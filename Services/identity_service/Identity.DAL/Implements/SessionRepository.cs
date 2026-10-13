@@ -5,6 +5,39 @@ namespace Identity.DAL.Implements;
 
 public sealed class SessionRepository(IdentityDbContext context) : ISessionRepository
 {
+    public async Task<bool> CreateExclusiveAsync(UserSession session, string passwordHash, string roleId)
+    {
+        await using var transaction = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        // Lock the user before reading sessions so concurrent logins are serialized.
+        // Recheck access and credentials in case they changed after password verification.
+        var matched = await context.Users
+            .Where(user => user.UserId == session.UserId && user.IsActive
+                && user.PasswordHash == passwordHash && user.RoleId == roleId)
+            .ExecuteUpdateAsync(set => set.SetProperty(user => user.IsActive, user => user.IsActive));
+        if (matched == 0)
+        {
+            return false;
+        }
+
+        await context.UserSessions
+            .Where(item => item.UserId == session.UserId && item.RevokedAt == null)
+            .ExecuteUpdateAsync(set => set.SetProperty(item => item.RevokedAt, (DateTime?)session.LoggedInAt));
+        context.UserSessions.Add(session);
+        context.AuditLogs.Add(new AuditLog
+        {
+            AuditLogId = Guid.NewGuid(),
+            UserId = session.UserId,
+            Action = "LOGIN",
+            EntityName = "UserSession",
+            EntityId = session.UserSessionId.ToString(),
+            IpAddress = session.IpAddress,
+            CreatedAt = session.LoggedInAt
+        });
+        await context.SaveChangesAsync();
+        await transaction.CommitAsync();
+        return true;
+    }
+
     public Task<UserSession?> FindByHashAsync(string hash)
     {
         return context.UserSessions.AsNoTracking().Include(s => s.User)

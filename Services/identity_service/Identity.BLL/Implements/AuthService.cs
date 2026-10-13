@@ -73,18 +73,11 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
             RefreshTokenHash = Hash(refreshToken)
         };
         var result = CreateResponse(user, session, refreshToken, now);
-        user.UserSessions.Add(session);
-        user.AuditLogs.Add(new AuditLog
+        if (!await sessions.CreateExclusiveAsync(session, user.PasswordHash, user.RoleId))
         {
-            AuditLogId = Guid.NewGuid(),
-            UserId = user.UserId,
-            Action = "LOGIN",
-            EntityName = "UserSession",
-            EntityId = session.UserSessionId.ToString(),
-            IpAddress = session.IpAddress,
-            CreatedAt = now
-        });
-        await unitOfWork.SaveAsync();
+            return new ResponseDTO("Thông tin tài khoản đã thay đổi. Vui lòng đăng nhập lại.", 401);
+        }
+
         return new ResponseDTO("Đăng nhập thành công.", 200, true, result);
     }
 
