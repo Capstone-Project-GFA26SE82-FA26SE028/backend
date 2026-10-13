@@ -1,0 +1,96 @@
+using Backend.Contracts.Identity;
+using Grpc.Core;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddControllers();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactApp",
+        policy =>
+        {
+            policy.WithOrigins("http://localhost:5173")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials();
+        });
+});
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new()
+    {
+        Title = "API Gateway",
+        Version = "v1"
+    });
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Paste the access token returned by login or refresh."
+    });
+    options.OperationFilter<ApiGateway.Swagger.BearerSecurityFilter>();
+});
+
+var identityAddress =
+    builder.Configuration["GrpcServices:Identity"]
+    ?? throw new InvalidOperationException(
+        "Thiếu cấu hình GrpcServices:Identity");
+
+builder.Services.AddGrpcClient<IdentityGrpc.IdentityGrpcClient>(
+    options => options.Address = new Uri(identityAddress));
+
+builder.Services.AddGrpcClient<UserGrpc.UserGrpcClient>(
+    options => options.Address = new Uri(identityAddress));
+
+builder.Services.AddGrpcClient<AuditLogGrpc.AuditLogGrpcClient>(
+    options => options.Address = new Uri(identityAddress));
+builder.Services.AddGrpcClient<SessionGrpc.SessionGrpcClient>(
+    options => options.Address = new Uri(identityAddress));
+
+builder.Services.AddGrpcClient<RoleGrpc.RoleGrpcClient>(
+    options => options.Address = new Uri(identityAddress));
+
+var app = builder.Build();
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled"))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+        options.SwaggerEndpoint("v1/swagger.json", "API Gateway v1"));
+}
+app.UseCors("AllowReactApp");
+app.MapControllers();
+
+app.MapGet("/api/identity/ping", async (
+    IdentityGrpc.IdentityGrpcClient client,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var reply = await client.PingAsync(
+            new PingRequest { Name = "ApiGateway" },
+            deadline: DateTime.UtcNow.AddSeconds(5),
+            cancellationToken: cancellationToken);
+
+        return Results.Ok(new
+        {
+            message = reply.Message
+        });
+    }
+    catch (RpcException ex)
+        when (ex.StatusCode == StatusCode.Unavailable)
+    {
+        return Results.Problem(
+            statusCode: 503,
+            detail: "Identity service hiện không khả dụng.");
+    }
+    catch (RpcException ex)
+        when (ex.StatusCode == StatusCode.DeadlineExceeded)
+    {
+        return Results.Problem(
+            statusCode: 504,
+            detail: "Identity service phản hồi quá thời gian.");
+    }
+});
+
+app.Run();

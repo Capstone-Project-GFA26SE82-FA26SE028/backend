@@ -1,0 +1,219 @@
+syntax = "proto3";
+
+option csharp_namespace = "Backend.Contracts.Identity";
+
+package identity;
+
+import "google/protobuf/timestamp.proto";
+
+service IdentityGrpc {
+  rpc ChangePassword (ChangePasswordRequest) returns (LogoutReply);
+  rpc Ping (PingRequest) returns (PingReply);
+  rpc Login (LoginRequest) returns (LoginReply);
+  rpc Refresh (RefreshRequest) returns (LoginReply);
+  rpc Logout (LogoutRequest) returns (LogoutReply);
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message LogoutRequest {}
+
+message LogoutReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+}
+
+message PingRequest {
+  string name = 1;
+}
+
+message PingReply {
+  string message = 1;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+  optional string ip_address = 3;
+  optional string user_agent = 4;
+}
+
+message LoginReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  LoginResult result = 4;
+}
+
+message LoginResult {
+  UserInfo user = 1;
+  string access_token = 2;
+  string refresh_token = 3;
+  string session_id = 4;
+  google.protobuf.Timestamp expires_at = 5;
+  google.protobuf.Timestamp session_expires_at = 6;
+}
+
+message UserInfo {
+  string user_id = 1;
+  string role_id = 2;
+  string user_name = 3;
+  string email = 4;
+  optional string phone_number = 5;
+  optional string full_name = 6;
+  optional string avatar_url = 7;
+  bool is_active = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+service UserGrpc {
+  rpc CreateUser (CreateUserRequest) returns (UserReply);
+  rpc ListRoles (ListRolesRequest) returns (RoleListReply);
+  rpc SetUserRole (SetUserRoleRequest) returns (UserReply);
+  rpc GetMe (GetMeRequest) returns (UserReply);
+  rpc UpdateMe (UpdateMeRequest) returns (UserReply);
+  rpc ListUsers (ListUsersRequest) returns (UserListReply);
+  rpc GetUser (GetUserRequest) returns (UserReply);
+  rpc SetUserStatus (SetUserStatusRequest) returns (UserReply);
+}
+message GetMeRequest {}
+message UpdateMeRequest {
+  string full_name = 1;
+  optional string phone_number = 2;
+  optional string avatar_url = 3;
+}
+message GetUserRequest { string user_id = 1; }
+message SetUserStatusRequest {
+  string user_id = 1;
+  bool is_active = 2;
+}
+message ListUsersRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string search = 3;
+}
+message UserReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  UserInfo result = 4;
+}
+message UserListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated UserInfo items = 4;
+  int32 total_count = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+message CreateUserRequest {
+  string user_name = 1;
+  string email = 2;
+  string password = 3;
+  string full_name = 4;
+  optional string phone_number = 5;
+  string role_id = 6;
+}
+message SetUserRoleRequest { string user_id = 1; string role_id = 2; }
+message ListRolesRequest {}
+message RoleInfo { string role_id = 1; string role_name = 2; optional string description = 3; }
+message RoleListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated RoleInfo items = 4;
+}
+
+message ActivityListRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional string user_id = 3;
+}
+
+message AuditLogInfo {
+  string audit_log_id = 1;
+  optional string user_id = 2;
+  optional string action = 3;
+  optional string entity_name = 4;
+  optional string entity_id = 5;
+  optional string old_value = 6;
+  optional string new_value = 7;
+  optional string ip_address = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message AuditLogListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated AuditLogInfo items = 4;
+  int32 total_count = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+message SessionInfo {
+  string user_session_id = 1;
+  string user_id = 2;
+  optional string ip_address = 3;
+  optional string user_agent = 4;
+  optional string device_type = 5;
+  google.protobuf.Timestamp logged_in_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  google.protobuf.Timestamp revoked_at = 8;
+  bool is_current = 9;
+}
+
+message SessionListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated SessionInfo items = 4;
+  int32 total_count = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+
+service AuditLogGrpc {
+  rpc ListAuditLogs (ActivityListRequest) returns (AuditLogListReply);
+}
+
+service SessionGrpc {
+  rpc GetMe (ActivityListRequest) returns (SessionListReply);
+  rpc Delete (DeleteSessionRequest) returns (LogoutReply);
+  rpc DeleteAll (LogoutRequest) returns (LogoutReply);
+  rpc ListSessions (ActivityListRequest) returns (SessionListReply);
+}
+
+message ChangePasswordRequest {
+  string current_password = 1;
+  string new_password = 2;
+  string confirm_password = 3;
+}
+
+message DeleteSessionRequest {
+  string session_id = 1;
+}
+
+service RoleGrpc {
+  rpc GetAll (ListRolesRequest) returns (RoleListReply);
+  rpc GetById (RoleIdRequest) returns (RoleReply);
+  rpc Create (RoleInfo) returns (RoleReply);
+  rpc Update (RoleInfo) returns (RoleReply);
+  rpc Delete (RoleIdRequest) returns (RoleReply);
+}
+
+message RoleIdRequest { string role_id = 1; }
+message RoleReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  RoleInfo result = 4;
+}

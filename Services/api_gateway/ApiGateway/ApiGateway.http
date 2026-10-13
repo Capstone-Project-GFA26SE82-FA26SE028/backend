@@ -1,0 +1,64 @@
+@ApiGateway_HostAddress = https://localhost:5000
+
+GET {{ApiGateway_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
+### User management: paste an access token from login
+@userAccessToken = paste-access-token-here
+@managedUserId = 11111111-1111-1111-1111-111111111111
+
+### My profile
+GET {{ApiGateway_HostAddress}}/api/users/me
+Authorization: Bearer {{userAccessToken}}
+
+### Replace editable profile fields
+PUT {{ApiGateway_HostAddress}}/api/users/me
+Authorization: Bearer {{userAccessToken}}
+Content-Type: application/json
+
+{
+  "fullName": "Nguyen Van A",
+  "phoneNumber": "0901234567",
+  "avatarUrl": null
+}
+
+### Admin: search users
+GET {{ApiGateway_HostAddress}}/api/users?page=1&pageSize=20&search=
+Authorization: Bearer {{userAccessToken}}
+
+### Admin: user detail
+GET {{ApiGateway_HostAddress}}/api/users/{{managedUserId}}
+Authorization: Bearer {{userAccessToken}}
+
+### Admin: lock account and revoke sessions
+PATCH {{ApiGateway_HostAddress}}/api/users/{{managedUserId}}/status
+Authorization: Bearer {{userAccessToken}}
+Content-Type: application/json
+
+{ "isActive": false }
+
+### Admin: existing roles
+GET {{ApiGateway_HostAddress}}/api/roles
+Authorization: Bearer {{userAccessToken}}
+
+### Admin: create employee (replace roleId with an existing role)
+POST {{ApiGateway_HostAddress}}/api/users
+Authorization: Bearer {{userAccessToken}}
+Content-Type: application/json
+
+{
+  "userName": "nhanvien01",
+  "email": "nhanvien01@example.com",
+  "password": "EmployeePass123!",
+  "fullName": "Nguyen Van A",
+  "roleId": "REPLACE_WITH_EXISTING_ROLE"
+}
+
+### Admin: change role and revoke sessions
+PATCH {{ApiGateway_HostAddress}}/api/users/{{managedUserId}}/role
+Authorization: Bearer {{userAccessToken}}
+Content-Type: application/json
+
+{ "roleId": "REPLACE_WITH_EXISTING_ROLE" }

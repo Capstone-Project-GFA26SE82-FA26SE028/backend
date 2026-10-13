@@ -1,0 +1,34 @@
+name: backend
+services:
+  identity:
+    image: backend-identity:local
+    build:
+      context: .
+      dockerfile: Services/identity_service/Identity.API/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__DefaultConnection: ${IDENTITY_DB_CONNECTION:?Set IDENTITY_DB_CONNECTION in .env}
+      Jwt__SecretKey: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      Jwt__Issuer: ${JWT_ISSUER:-backend-identity}
+      Jwt__Audience: ${JWT_AUDIENCE:-backend-clients}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - backend
+  gateway:
+    image: backend-gateway:local
+    build:
+      context: .
+      dockerfile: Services/api_gateway/ApiGateway/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      GrpcServices__Identity: http://identity:5001
+    ports:
+      - "127.0.0.1:${GATEWAY_HTTP_PORT:-5000}:5000"
+    depends_on:
+      - identity
+    networks:
+      - backend
+networks:
+  backend:
+    driver: bridge

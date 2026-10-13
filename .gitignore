@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/.vs/
+*.user
+*.db
+*.db-shm
+*.db-wal
+TestResults/
+
+# Docker local credentials
+.env
+.env.*
+!.env.example
