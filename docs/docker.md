@@ -7,8 +7,40 @@
 | Gateway HTTPS | https://localhost:5000 | Không cấu hình HTTPS |
 | Gateway HTTP | http://localhost:15000 | http://localhost:5000 (container: 5000) |
 | Identity gRPC | https://localhost:5001 | http://identity:5001 (chỉ nội bộ) |
+| Restaurant | https://localhost:5002 | http://restaurant:5002 (chỉ nội bộ) |
+| Catalog | https://localhost:5003 | http://catalog:5003 (chỉ nội bộ) |
+| Ordering | https://localhost:5004 | http://ordering:5004 (chỉ nội bộ) |
+| Customer | https://localhost:5005 | http://customer:5005 (chỉ nội bộ) |
+| Inventory | https://localhost:5006 | http://inventory:5006 (chỉ nội bộ) |
+| Billing | https://localhost:5007 | http://billing:5007 (chỉ nội bộ) |
 
-Chạy local với profile `https`, mở https://localhost:5000/swagger. Chạy Docker, mở http://localhost:5000/swagger. Local HTTPS và Docker dùng chung cổng 5000 nên chạy luân phiên. Dãy cổng chính dành cho service: Gateway 5000, Identity 5001, Restaurant 5002 (dự kiến), các service tiếp theo 5003 tăng dần. HTTP phụ khi chạy local dùng dãy 15000 trở lên (Gateway 15000), không chiếm dãy cổng chính.
+Chạy local với profile `https`, mở https://localhost:5000/swagger. Chạy Docker, mở http://localhost:5000/swagger. Local HTTPS và Docker dùng chung cổng 5000 nên chạy luân phiên. HTTP phụ khi chạy local dùng dãy 15000 trở lên (Gateway 15000), không chiếm dãy cổng chính.
+
+## Sáu service mới
+
+Restaurant, Catalog, Ordering, Customer, Inventory và Billing đã được cấu hình DbContext, repository theo entity và UnitOfWork scoped. Chúng có endpoint `/health/live` (tiến trình hoạt động) và `/health/ready` (kết nối database được: 200, không được: 503). Readiness chỉ kiểm tra kết nối, chưa xác nhận schema đầy đủ. Các cổng này chỉ nhận HTTP/2; dùng client hỗ trợ HTTP/2 khi kiểm tra health.
+
+Các service mới chưa có RPC nghiệp vụ hoặc controller tương ứng ở Gateway. Thêm `.proto`, gRPC service, BLL và controller theo từng chức năng; xem [hướng dẫn chuẩn bị code](development.md).
+
+Chạy local với User Secrets, ví dụ Catalog:
+
+```powershell
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost;Database=CatalogDb;Integrated Security=True;TrustServerCertificate=True" --project Services/catalog_service/Catalog.API
+dotnet run --project Services/catalog_service/Catalog.API --launch-profile https
+```
+
+Thay database và kiểu xác thực cho phù hợp máy của bạn. Các service còn lại cấu hình tương tự theo project API của chúng. `appsettings.json` để trống connection string; ứng dụng báo lỗi ngay nếu chưa cấu hình. User Secrets chỉ được nạp tự động trong Development. Docker đọc `ConnectionStrings__DefaultConnection` từ Compose.
+
+Compose mặc định vẫn chạy Gateway + Identity. Để chạy thêm sáu service, bổ sung các biến `RESTAURANT_DB_CONNECTION`, `CATALOG_DB_CONNECTION`, `ORDERING_DB_CONNECTION`, `CUSTOMER_DB_CONNECTION`, `INVENTORY_DB_CONNECTION`, `BILLING_DB_CONNECTION` vào `.env` theo `.env.example`, sau đó:
+
+```powershell
+docker compose --profile services config --quiet
+docker compose --profile services up -d --build
+docker compose --profile services ps
+docker compose --profile services logs -f catalog
+```
+
+Có thể chạy riêng một service mới bằng `docker compose up -d --build catalog`. Các connection string mới mặc định rỗng để không ảnh hưởng chế độ chỉ chạy Identity; service được chọn sẽ từ chối khởi động nếu biến của nó chưa có giá trị. `config --quiet` chỉ kiểm tra cấu trúc Compose, không xác nhận kết nối SQL. Không chép đè `.env` đang dùng; bổ sung các biến còn thiếu. Dùng `docker compose --profile services down` để dừng cả nhóm.
 
 ## Chuẩn bị
 

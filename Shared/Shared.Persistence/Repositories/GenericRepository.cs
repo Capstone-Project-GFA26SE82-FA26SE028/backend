@@ -45,7 +45,6 @@ namespace Shared.Persistence.Repositories
             if (entity != null)
             {
                 Delete(entity);
-                await _context.SaveChangesAsync();
             }
         }
 
@@ -54,9 +53,9 @@ namespace Shared.Persistence.Repositories
             return _dbSet.Where(expression).AsQueryable();
         }
 
-        public IEnumerable<T> FindAllAsync(Expression<Func<T, bool>> expression)
+        public Task<List<T>> FindAllAsync(Expression<Func<T, bool>> expression)
         {
-            return _dbSet.Where(expression).AsEnumerable();
+            return _dbSet.Where(expression).ToListAsync();
         }
 
         public async Task<bool> AnyAsync(Expression<Func<T, bool>> expression)
@@ -81,8 +80,10 @@ namespace Shared.Persistence.Repositories
 
         public T GetById(string id)
         {
-            throw new NotImplementedException();
+            ArgumentException.ThrowIfNullOrWhiteSpace(id);
+            return _dbSet.Find(id);
         }
+
         public T GetByGuid(Guid id)
         {
             return _dbSet.Find(id);
@@ -108,11 +109,11 @@ namespace Shared.Persistence.Repositories
             return await _dbSet.FindAsync(id);
         }
 
-        public async Task<T> UpdateAsync(T entity)
+        public Task<T> UpdateAsync(T entity)
         {
             _dbSet.Update(entity);
 
-            return entity;
+            return Task.FromResult(entity);
         }
 
 

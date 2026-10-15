@@ -29,6 +29,84 @@ services:
       - identity
     networks:
       - backend
+  restaurant:
+    profiles: [services]
+    image: backend-restaurant:local
+    build:
+      context: .
+      dockerfile: Services/restaurant_service/Restaurant.API/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__DefaultConnection: ${RESTAURANT_DB_CONNECTION:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - backend
+  catalog:
+    profiles: [services]
+    image: backend-catalog:local
+    build:
+      context: .
+      dockerfile: Services/catalog_service/Catalog.API/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__DefaultConnection: ${CATALOG_DB_CONNECTION:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - backend
+  ordering:
+    profiles: [services]
+    image: backend-ordering:local
+    build:
+      context: .
+      dockerfile: Services/ordering_service/Ordering.API/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__DefaultConnection: ${ORDERING_DB_CONNECTION:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - backend
+  customer:
+    profiles: [services]
+    image: backend-customer:local
+    build:
+      context: .
+      dockerfile: Services/customer_service/Customer.API/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__DefaultConnection: ${CUSTOMER_DB_CONNECTION:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - backend
+  inventory:
+    profiles: [services]
+    image: backend-inventory:local
+    build:
+      context: .
+      dockerfile: Services/inventory_service/Inventory.API/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__DefaultConnection: ${INVENTORY_DB_CONNECTION:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - backend
+  billing:
+    profiles: [services]
+    image: backend-billing:local
+    build:
+      context: .
+      dockerfile: Services/billing_service/Billing.API/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Docker
+      ConnectionStrings__DefaultConnection: ${BILLING_DB_CONNECTION:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - backend
 networks:
   backend:
     driver: bridge
