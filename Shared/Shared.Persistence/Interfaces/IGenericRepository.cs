@@ -14,7 +14,7 @@ namespace Shared.Persistence.Interfaces
         Task<T> GetByIdAsync(Guid id);
         IQueryable<T> GetAll();
         IQueryable<T> FindAll(Expression<Func<T, bool>> expression);
-        IEnumerable<T> FindAllAsync(Expression<Func<T, bool>> expression);
+        Task<List<T>> FindAllAsync(Expression<Func<T, bool>> expression);
         Task<bool> AnyAsync(Expression<Func<T, bool>> expression);
         Task<T> AddAsync(T entity);
         T Add(T entity);
