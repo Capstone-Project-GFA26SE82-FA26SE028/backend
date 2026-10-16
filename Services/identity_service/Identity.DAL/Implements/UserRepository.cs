@@ -16,6 +16,15 @@ namespace Identity.DAL.Implements
         {
         }
 
+        public Task<bool> LoginExistsAsync(Guid exceptId, string name, string email, CancellationToken ct)
+        {
+            name = name.ToLowerInvariant();
+            email = email.ToLowerInvariant();
+            return _context.Users.AnyAsync(u => u.UserId != exceptId
+                && (u.UserName.ToLower() == name || u.Email.ToLower() == email
+                    || u.UserName.ToLower() == email || u.Email.ToLower() == name), ct);
+        }
+
         public Task<User?> FindUserAsync(Guid id, CancellationToken ct)
         {
             return _context.Users.FirstOrDefaultAsync(u => u.UserId == id, ct);
@@ -49,12 +58,22 @@ namespace Identity.DAL.Implements
             return true;
         }
 
-        public async Task<(List<User> Items, int Total)> GetAllAsync(int page, int pageSize, string? search, CancellationToken ct)
+        public async Task<(List<User> Items, int Total)> GetAllAsync(int page, int pageSize, string? search, CancellationToken ct, Identity.Common.DTOs.UserFilter? filter = null)
         {
             var query = _context.Users.AsNoTracking();
             if (!string.IsNullOrEmpty(search))
             {
                 query = query.Where(u => u.Email.Contains(search) || u.UserName.Contains(search) || u.FullName.Contains(search));
+            }
+
+            if (!string.IsNullOrWhiteSpace(filter?.RoleId))
+            {
+                query = query.Where(u => u.RoleId == filter.RoleId.Trim());
+            }
+
+            if (filter?.IsActive is { } active)
+            {
+                query = query.Where(u => u.IsActive == active);
             }
 
             var total = await query.CountAsync(ct);
@@ -72,9 +91,11 @@ namespace Identity.DAL.Implements
             }
 
             var normalizedEmail = email.Trim().ToLower();
-            return await _context.Users
+            var matches = await _context.Users
                 .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+                .Where(u => u.Email.ToLower() == normalizedEmail || u.UserName.ToLower() == normalizedEmail)
+                .Take(2).ToListAsync();
+            return matches.Count == 1 ? matches[0] : null;
         }
 
         // Called inside UnitOfWork.ExecuteInTransactionAsync to protect concurrent changes.
@@ -94,7 +115,7 @@ namespace Identity.DAL.Implements
             user.RoleId = assignedRole;
             var email = user.Email.ToLowerInvariant();
             var name = user.UserName.ToLowerInvariant();
-            if (await _context.Users.AnyAsync(u => u.Email.ToLower() == email || u.UserName.ToLower() == name, ct))
+            if (await LoginExistsAsync(user.UserId, name, email, ct))
             {
                 return (409, null);
             }

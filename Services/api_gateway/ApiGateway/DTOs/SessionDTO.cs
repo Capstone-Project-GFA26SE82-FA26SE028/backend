@@ -2,6 +2,9 @@ namespace ApiGateway.DTOs;
 
 public sealed class SessionDTO
 {
+    public string UserName { get; set; } = "";
+    public string Email { get; set; } = "";
+    public string RoleId { get; set; } = "";
     public Guid UserSessionId { get; set; }
     public Guid UserId { get; set; }
     public string? IpAddress { get; set; }

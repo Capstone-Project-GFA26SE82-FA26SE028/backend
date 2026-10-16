@@ -23,8 +23,9 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
 
     private async Task<bool> IsAdmin(Guid actorId, CancellationToken ct)
     {
-        var actor = await unitOfWork.UserRepo.FindUserAsync(actorId, ct);
-        return actor is { IsActive: true } && settings.Value.AdminRoleIds.Contains(actor.RoleId, StringComparer.Ordinal);
+        var adminRoles = settings.Value.AdminRoleIds;
+        return await unitOfWork.UserRepo.AnyAsync(actor => actor.UserId == actorId
+            && actor.IsActive && adminRoles.Contains(actor.RoleId));
     }
 
     public async Task<ResponseDTO> GetMe(Guid actorId, CancellationToken ct)
@@ -72,7 +73,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
         return new("Cập nhật hồ sơ thành công.", 200, true, Map(user));
     }
 
-    public async Task<ResponseDTO> GetAll(Guid actorId, int page, int pageSize, string? search, CancellationToken ct)
+    public async Task<ResponseDTO> GetAll(Guid actorId, int page, int pageSize, string? search, CancellationToken ct, Identity.Common.DTOs.UserFilter? filter = null)
     {
         if (!await IsAdmin(actorId, ct))
         {
@@ -85,12 +86,12 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             PageSize = pageSize
         };
 
-        if (!pagination.IsValid() || search?.Length > 255)
+        if (!pagination.IsValid() || search?.Length > 255 || filter?.RoleId?.Length > 50)
         {
             return new("Phân trang hoặc từ khóa không hợp lệ. PageSize từ 1 đến 100.", 400);
         }
 
-        var (items, count) = await unitOfWork.UserRepo.GetAllAsync(page, pageSize, search?.Trim(), ct);
+        var (items, count) = await unitOfWork.UserRepo.GetAllAsync(page, pageSize, search?.Trim(), ct, filter);
         return new("Thành công.", 200, true, new PagedResult<UserDTO>(items.Select(Map).ToList(), count, page, pageSize));
     }
 
@@ -130,12 +131,15 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
         var email = request.Email?.Trim();
         var fullName = request.FullName?.Trim();
         var role = request.RoleId?.Trim();
+        var avatar = string.IsNullOrWhiteSpace(request.AvatarUrl) ? null : request.AvatarUrl.Trim();
         var phone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
         if (string.IsNullOrEmpty(name) || name.Length > 100 || name.Any(char.IsWhiteSpace)
             || string.IsNullOrEmpty(email) || email.Length > 255 || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email)
             || string.IsNullOrEmpty(fullName) || fullName.Length > 255 || string.IsNullOrEmpty(role) || role.Length > 50
             || phone?.Length > 20 || string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8
-            || System.Text.Encoding.UTF8.GetByteCount(request.Password) > 72)
+            || System.Text.Encoding.UTF8.GetByteCount(request.Password) > 72
+            || avatar?.Length > 2048 || (avatar is not null
+                && (!Uri.TryCreate(avatar, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))))
         {
             return new("Dữ liệu không hợp lệ. Mật khẩu cần ít nhất 8 ký tự và tối đa 72 byte UTF-8.", 400);
         }
@@ -150,6 +154,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             RoleId = role,
             IsActive = true,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            AvatarUrl = avatar!,
             CreatedAt = DateTime.UtcNow
         };
         var result = await unitOfWork.ExecuteInTransactionAsync(() => unitOfWork.UserRepo.CreateEmployeeAsync(actorId, user, settings.Value.AdminRoleIds, ct), ct);
@@ -160,6 +165,59 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             400 => new("Role không tồn tại.", 400),
             _ => Forbidden()
         };
+    }
+
+    public async Task<ResponseDTO> Update(Guid actorId, Guid userId, UpdateUserDTO request, CancellationToken ct)
+    {
+        if (!await IsAdmin(actorId, ct))
+        {
+            return Forbidden();
+        }
+
+        var name = request.UserName?.Trim();
+        var email = request.Email?.Trim();
+        var fullName = request.FullName?.Trim();
+        var phone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+        var avatar = string.IsNullOrWhiteSpace(request.AvatarUrl) ? null : request.AvatarUrl.Trim();
+        if (userId == Guid.Empty || string.IsNullOrEmpty(name) || name.Length > 100 || name.Any(char.IsWhiteSpace)
+            || string.IsNullOrEmpty(email) || email.Length > 255
+            || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email)
+            || string.IsNullOrEmpty(fullName) || fullName.Length > 255 || phone?.Length > 20
+            || avatar?.Length > 2048 || (avatar is not null
+                && (!Uri.TryCreate(avatar, UriKind.Absolute, out var uri) || (uri.Scheme != "https" && uri.Scheme != "http"))))
+        {
+            return new ResponseDTO("Thông tin tài khoản không hợp lệ.", 400);
+        }
+
+        return await unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            if (!await IsAdmin(actorId, ct))
+            {
+                return Forbidden();
+            }
+
+            var user = await unitOfWork.UserRepo.FindUserAsync(userId, ct);
+            if (user is null)
+            {
+                return Missing();
+            }
+
+            if (await unitOfWork.UserRepo.LoginExistsAsync(userId, name, email, ct))
+            {
+                return new ResponseDTO("Email hoặc username đã được sử dụng.", 409);
+            }
+
+            var before = Map(user);
+            user.UserName = name;
+            user.Email = email;
+            user.FullName = fullName;
+            user.PhoneNumber = phone!;
+            user.AvatarUrl = avatar!;
+            user.UpdatedAt = DateTime.UtcNow;
+            var result = Map(user);
+            unitOfWork.RecordAudit(actorId, "UPDATE_USER", "User", userId.ToString(), before, result);
+            return new ResponseDTO("Cập nhật thành công.", 200, true, result);
+        }, ct);
     }
 
     public async Task<ResponseDTO> SetRole(Guid actorId, Guid userId, string roleId, CancellationToken ct)

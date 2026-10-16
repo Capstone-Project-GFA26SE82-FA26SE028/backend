@@ -10,6 +10,19 @@ namespace Identity.API.GrpcServices;
 
 public sealed class UserGrpcService(IUserService users, IRoleService roles) : UserGrpc.UserGrpcBase
 {
+    public override async Task<UserReply> UpdateUser(UpdateUserRequest request, ServerCallContext context)
+    {
+        var actor = await GrpcAuthentication.RequireUser(context);
+        return Map(await users.Update(actor.UserId, ParseId(request.UserId), new UpdateUserDTO
+        {
+            UserName = request.UserName,
+            Email = request.Email,
+            FullName = request.FullName,
+            PhoneNumber = request.HasPhoneNumber ? request.PhoneNumber : null,
+            AvatarUrl = request.HasAvatarUrl ? request.AvatarUrl : null
+        }, context.CancellationToken));
+    }
+
     public override async Task<UserReply> GetMe(GetMeRequest request, ServerCallContext context)
     {
         var actor = await GrpcAuthentication.RequireUser(context);
@@ -42,7 +55,11 @@ public sealed class UserGrpcService(IUserService users, IRoleService roles) : Us
     public override async Task<UserListReply> ListUsers(ListUsersRequest request, ServerCallContext context)
     {
         var actor = await GrpcAuthentication.RequireUser(context);
-        var response = await users.GetAll(actor.UserId, request.Page, request.PageSize, request.Search, context.CancellationToken);
+        var response = await users.GetAll(actor.UserId, request.Page, request.PageSize, request.Search, context.CancellationToken, new UserFilter
+        {
+            RoleId = request.HasRoleId ? request.RoleId : null,
+            IsActive = request.HasIsActive ? request.IsActive : null
+        });
         var reply = new UserListReply
         {
             StatusCode = response.StatusCode,
@@ -67,6 +84,7 @@ public sealed class UserGrpcService(IUserService users, IRoleService roles) : Us
             UserName = request.UserName,
             Email = request.Email,
             Password = request.Password,
+            AvatarUrl = request.HasAvatarUrl ? request.AvatarUrl : null,
             FullName = request.FullName,
             PhoneNumber = request.HasPhoneNumber ? request.PhoneNumber : null,
             RoleId = request.RoleId
@@ -82,7 +100,7 @@ public sealed class UserGrpcService(IUserService users, IRoleService roles) : Us
     public override async Task<RoleListReply> ListRoles(ListRolesRequest request, ServerCallContext context)
     {
         var actor = await GrpcAuthentication.RequireUser(context);
-        var response = await roles.GetAll(actor.UserId, context.CancellationToken);
+        var response = await roles.GetAll(actor.UserId, context.CancellationToken, request.HasSearch ? request.Search : null);
         return RoleGrpcService.ToListReply(response);
     }
     private static Guid ParseId(string value)

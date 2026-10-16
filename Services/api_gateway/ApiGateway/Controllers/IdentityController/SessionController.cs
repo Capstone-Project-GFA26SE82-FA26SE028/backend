@@ -13,7 +13,10 @@ public sealed class SessionController(SessionGrpc.SessionGrpcClient client) : Id
 {
     [HttpGet]
     public Task<IActionResult> GetAll(CancellationToken ct, [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20, [FromQuery] Guid? userId = null)
+        [FromQuery] int pageSize = 20, [FromQuery] Guid? userId = null,
+        [FromQuery] string? search = null, [FromQuery] string? roleId = null,
+        [FromQuery] string? status = null, [FromQuery] string? deviceType = null,
+        [FromQuery] DateTimeOffset? fromUtc = null, [FromQuery] DateTimeOffset? toUtc = null)
     {
         return Execute(async () =>
         {
@@ -28,7 +31,38 @@ public sealed class SessionController(SessionGrpc.SessionGrpcClient client) : Id
                 request.UserId = userId.Value.ToString();
             }
 
+            if (search is not null)
+            {
+                request.Search = search;
+            }
+
+            if (roleId is not null)
+            {
+                request.RoleId = roleId;
+            }
+
+            if (status is not null)
+            {
+                request.Status = status;
+            }
+
+            if (deviceType is not null)
+            {
+                request.DeviceType = deviceType;
+            }
+
+            if (fromUtc.HasValue)
+            {
+                request.FromUtc = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(fromUtc.Value.UtcDateTime);
+            }
+
+            if (toUtc.HasValue)
+            {
+                request.ToUtc = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(toUtc.Value.UtcDateTime);
+            }
+
             var reply = await client.ListSessionsAsync(request, Options(ct));
+
             return PageResponse(reply);
         }, ct);
     }
@@ -93,6 +127,9 @@ public sealed class SessionController(SessionGrpc.SessionGrpcClient client) : Id
                 {
                     UserSessionId = Guid.Parse(item.UserSessionId),
                     UserId = Guid.Parse(item.UserId),
+                    UserName = item.UserName,
+                    Email = item.Email,
+                    RoleId = item.RoleId,
                     IpAddress = item.HasIpAddress ? item.IpAddress : null,
                     UserAgent = item.HasUserAgent ? item.UserAgent : null,
                     DeviceType = item.HasDeviceType ? item.DeviceType : null,

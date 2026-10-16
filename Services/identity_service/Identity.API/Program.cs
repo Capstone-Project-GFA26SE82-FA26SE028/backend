@@ -33,6 +33,8 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+app.MapGrpcService<Identity.API.GrpcServices.AccessGrpcService>();
+
 app.MapGrpcService<Identity.API.GrpcServices.IdentityGrpcService>();
 app.MapGrpcService<Identity.API.GrpcServices.UserGrpcService>();
 app.MapGrpcService<Identity.API.GrpcServices.RoleGrpcService>();

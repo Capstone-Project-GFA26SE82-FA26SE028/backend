@@ -5,6 +5,6 @@
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" PrivateAssets="all" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.24" />
-    <ProjectReference Include="../Identity.BLL/Identity.BLL.csproj" />
+    <ProjectReference Include="../../Services/identity_service/Identity.BLL/Identity.BLL.csproj" />
   </ItemGroup>
 </Project>
