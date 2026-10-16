@@ -35,12 +35,14 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
         await _connection.OpenAsync();
         _restaurant = new WebApplicationFactory<RestaurantMarker>().WithWebHostBuilder(builder =>
         {
+            builder.UseEnvironment("Testing");
+            // Program reads these before ConfigureAppConfiguration callbacks run.
+            builder.UseSetting("ConnectionStrings:DefaultConnection", "Server=unused;Database=unused");
+            builder.UseSetting("GrpcServices:Identity", "http://identity.test");
             builder.ConfigureAppConfiguration((_, config) =>
             {
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:DefaultConnection"] = "Server=unused;Database=unused",
-                    ["GrpcServices:Identity"] = "http://identity.test",
                     ["Qr:MenuBaseUrl"] = "https://menu.example.test/menu",
                     ["Qr:ImageDirectory"] = _qrDirectory
                 });
@@ -60,14 +62,9 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
 
         _gateway = new WebApplicationFactory<ApiGateway.ApiAssembly>().WithWebHostBuilder(builder =>
         {
-            builder.ConfigureAppConfiguration((_, config) =>
-            {
-                config.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["GrpcServices:Identity"] = "http://identity.test",
-                    ["GrpcServices:Restaurant"] = "http://restaurant.test"
-                });
-            });
+            builder.UseEnvironment("Testing");
+            builder.UseSetting("GrpcServices:Identity", "http://identity.test");
+            builder.UseSetting("GrpcServices:Restaurant", "http://restaurant.test");
             builder.ConfigureTestServices(services =>
             {
                 services.AddGrpcClient<RestaurantGrpc.RestaurantGrpcClient>()
