@@ -11,3 +11,7 @@ TestResults/
 .env
 .env.*
 !.env.example
+
+# Original pasted requirements stay local; share the Markdown specification.
+/docs/requirements/sources/*.txt
+**/App_Data/qr-images/

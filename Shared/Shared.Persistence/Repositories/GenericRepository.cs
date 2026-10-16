@@ -58,24 +58,25 @@ namespace Shared.Persistence.Repositories
             return _dbSet.Where(expression).ToListAsync();
         }
 
-        public async Task<bool> AnyAsync(Expression<Func<T, bool>> expression)
+        public async Task<bool> AnyAsync(Expression<Func<T, bool>> expression, CancellationToken cancellationToken = default)
         {
-            return await _dbSet.AnyAsync(expression);
+            return await _dbSet.AnyAsync(expression, cancellationToken);
         }
 
-        public IQueryable<T> GetAll()
+        public virtual IQueryable<T> GetAll()
         {
             return _dbSet.AsQueryable();
         }
 
-        public async Task<List<T>> GetAllByListAsync(Expression<Func<T, bool>> expression)
+        public Task<List<T>> GetAllByListAsync(Expression<Func<T, bool>> expression)
         {
-            return await _dbSet.Where(expression).ToListAsync();
+            return FindAllAsync(expression);
         }
 
-        public async Task<List<T>> GetAllByListAsync(Expression<Func<T, bool>> expression, object include)
+        public Task<List<T>> GetAllByListAsync(Expression<Func<T, bool>> expression, Func<IQueryable<T>, IQueryable<T>> include)
         {
-            return await _dbSet.Where(expression).ToListAsync();
+            ArgumentNullException.ThrowIfNull(include);
+            return include(_dbSet.Where(expression)).ToListAsync();
         }
 
         public T GetById(string id)
@@ -89,14 +90,14 @@ namespace Shared.Persistence.Repositories
             return _dbSet.Find(id);
         }
 
-        public async Task<T> GetByIdAsync(Guid id)
+        public virtual async Task<T?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
             if (id == Guid.Empty)
             {
                 throw new ArgumentException("Id cannot be empty", nameof(id));
             }
 
-            return await _dbSet.FindAsync(id);
+            return await _dbSet.FindAsync(new object[] { id }, cancellationToken);
         }
 
         public async Task<T> GetByIdsAsync(int id)
@@ -138,9 +139,9 @@ namespace Shared.Persistence.Repositories
             return await _dbSet.FirstOrDefaultAsync(expression);
         }
 
-        public async Task<T> GetByConditionAsync(Expression<Func<T, bool>> expression)
+        public Task<T> GetByConditionAsync(Expression<Func<T, bool>> expression)
         {
-            return await _dbSet.FirstOrDefaultAsync(expression);
+            return FirstOrDefaultAsync(expression);
         }
 
         public Task<List<T>> ToListAsync()
