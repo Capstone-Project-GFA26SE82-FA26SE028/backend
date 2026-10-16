@@ -66,6 +66,17 @@ public class PersistenceTests
         Assert.Same(db, scope.ServiceProvider.GetRequiredService(contextType));
         Assert.NotSame(db, secondScope.ServiceProvider.GetRequiredService(contextType));
         Assert.IsAssignableFrom<IUnitOfWork>(scope.ServiceProvider.GetRequiredService<IUnitOfWork>());
+        if (service == "Restaurant")
+        {
+            Assert.Same(scope.ServiceProvider.GetRequiredService<Restaurant.DAL.Interfaces.IAreaRepository>(),
+                scope.ServiceProvider.GetRequiredService<IGenericRepository<Area>>());
+            Assert.Same(scope.ServiceProvider.GetRequiredService<Restaurant.DAL.Interfaces.ITableRepository>(),
+                scope.ServiceProvider.GetRequiredService<IGenericRepository<Table>>());
+            Assert.Same(scope.ServiceProvider.GetRequiredService<Restaurant.DAL.Interfaces.IQrRepository>(),
+                scope.ServiceProvider.GetRequiredService<IGenericRepository<Qr>>());
+            Assert.Same(scope.ServiceProvider.GetRequiredService<Restaurant.DAL.Interfaces.IRestaurantRepository>(),
+                scope.ServiceProvider.GetRequiredService<IGenericRepository<Restaurant.DAL.Models.Restaurant>>());
+        }
 
         // Implicit many-to-many join tables are managed through navigation properties.
         foreach (var entity in db.Model.GetEntityTypes().Where(entity => !entity.HasSharedClrType))
@@ -101,16 +112,18 @@ public class PersistenceTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task TransactionCommitsOrRollsBackAllWrites(bool fail)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task TransactionCommitsOrRollsBackAllWrites(bool fail, bool explicitIsolation)
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         await using var db = CreateContext(connection);
         await db.Database.EnsureCreatedAsync();
         using var unitOfWork = new UnitOfWork<TestContext>(db);
-        var operation = async () => await unitOfWork.ExecuteInTransactionAsync(async () =>
+        Func<Task<bool>> action = async () =>
         {
             db.Entities.Add(new TestEntity
             {
@@ -129,7 +142,10 @@ public class PersistenceTests
                 Name = "Second"
             });
             return true;
-        });
+        };
+        Func<Task<bool>> operation = () => explicitIsolation
+            ? unitOfWork.ExecuteInTransactionAsync(action, System.Data.IsolationLevel.Serializable)
+            : unitOfWork.ExecuteInTransactionAsync(action);
 
         if (fail)
         {
@@ -184,5 +200,36 @@ public class PersistenceTests
     {
         public Guid Id { get; set; }
         public string Name { get; set; } = string.Empty;
+        public Guid? ParentId { get; set; }
+        public TestEntity? Parent { get; set; }
+    }
+
+    [Fact]
+    public async Task IncludeLoadsRelatedEntityAndKeepsFilter()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var db = CreateContext(connection);
+        await db.Database.EnsureCreatedAsync();
+        var parent = new TestEntity
+        {
+            Id = Guid.NewGuid(),
+            Name = "Parent"
+        };
+        var child = new TestEntity
+        {
+            Id = Guid.NewGuid(),
+            Name = "Child",
+            Parent = parent
+        };
+        db.Entities.Add(child);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var repository = new GenericRepository<TestEntity, TestContext>(db);
+        var result = await repository.GetAllByListAsync(entity => entity.Id == child.Id,
+            query => query.Include(entity => entity.Parent));
+
+        Assert.Equal("Parent", Assert.Single(result).Parent!.Name);
     }
 }

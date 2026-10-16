@@ -51,7 +51,29 @@ builder.Services.AddGrpcClient<SessionGrpc.SessionGrpcClient>(
 builder.Services.AddGrpcClient<RoleGrpc.RoleGrpcClient>(
     options => options.Address = new Uri(identityAddress));
 
+var restaurantAddress = builder.Configuration["GrpcServices:Restaurant"]
+    ?? throw new InvalidOperationException("Configure GrpcServices:Restaurant.");
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantGrpc.RestaurantGrpcClient>(options =>
+{
+    options.Address = new Uri(restaurantAddress);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.AreaGrpc.AreaGrpcClient>(options =>
+{
+    options.Address = new Uri(restaurantAddress);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.TableGrpc.TableGrpcClient>(options =>
+{
+    options.Address = new Uri(restaurantAddress);
+});
+
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.QrGrpc.QrGrpcClient>(options =>
+{
+    options.Address = new Uri(restaurantAddress);
+});
+
 var app = builder.Build();
+
+
 if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled"))
 {
     app.UseSwagger();

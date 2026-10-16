@@ -38,6 +38,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
       ConnectionStrings__DefaultConnection: ${RESTAURANT_DB_CONNECTION:-}
+      Qr__MenuBaseUrl: ${QR_MENU_BASE_URL:-http://localhost:5173/menu}
+      Qr__ImageDirectory: /app/App_Data/qr-images
+    volumes:
+      - qr-images:/app/App_Data/qr-images
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -107,6 +111,8 @@ services:
       - "host.docker.internal:host-gateway"
     networks:
       - backend
+volumes:
+  qr-images:
 networks:
   backend:
     driver: bridge

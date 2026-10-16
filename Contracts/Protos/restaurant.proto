@@ -1,0 +1,100 @@
+syntax = "proto3";
+option csharp_namespace = "Backend.Contracts.Restaurant";
+package restaurant;
+import "google/protobuf/empty.proto";
+
+message IdRequest { string id = 1; string version = 2; }
+message ListRequest {
+  optional string restaurant_id = 1;
+  optional string area_id = 2;
+  optional bool is_active = 3;
+  string search = 4;
+  int32 page = 5;
+  int32 page_size = 6;
+}
+message StatusRequest { string id = 1; bool is_active = 2; string version = 3; }
+message AssignAreaRequest { string id = 1; string area_id = 2; string version = 3; }
+message OpeningHourInfo { int32 day_of_week = 1; string open_at = 2; string close_at = 3; }
+
+message RestaurantInfo {
+  string restaurant_id = 1;
+  string restaurant_name = 2;
+  string address = 3;
+  string hotline = 4;
+  optional string tax_code = 5;
+  optional string logo_url = 6;
+  string time_zone = 7;
+  repeated OpeningHourInfo opening_hours = 8;
+}
+message RestaurantPage { repeated RestaurantInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
+service RestaurantGrpc {
+  rpc GetAll(ListRequest) returns (RestaurantPage);
+  rpc GetById(IdRequest) returns (RestaurantInfo);
+  rpc Create(RestaurantInfo) returns (RestaurantInfo);
+  rpc Update(RestaurantInfo) returns (RestaurantInfo);
+}
+
+message AreaInfo {
+  string area_id = 1;
+  string restaurant_id = 2;
+  string area_code = 3;
+  string area_name = 4;
+  string service_type = 5;
+  string space_type = 6;
+  bool is_active = 7;
+}
+message AreaPage { repeated AreaInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
+service AreaGrpc {
+  rpc GetAll(ListRequest) returns (AreaPage);
+  rpc GetById(IdRequest) returns (AreaInfo);
+  rpc Create(AreaInfo) returns (AreaInfo);
+  rpc Update(AreaInfo) returns (AreaInfo);
+  rpc Delete(IdRequest) returns (google.protobuf.Empty);
+  rpc SetStatus(StatusRequest) returns (AreaInfo);
+}
+
+message TableInfo {
+  string table_id = 1;
+  string area_id = 2;
+  string table_code = 3;
+  int32 capacity = 4;
+  optional string position_x = 5;
+  optional string position_y = 6;
+  bool is_active = 7;
+  string cleaning_status = 8;
+  string version = 9;
+}
+message TablePage { repeated TableInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
+service TableGrpc {
+  rpc GetAll(ListRequest) returns (TablePage);
+  rpc GetById(IdRequest) returns (TableInfo);
+  rpc Create(TableInfo) returns (TableInfo);
+  rpc Update(TableInfo) returns (TableInfo);
+  rpc Delete(IdRequest) returns (google.protobuf.Empty);
+  rpc SetStatus(StatusRequest) returns (TableInfo);
+  rpc AssignArea(AssignAreaRequest) returns (TableInfo);
+}
+
+message QrRegenerateRequest { string table_id = 1; string expected_qr_id = 2; }
+message QrTokenRequest { string token = 1; }
+message QrInfo {
+  string qr_id = 1;
+  string table_id = 2;
+  string table_code = 3;
+  string area_id = 4;
+  string created_at = 5;
+  optional string revoked_at = 6;
+  bool is_usable = 7;
+  optional string image_url = 8;
+}
+message QrImageReply { bytes png = 1; }
+message QrCreatedReply { QrInfo qr = 1; string menu_url = 2; string token = 3; bytes png = 4; }
+message QrPage { repeated QrInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
+message QrTableReply { string table_id = 1; string table_code = 2; string area_id = 3; string restaurant_id = 4; }
+service QrGrpc {
+  rpc GetImage(IdRequest) returns (QrImageReply);
+  rpc GetAll(ListRequest) returns (QrPage);
+  rpc Create(IdRequest) returns (QrCreatedReply);
+  rpc Regenerate(QrRegenerateRequest) returns (QrCreatedReply);
+  rpc Resolve(QrTokenRequest) returns (QrTableReply);
+}
