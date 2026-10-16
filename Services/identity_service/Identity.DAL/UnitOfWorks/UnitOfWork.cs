@@ -41,9 +41,14 @@ namespace Identity.DAL.UnitOfWorks
             return await _context.SaveChangesAsync(cancellationToken);
         }
 
-        public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action, CancellationToken cancellationToken = default)
+        public Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action, CancellationToken cancellationToken = default)
         {
-            await using var transaction = await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
+            return ExecuteInTransactionAsync(action, IsolationLevel.Serializable, cancellationToken);
+        }
+
+        public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action, IsolationLevel isolationLevel, CancellationToken cancellationToken = default)
+        {
+            await using var transaction = await _context.Database.BeginTransactionAsync(isolationLevel, cancellationToken);
             var result = await action();
             await SaveAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);

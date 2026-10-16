@@ -5,7 +5,7 @@ namespace Identity.BLL.Interfaces;
 
 public interface IRoleService
 {
-    Task<ResponseDTO> GetAll(Guid actorId, CancellationToken ct);
+    Task<ResponseDTO> GetAll(Guid actorId, CancellationToken ct, string? search = null);
     Task<ResponseDTO> GetById(Guid actorId, string id, CancellationToken ct);
     Task<ResponseDTO> Create(Guid actorId, RoleDTO request, CancellationToken ct);
     Task<ResponseDTO> Update(Guid actorId, string id, RoleDTO request, CancellationToken ct);

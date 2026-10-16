@@ -1,3 +1,5 @@
+> Cập nhật: vai trò hiện là danh mục cố định theo UC_ADM_06. Các mô tả CRUD bên dưới là thiết kế cũ; API ghi đã bị chặn. Xem [admin-identity.md](admin-identity.md).
+
 # Employee roles
 
 All endpoints require a Bearer token for an active administrator. Administrators are

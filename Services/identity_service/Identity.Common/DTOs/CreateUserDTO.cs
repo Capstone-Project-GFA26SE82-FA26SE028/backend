@@ -2,6 +2,7 @@ namespace Identity.Common.DTOs;
 
 public sealed class CreateUserDTO
 {
+    public string? AvatarUrl { get; set; }
     public string? UserName { get; set; }
 
     public string? Email { get; set; }

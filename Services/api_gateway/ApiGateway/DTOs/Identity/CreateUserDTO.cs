@@ -4,6 +4,7 @@ namespace ApiGateway.DTOs.Identity;
 
 public sealed class CreateUserDTO
 {
+    public string? AvatarUrl { get; set; }
     [Required, StringLength(100)] public string UserName { get; set; } = "";
     [Required, EmailAddress, StringLength(255)] public string Email { get; set; } = "";
     [Required, StringLength(72, MinimumLength = 8), DataType(DataType.Password)] public string Password { get; set; } = "";

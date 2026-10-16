@@ -13,24 +13,8 @@ namespace ApiGateway.Controllers.IdentityController;
 [ApiController]
 [Route("api/users")]
 [RequireBearerToken]
-public sealed class UserController(UserGrpc.UserGrpcClient client) : ControllerBase
+public sealed class UserController(UserGrpc.UserGrpcClient client) : IdentityControllerBase
 {
-    private CallOptions Options(CancellationToken ct)
-    {
-        var headers = new Metadata();
-        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
-        if (ip is not null)
-        {
-            headers.Add("x-client-ip", ip);
-        }
-        var authorization = Request.Headers.Authorization.ToString();
-        if (!string.IsNullOrWhiteSpace(authorization))
-        {
-            headers.Add("authorization", authorization);
-        }
-
-        return new CallOptions(headers, DateTime.UtcNow.AddSeconds(10), ct);
-    }
     [HttpGet("me")]
     public Task<IActionResult> GetMe(CancellationToken ct)
     {
@@ -60,16 +44,28 @@ public sealed class UserController(UserGrpc.UserGrpcClient client) : ControllerB
 
     [HttpGet]
     public Task<IActionResult> GetAll(CancellationToken ct, [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20, [FromQuery] string? search = null)
+        [FromQuery] int pageSize = 20, [FromQuery] string? search = null,
+        [FromQuery] string? roleId = null, [FromQuery] bool? isActive = null)
     {
         return Execute(async () =>
     {
-        var reply = await client.ListUsersAsync(new ListUsersRequest
+        var request = new ListUsersRequest
         {
             Page = page,
             PageSize = pageSize,
             Search = search ?? ""
-        }, Options(ct));
+        };
+        if (roleId is not null)
+        {
+            request.RoleId = roleId;
+        }
+
+        if (isActive.HasValue)
+        {
+            request.IsActive = isActive.Value;
+        }
+
+        var reply = await client.ListUsersAsync(request, Options(ct));
         return StatusCode(reply.StatusCode, new ResponseDTO
         {
             StatusCode = reply.StatusCode,
@@ -91,6 +87,32 @@ public sealed class UserController(UserGrpc.UserGrpcClient client) : ControllerB
     {
         return Execute(async () =>
         UserResponse(await client.GetUserAsync(new GetUserRequest { UserId = id.ToString() }, Options(ct))), ct);
+    }
+
+    [HttpPut("{id:guid}")]
+    public Task<IActionResult> Update(Guid id, UpdateUserDTO body, CancellationToken ct)
+    {
+        return Execute(async () =>
+        {
+            var request = new UpdateUserRequest
+            {
+                UserId = id.ToString(),
+                UserName = body.UserName,
+                Email = body.Email,
+                FullName = body.FullName
+            };
+            if (body.PhoneNumber is not null)
+            {
+                request.PhoneNumber = body.PhoneNumber;
+            }
+
+            if (body.AvatarUrl is not null)
+            {
+                request.AvatarUrl = body.AvatarUrl;
+            }
+
+            return UserResponse(await client.UpdateUserAsync(request, Options(ct)));
+        }, ct);
     }
 
     [HttpPatch("{id:guid}/status")]
@@ -120,6 +142,11 @@ public sealed class UserController(UserGrpc.UserGrpcClient client) : ControllerB
         if (body.PhoneNumber is not null)
         {
             request.PhoneNumber = body.PhoneNumber;
+        }
+
+        if (body.AvatarUrl is not null)
+        {
+            request.AvatarUrl = body.AvatarUrl;
         }
 
         var reply = await client.CreateUserAsync(request, Options(ct));
@@ -170,31 +197,4 @@ public sealed class UserController(UserGrpc.UserGrpcClient client) : ControllerB
             UpdatedAt = user.UpdatedAt?.ToDateTime()
         };
     }
-
-    private async Task<IActionResult> Execute(Func<Task<IActionResult>> call, CancellationToken ct)
-    {
-        Response.Headers.CacheControl = "no-store";
-        try
-        {
-            return await call();
-        }
-        catch (RpcException ex) when (!ct.IsCancellationRequested)
-        {
-            var (status, message) = ex.StatusCode switch
-            {
-                Grpc.Core.StatusCode.Unauthenticated => (401, "Token hoặc phiên không hợp lệ."),
-                Grpc.Core.StatusCode.PermissionDenied => (403, "Không có quyền truy cập."),
-                Grpc.Core.StatusCode.InvalidArgument => (400, "Dữ liệu không hợp lệ."),
-                Grpc.Core.StatusCode.NotFound => (404, "Không tìm thấy user."),
-                Grpc.Core.StatusCode.Unavailable => (503, "Identity service không khả dụng."),
-                Grpc.Core.StatusCode.DeadlineExceeded => (504, "Identity service phản hồi quá thời gian."),
-                _ => (502, "Không thể xử lý phản hồi từ Identity service.")
-            };
-            return StatusCode(status, new ResponseDTO { StatusCode = status, Message = message, IsSuccess = false });
-        }
-    }
-
-
-
-
 }

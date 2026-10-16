@@ -11,7 +11,7 @@ public sealed class RoleGrpcService(IRoleService service) : RoleGrpc.RoleGrpcBas
     public override async Task<RoleListReply> GetAll(ListRolesRequest request, ServerCallContext context)
     {
         var actor = await GrpcAuthentication.RequireUser(context);
-        var response = await service.GetAll(actor.UserId, context.CancellationToken);
+        var response = await service.GetAll(actor.UserId, context.CancellationToken, request.HasSearch ? request.Search : null);
         return ToListReply(response);
     }
 

@@ -3,7 +3,28 @@ using Restaurant.DAL.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddGrpc();
+builder.Services.AddGrpc(options =>
+{
+    options.Interceptors.Add<Restaurant.API.Management.ManagementInterceptor>();
+});
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IManagementAccess, Restaurant.API.Management.IdentityManagementAccess>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantService, Restaurant.BLL.Implements.RestaurantService>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IAreaService, Restaurant.BLL.Implements.AreaService>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableService, Restaurant.BLL.Implements.TableService>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IQrService, Restaurant.BLL.Implements.QrService>();
+builder.Services.Configure<Restaurant.Common.Settings.QrSettings>(builder.Configuration.GetSection("Qr"));
+builder.Services.AddSingleton<Restaurant.BLL.Interfaces.IQrImageStore>(provider =>
+{
+    var settings = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Restaurant.Common.Settings.QrSettings>>().Value;
+    var environment = provider.GetRequiredService<IHostEnvironment>();
+    return new Restaurant.BLL.Implements.QrImageStore(Path.GetFullPath(settings.ImageDirectory, environment.ContentRootPath));
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Identity.AccessGrpc.AccessGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Identity."));
+});
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -14,6 +35,11 @@ if (string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddRestaurantPersistence(connectionString);
 
 var app = builder.Build();
+
+app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.AreaGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.TableGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.QrGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

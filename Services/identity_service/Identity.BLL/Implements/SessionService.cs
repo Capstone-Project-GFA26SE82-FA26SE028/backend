@@ -13,14 +13,14 @@ public sealed class SessionService(
     IUserRepository users,
     IOptions<UserManagementSettings> settings) : ISessionService
 {
-    public async Task<ResponseDTO> GetAll(Guid actorId, int page, int pageSize, Guid? userId, CancellationToken ct)
+    public async Task<ResponseDTO> GetAll(Guid actorId, int page, int pageSize, Guid? userId, CancellationToken ct, Identity.Common.DTOs.SessionFilter? filter = null)
     {
         if (!await IsAdmin(actorId, ct))
         {
             return new ResponseDTO("Không có quyền truy cập.", 403);
         }
 
-        return await GetPage(page, pageSize, userId, ct);
+        return await GetPage(page, pageSize, userId, ct, filter);
     }
 
     public async Task<ResponseDTO> GetMe(Guid userId, int page, int pageSize, CancellationToken ct)
@@ -47,7 +47,7 @@ public sealed class SessionService(
         return new ResponseDTO("Đã đăng xuất tất cả phiên.", 200, true);
     }
 
-    private async Task<ResponseDTO> GetPage(int page, int pageSize, Guid? userId, CancellationToken ct)
+    private async Task<ResponseDTO> GetPage(int page, int pageSize, Guid? userId, CancellationToken ct, Identity.Common.DTOs.SessionFilter? filter = null)
     {
         var pagination = new PaginationRequest
         {
@@ -55,18 +55,21 @@ public sealed class SessionService(
             PageSize = pageSize
         };
 
-        if (!pagination.IsValid() || userId == Guid.Empty)
+        if (!pagination.IsValid() || userId == Guid.Empty || filter?.IsValid() == false)
         {
             return new ResponseDTO("Phân trang hoặc userId không hợp lệ. PageSize từ 1 đến 100.", 400);
         }
 
-        var (items, total) = await repository.GetAllAsync(page, pageSize, userId, ct);
+        var (items, total) = await repository.GetAllAsync(page, pageSize, userId, ct, filter);
         var result = new PagedResult<SessionDTO>
         {
             Items = items.Select(item => new SessionDTO
             {
                 UserSessionId = item.UserSessionId,
                 UserId = item.UserId,
+                UserName = item.User.UserName,
+                Email = item.User.Email,
+                RoleId = item.User.RoleId,
                 IpAddress = item.IpAddress,
                 UserAgent = item.UserAgent,
                 DeviceType = item.DeviceType,

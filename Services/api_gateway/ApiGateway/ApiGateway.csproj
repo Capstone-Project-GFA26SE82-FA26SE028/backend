@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
@@ -23,5 +23,8 @@
 	</ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\Shared\Shared.Common\Shared.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Protobuf Include="../../../Contracts/Protos/restaurant.proto" Link="Protos\restaurant.proto" GrpcServices="Client" />
   </ItemGroup>
 </Project>

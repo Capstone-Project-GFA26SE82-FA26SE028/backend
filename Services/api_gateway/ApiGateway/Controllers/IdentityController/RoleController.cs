@@ -12,11 +12,17 @@ namespace ApiGateway.Controllers.IdentityController;
 public sealed class RoleController(RoleGrpc.RoleGrpcClient client) : IdentityControllerBase
 {
     [HttpGet]
-    public Task<IActionResult> GetAll(CancellationToken ct)
+    public Task<IActionResult> GetAll(CancellationToken ct, [FromQuery] string? search = null)
     {
         return Execute(async () =>
         {
-            var reply = await client.GetAllAsync(new ListRolesRequest(), Options(ct));
+            var request = new ListRolesRequest();
+            if (search is not null)
+            {
+                request.Search = search;
+            }
+
+            var reply = await client.GetAllAsync(request, Options(ct));
             return StatusCode(reply.StatusCode, new ResponseDTO
             {
                 StatusCode = reply.StatusCode,
@@ -40,6 +46,7 @@ public sealed class RoleController(RoleGrpc.RoleGrpcClient client) : IdentityCon
         }, ct);
     }
 
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpPost]
     public Task<IActionResult> Create(CreateRoleDTO body, CancellationToken ct)
     {
@@ -55,6 +62,7 @@ public sealed class RoleController(RoleGrpc.RoleGrpcClient client) : IdentityCon
         }, ct);
     }
 
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpPut("{id}")]
     public Task<IActionResult> Update(string id, UpdateRoleDTO body, CancellationToken ct)
     {
@@ -65,6 +73,7 @@ public sealed class RoleController(RoleGrpc.RoleGrpcClient client) : IdentityCon
         }, ct);
     }
 
+    [ApiExplorerSettings(IgnoreApi = true)]
     [HttpDelete("{id}")]
     public Task<IActionResult> Delete(string id, CancellationToken ct)
     {

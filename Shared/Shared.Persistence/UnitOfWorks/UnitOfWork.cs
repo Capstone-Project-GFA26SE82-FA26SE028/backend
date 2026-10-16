@@ -22,11 +22,23 @@ public class UnitOfWork<TContext> : IUnitOfWork where TContext : DbContext
         return await SaveAsync() > 0;
     }
 
-    public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action, CancellationToken cancellationToken = default)
+    public Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action, CancellationToken cancellationToken = default)
+    {
+        return ExecuteTransactionAsync(action, null, cancellationToken);
+    }
+
+    public Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> action, System.Data.IsolationLevel isolationLevel, CancellationToken cancellationToken = default)
+    {
+        return ExecuteTransactionAsync(action, isolationLevel, cancellationToken);
+    }
+
+    private async Task<T> ExecuteTransactionAsync<T>(Func<Task<T>> action, System.Data.IsolationLevel? isolationLevel, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = isolationLevel.HasValue
+            ? await _context.Database.BeginTransactionAsync(isolationLevel.Value, cancellationToken)
+            : await _context.Database.BeginTransactionAsync(cancellationToken);
         var result = await action();
         await SaveAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);

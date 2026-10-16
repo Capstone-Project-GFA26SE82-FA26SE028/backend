@@ -20,7 +20,7 @@ Chạy local với profile `https`, mở https://localhost:5000/swagger. Chạy 
 
 Restaurant, Catalog, Ordering, Customer, Inventory và Billing đã được cấu hình DbContext, repository theo entity và UnitOfWork scoped. Chúng có endpoint `/health/live` (tiến trình hoạt động) và `/health/ready` (kết nối database được: 200, không được: 503). Readiness chỉ kiểm tra kết nối, chưa xác nhận schema đầy đủ. Các cổng này chỉ nhận HTTP/2; dùng client hỗ trợ HTTP/2 khi kiểm tra health.
 
-Các service mới chưa có RPC nghiệp vụ hoặc controller tương ứng ở Gateway. Thêm `.proto`, gRPC service, BLL và controller theo từng chức năng; xem [hướng dẫn chuẩn bị code](development.md).
+Restaurant đã có API quản lý thông tin nhà hàng, khu vực, bàn và gán khu vực qua Gateway; xem [hướng dẫn và JSON mẫu](restaurant-management.md). Năm service mới còn lại chưa có RPC nghiệp vụ hoặc controller tương ứng ở Gateway. Thêm `.proto`, gRPC service, BLL và controller theo từng chức năng; xem [hướng dẫn chuẩn bị code](development.md).
 
 Chạy local với User Secrets, ví dụ Catalog:
 

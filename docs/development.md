@@ -13,6 +13,8 @@ Sáu service mới đăng ký persistence tại `<Service>.DAL/Extensions/Persis
 
 ## Thêm chức năng đầu tiên
 
+Nhóm quản lý Restaurant đã có luồng Gateway → gRPC → BLL → DAL và test tích hợp; xem [restaurant-management.md](restaurant-management.md) để chạy và tham khảo cách tổ chức theo từng model.
+
 Ví dụ Category của Catalog:
 
 1. Tạo DTO request/response trong Catalog.Common, quy định trường bắt buộc và phân trang.
@@ -34,7 +36,7 @@ Sửa SQL/schema trước, cập nhật database rồi scaffold lại bằng c�
 ```powershell
 dotnet build Backend.sln
 dotnet test Tests/Foundation.Tests/Foundation.Tests.csproj
-dotnet test Services/identity_service/Identity.Tests/Identity.Tests.csproj
+dotnet test Tests/Identity.Tests/Identity.Tests.csproj
 ```
 
 Foundation.Tests kiểm tra DI và mapping của sáu service mà không kết nối SQL Server; test lưu/xóa và commit/rollback dùng SQLite in-memory. Cần kiểm tra thêm trên SQL Server thật cho constraint, rowversion và transaction của nghiệp vụ cụ thể.

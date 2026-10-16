@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
@@ -20,13 +20,14 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Protos", "Protos", "{D9F45AB6-E5A7-4031-8115-95FEFC11779D}"
 	ProjectSection(SolutionItems) = preProject
 		Contracts\Protos\identity.proto = Contracts\Protos\identity.proto
+		Contracts\Protos\restaurant.proto = Contracts\Protos\restaurant.proto
 	EndProjectSection
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ApiGateway", "Services\api_gateway\ApiGateway\ApiGateway.csproj", "{85CE8829-3638-67F2-3EFF-79C45CFA894C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Identity.API", "Services\identity_service\Identity.API\Identity.API.csproj", "{099B16E2-B029-770B-F661-D2EC1AF56156}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Identity.Tests", "Services\identity_service\Identity.Tests\Identity.Tests.csproj", "{0DFD77E5-8048-4ACE-BB07-BF6365DC7BBD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Identity.Tests", "Tests\Identity.Tests\Identity.Tests.csproj", "{0DFD77E5-8048-4ACE-BB07-BF6365DC7BBD}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "restaurant_service", "restaurant_service", "{B4664E3E-B7E2-D55D-26AE-52F99BB95909}"
 EndProject
@@ -97,6 +98,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Foundation.Tests", "Tests\Foundation.Tests\Foundation.Tests.csproj", "{8F694523-F556-4FFD-AD87-3AF9F0FBB4E9}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Restaurant.Tests", "Tests\Restaurant.Tests\Restaurant.Tests.csproj", "{4862C570-B192-484D-A43E-2C685B515CB7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -504,6 +507,18 @@ Global
 		{8F694523-F556-4FFD-AD87-3AF9F0FBB4E9}.Release|x64.Build.0 = Release|Any CPU
 		{8F694523-F556-4FFD-AD87-3AF9F0FBB4E9}.Release|x86.ActiveCfg = Release|Any CPU
 		{8F694523-F556-4FFD-AD87-3AF9F0FBB4E9}.Release|x86.Build.0 = Release|Any CPU
+		{4862C570-B192-484D-A43E-2C685B515CB7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4862C570-B192-484D-A43E-2C685B515CB7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4862C570-B192-484D-A43E-2C685B515CB7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4862C570-B192-484D-A43E-2C685B515CB7}.Debug|x64.Build.0 = Debug|Any CPU
+		{4862C570-B192-484D-A43E-2C685B515CB7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4862C570-B192-484D-A43E-2C685B515CB7}.Debug|x86.Build.0 = Debug|Any CPU
+		{4862C570-B192-484D-A43E-2C685B515CB7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4862C570-B192-484D-A43E-2C685B515CB7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4862C570-B192-484D-A43E-2C685B515CB7}.Release|x64.ActiveCfg = Release|Any CPU
+		{4862C570-B192-484D-A43E-2C685B515CB7}.Release|x64.Build.0 = Release|Any CPU
+		{4862C570-B192-484D-A43E-2C685B515CB7}.Release|x86.ActiveCfg = Release|Any CPU
+		{4862C570-B192-484D-A43E-2C685B515CB7}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -517,7 +532,7 @@ Global
 		{D9F45AB6-E5A7-4031-8115-95FEFC11779D} = {4F8D54B2-F7F5-4B97-BCCA-F0ACD72ACAC3}
 		{85CE8829-3638-67F2-3EFF-79C45CFA894C} = {8D444660-E267-F61C-EFE9-3054A086E62D}
 		{099B16E2-B029-770B-F661-D2EC1AF56156} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
-		{0DFD77E5-8048-4ACE-BB07-BF6365DC7BBD} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{0DFD77E5-8048-4ACE-BB07-BF6365DC7BBD} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{B4664E3E-B7E2-D55D-26AE-52F99BB95909} = {5854FF58-B8C5-05C6-5BF2-ACE42193F22B}
 		{A03B270F-CE16-4C73-BCAC-2B0C6C7A80DD} = {B4664E3E-B7E2-D55D-26AE-52F99BB95909}
 		{42E337AE-5575-4C4B-92C0-127925863C87} = {B4664E3E-B7E2-D55D-26AE-52F99BB95909}
@@ -551,6 +566,7 @@ Global
 		{82D583C8-5512-432F-AB96-57710A6B1CF2} = {4F52FD11-658E-A102-6CD3-7D7C16FFA15B}
 		{633631FD-3C4A-43BA-963D-FD99F5C63B43} = {4F52FD11-658E-A102-6CD3-7D7C16FFA15B}
 		{8F694523-F556-4FFD-AD87-3AF9F0FBB4E9} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{4862C570-B192-484D-A43E-2C685B515CB7} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {8A12A186-6AA3-44DF-829C-C5D6EB912FE1}

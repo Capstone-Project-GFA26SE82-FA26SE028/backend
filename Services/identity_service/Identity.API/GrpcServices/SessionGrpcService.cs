@@ -13,7 +13,15 @@ public sealed class SessionGrpcService(ISessionService service) : SessionGrpc.Se
     {
         var actor = await GrpcAuthentication.RequireUser(context);
         Guid? userId = request.HasUserId ? ParseId(request.UserId) : null;
-        var response = await service.GetAll(actor.UserId, request.Page, request.PageSize, userId, context.CancellationToken);
+        var response = await service.GetAll(actor.UserId, request.Page, request.PageSize, userId, context.CancellationToken, new SessionFilter
+        {
+            Search = request.HasSearch ? request.Search : null,
+            RoleId = request.HasRoleId ? request.RoleId : null,
+            DeviceType = request.HasDeviceType ? request.DeviceType : null,
+            Status = request.HasStatus ? request.Status : null,
+            FromUtc = request.FromUtc?.ToDateTime(),
+            ToUtc = request.ToUtc?.ToDateTime()
+        });
         return ToReply(response, actor.SessionId);
     }
 
@@ -68,6 +76,9 @@ public sealed class SessionGrpcService(ISessionService service) : SessionGrpc.Se
                 {
                     UserSessionId = item.UserSessionId.ToString(),
                     UserId = item.UserId.ToString(),
+                    UserName = item.UserName,
+                    Email = item.Email,
+                    RoleId = item.RoleId,
                     LoggedInAt = Timestamp.FromDateTime(item.LoggedInAt),
                     ExpiresAt = Timestamp.FromDateTime(item.ExpiresAt),
                     IsCurrent = item.UserSessionId == currentSessionId

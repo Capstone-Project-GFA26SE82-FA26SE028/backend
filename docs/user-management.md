@@ -40,7 +40,7 @@ RequireBearerTokenAttribute và BearerSecurityFilter chỉ cung cấp metadata c
 
 ```powershell
 dotnet build Backend.sln -c Release
-dotnet test Services/identity_service/Identity.Tests/Identity.Tests.csproj -c Release
+dotnet test Tests/Identity.Tests/Identity.Tests.csproj -c Release
 ```
 
 Tests dùng SQLite in-memory, không ghi vào database thật. Sau khi cập nhật code cần khởi động lại Gateway và Identity. Kiểm thử với tài khoản thật: login → GET me → PUT me → GET me; user thường gọi danh sách phải nhận 403; admin khóa user thì token cũ bị từ chối.

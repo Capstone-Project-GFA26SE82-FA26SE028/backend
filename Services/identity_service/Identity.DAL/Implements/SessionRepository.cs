@@ -115,12 +115,52 @@ public sealed class SessionRepository(IdentityDbContext context) : ISessionRepos
             && s.ExpiresAt > now && s.User.IsActive && s.User.RoleId == roleId);
     }
 
-    public async Task<(List<UserSession> Items, int Total)> GetAllAsync(int page, int pageSize, Guid? userId, CancellationToken ct)
+    public async Task<(List<UserSession> Items, int Total)> GetAllAsync(int page, int pageSize, Guid? userId, CancellationToken ct, Identity.Common.DTOs.SessionFilter? filter = null)
     {
-        var query = context.UserSessions.AsNoTracking();
+        var query = context.UserSessions.AsNoTracking().Include(x => x.User).AsQueryable();
         if (userId.HasValue)
         {
             query = query.Where(item => item.UserId == userId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter?.Search))
+        {
+            var search = filter.Search.Trim();
+            query = query.Where(x => x.User.Email.Contains(search) || x.User.UserName.Contains(search));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter?.RoleId))
+        {
+            query = query.Where(x => x.User.RoleId == filter.RoleId.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter?.DeviceType))
+        {
+            query = query.Where(x => x.DeviceType == filter.DeviceType.Trim());
+        }
+
+        if (filter?.FromUtc is { } from)
+        {
+            query = query.Where(x => x.LoggedInAt >= from);
+        }
+
+        if (filter?.ToUtc is { } to)
+        {
+            query = query.Where(x => x.LoggedInAt <= to);
+        }
+
+        var now = DateTime.UtcNow;
+        if (filter?.Status == "active")
+        {
+            query = query.Where(x => x.RevokedAt == null && x.ExpiresAt > now && x.User.IsActive);
+        }
+        else if (filter?.Status == "expired")
+        {
+            query = query.Where(x => x.RevokedAt == null && x.ExpiresAt <= now);
+        }
+        else if (filter?.Status == "revoked")
+        {
+            query = query.Where(x => x.RevokedAt != null);
         }
 
         var total = await query.CountAsync(ct);

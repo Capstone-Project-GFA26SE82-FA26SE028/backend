@@ -16,3 +16,4 @@
 **/*.pfx
 **/*.pem
 **/secrets.json
+**/App_Data/qr-images/

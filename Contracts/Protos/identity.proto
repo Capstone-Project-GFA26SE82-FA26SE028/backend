@@ -4,6 +4,11 @@ option csharp_namespace = "Backend.Contracts.Identity";
 
 package identity;
 
+service AccessGrpc {
+  rpc RequireAdmin(GetMeRequest) returns (AdminAccessReply);
+}
+message AdminAccessReply { string user_id = 1; }
+
 import "google/protobuf/timestamp.proto";
 
 service IdentityGrpc {
@@ -71,6 +76,7 @@ message UserInfo {
 }
 
 service UserGrpc {
+  rpc UpdateUser (UpdateUserRequest) returns (UserReply);
   rpc CreateUser (CreateUserRequest) returns (UserReply);
   rpc ListRoles (ListRolesRequest) returns (RoleListReply);
   rpc SetUserRole (SetUserRoleRequest) returns (UserReply);
@@ -95,6 +101,8 @@ message ListUsersRequest {
   int32 page = 1;
   int32 page_size = 2;
   string search = 3;
+  optional string role_id = 4;
+  optional bool is_active = 5;
 }
 message UserReply {
   int32 status_code = 1;
@@ -119,9 +127,10 @@ message CreateUserRequest {
   string full_name = 4;
   optional string phone_number = 5;
   string role_id = 6;
+  optional string avatar_url = 7;
 }
 message SetUserRoleRequest { string user_id = 1; string role_id = 2; }
-message ListRolesRequest {}
+message ListRolesRequest { optional string search = 1; }
 message RoleInfo { string role_id = 1; string role_name = 2; optional string description = 3; }
 message RoleListReply {
   int32 status_code = 1;
@@ -134,6 +143,12 @@ message ActivityListRequest {
   int32 page = 1;
   int32 page_size = 2;
   optional string user_id = 3;
+  optional string search = 4;
+  optional string role_id = 5;
+  optional string device_type = 6;
+  optional string status = 7;
+  google.protobuf.Timestamp from_utc = 8;
+  google.protobuf.Timestamp to_utc = 9;
 }
 
 message AuditLogInfo {
@@ -168,6 +183,9 @@ message SessionInfo {
   google.protobuf.Timestamp expires_at = 7;
   google.protobuf.Timestamp revoked_at = 8;
   bool is_current = 9;
+  string user_name = 10;
+  string email = 11;
+  string role_id = 12;
 }
 
 message SessionListReply {
@@ -216,4 +234,13 @@ message RoleReply {
   string message = 2;
   bool is_success = 3;
   RoleInfo result = 4;
+}
+
+message UpdateUserRequest {
+  string user_id = 1;
+  string user_name = 2;
+  string email = 3;
+  string full_name = 4;
+  optional string phone_number = 5;
+  optional string avatar_url = 6;
 }
