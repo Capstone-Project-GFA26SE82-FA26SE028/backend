@@ -58,7 +58,8 @@ services:
       ConnectionStrings__DefaultConnection: ${CATALOG_DB_CONNECTION:-}
       GrpcServices__Identity: http://identity:5001
       CatalogManagement__MenuManagerRoleIds__0: ${CATALOG_MENU_MANAGER_ROLE_ID:-}
-      CatalogManagement__NonSellingItemAvailabilities__0: ${CATALOG_NON_SELLING_AVAILABILITY:-}
+      CatalogManagement__NonSellingItemAvailabilities__0: ${CATALOG_NON_SELLING_AVAILABILITY:-Inactive}
+      ItemManagement__InitialAvailability: ${CATALOG_INITIAL_AVAILABILITY:-Inactive}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

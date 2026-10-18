@@ -13,6 +13,14 @@ public static class CatalogServiceExtensions
         IConfiguration configuration)
     {
         services.AddHttpContextAccessor();
+        services.AddOptions<ItemManagementSettings>()
+            .Bind(configuration.GetSection("ItemManagement"))
+            .Validate(settings => settings.InitialAvailability is not null
+                && settings.InitialAvailability.Length <= 50
+                && settings.InitialAvailability == settings.InitialAvailability.Trim()
+                && !settings.InitialAvailability.Any(char.IsControl),
+                "ItemManagement:InitialAvailability must be at most 50 characters without surrounding whitespace or control characters.")
+            .ValidateOnStart();
         services.AddOptions<CatalogManagementSettings>()
             .Bind(configuration.GetSection("CatalogManagement"))
             .PostConfigure(settings =>
@@ -45,6 +53,7 @@ public static class CatalogServiceExtensions
         });
         services.AddScoped<ICatalogAccess, IdentityCatalogAccess>();
         services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<IItemService, ItemService>();
         return services;
     }
 
