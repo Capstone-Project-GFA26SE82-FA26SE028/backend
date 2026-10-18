@@ -1,7 +1,27 @@
 using Backend.Contracts.Identity;
 using Grpc.Core;
+using ApiGateway.Settings;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddOptions<CatalogClientSettings>()
+    .Bind(builder.Configuration.GetSection("CatalogClient"))
+    .Validate(settings => settings.TimeoutSeconds > 0,
+        "CatalogClient:TimeoutSeconds must be positive.")
+    .ValidateOnStart();
+
+var catalogAddress = builder.Configuration["GrpcServices:Catalog"];
+if (!Uri.TryCreate(catalogAddress, UriKind.Absolute, out var catalogUri)
+    || (catalogUri.Scheme != Uri.UriSchemeHttp
+        && catalogUri.Scheme != Uri.UriSchemeHttps))
+{
+    throw new InvalidOperationException("Configure GrpcServices:Catalog.");
+}
+
+builder.Services.AddGrpcClient<Backend.Contracts.Catalog.CategoryGrpc.CategoryGrpcClient>(options =>
+{
+    options.Address = catalogUri;
+});
+
 builder.Services.AddControllers();
 builder.Services.AddCors(options =>
 {

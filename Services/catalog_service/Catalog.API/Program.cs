@@ -1,9 +1,12 @@
 using Catalog.DAL.Extensions;
 using Catalog.DAL.Models;
+using Catalog.API.Extensions;
+using Catalog.API.GrpcServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddGrpc();
+builder.Services.AddCatalogManagement(builder.Configuration);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -14,6 +17,8 @@ if (string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddCatalogPersistence(connectionString);
 
 var app = builder.Build();
+
+app.MapGrpcService<CategoryGrpcService>();
 
 app.MapGet("/health/live", () =>
 {
