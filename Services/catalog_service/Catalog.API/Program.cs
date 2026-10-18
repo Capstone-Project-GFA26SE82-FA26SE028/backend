@@ -19,6 +19,7 @@ builder.Services.AddCatalogPersistence(connectionString);
 var app = builder.Build();
 
 app.MapGrpcService<CategoryGrpcService>();
+app.MapGrpcService<ItemGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

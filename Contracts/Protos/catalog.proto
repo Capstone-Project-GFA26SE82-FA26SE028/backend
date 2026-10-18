@@ -61,3 +61,67 @@ message CategoryListReply {
   int32 page = 6;
   int32 page_size = 7;
 }
+
+service ItemGrpc {
+  rpc Create (CreateItemRequest) returns (ItemReply);
+  rpc GetAll (ItemListRequest) returns (ItemListReply);
+  rpc GetById (ItemIdRequest) returns (ItemReply);
+  rpc Update (UpdateItemRequest) returns (ItemReply);
+}
+
+message CreateItemRequest {
+  string category_id = 1;
+  string item_name = 2;
+  optional string description = 3;
+  optional string image_url = 4;
+}
+
+message UpdateItemRequest {
+  string item_id = 1;
+  string category_id = 2;
+  string item_name = 3;
+  optional string description = 4;
+  optional string image_url = 5;
+  string version = 6;
+}
+
+message ItemIdRequest {
+  string item_id = 1;
+}
+
+message ItemListRequest {
+  optional string category_id = 1;
+  optional string search = 2;
+  optional string availability = 3;
+  int32 page = 4;
+  int32 page_size = 5;
+}
+
+message ItemInfo {
+  string item_id = 1;
+  string category_id = 2;
+  string category_name = 3;
+  string item_code = 4;
+  string item_name = 5;
+  optional string description = 6;
+  optional string image_url = 7;
+  string availability = 8;
+  string version = 9;
+}
+
+message ItemReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  ItemInfo result = 4;
+}
+
+message ItemListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated ItemInfo items = 4;
+  int32 total_count = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
