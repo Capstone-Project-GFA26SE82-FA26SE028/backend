@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+option csharp_namespace = "Backend.Contracts.Catalog";
+
+package catalog;
+
+service CategoryGrpc {
+  rpc Create (CreateCategoryRequest) returns (CategoryReply);
+  rpc GetAll (CategoryListRequest) returns (CategoryListReply);
+  rpc GetById (CategoryIdRequest) returns (CategoryReply);
+  rpc Update (UpdateCategoryRequest) returns (CategoryReply);
+  rpc SetStatus (SetCategoryStatusRequest) returns (CategoryReply);
+  rpc Delete (CategoryIdRequest) returns (CategoryReply);
+}
+
+message CreateCategoryRequest {
+  string category_name = 1;
+}
+
+message UpdateCategoryRequest {
+  string category_id = 1;
+  string category_name = 2;
+}
+
+message SetCategoryStatusRequest {
+  string category_id = 1;
+  optional bool is_active = 2;
+}
+
+message CategoryIdRequest {
+  string category_id = 1;
+}
+
+message CategoryListRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional string search = 3;
+  optional bool is_active = 4;
+}
+
+message CategoryInfo {
+  string category_id = 1;
+  string category_code = 2;
+  string category_name = 3;
+  bool is_active = 4;
+}
+
+message CategoryReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  CategoryInfo result = 4;
+}
+
+message CategoryListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated CategoryInfo items = 4;
+  int32 total_count = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
