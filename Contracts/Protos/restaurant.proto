@@ -1,4 +1,25 @@
 syntax = "proto3";
+
+message GuestJoinRequest {
+  string table_session_id = 1;
+  string phone_or_code = 2;
+}
+
+message GuestAccessRequest {
+  string table_session_id = 1;
+  string token = 2;
+}
+
+message GuestAccessReply {
+  string table_session_id = 1;
+  string expires_at = 2;
+  string token = 3;
+}
+
+service GuestAccessGrpc {
+  rpc Join(GuestJoinRequest) returns (GuestAccessReply);
+  rpc GetMe(GuestAccessRequest) returns (GuestAccessReply);
+}
 option csharp_namespace = "Backend.Contracts.Restaurant";
 package restaurant;
 import "google/protobuf/empty.proto";

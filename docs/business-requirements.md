@@ -44,7 +44,7 @@ Ngày tiếp nhận: 2026-10-16. Tổng cộng **83 chức năng**, từ **8 fil
 14. **UC_WAI_08 / UC_CUS_10 / UC_CAS_04:** cần thống nhất tên trạng thái chờ và quyền xác nhận tiền; luồng thu hộ chỉ hoàn tất khi Cashier nhận tiền. Cần chốt đối soát xác nhận chuyển khoản thủ công với webhook để tránh ghi nhận hai lần.
 15. **UC_CAS_09:** “lệch tiền >0” cần xác nhận là chênh lệch tuyệt đối hay chỉ thừa tiền, để xử lý cả thiếu quỹ.
 16. **UC_ADM_15 / UC_MGR_01 / UC_MGR_14 / UC_MGR_16:** nguồn còn để mở chỉ số giám sát, phạm vi mã duy nhất, lưu lịch sử tối thiểu 12 tháng và ngưỡng phân loại món; các đề xuất chưa được coi là đã chốt.
-17. **UC_CUS_02 / UC_CUS_11:** cần xác định thời hạn cookie, giới hạn thử mã tham gia và cách cấp quyền xem hóa đơn/đánh giá sau khi phiên bàn đã đóng.
+17. **UC_CUS_02 / UC_CUS_11:** Cookie mặc định 12 giờ, chỉnh bằng GuestAccess:LifetimeHours; phiên đóng thì hết quyền ngay. Sai mã cho nhập lại, không giới hạn lượt thử theo yêu cầu. Còn cần xác định cách cấp quyền xem hóa đơn/đánh giá sau khi phiên bàn đã đóng.
 18. **UC_CAS_07 và các thông báo:** cần chốt nhà cung cấp/API hóa đơn điện tử, tra cứu MST, push/SMS và realtime. Yêu cầu trong tài liệu không đồng nghĩa các tích hợp đã có sẵn.
 
 ## Danh mục chức năng

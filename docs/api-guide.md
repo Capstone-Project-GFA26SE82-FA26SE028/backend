@@ -510,3 +510,7 @@ Catalog, Inventory, Ordering, Billing và Customer hiện chưa có HTTP API ngh
 11. Khi thử cập nhật bàn, luôn lấy version mới nhất; khi thử khóa tài khoản/đổi mật khẩu/logout, dự kiến token hiện tại có thể hết hiệu lực.
 
 Các API GET không có request body. Các placeholder `{id}` trên route là biến phải thay trước khi gọi, không gửi nguyên dấu ngoặc. Không copy các GUID minh họa rồi kỳ vọng có dữ liệu tương ứng trong database.
+
+## Quyền khách trong phiên bàn
+
+Xem [Tham gia phiên và cookie khách](table-sessions.md#tham-gia-phiên-và-cookie-khách): POST /api/table-sessions/{sessionId}/guest-access/join và GET /api/table-sessions/{sessionId}/guest-access/me.

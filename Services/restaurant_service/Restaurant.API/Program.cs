@@ -8,6 +8,12 @@ builder.Services.AddGrpc(options =>
     options.Interceptors.Add<Restaurant.API.Management.ManagementInterceptor>();
 });
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IGuestAccessService, Restaurant.BLL.Implements.GuestAccessService>();
+builder.Services.AddOptions<Restaurant.Common.Settings.GuestAccessSettings>()
+    .Bind(builder.Configuration.GetSection("GuestAccess"))
+    .Validate(x => double.IsFinite(x.LifetimeHours) && x.LifetimeHours > 0 && x.LifetimeHours <= 8760,
+        "GuestAccess:LifetimeHours must be greater than 0 and no more than 8760.")
+    .ValidateOnStart();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IManagementAccess, Restaurant.API.Management.IdentityManagementAccess>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantService, Restaurant.BLL.Implements.RestaurantService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IAreaService, Restaurant.BLL.Implements.AreaService>();
@@ -30,7 +36,7 @@ builder.Services.AddGrpcClient<Backend.Contracts.Identity.AccessGrpc.AccessGrpcC
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    throw new InvalidOperationException("Configure ConnectionStrings:DefaultConnection using User Secrets or environment variables.");
+    throw new InvalidOperationException("Configure ConnectionStrings:DefaultConnection in appsettings.json or environment variables.");
 }
 
 builder.Services.AddRestaurantPersistence(connectionString);
@@ -42,6 +48,7 @@ app.MapGrpcService<Restaurant.API.GrpcServices.AreaGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.TableGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.QrGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.TableSessionGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.GuestAccessGrpcService>();
 
 app.MapGet("/health/live", () =>
 {
