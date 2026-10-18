@@ -2664,7 +2664,7 @@ Service đề xuất: **Restaurant + Customer**.
 
 **Mô tả nghiệp vụ:**
 
-> Khách quét QR tại bàn để truy cập phiên phục vụ do nhân viên mở. Khách đầu tiên nhập đầy đủ SĐT hoặc 3 số cuối để thiết lập mã tham gia. Các thiết bị tiếp theo nhập đúng 3 số cuối để tham gia cùng phiên. Hệ thống lưu cookie để khách tiếp tục sử dụng mà không phải nhập lại trong thời hạn truy cập.
+> Khách quét QR hợp lệ tại bàn. Nếu bàn chưa có phiên phục vụ đang mở, hệ thống tự tạo phiên ngay khi quét, không cần nhân viên mở trước và không chờ nhập thông tin tham gia. Khách đầu tiên nhập đầy đủ SĐT hoặc 3 số cuối để thiết lập mã tham gia. Các thiết bị tiếp theo nhập đúng 3 số cuối để tham gia cùng phiên. Hệ thống lưu cookie để khách tiếp tục sử dụng mà không phải nhập lại trong thời hạn truy cập.
 
 **Dữ liệu đầu vào:**
 
@@ -2676,7 +2676,7 @@ Service đề xuất: **Restaurant + Customer**.
 
 **Quy tắc nghiệp vụ:**
 
-> QR phải hợp lệ, bàn đang hoạt động và có phiên phục vụ đang mở. Nếu chưa mở phiên, thông báo liên hệ nhân viên. Khách đầu nhập full SĐT thì dùng 3 số cuối làm mã tham gia; nếu chỉ nhập 3 số thì không liên kết thành viên. Mã chỉ được thiết lập một lần trong phiên, không cho yêu cầu đồng thời ghi đè. Thiết bị khác nhập đúng mã mới được cấp quyền và không được thay đổi người nhận điểm. Cookie hợp lệ cho phép truy cập lại mà không nhập mã; mọi thao tác gọi món phải kiểm tra quyền và phiên còn hiệu lực. Khi đóng phiên, thu hồi toàn bộ quyền truy cập; cookie cũ không dùng được cho phiên mới.
+> QR phải hợp lệ, bàn và khu vực đang hoạt động. Nếu bàn chưa có phiên mở, hệ thống tự tạo phiên ngay khi quét QR hợp lệ. Việc thiết lập mã tham gia và cấp quyền gọi món được thực hiện sau khi khách nhập thông tin hợp lệ. Nếu bàn đã có phiên mở, khách phải tham gia phiên hiện tại. Các yêu cầu đồng thời không được tạo nhiều phiên mở cho cùng bàn. Khách đầu nhập full SĐT thì dùng 3 số cuối làm mã tham gia; nếu chỉ nhập 3 số thì không liên kết thành viên. Mã chỉ được thiết lập một lần trong phiên, không cho yêu cầu đồng thời ghi đè. Thiết bị khác nhập đúng mã mới được cấp quyền và không được thay đổi người nhận điểm. Cookie hợp lệ cho phép truy cập lại mà không nhập mã; mọi thao tác gọi món phải kiểm tra quyền và phiên còn hiệu lực. Khi đóng phiên, thu hồi toàn bộ quyền truy cập; cookie cũ không dùng được cho phiên mới.
 
 **Ghi chú:**
 

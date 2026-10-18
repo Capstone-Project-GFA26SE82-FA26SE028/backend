@@ -71,6 +71,11 @@ builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.QrGrpc.QrGrpcClient>
     options.Address = new Uri(restaurantAddress);
 });
 
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.TableSessionGrpc.TableSessionGrpcClient>(options =>
+{
+    options.Address = new Uri(restaurantAddress);
+});
+
 var app = builder.Build();
 
 

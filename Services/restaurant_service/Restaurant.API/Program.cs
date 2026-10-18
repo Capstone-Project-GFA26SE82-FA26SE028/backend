@@ -13,6 +13,7 @@ builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantService, Restaur
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IAreaService, Restaurant.BLL.Implements.AreaService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableService, Restaurant.BLL.Implements.TableService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IQrService, Restaurant.BLL.Implements.QrService>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableSessionService, Restaurant.BLL.Implements.TableSessionService>();
 builder.Services.Configure<Restaurant.Common.Settings.QrSettings>(builder.Configuration.GetSection("Qr"));
 builder.Services.AddSingleton<Restaurant.BLL.Interfaces.IQrImageStore>(provider =>
 {
@@ -40,6 +41,7 @@ app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.AreaGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.TableGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.QrGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.TableSessionGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

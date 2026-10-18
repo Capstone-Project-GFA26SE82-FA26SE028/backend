@@ -98,3 +98,17 @@ service QrGrpc {
   rpc Regenerate(QrRegenerateRequest) returns (QrCreatedReply);
   rpc Resolve(QrTokenRequest) returns (QrTableReply);
 }
+
+message TableSessionScanReply {
+  string table_session_id = 1;
+  string table_id = 2;
+  string table_code = 3;
+  string area_id = 4;
+  string restaurant_id = 5;
+  string status = 6;
+  string opened_at = 7;
+  bool is_new_session = 8;
+}
+service TableSessionGrpc {
+  rpc Scan(QrTokenRequest) returns (TableSessionScanReply);
+}
