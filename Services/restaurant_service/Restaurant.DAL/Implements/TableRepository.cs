@@ -9,6 +9,24 @@ namespace Restaurant.DAL.Implements;
 
 public sealed class TableRepository(RestaurantDbContext db) : GenericRepository<global::Restaurant.DAL.Models.Table, RestaurantDbContext>(db), ITableRepository
 {
+    public Task<TableEntity?> LockForSessionAsync(Guid id, CancellationToken ct)
+    {
+        if (_context.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("Opening a table session requires a transaction.");
+        }
+
+        if (_context.Database.IsSqlServer())
+        {
+            // Serialize scans for this table across processes until the transaction commits.
+            return _context.Tables.FromSqlInterpolated(
+                $"SELECT * FROM [Table] WITH (UPDLOCK, HOLDLOCK) WHERE [TableId] = {id}")
+                .SingleOrDefaultAsync(ct);
+        }
+
+        return GetByIdAsync(id, ct);
+    }
+
     public async Task<PageResult<global::Restaurant.DAL.Models.Table>> GetPageAsync(ListQuery query, CancellationToken ct)
     {
         var source = GetAll().AsNoTracking();
