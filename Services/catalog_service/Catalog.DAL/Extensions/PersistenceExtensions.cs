@@ -23,6 +23,8 @@ public static class PersistenceExtensions
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IItemRepository, ItemRepository>();
         services.AddScoped<IItemTransaction, ItemTransaction>();
+        services.AddScoped<IPriceRepository, PriceRepository>();
+        services.AddScoped<IPriceTransaction, PriceTransaction>();
         services.AddScoped<IGenericRepository<global::Catalog.DAL.Models.Category>, GenericRepository<global::Catalog.DAL.Models.Category, CatalogDbContext>>();
         services.AddScoped<IGenericRepository<global::Catalog.DAL.Models.Item>, GenericRepository<global::Catalog.DAL.Models.Item, CatalogDbContext>>();
         services.AddScoped<IGenericRepository<global::Catalog.DAL.Models.ItemOptionGroup>, GenericRepository<global::Catalog.DAL.Models.ItemOptionGroup, CatalogDbContext>>();

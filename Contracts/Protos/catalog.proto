@@ -125,3 +125,114 @@ message ItemListReply {
   int32 page = 6;
   int32 page_size = 7;
 }
+
+service PriceGrpc {
+  rpc Create (CreatePriceRequest) returns (PriceReply);
+  rpc GetAll (PriceListRequest) returns (PriceListReply);
+  rpc GetById (PriceIdRequest) returns (PriceReply);
+  rpc Update (UpdatePriceRequest) returns (PriceReply);
+  rpc Delete (DeletePriceRequest) returns (PriceReply);
+  rpc Replace (ReplacePriceRequest) returns (PriceReply);
+  rpc GetAppliedPrice (AppliedPriceRequest) returns (AppliedPriceReply);
+}
+
+message PriceIdRequest {
+  string price_id = 1;
+}
+
+message CreatePriceRequest {
+  string item_id = 1;
+  string channel = 2;
+  string amount = 3;
+  string effective_from = 4;
+  optional string effective_to = 5;
+  optional string daily_start = 6;
+  optional string daily_end = 7;
+}
+
+message UpdatePriceRequest {
+  string price_id = 1;
+  string channel = 2;
+  string amount = 3;
+  string effective_from = 4;
+  optional string effective_to = 5;
+  optional string daily_start = 6;
+  optional string daily_end = 7;
+  reserved 8;
+  reserved "expected_token";
+}
+
+message ReplacePriceRequest {
+  string price_id = 1;
+  string amount = 2;
+  optional string effective_to = 3;
+  reserved 4;
+  reserved "expected_token";
+}
+
+message DeletePriceRequest {
+  string price_id = 1;
+  reserved 2;
+  reserved "expected_token";
+}
+
+message PriceListRequest {
+  optional string item_id = 1;
+  optional string channel = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message PriceInfo {
+  string price_id = 1;
+  string item_id = 2;
+  string channel = 3;
+  string amount = 4;
+  string effective_from = 5;
+  optional string effective_to = 6;
+  optional string daily_start = 7;
+  optional string daily_end = 8;
+  reserved 9;
+  reserved "concurrency_token";
+}
+
+message PriceReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  PriceInfo result = 4;
+}
+
+message PriceListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated PriceInfo items = 4;
+  int32 total_count = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+message AppliedPriceRequest {
+  string item_id = 1;
+  string channel = 2;
+  optional string at = 3;
+}
+
+message AppliedPriceInfo {
+  string item_id = 1;
+  string price_id = 2;
+  string amount = 3;
+  string requested_channel = 4;
+  string price_channel = 5;
+  string evaluated_at = 6;
+  bool has_valid_standard_price = 7;
+  PriceInfo price = 8;
+}
+
+message AppliedPriceReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  AppliedPriceInfo result = 4;
+}
