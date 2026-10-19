@@ -61,6 +61,10 @@ public static class CatalogServiceExtensions
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IPriceService, PriceService>();
+        services.AddScoped<OptionWriteExecutor>();
+        services.AddScoped<IOptionGroupService, OptionGroupService>();
+        services.AddScoped<IOptionService, OptionService>();
+        services.AddScoped<IItemOptionGroupService, ItemOptionGroupService>();
         return services;
     }
 

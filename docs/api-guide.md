@@ -495,6 +495,8 @@ Lưu ảnh mặc định tại Restaurant.API/App_Data/qr-images, tùy chỉnh b
 
 Catalog đã có API quản lý Category, Item và Price qua Gateway. Thao tác `PATCH /api/items/{id}/status` và quyền Manager/Kitchen được mô tả tại [Trạng thái bán của món](catalog-item-status.md). Các API Catalog hiện tại phục vụ quản lý, chưa phải API thực đơn cho khách hàng.
 
+API quản lý OptionGroup, Option và gán nhóm vào Item đã được bổ sung; xem [Tùy chọn món và dữ liệu mẫu](catalog-options.md) để biết đủ 16 endpoint, quyền và quy tắc dữ liệu.
+
 Inventory, Ordering, Billing và Customer hiện chưa có HTTP API nghiệp vụ qua Gateway. Có model/persistence không đồng nghĩa đã có API kho, gọi món, hóa đơn, thanh toán hay khách hàng.
 
 ## 12. Thứ tự thử bằng Swagger/Postman

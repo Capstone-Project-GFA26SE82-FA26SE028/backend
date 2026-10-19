@@ -75,6 +75,9 @@ internal sealed class ItemTestApplication : IDisposable
                 services.AddScoped<ICategoryRepository, CategoryRepository>();
                 services.AddScoped<IItemRepository, ItemRepository>();
                 services.AddScoped<IPriceRepository, PriceRepository>();
+                services.AddScoped<IOptionGroupRepository, OptionGroupRepository>();
+                services.AddScoped<IOptionRepository, OptionRepository>();
+                services.AddScoped<IItemOptionGroupRepository, ItemOptionGroupRepository>();
                 services.AddScoped<IUnitOfWork, UnitOfWork<CatalogDbContext>>();
                 services.AddScoped<IItemTransaction, ItemTransaction>();
             })
@@ -84,6 +87,9 @@ internal sealed class ItemTestApplication : IDisposable
                 app.UseEndpoints(endpoints =>
                 {
                     endpoints.MapGrpcService<ItemGrpcService>();
+                    endpoints.MapGrpcService<OptionGroupGrpcService>();
+                    endpoints.MapGrpcService<OptionGrpcService>();
+                    endpoints.MapGrpcService<ItemOptionGroupGrpcService>();
                 });
             }));
 
@@ -97,6 +103,18 @@ internal sealed class ItemTestApplication : IDisposable
                     settings.TimeoutSeconds = 10;
                 });
                 services.AddGrpcClient<GatewayItemGrpc.ItemGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.OptionGroupGrpc.OptionGroupGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.OptionGrpc.OptionGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.ItemOptionGroupGrpc.ItemOptionGroupGrpcClient>(options =>
                 {
                     options.Address = new Uri("http://catalog.test");
                 }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
