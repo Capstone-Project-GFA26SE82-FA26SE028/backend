@@ -84,7 +84,7 @@ Lưu ảnh thất bại trả 503 và rollback thao tác tạo/tạo lại, gi�
 3. Nếu thành công, hiển thị tableCode do backend trả về, ví dụ “Bàn B01”. Có thể dùng history.replaceState để bỏ token khỏi thanh địa chỉ sau khi đọc; tránh lưu vào analytics/log.
 4. Nếu 404, báo QR không còn hợp lệ; không dùng thông tin bàn từ URL để tiếp tục.
 
-Phần hiện tại chỉ xác minh QR và nhận diện bàn. Chưa triển khai giao diện /menu, tham gia phiên, cookie khách hoặc gọi món UC_CUS_02. Resolve không tự tạo phiên/GuestAccess và không cấp quyền đặt món. Luồng tham gia/gọi món sau này phải kiểm tra lại QR, phiên và quyền truy cập.
+API resolve chỉ xác minh QR và nhận diện bàn. Đã có API POST /api/table-sessions/scan để tự mở hoặc lấy lại phiên ngay khi quét; frontend dùng scan cho luồng này, xem [table-sessions.md](table-sessions.md). Chưa triển khai giao diện /menu, tham gia phiên, cookie khách hoặc gọi món UC_CUS_02. Resolve không tự tạo phiên/GuestAccess và không cấp quyền đặt món. Luồng tham gia/gọi món sau này phải kiểm tra lại QR, phiên và quyền truy cập.
 
 ## Quy tắc và kiểm tra
 

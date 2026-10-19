@@ -8,7 +8,7 @@ builder.Services.AddGrpc();
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    throw new InvalidOperationException("Configure ConnectionStrings:DefaultConnection using User Secrets or environment variables.");
+    throw new InvalidOperationException("Configure ConnectionStrings:DefaultConnection in appsettings.json or environment variables.");
 }
 
 builder.Services.AddInventoryPersistence(connectionString);
