@@ -67,6 +67,16 @@ public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBas
         return ToReply(response);
     }
 
+    public override async Task<ItemReply> SetStatus(SetItemStatusRequest request, ServerCallContext context)
+    {
+        var response = await service.SetStatus(ParseId(request.ItemId, "item"), new SetItemStatusDTO
+        {
+            Availability = request.Availability,
+            Version = request.Version
+        }, context.CancellationToken);
+        return ToReply(response);
+    }
+
     private static Guid ParseId(string value, string resource)
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)

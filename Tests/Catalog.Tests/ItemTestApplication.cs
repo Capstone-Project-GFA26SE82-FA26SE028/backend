@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Backend.Contracts.Identity;
 using Catalog.API.Extensions;
 using Catalog.API.GrpcServices;
 using Catalog.BLL.Interfaces;
@@ -45,6 +46,8 @@ internal sealed class ItemTestApplication : IDisposable
 
     public HttpClient Client { get; }
 
+    public static DateTimeOffset Now { get; } = new(2030, 1, 15, 8, 0, 0, TimeSpan.Zero);
+
     public static async Task<ItemTestApplication> Create(string initialAvailability = "Inactive")
     {
         var connection = new SqliteConnection("Data Source=:memory:");
@@ -54,8 +57,10 @@ internal sealed class ItemTestApplication : IDisposable
             ["GrpcServices:Identity"] = "http://identity.test",
             ["CatalogManagement:IdentityTimeoutSeconds"] = "5",
             ["CatalogManagement:MenuManagerRoleIds:0"] = "test-menu-manager",
+            ["CatalogManagement:KitchenRoleIds:0"] = "test-kitchen",
             ["CatalogManagement:NonSellingItemAvailabilities:0"] = "Inactive",
-            ["ItemManagement:InitialAvailability"] = initialAvailability
+            ["ItemManagement:InitialAvailability"] = initialAvailability,
+            ["Pricing:AllChannelsCode"] = "AllChannels"
         }).Build();
 
         var catalog = new TestServer(new WebHostBuilder()
@@ -64,10 +69,12 @@ internal sealed class ItemTestApplication : IDisposable
                 services.AddRouting();
                 services.AddGrpc();
                 services.AddCatalogManagement(configuration);
-                services.AddScoped<ICatalogAccess, TestMenuAccess>();
+                services.AddSingleton(new UserGrpc.UserGrpcClient(new ItemIdentityInvoker()));
+                services.AddSingleton<TimeProvider>(new TestClock());
                 services.AddScoped<CatalogDbContext>(_ => CreateDatabase(connection));
                 services.AddScoped<ICategoryRepository, CategoryRepository>();
                 services.AddScoped<IItemRepository, ItemRepository>();
+                services.AddScoped<IPriceRepository, PriceRepository>();
                 services.AddScoped<IUnitOfWork, UnitOfWork<CatalogDbContext>>();
                 services.AddScoped<IItemTransaction, ItemTransaction>();
             })
@@ -159,22 +166,70 @@ internal sealed class ItemTestApplication : IDisposable
         return new ItemTestDbContext(new DbContextOptionsBuilder<CatalogDbContext>().UseSqlite(connection).Options);
     }
 
-    private sealed class TestMenuAccess(IHttpContextAccessor accessor) : ICatalogAccess
+    private sealed class TestClock : TimeProvider
     {
-        public Task<Guid> RequireMenuManagerAsync(CancellationToken cancellationToken)
+        public override DateTimeOffset GetUtcNow()
         {
-            var token = accessor.HttpContext?.Request.Headers.Authorization.ToString();
-            if (string.IsNullOrWhiteSpace(token) || token == "Bearer revoked")
+            return Now;
+        }
+    }
+
+    private sealed class ItemIdentityInvoker : CallInvoker
+    {
+        public override AsyncUnaryCall<TResponse> AsyncUnaryCall<TRequest, TResponse>(
+            Method<TRequest, TResponse> method, string? host, CallOptions options, TRequest request)
+        {
+            Assert.EndsWith("/GetMe", method.FullName);
+            var token = options.Headers?.FirstOrDefault(header => header.Key == "authorization")?.Value;
+            if (token == "Bearer revoked")
             {
                 throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid session."));
             }
 
-            if (token != "Bearer manager")
+            var reply = new UserReply
             {
-                throw new RpcException(new Status(StatusCode.PermissionDenied, "Access denied."));
-            }
+                StatusCode = 200,
+                IsSuccess = true,
+                Result = new UserInfo
+                {
+                    UserId = "00000000-0000-0000-0000-000000000001",
+                    RoleId = token switch
+                    {
+                        "Bearer manager" => "test-menu-manager",
+                        "Bearer kitchen" => "test-kitchen",
+                        _ => "ordinary-user"
+                    },
+                    IsActive = token != "Bearer disabled"
+                }
+            };
+            return new AsyncUnaryCall<TResponse>(Task.FromResult((TResponse)(object)reply),
+                Task.FromResult(new Metadata()), () => Status.DefaultSuccess, () => new Metadata(), () =>
+                {
+                });
+        }
 
-            return Task.FromResult(Guid.Parse("00000000-0000-0000-0000-000000000001"));
+        public override TResponse BlockingUnaryCall<TRequest, TResponse>(
+            Method<TRequest, TResponse> method, string? host, CallOptions options, TRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override AsyncServerStreamingCall<TResponse> AsyncServerStreamingCall<TRequest, TResponse>(
+            Method<TRequest, TResponse> method, string? host, CallOptions options, TRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override AsyncClientStreamingCall<TRequest, TResponse> AsyncClientStreamingCall<TRequest, TResponse>(
+            Method<TRequest, TResponse> method, string? host, CallOptions options)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override AsyncDuplexStreamingCall<TRequest, TResponse> AsyncDuplexStreamingCall<TRequest, TResponse>(
+            Method<TRequest, TResponse> method, string? host, CallOptions options)
+        {
+            throw new NotSupportedException();
         }
     }
 

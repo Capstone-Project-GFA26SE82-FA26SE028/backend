@@ -125,6 +125,21 @@ public sealed class ItemController(
         }, cancellationToken);
     }
 
+    [HttpPatch("{id}/status")]
+    public Task<IActionResult> SetStatus(Guid id, SetItemStatusDTO body, CancellationToken cancellationToken)
+    {
+        return Execute(async () =>
+        {
+            var reply = await client.SetStatusAsync(new SetItemStatusRequest
+            {
+                ItemId = id.ToString(),
+                Availability = body.Availability ?? string.Empty,
+                Version = body.Version ?? string.Empty
+            }, Options(cancellationToken));
+            return ToResponse(reply);
+        }, cancellationToken);
+    }
+
     private IActionResult ToResponse(ItemReply reply)
     {
         return StatusCode(reply.StatusCode, new ResponseDTO

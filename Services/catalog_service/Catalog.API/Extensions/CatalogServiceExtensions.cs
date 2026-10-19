@@ -29,12 +29,15 @@ public static class CatalogServiceExtensions
             .PostConfigure(settings =>
             {
                 settings.MenuManagerRoleIds = RemoveEmptyValues(settings.MenuManagerRoleIds);
+                settings.KitchenRoleIds = RemoveEmptyValues(settings.KitchenRoleIds);
                 settings.NonSellingItemAvailabilities = RemoveEmptyValues(
                     settings.NonSellingItemAvailabilities);
             })
             .Validate(settings => settings.MenuManagerRoleIds is not null
                 && settings.MenuManagerRoleIds.All(IsValidValue),
                 "MenuManagerRoleIds must contain actual, non-empty RoleIds.")
+            .Validate(settings => settings.KitchenRoleIds.All(IsValidValue),
+                "KitchenRoleIds must contain actual, non-empty RoleIds.")
             .Validate(settings => settings.NonSellingItemAvailabilities is not null
                 && settings.NonSellingItemAvailabilities.All(IsValidValue),
                 "NonSellingItemAvailabilities must contain actual status values.")
