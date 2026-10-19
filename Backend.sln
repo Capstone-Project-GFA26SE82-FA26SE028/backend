@@ -1,7 +1,6 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.0.31903.59
+# Visual Studio Version 18
+VisualStudioVersion = 18.10.12224.181 stable
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Services", "Services", "{5854FF58-B8C5-05C6-5BF2-ACE42193F22B}"
 EndProject
@@ -19,6 +18,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Contracts", "Contracts", "{
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Protos", "Protos", "{D9F45AB6-E5A7-4031-8115-95FEFC11779D}"
 	ProjectSection(SolutionItems) = preProject
+		Contracts\Protos\catalog.proto = Contracts\Protos\catalog.proto
 		Contracts\Protos\identity.proto = Contracts\Protos\identity.proto
 		Contracts\Protos\restaurant.proto = Contracts\Protos\restaurant.proto
 	EndProjectSection
@@ -100,6 +100,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Foundation.Tests", "Tests\Foundation.Tests\Foundation.Tests.csproj", "{8F694523-F556-4FFD-AD87-3AF9F0FBB4E9}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Restaurant.Tests", "Tests\Restaurant.Tests\Restaurant.Tests.csproj", "{4862C570-B192-484D-A43E-2C685B515CB7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Catalog.Tests", "Tests\Catalog.Tests\Catalog.Tests.csproj", "{83B877DE-98BA-4A90-9181-E7121061525B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -519,6 +521,18 @@ Global
 		{4862C570-B192-484D-A43E-2C685B515CB7}.Release|x64.Build.0 = Release|Any CPU
 		{4862C570-B192-484D-A43E-2C685B515CB7}.Release|x86.ActiveCfg = Release|Any CPU
 		{4862C570-B192-484D-A43E-2C685B515CB7}.Release|x86.Build.0 = Release|Any CPU
+		{83B877DE-98BA-4A90-9181-E7121061525B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{83B877DE-98BA-4A90-9181-E7121061525B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{83B877DE-98BA-4A90-9181-E7121061525B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{83B877DE-98BA-4A90-9181-E7121061525B}.Debug|x64.Build.0 = Debug|Any CPU
+		{83B877DE-98BA-4A90-9181-E7121061525B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{83B877DE-98BA-4A90-9181-E7121061525B}.Debug|x86.Build.0 = Debug|Any CPU
+		{83B877DE-98BA-4A90-9181-E7121061525B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{83B877DE-98BA-4A90-9181-E7121061525B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{83B877DE-98BA-4A90-9181-E7121061525B}.Release|x64.ActiveCfg = Release|Any CPU
+		{83B877DE-98BA-4A90-9181-E7121061525B}.Release|x64.Build.0 = Release|Any CPU
+		{83B877DE-98BA-4A90-9181-E7121061525B}.Release|x86.ActiveCfg = Release|Any CPU
+		{83B877DE-98BA-4A90-9181-E7121061525B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -567,6 +581,7 @@ Global
 		{633631FD-3C4A-43BA-963D-FD99F5C63B43} = {4F52FD11-658E-A102-6CD3-7D7C16FFA15B}
 		{8F694523-F556-4FFD-AD87-3AF9F0FBB4E9} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{4862C570-B192-484D-A43E-2C685B515CB7} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{83B877DE-98BA-4A90-9181-E7121061525B} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {8A12A186-6AA3-44DF-829C-C5D6EB912FE1}
