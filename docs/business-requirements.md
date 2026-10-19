@@ -29,7 +29,7 @@ Ngày tiếp nhận: 2026-10-16. Tổng cộng **83 chức năng**, từ **8 fil
 ## Những điểm cần xác nhận khi triển khai
 
 1. **UC_AI_02:** tên và mô tả là chatbot cho khách nhưng module là AI Forecasting, cột quy tắc lại yêu cầu quyền Manager và dữ liệu dự báo. Giữ nguyên nguồn; cần xác định nội dung đúng.
-2. **UC_MGR_03 / UC_KIT_07:** một bên quy định chỉ Manager được đổi trạng thái bán, bên kia cho Kitchen báo hết/tạm dừng. Cần chốt quyền và phạm vi trạng thái cho từng vai trò.
+2. **UC_MGR_03 / UC_KIT_07:** đã chốt ngày 20/10/2026: Manager quản lý trạng thái bán; Kitchen chỉ báo tạm hết món, không được mở bán/ngừng kinh doanh. Giữ nguyên nội dung nguồn bên dưới; phạm vi triển khai và phần tích hợp còn thiếu xem [Trạng thái bán của món](catalog-item-status.md).
 3. **UC_MGR_06:** ghi chú trỏ báo cáo giá vốn đến UC_MGR_18, trong khi UC_MGR_18 là khuyến mãi, UC_MGR_17 là chi phí/lợi nhuận. Chưa tự sửa tham chiếu.
 4. **UC_MGR_10 và UC_MGR_11:** không có trong file gửi. Không tự tạo thêm hoặc đánh lại số.
 5. **UC_AI_02, UC_ADM_02:** giữ nguyên nội dung nguồn, bao gồm phần đầu vào UC_ADM_02 kết thúc ở “tùy chọ”; cần bổ sung nếu bản gốc bị cắt.

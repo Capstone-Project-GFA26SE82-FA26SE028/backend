@@ -11,7 +11,21 @@ public sealed class IdentityCatalogAccess(
     IHttpContextAccessor httpContextAccessor,
     IOptions<CatalogManagementSettings> settings) : ICatalogAccess
 {
-    public async Task<Guid> RequireMenuManagerAsync(
+    public Task<Guid> RequireMenuManagerAsync(
+        CancellationToken cancellationToken)
+    {
+        return RequireRolesAsync(settings.Value.MenuManagerRoleIds, cancellationToken);
+    }
+
+    public Task<Guid> RequireMenuStaffAsync(CancellationToken cancellationToken)
+    {
+        return RequireRolesAsync(
+            settings.Value.MenuManagerRoleIds.Concat(settings.Value.KitchenRoleIds),
+            cancellationToken);
+    }
+
+    private async Task<Guid> RequireRolesAsync(
+        IEnumerable<string> allowedRoles,
         CancellationToken cancellationToken)
     {
         var httpContext = httpContextAccessor.HttpContext;
@@ -63,8 +77,6 @@ public sealed class IdentityCatalogAccess(
                 StatusCode.Unauthenticated,
                 "The account is invalid or inactive."));
         }
-
-        var allowedRoles = settings.Value.MenuManagerRoleIds;
 
         if (!allowedRoles.Contains(user.RoleId, StringComparer.Ordinal))
         {

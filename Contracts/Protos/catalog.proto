@@ -67,6 +67,13 @@ service ItemGrpc {
   rpc GetAll (ItemListRequest) returns (ItemListReply);
   rpc GetById (ItemIdRequest) returns (ItemReply);
   rpc Update (UpdateItemRequest) returns (ItemReply);
+  rpc SetStatus (SetItemStatusRequest) returns (ItemReply);
+}
+
+message SetItemStatusRequest {
+  string item_id = 1;
+  string availability = 2;
+  string version = 3;
 }
 
 message CreateItemRequest {

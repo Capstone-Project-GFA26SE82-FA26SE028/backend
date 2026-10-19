@@ -4,7 +4,7 @@
 
 ## 1. Cách gọi và đọc phản hồi
 
-Frontend/Postman gọi Gateway; Gateway gọi gRPC đến Identity hoặc Restaurant. Cần chạy các service tương ứng và cấu hình database.
+Frontend/Postman gọi Gateway; Gateway gọi gRPC đến Identity, Restaurant hoặc Catalog. Cần chạy các service tương ứng và cấu hình database.
 
 - Local profile HTTPS: `https://localhost:5000`; Swagger: `https://localhost:5000/swagger`.
 - Local profile HTTP: `http://localhost:15000`.
@@ -493,7 +493,9 @@ Lưu ảnh mặc định tại Restaurant.API/App_Data/qr-images, tùy chỉnh b
 - `GET /health/ready`: tại sáu service trên; kiểm tra kết nối database, 200 nếu kết nối được, 503 nếu không kết nối được theo nhánh CanConnect. Đây chưa phải kiểm tra đầy đủ schema/nghiệp vụ.
 - Health chưa được route qua Gateway. Gọi đúng host/port/protocol của service khi vận hành; frontend nghiệp vụ vẫn gọi Gateway.
 
-Catalog, Inventory, Ordering, Billing và Customer hiện chưa có HTTP API nghiệp vụ qua Gateway. Có model/persistence không đồng nghĩa đã có API menu, kho, gọi món, hóa đơn, thanh toán hay khách hàng.
+Catalog đã có API quản lý Category, Item và Price qua Gateway. Thao tác `PATCH /api/items/{id}/status` và quyền Manager/Kitchen được mô tả tại [Trạng thái bán của món](catalog-item-status.md). Các API Catalog hiện tại phục vụ quản lý, chưa phải API thực đơn cho khách hàng.
+
+Inventory, Ordering, Billing và Customer hiện chưa có HTTP API nghiệp vụ qua Gateway. Có model/persistence không đồng nghĩa đã có API kho, gọi món, hóa đơn, thanh toán hay khách hàng.
 
 ## 12. Thứ tự thử bằng Swagger/Postman
 

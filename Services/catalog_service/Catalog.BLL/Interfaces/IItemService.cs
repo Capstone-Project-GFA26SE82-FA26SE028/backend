@@ -12,4 +12,6 @@ public interface IItemService
     Task<ResponseDTO> Create(CreateItemDTO request, CancellationToken cancellationToken);
 
     Task<ResponseDTO> Update(Guid id, UpdateItemDTO request, CancellationToken cancellationToken);
+
+    Task<ResponseDTO> SetStatus(Guid id, SetItemStatusDTO request, CancellationToken cancellationToken);
 }

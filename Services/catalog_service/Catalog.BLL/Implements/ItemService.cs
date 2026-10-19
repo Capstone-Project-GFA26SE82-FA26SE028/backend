@@ -19,11 +19,14 @@ public sealed class ItemService(
     ICatalogAccess access,
     IOptions<ItemManagementSettings> settings,
     IOptions<CatalogManagementSettings> catalogSettings,
+    IPriceRepository prices,
+    IOptions<PricingSettings> pricingSettings,
+    TimeProvider timeProvider,
     ILogger<ItemService> logger) : IItemService
 {
     public async Task<ResponseDTO> GetAll(ItemQueryDTO query, CancellationToken cancellationToken)
     {
-        await access.RequireMenuManagerAsync(cancellationToken);
+        await access.RequireMenuStaffAsync(cancellationToken);
         if (query is null || !query.IsValid())
         {
             return new ResponseDTO("Invalid pagination, category ID, or item filter.", 400);
@@ -42,7 +45,7 @@ public sealed class ItemService(
 
     public async Task<ResponseDTO> GetById(Guid id, CancellationToken cancellationToken)
     {
-        await access.RequireMenuManagerAsync(cancellationToken);
+        await access.RequireMenuStaffAsync(cancellationToken);
         if (id == Guid.Empty)
         {
             return new ResponseDTO("Invalid item ID.", 400);
@@ -176,6 +179,100 @@ public sealed class ItemService(
             item.Description = description;
             item.ImageUrl = imageUrl;
             return (new ResponseDTO("Item updated successfully.", 200, true), item);
+        }, cancellationToken);
+    }
+
+    public async Task<ResponseDTO> SetStatus(
+        Guid id,
+        SetItemStatusDTO request,
+        CancellationToken cancellationToken)
+    {
+        if (request?.Availability == ItemAvailability.OutOfStock)
+        {
+            await access.RequireMenuStaffAsync(cancellationToken);
+        }
+        else
+        {
+            await access.RequireMenuManagerAsync(cancellationToken);
+        }
+
+        if (id == Guid.Empty)
+        {
+            return new ResponseDTO("Invalid item ID.", 400);
+        }
+
+        var availability = request?.Availability;
+        if (availability is not (ItemAvailability.Available or ItemAvailability.OutOfStock or ItemAvailability.Inactive))
+        {
+            return new ResponseDTO("Availability must be Available, OutOfStock, or Inactive.", 400);
+        }
+
+        if (!TryParseVersion(request?.Version, out var version))
+        {
+            return new ResponseDTO("Version is required and must be a Base64-encoded SQL Server rowversion.", 400);
+        }
+
+        var nonSelling = catalogSettings.Value.NonSellingItemAvailabilities;
+        if (!nonSelling.Contains(ItemAvailability.Inactive, StringComparer.Ordinal)
+            || nonSelling.Contains(ItemAvailability.Available, StringComparer.Ordinal)
+            || nonSelling.Contains(ItemAvailability.OutOfStock, StringComparer.Ordinal))
+        {
+            return new ResponseDTO("Configure non-selling statuses to include Inactive and exclude Available and OutOfStock.", 503);
+        }
+
+        return await WriteAsync(async () =>
+        {
+            var item = await items.GetByIdAsync(id, cancellationToken);
+            if (item is null)
+            {
+                return (ItemNotFound(), null);
+            }
+
+            if (!item.Version.SequenceEqual(version))
+            {
+                return (ConcurrentUpdate(), null);
+            }
+
+            if (availability == ItemAvailability.Available)
+            {
+                if (!item.Category.IsActive)
+                {
+                    return (InactiveCategory(), null);
+                }
+
+                var allChannels = pricingSettings.Value.AllChannelsCode;
+                if (string.IsNullOrWhiteSpace(allChannels))
+                {
+                    return (new ResponseDTO("Configure Pricing:AllChannelsCode before opening an item for sale.", 503), null);
+                }
+
+                var now = prices.NormalizeTimestamp(timeProvider.GetUtcNow().UtcDateTime);
+                var standardPrices = (await prices.GetForItemAsync(id, cancellationToken))
+                    .Where(price => price.Channel == allChannels
+                        && !price.DailyStart.HasValue && !price.DailyEnd.HasValue
+                        && price.EffectiveFrom <= now
+                        && (!price.EffectiveTo.HasValue || now < price.EffectiveTo.Value))
+                    .ToArray();
+                if (standardPrices.Length != 1 || standardPrices[0].Amount < 0)
+                {
+                    return (new ResponseDTO("An item can only be opened for sale with exactly one valid, currently effective standard price.", 409), null);
+                }
+            }
+
+            if (availability == ItemAvailability.OutOfStock
+                && item.Availability is not (ItemAvailability.Available or ItemAvailability.OutOfStock))
+            {
+                return (new ResponseDTO("Only an item already offered for sale can be marked out of stock.", 409), null);
+            }
+
+            if (item.Availability == availability)
+            {
+                return (new ResponseDTO("The item already has the requested status.", 200, true), item);
+            }
+
+            items.SetOriginalVersion(item, version);
+            item.Availability = availability;
+            return (new ResponseDTO("Item status updated successfully.", 200, true), item);
         }, cancellationToken);
     }
 
