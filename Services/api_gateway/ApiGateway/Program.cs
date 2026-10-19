@@ -25,6 +25,10 @@ builder.Services.AddGrpcClient<Backend.Contracts.Catalog.ItemGrpc.ItemGrpcClient
 {
     options.Address = catalogUri;
 });
+builder.Services.AddGrpcClient<Backend.Contracts.Catalog.PriceGrpc.PriceGrpcClient>(options =>
+{
+    options.Address = catalogUri;
+});
 
 builder.Services.AddControllers();
 builder.Services.AddCors(options =>

@@ -3,6 +3,7 @@ using Catalog.API.Authorization;
 using Catalog.BLL.Implements;
 using Catalog.BLL.Interfaces;
 using Catalog.Common.Settings;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Catalog.API.Extensions;
 
@@ -13,6 +14,8 @@ public static class CatalogServiceExtensions
         IConfiguration configuration)
     {
         services.AddHttpContextAccessor();
+        services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+        services.Configure<PricingSettings>(configuration.GetSection("Pricing"));
         services.AddOptions<ItemManagementSettings>()
             .Bind(configuration.GetSection("ItemManagement"))
             .Validate(settings => settings.InitialAvailability is not null
@@ -54,6 +57,7 @@ public static class CatalogServiceExtensions
         services.AddScoped<ICatalogAccess, IdentityCatalogAccess>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IItemService, ItemService>();
+        services.AddScoped<IPriceService, PriceService>();
         return services;
     }
 
