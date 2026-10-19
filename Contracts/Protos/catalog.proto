@@ -243,3 +243,168 @@ message AppliedPriceReply {
   bool is_success = 3;
   AppliedPriceInfo result = 4;
 }
+
+service OptionGroupGrpc {
+  rpc Create (CreateOptionGroupRequest) returns (OptionGroupReply);
+  rpc GetAll (OptionGroupListRequest) returns (OptionGroupListReply);
+  rpc GetById (OptionGroupIdRequest) returns (OptionGroupReply);
+  rpc Update (UpdateOptionGroupRequest) returns (OptionGroupReply);
+  rpc Delete (OptionGroupIdRequest) returns (OptionGroupReply);
+}
+
+message CreateOptionGroupRequest {
+  string option_group_name = 1;
+}
+
+message UpdateOptionGroupRequest {
+  string option_group_id = 1;
+  string option_group_name = 2;
+}
+
+message OptionGroupIdRequest {
+  string option_group_id = 1;
+}
+
+message OptionGroupListRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional string search = 3;
+}
+
+message OptionGroupInfo {
+  string option_group_id = 1;
+  string option_group_name = 2;
+}
+
+message OptionGroupReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  OptionGroupInfo result = 4;
+}
+
+message OptionGroupListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated OptionGroupInfo items = 4;
+  int32 total_count = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+service OptionGrpc {
+  rpc Create (CreateOptionRequest) returns (OptionReply);
+  rpc GetAll (OptionListRequest) returns (OptionListReply);
+  rpc GetById (OptionIdRequest) returns (OptionReply);
+  rpc Update (UpdateOptionRequest) returns (OptionReply);
+  rpc SetStatus (SetOptionStatusRequest) returns (OptionReply);
+  rpc Delete (OptionIdRequest) returns (OptionReply);
+}
+
+message CreateOptionRequest {
+  string option_group_id = 1;
+  string option_name = 2;
+  string extra_price = 3;
+}
+
+message UpdateOptionRequest {
+  string option_id = 1;
+  string option_name = 2;
+  string extra_price = 3;
+}
+
+message SetOptionStatusRequest {
+  string option_id = 1;
+  string availability = 2;
+}
+
+message OptionIdRequest {
+  string option_id = 1;
+}
+
+message OptionListRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional string search = 3;
+  optional string option_group_id = 4;
+  optional string availability = 5;
+}
+
+message OptionInfo {
+  string option_id = 1;
+  string option_group_id = 2;
+  string option_name = 3;
+  string extra_price = 4;
+  string availability = 5;
+}
+
+message OptionReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  OptionInfo result = 4;
+}
+
+message OptionListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated OptionInfo items = 4;
+  int32 total_count = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+service ItemOptionGroupGrpc {
+  rpc Create (CreateItemOptionGroupRequest) returns (ItemOptionGroupReply);
+  rpc GetAll (ItemOptionGroupListRequest) returns (ItemOptionGroupListReply);
+  rpc GetById (ItemOptionGroupIdRequest) returns (ItemOptionGroupReply);
+  rpc Update (UpdateItemOptionGroupRequest) returns (ItemOptionGroupReply);
+  rpc Delete (ItemOptionGroupIdRequest) returns (ItemOptionGroupReply);
+}
+
+message CreateItemOptionGroupRequest {
+  string item_id = 1;
+  string option_group_id = 2;
+  optional int32 min_selection = 3;
+  optional int32 max_selection = 4;
+}
+
+message UpdateItemOptionGroupRequest {
+  string item_id = 1;
+  string option_group_id = 2;
+  optional int32 min_selection = 3;
+  optional int32 max_selection = 4;
+}
+
+message ItemOptionGroupIdRequest {
+  string item_id = 1;
+  string option_group_id = 2;
+}
+
+message ItemOptionGroupListRequest {
+  string item_id = 1;
+}
+
+message ItemOptionGroupInfo {
+  string item_id = 1;
+  string option_group_id = 2;
+  string option_group_name = 3;
+  int32 min_selection = 4;
+  int32 max_selection = 5;
+}
+
+message ItemOptionGroupReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  ItemOptionGroupInfo result = 4;
+}
+
+message ItemOptionGroupListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated ItemOptionGroupInfo items = 4;
+}
