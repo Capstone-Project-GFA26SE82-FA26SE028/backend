@@ -7,9 +7,14 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.84.0" />
+    <PackageReference Include="Grpc.Net.ClientFactory" Version="2.84.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Catalog.BLL\Catalog.BLL.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Protobuf Include="../../../Contracts/Protos/catalog.proto" Link="Protos\catalog.proto" GrpcServices="Server" />
+    <Protobuf Include="../../../Contracts/Protos/identity.proto" Link="Protos\identity.proto" GrpcServices="Client" />
   </ItemGroup>
 </Project>
 
