@@ -484,7 +484,7 @@ GET image trả trực tiếp bytes `image/png`, không bọc ResponseDTO khi th
 
 Lưu ảnh mặc định tại Restaurant.API/App_Data/qr-images, tùy chỉnh bằng Qr:ImageDirectory. Docker dùng volume qr-images. Ảnh không đưa lên Git. Hướng dẫn tải ảnh bằng fetch có Authorization, sao lưu và xử lý lỗi lưu ảnh xem [qr-management.md](qr-management.md).
 
-Chưa có GET metadata QR theo ID, DELETE QR, tạo phiên khách hoặc quyền gọi món từ QR. Resolve hiện chỉ xác định bàn.
+Đã có POST /api/table-sessions/scan để tự mở hoặc lấy lại phiên bàn ngay khi quét QR. Body gồm token, công khai, trả thông tin bàn và tableSessionId/isNewSession. Xem [table-sessions.md](table-sessions.md). Chưa có GET metadata QR theo ID, DELETE QR hoặc cấp quyền gọi món từ QR. Resolve vẫn chỉ xác định bàn; frontend gọi scan cho luồng tự mở phiên.
 
 ## 11. Kiểm tra kết nối và health
 
@@ -510,3 +510,7 @@ Catalog, Inventory, Ordering, Billing và Customer hiện chưa có HTTP API ngh
 11. Khi thử cập nhật bàn, luôn lấy version mới nhất; khi thử khóa tài khoản/đổi mật khẩu/logout, dự kiến token hiện tại có thể hết hiệu lực.
 
 Các API GET không có request body. Các placeholder `{id}` trên route là biến phải thay trước khi gọi, không gửi nguyên dấu ngoặc. Không copy các GUID minh họa rồi kỳ vọng có dữ liệu tương ứng trong database.
+
+## Quyền khách trong phiên bàn
+
+Xem [Tham gia phiên và cookie khách](table-sessions.md#tham-gia-phiên-và-cookie-khách): POST /api/table-sessions/{sessionId}/guest-access/join và GET /api/table-sessions/{sessionId}/guest-access/me.
