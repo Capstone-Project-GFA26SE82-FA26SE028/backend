@@ -4,6 +4,13 @@ namespace Catalog.DAL.Interfaces;
 
 public interface IRecipeRepository
 {
+    DateTime NormalizeTimestamp(DateTime utc);
+
+    Task<DateTime?> GetLatestEffectiveFromAsync(Guid? itemId, Guid? optionId, CancellationToken cancellationToken);
+
+    Task<List<RecipeVersion>> GetActiveForOrderAsync(Guid[] itemIds, Guid[] optionIds, DateTime at,
+        CancellationToken cancellationToken);
+
     Task<RecipeVersion?> GetActiveForItemAsync(
         Guid itemId,
         DateTime at,

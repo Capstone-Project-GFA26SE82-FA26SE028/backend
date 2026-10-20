@@ -17,6 +17,7 @@ public sealed class ItemStatusFlowTests
         var categoryId = await application.AddCategory();
         var item = await application.CreateItem(categoryId);
         var id = item.GetProperty("itemId").GetGuid();
+        await application.AddRecipe(id);
         await AddPrice(application, id);
 
         foreach (var availability in new[] { "Available", "OutOfStock", "Available", "Inactive" })
@@ -50,6 +51,7 @@ public sealed class ItemStatusFlowTests
         using var application = await ItemTestApplication.Create();
         var item = await application.CreateItem(await application.AddCategory());
         var id = item.GetProperty("itemId").GetGuid();
+        await application.AddRecipe(id);
         if (scenario != "missing")
         {
             await AddPrice(application, id, scenario);
@@ -72,6 +74,7 @@ public sealed class ItemStatusFlowTests
     {
         using var application = await ItemTestApplication.Create();
         var item = await application.CreateItem(await application.AddCategory());
+        await application.AddRecipe(item.GetProperty("itemId").GetGuid());
         await AddPrice(application, item.GetProperty("itemId").GetGuid(), "starts-now-zero");
         Assert.Equal(HttpStatusCode.OK, (await SetStatus(application, item, "Available")).StatusCode);
     }
@@ -82,6 +85,7 @@ public sealed class ItemStatusFlowTests
         using var application = await ItemTestApplication.Create();
         var categoryId = await application.AddCategory();
         var item = await application.CreateItem(categoryId);
+        await application.AddRecipe(item.GetProperty("itemId").GetGuid());
         await AddPrice(application, item.GetProperty("itemId").GetGuid());
         await using (var db = application.OpenDatabase())
         {
@@ -100,6 +104,7 @@ public sealed class ItemStatusFlowTests
         var categoryId = await application.AddCategory();
         var item = await application.CreateItem(categoryId);
         var id = item.GetProperty("itemId").GetGuid();
+        await application.AddRecipe(id);
         await AddPrice(application, id);
         var opened = await SetStatus(application, item, "Available");
         Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
@@ -191,6 +196,7 @@ public sealed class ItemStatusFlowTests
         var categoryId = await application.AddCategory();
         var original = await application.CreateItem(categoryId);
         var id = original.GetProperty("itemId").GetGuid();
+        await application.AddRecipe(id);
         await AddPrice(application, id);
         var response = await SetStatus(application, original, "Available");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

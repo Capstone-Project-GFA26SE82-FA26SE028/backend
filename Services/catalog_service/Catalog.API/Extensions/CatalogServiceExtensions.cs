@@ -73,6 +73,7 @@ public static class CatalogServiceExtensions
         });
         services.AddScoped<IMenuAccess, MenuAccess>();
         services.AddScoped<IMenuService, MenuService>();
+        services.AddScoped<IOrderValidationService, OrderValidationService>();
         services.AddScoped<ICatalogAccess, IdentityCatalogAccess>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IItemService, ItemService>();

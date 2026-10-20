@@ -84,6 +84,7 @@ internal sealed class ItemTestApplication : IDisposable
                 services.AddScoped<IOptionRepository, OptionRepository>();
                 services.AddScoped<IItemOptionGroupRepository, ItemOptionGroupRepository>();
                 services.AddScoped<IRecipeRepository, RecipeRepository>();
+                services.AddScoped<IRecipeTransaction, RecipeTransaction>();
                 services.AddScoped<IRecipeService, RecipeService>();
                 services.AddScoped<IUnitOfWork, UnitOfWork<CatalogDbContext>>();
                 services.AddScoped<IItemTransaction, ItemTransaction>();
@@ -95,6 +96,7 @@ internal sealed class ItemTestApplication : IDisposable
                 {
                     endpoints.MapGrpcService<ItemGrpcService>();
                     endpoints.MapGrpcService<MenuGrpcService>();
+                    endpoints.MapGrpcService<OrderValidationGrpcService>();
                     endpoints.MapGrpcService<OptionGroupGrpcService>();
                     endpoints.MapGrpcService<OptionGrpcService>();
                     endpoints.MapGrpcService<ItemOptionGroupGrpcService>();
@@ -111,6 +113,10 @@ internal sealed class ItemTestApplication : IDisposable
                 {
                     settings.TimeoutSeconds = 10;
                 });
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.OrderValidationGrpc.OrderValidationGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
                 services.AddGrpcClient<gateway::Backend.Contracts.Catalog.MenuGrpc.MenuGrpcClient>(options =>
                 {
                     options.Address = new Uri("http://catalog.test");
@@ -154,6 +160,32 @@ internal sealed class ItemTestApplication : IDisposable
     public CatalogDbContext OpenDatabase()
     {
         return CreateDatabase(_connection);
+    }
+
+    public async Task<Guid> AddRecipe(Guid itemId, DateTime? from = null, DateTime? to = null)
+    {
+        await using var db = OpenDatabase();
+        var recipe = new RecipeVersion
+        {
+            RecipeVersionId = Guid.NewGuid(),
+            ItemId = itemId,
+            Version = 1,
+            EffectiveFrom = from ?? Now.AddDays(-1).UtcDateTime,
+            EffectiveTo = to,
+            Instructions = "Prepare one serving."
+        };
+        recipe.RecipeIngredients.Add(new RecipeIngredient
+        {
+            RecipeIngredientId = Guid.NewGuid(),
+            IngredientRef = Guid.NewGuid(),
+            UnitRef = Guid.NewGuid(),
+            Quantity = 100m,
+            ConversionFactorSnapshot = 0.001m,
+            BaseQuantitySnapshot = 0.1m
+        });
+        db.RecipeVersions.Add(recipe);
+        await db.SaveChangesAsync();
+        return recipe.RecipeVersionId;
     }
 
     public async Task<Guid> AddCategory(string name = "Main Courses", bool active = true)

@@ -9,9 +9,21 @@ namespace Catalog.DAL.Implements;
 public sealed class ItemRepository(
     CatalogDbContext context) : IItemRepository
 {
-    public async Task<PagedResult<Item>> GetMenuPageAsync(MenuQueryDTO query, CancellationToken cancellationToken)
+    public Task<List<Item>> GetForOrderValidationAsync(Guid[] ids, CancellationToken cancellationToken)
     {
-        var source = MenuSource();
+        return context.Items.AsNoTracking().Where(item => ids.Contains(item.ItemId))
+            .Include(item => item.Category)
+            .Include(item => item.Prices)
+            .Include(item => item.ItemOptionGroups)
+                .ThenInclude(link => link.OptionGroup)
+                .ThenInclude(group => group.Options)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<PagedResult<Item>> GetMenuPageAsync(MenuQueryDTO query, DateTime at, CancellationToken cancellationToken)
+    {
+        var source = MenuSource(at);
         if (query.CategoryId.HasValue)
         {
             source = source.Where(item => item.CategoryId == query.CategoryId.Value);
@@ -31,14 +43,16 @@ public sealed class ItemRepository(
         return new PagedResult<Item>(items, count, query.Page, query.PageSize);
     }
 
-    public Task<Item?> GetMenuByIdAsync(Guid id, CancellationToken cancellationToken)
+    public Task<Item?> GetMenuByIdAsync(Guid id, DateTime at, CancellationToken cancellationToken)
     {
-        return MenuSource().SingleOrDefaultAsync(item => item.ItemId == id, cancellationToken);
+        return MenuSource(at).SingleOrDefaultAsync(item => item.ItemId == id, cancellationToken);
     }
 
-    private IQueryable<Item> MenuSource()
+    private IQueryable<Item> MenuSource(DateTime at)
     {
         return context.Items.AsNoTracking()
+            .Include(item => item.RecipeVersions.Where(recipe => recipe.EffectiveFrom <= at
+                && (!recipe.EffectiveTo.HasValue || at < recipe.EffectiveTo)))
             .Where(item => item.Category.IsActive
                 && (item.Availability == "Available" || item.Availability == "OutOfStock"))
             .Include(item => item.Category)
