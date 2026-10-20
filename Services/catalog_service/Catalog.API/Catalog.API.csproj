@@ -14,6 +14,7 @@
   </ItemGroup>
   <ItemGroup>
     <Protobuf Include="../../../Contracts/Protos/catalog.proto" Link="Protos\catalog.proto" GrpcServices="Server" />
+    <Protobuf Include="../../../Contracts/Protos/restaurant.proto" Link="Protos\restaurant.proto" GrpcServices="Client" />
     <Protobuf Include="../../../Contracts/Protos/identity.proto" Link="Protos\identity.proto" GrpcServices="Client" />
   </ItemGroup>
 </Project>

@@ -9,6 +9,46 @@ namespace Catalog.DAL.Implements;
 public sealed class ItemRepository(
     CatalogDbContext context) : IItemRepository
 {
+    public async Task<PagedResult<Item>> GetMenuPageAsync(MenuQueryDTO query, CancellationToken cancellationToken)
+    {
+        var source = MenuSource();
+        if (query.CategoryId.HasValue)
+        {
+            source = source.Where(item => item.CategoryId == query.CategoryId.Value);
+        }
+
+        var search = query.Search?.Trim().Normalize().ToUpperInvariant();
+        if (!string.IsNullOrEmpty(search))
+        {
+            source = source.Where(item => item.ItemName.ToUpper().Contains(search)
+                || item.ItemCode.ToUpper().Contains(search));
+        }
+
+        var count = await source.CountAsync(cancellationToken);
+        var items = await source.OrderBy(item => item.ItemName).ThenBy(item => item.ItemId)
+            .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
+            .ToListAsync(cancellationToken);
+        return new PagedResult<Item>(items, count, query.Page, query.PageSize);
+    }
+
+    public Task<Item?> GetMenuByIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        return MenuSource().SingleOrDefaultAsync(item => item.ItemId == id, cancellationToken);
+    }
+
+    private IQueryable<Item> MenuSource()
+    {
+        return context.Items.AsNoTracking()
+            .Where(item => item.Category.IsActive
+                && (item.Availability == "Available" || item.Availability == "OutOfStock"))
+            .Include(item => item.Category)
+            .Include(item => item.Prices)
+            .Include(item => item.ItemOptionGroups)
+                .ThenInclude(link => link.OptionGroup)
+                .ThenInclude(group => group.Options)
+            .AsSplitQuery();
+    }
+
     public async Task<PagedResult<Item>> GetPageAsync(
         ItemQueryDTO query,
         CancellationToken cancellationToken)

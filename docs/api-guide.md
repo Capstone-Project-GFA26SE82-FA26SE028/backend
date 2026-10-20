@@ -493,7 +493,9 @@ Lưu ảnh mặc định tại Restaurant.API/App_Data/qr-images, tùy chỉnh b
 - `GET /health/ready`: tại sáu service trên; kiểm tra kết nối database, 200 nếu kết nối được, 503 nếu không kết nối được theo nhánh CanConnect. Đây chưa phải kiểm tra đầy đủ schema/nghiệp vụ.
 - Health chưa được route qua Gateway. Gọi đúng host/port/protocol của service khi vận hành; frontend nghiệp vụ vẫn gọi Gateway.
 
-Catalog đã có API quản lý Category, Item và Price qua Gateway. Thao tác `PATCH /api/items/{id}/status` và quyền Manager/Kitchen được mô tả tại [Trạng thái bán của món](catalog-item-status.md). Các API Catalog hiện tại phục vụ quản lý, chưa phải API thực đơn cho khách hàng.
+Catalog đã có API quản lý Category, Item và Price qua Gateway. Thao tác `PATCH /api/items/{id}/status` và quyền Manager/Kitchen được mô tả tại [Trạng thái bán của món](catalog-item-status.md).
+
+API đọc thực đơn cho khách và waiter: `GET /api/menu`, `GET /api/menu/{id}`. Hỗ trợ giá hiện tại, nhóm option, trạng thái bán, tìm kiếm và phân trang; xem [Menu cho khách và waiter](catalog-menu.md) để biết cách dùng cookie GuestAccess hoặc Bearer token.
 
 API quản lý OptionGroup, Option và gán nhóm vào Item đã được bổ sung; xem [Tùy chọn món và dữ liệu mẫu](catalog-options.md) để biết đủ 16 endpoint, quyền và quy tắc dữ liệu.
 

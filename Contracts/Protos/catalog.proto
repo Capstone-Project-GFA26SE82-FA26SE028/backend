@@ -513,3 +513,72 @@ message RecipeListReply {
   bool is_success = 3;
   repeated RecipeInfo items = 4;
 }
+
+
+service MenuGrpc {
+  rpc GetAll (MenuListRequest) returns (MenuListReply);
+  rpc GetById (MenuItemRequest) returns (MenuItemReply);
+}
+message MenuAccessRequest {
+  optional string table_session_id = 1;
+  string guest_token = 2;
+}
+message MenuListRequest {
+  MenuAccessRequest access = 1;
+  string channel = 2;
+  optional string category_id = 3;
+  optional string search = 4;
+  int32 page = 5;
+  int32 page_size = 6;
+}
+message MenuItemRequest {
+  MenuAccessRequest access = 1;
+  string channel = 2;
+  string item_id = 3;
+}
+message MenuOptionInfo {
+  string option_id = 1;
+  string option_name = 2;
+  string extra_price = 3;
+  string availability = 4;
+  bool can_select = 5;
+}
+message MenuOptionGroupInfo {
+  string option_group_id = 1;
+  string option_group_name = 2;
+  int32 min_selection = 3;
+  int32 max_selection = 4;
+  repeated MenuOptionInfo options = 5;
+}
+message MenuItemInfo {
+  string item_id = 1;
+  string category_id = 2;
+  string category_name = 3;
+  string item_code = 4;
+  string item_name = 5;
+  optional string description = 6;
+  optional string image_url = 7;
+  string availability = 8;
+  optional string price = 9;
+  optional string price_id = 10;
+  string channel = 11;
+  string evaluated_at = 12;
+  bool can_order = 13;
+  optional string unavailable_reason = 14;
+  repeated MenuOptionGroupInfo option_groups = 15;
+}
+message MenuListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated MenuItemInfo items = 4;
+  int32 total_count = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+message MenuItemReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  MenuItemInfo result = 4;
+}
