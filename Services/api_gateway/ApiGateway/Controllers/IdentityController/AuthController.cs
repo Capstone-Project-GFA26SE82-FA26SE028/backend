@@ -143,7 +143,9 @@ public sealed class AuthController(IdentityGrpc.IdentityGrpcClient client) : Con
                 Grpc.Core.StatusCode.InvalidArgument => (400, "Thông tin đăng nhập không hợp lệ."),
                 Grpc.Core.StatusCode.Unauthenticated => (401, "Thông tin xác thực không hợp lệ."),
                 Grpc.Core.StatusCode.PermissionDenied => (403, "Không có quyền truy cập."),
-                _ => (502, "Không thể xử lý phản hồi từ Identity service.")
+                _ => (502, string.IsNullOrWhiteSpace(ex.Status.Detail)
+                    ? "Không thể xử lý phản hồi từ Identity service."
+                    : $"Identity service gặp lỗi: {ex.Status.Detail}")
             };
             return StatusCode(status, new ResponseDTO { StatusCode = status, Message = message, IsSuccess = false });
         }
