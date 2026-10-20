@@ -7,6 +7,7 @@ using System.Text.Json;
 using Backend.Contracts.Identity;
 using Catalog.API.Extensions;
 using Catalog.API.GrpcServices;
+using Catalog.BLL.Implements;
 using Catalog.BLL.Interfaces;
 using Catalog.DAL.Implements;
 using Catalog.DAL.Interfaces;
@@ -78,6 +79,8 @@ internal sealed class ItemTestApplication : IDisposable
                 services.AddScoped<IOptionGroupRepository, OptionGroupRepository>();
                 services.AddScoped<IOptionRepository, OptionRepository>();
                 services.AddScoped<IItemOptionGroupRepository, ItemOptionGroupRepository>();
+                services.AddScoped<IRecipeRepository, RecipeRepository>();
+                services.AddScoped<IRecipeService, RecipeService>();
                 services.AddScoped<IUnitOfWork, UnitOfWork<CatalogDbContext>>();
                 services.AddScoped<IItemTransaction, ItemTransaction>();
             })
@@ -90,6 +93,7 @@ internal sealed class ItemTestApplication : IDisposable
                     endpoints.MapGrpcService<OptionGroupGrpcService>();
                     endpoints.MapGrpcService<OptionGrpcService>();
                     endpoints.MapGrpcService<ItemOptionGroupGrpcService>();
+                    endpoints.MapGrpcService<RecipeGrpcService>();
                 });
             }));
 
@@ -115,6 +119,10 @@ internal sealed class ItemTestApplication : IDisposable
                     options.Address = new Uri("http://catalog.test");
                 }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
                 services.AddGrpcClient<gateway::Backend.Contracts.Catalog.ItemOptionGroupGrpc.ItemOptionGroupGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.RecipeGrpc.RecipeGrpcClient>(options =>
                 {
                     options.Address = new Uri("http://catalog.test");
                 }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
