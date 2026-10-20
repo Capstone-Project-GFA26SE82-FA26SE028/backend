@@ -29,6 +29,7 @@ public static class CatalogServiceExtensions
             .PostConfigure(settings =>
             {
                 settings.MenuManagerRoleIds = RemoveEmptyValues(settings.MenuManagerRoleIds);
+                settings.MenuReaderRoleIds = RemoveEmptyValues(settings.MenuReaderRoleIds);
                 settings.KitchenRoleIds = RemoveEmptyValues(settings.KitchenRoleIds);
                 settings.NonSellingItemAvailabilities = RemoveEmptyValues(
                     settings.NonSellingItemAvailabilities);
@@ -38,6 +39,8 @@ public static class CatalogServiceExtensions
                 "MenuManagerRoleIds must contain actual, non-empty RoleIds.")
             .Validate(settings => settings.KitchenRoleIds.All(IsValidValue),
                 "KitchenRoleIds must contain actual, non-empty RoleIds.")
+            .Validate(settings => settings.MenuReaderRoleIds.All(IsValidValue),
+                "MenuReaderRoleIds must contain actual, non-empty RoleIds.")
             .Validate(settings => settings.NonSellingItemAvailabilities is not null
                 && settings.NonSellingItemAvailabilities.All(IsValidValue),
                 "NonSellingItemAvailabilities must contain actual status values.")
@@ -57,6 +60,19 @@ public static class CatalogServiceExtensions
         {
             options.Address = identityUri;
         });
+        services.AddGrpcClient<Backend.Contracts.Restaurant.GuestAccessGrpc.GuestAccessGrpcClient>(options =>
+        {
+            var address = configuration["GrpcServices:Restaurant"];
+            if (!Uri.TryCreate(address, UriKind.Absolute, out var restaurantUri)
+                || (restaurantUri.Scheme != Uri.UriSchemeHttp && restaurantUri.Scheme != Uri.UriSchemeHttps))
+            {
+                throw new InvalidOperationException("Configure GrpcServices:Restaurant.");
+            }
+
+            options.Address = restaurantUri;
+        });
+        services.AddScoped<IMenuAccess, MenuAccess>();
+        services.AddScoped<IMenuService, MenuService>();
         services.AddScoped<ICatalogAccess, IdentityCatalogAccess>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IItemService, ItemService>();

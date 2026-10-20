@@ -20,6 +20,7 @@ var app = builder.Build();
 
 app.MapGrpcService<CategoryGrpcService>();
 app.MapGrpcService<ItemGrpcService>();
+app.MapGrpcService<MenuGrpcService>();
 app.MapGrpcService<PriceGrpcService>();
 app.MapGrpcService<OptionGroupGrpcService>();
 app.MapGrpcService<OptionGrpcService>();

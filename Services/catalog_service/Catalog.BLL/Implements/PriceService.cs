@@ -413,30 +413,7 @@ public sealed class PriceService(
 
     private bool TryConfiguration(out TimeZoneInfo timeZone)
     {
-        timeZone = TimeZoneInfo.Utc;
-        var configuration = settings.Value;
-        if (!ValidChannel(configuration.AllChannelsCode) || configuration.Channels is not { Length: > 0 }
-            || !configuration.Channels.All(ValidChannel)
-            || configuration.Channels.Distinct(StringComparer.OrdinalIgnoreCase).Count() != configuration.Channels.Length
-            || configuration.Channels.Contains(configuration.AllChannelsCode, StringComparer.OrdinalIgnoreCase)
-            || string.IsNullOrWhiteSpace(configuration.BusinessTimeZone))
-        {
-            return false;
-        }
-
-        try
-        {
-            timeZone = TimeZoneInfo.FindSystemTimeZoneById(configuration.BusinessTimeZone);
-            return true;
-        }
-        catch (TimeZoneNotFoundException)
-        {
-            return false;
-        }
-        catch (InvalidTimeZoneException)
-        {
-            return false;
-        }
+        return PriceRules.TryConfiguration(settings.Value, out timeZone);
     }
 
     private static bool ValidChannel(string value)
@@ -452,7 +429,7 @@ public sealed class PriceService(
 
     private static int Priority(Price price, string channel)
     {
-        return (price.DailyStart.HasValue ? 2 : 0) + (price.Channel == channel ? 1 : 0);
+        return PriceRules.Priority(price, channel);
     }
 
     private static DateTimeOffset Utc(DateTime value)

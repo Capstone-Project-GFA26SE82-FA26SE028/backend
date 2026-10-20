@@ -21,6 +21,10 @@ builder.Services.AddGrpcClient<Backend.Contracts.Catalog.CategoryGrpc.CategoryGr
 {
     options.Address = catalogUri;
 });
+builder.Services.AddGrpcClient<Backend.Contracts.Catalog.MenuGrpc.MenuGrpcClient>(options =>
+{
+    options.Address = catalogUri;
+});
 builder.Services.AddGrpcClient<Backend.Contracts.Catalog.ItemGrpc.ItemGrpcClient>(options =>
 {
     options.Address = catalogUri;

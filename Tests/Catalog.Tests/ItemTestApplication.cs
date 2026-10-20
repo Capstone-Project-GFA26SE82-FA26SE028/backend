@@ -58,10 +58,13 @@ internal sealed class ItemTestApplication : IDisposable
             ["GrpcServices:Identity"] = "http://identity.test",
             ["CatalogManagement:IdentityTimeoutSeconds"] = "5",
             ["CatalogManagement:MenuManagerRoleIds:0"] = "test-menu-manager",
+            ["CatalogManagement:MenuReaderRoleIds:0"] = "test-waiter",
             ["CatalogManagement:KitchenRoleIds:0"] = "test-kitchen",
             ["CatalogManagement:NonSellingItemAvailabilities:0"] = "Inactive",
             ["ItemManagement:InitialAvailability"] = initialAvailability,
-            ["Pricing:AllChannelsCode"] = "AllChannels"
+            ["Pricing:AllChannelsCode"] = "AllChannels",
+            ["Pricing:Channels:0"] = "DineIn",
+            ["Pricing:BusinessTimeZone"] = "Asia/Ho_Chi_Minh"
         }).Build();
 
         var catalog = new TestServer(new WebHostBuilder()
@@ -71,6 +74,7 @@ internal sealed class ItemTestApplication : IDisposable
                 services.AddGrpc();
                 services.AddCatalogManagement(configuration);
                 services.AddSingleton(new UserGrpc.UserGrpcClient(new ItemIdentityInvoker()));
+                services.AddSingleton<Backend.Contracts.Restaurant.GuestAccessGrpc.GuestAccessGrpcClient>(new MenuGuestClient());
                 services.AddSingleton<TimeProvider>(new TestClock());
                 services.AddScoped<CatalogDbContext>(_ => CreateDatabase(connection));
                 services.AddScoped<ICategoryRepository, CategoryRepository>();
@@ -90,6 +94,7 @@ internal sealed class ItemTestApplication : IDisposable
                 app.UseEndpoints(endpoints =>
                 {
                     endpoints.MapGrpcService<ItemGrpcService>();
+                    endpoints.MapGrpcService<MenuGrpcService>();
                     endpoints.MapGrpcService<OptionGroupGrpcService>();
                     endpoints.MapGrpcService<OptionGrpcService>();
                     endpoints.MapGrpcService<ItemOptionGroupGrpcService>();
@@ -106,6 +111,10 @@ internal sealed class ItemTestApplication : IDisposable
                 {
                     settings.TimeoutSeconds = 10;
                 });
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.MenuGrpc.MenuGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
                 services.AddGrpcClient<GatewayItemGrpc.ItemGrpcClient>(options =>
                 {
                     options.Address = new Uri("http://catalog.test");
@@ -223,6 +232,7 @@ internal sealed class ItemTestApplication : IDisposable
                     {
                         "Bearer manager" => "test-menu-manager",
                         "Bearer kitchen" => "test-kitchen",
+                        "Bearer waiter" => "test-waiter",
                         _ => "ordinary-user"
                     },
                     IsActive = token != "Bearer disabled"

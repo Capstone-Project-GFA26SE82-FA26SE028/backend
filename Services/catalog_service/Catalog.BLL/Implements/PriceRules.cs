@@ -1,10 +1,49 @@
 using System.Globalization;
 using Catalog.DAL.Models;
+using Catalog.Common.Settings;
 
 namespace Catalog.BLL.Implements;
 
 internal static class PriceRules
 {
+    public static int Priority(Price price, string channel)
+    {
+        return (price.DailyStart.HasValue ? 2 : 0) + (price.Channel == channel ? 1 : 0);
+    }
+
+    public static bool TryConfiguration(PricingSettings configuration, out TimeZoneInfo timeZone)
+    {
+        timeZone = TimeZoneInfo.Utc;
+        if (!ValidChannel(configuration.AllChannelsCode) || configuration.Channels is not { Length: > 0 }
+            || !configuration.Channels.All(ValidChannel)
+            || configuration.Channels.Distinct(StringComparer.OrdinalIgnoreCase).Count() != configuration.Channels.Length
+            || configuration.Channels.Contains(configuration.AllChannelsCode, StringComparer.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(configuration.BusinessTimeZone))
+        {
+            return false;
+        }
+
+        try
+        {
+            timeZone = TimeZoneInfo.FindSystemTimeZoneById(configuration.BusinessTimeZone);
+            return true;
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return false;
+        }
+        catch (InvalidTimeZoneException)
+        {
+            return false;
+        }
+    }
+
+    private static bool ValidChannel(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value) && value.Length <= 50
+            && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
+    }
+
     private static readonly string[] TimestampFormats =
     [
         "yyyy-MM-dd'T'HH:mm:ss'Z'",

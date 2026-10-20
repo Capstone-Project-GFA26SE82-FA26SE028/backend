@@ -59,6 +59,7 @@ services:
       GrpcServices__Identity: http://identity:5001
       CatalogManagement__MenuManagerRoleIds__0: ${CATALOG_MENU_MANAGER_ROLE_ID:-}
       CatalogManagement__KitchenRoleIds__0: ${CATALOG_KITCHEN_ROLE_ID:-kitchen}
+      CatalogManagement__MenuReaderRoleIds__0: ${CATALOG_MENU_READER_ROLE_ID:-waiter}
       CatalogManagement__NonSellingItemAvailabilities__0: ${CATALOG_NON_SELLING_AVAILABILITY:-Inactive}
       ItemManagement__InitialAvailability: ${CATALOG_INITIAL_AVAILABILITY:-Inactive}
     extra_hosts:
