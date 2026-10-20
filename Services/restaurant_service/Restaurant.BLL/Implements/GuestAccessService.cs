@@ -56,9 +56,10 @@ public sealed class GuestAccessService(ITableSessionRepository sessions, IGuestA
 
             var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
             var expiresAt = now.AddHours(settings.Value.LifetimeHours);
+            var guestId = Guid.NewGuid();
             guests.Add(new GuestAccess
             {
-                GuestAccessId = Guid.NewGuid(),
+                GuestAccessId = guestId,
                 TableSessionId = sessionId,
                 TokenHash = HashToken(token),
                 CreatedAt = now,
@@ -66,6 +67,7 @@ public sealed class GuestAccessService(ITableSessionRepository sessions, IGuestA
             });
             return new GuestAccessDto
             {
+                GuestAccessId = guestId,
                 TableSessionId = sessionId,
                 ExpiresAt = expiresAt,
                 Token = token
@@ -90,6 +92,7 @@ public sealed class GuestAccessService(ITableSessionRepository sessions, IGuestA
 
         return new GuestAccessDto
         {
+            GuestAccessId = access.GuestAccessId,
             TableSessionId = sessionId,
             ExpiresAt = DateTime.SpecifyKind(access.ExpiredAt, DateTimeKind.Utc)
         };

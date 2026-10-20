@@ -7,9 +7,15 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.84.0" />
+    <PackageReference Include="Grpc.Net.ClientFactory" Version="2.84.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Ordering.BLL\Ordering.BLL.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Protobuf Include="../../../Contracts/Protos/ordering.proto" Link="Protos/ordering.proto" GrpcServices="Server" />
+    <Protobuf Include="../../../Contracts/Protos/restaurant.proto" Link="Protos/restaurant.proto" GrpcServices="Client" />
+    <Protobuf Include="../../../Contracts/Protos/catalog.proto" Link="Protos/catalog.proto" GrpcServices="Client" />
   </ItemGroup>
 </Project>
 

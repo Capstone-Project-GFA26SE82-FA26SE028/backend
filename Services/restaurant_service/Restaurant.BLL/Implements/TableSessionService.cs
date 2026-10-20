@@ -9,8 +9,43 @@ namespace Restaurant.BLL.Implements;
 
 public sealed class TableSessionService(IQrService qrService, ITableRepository tables,
     ITableSessionRepository sessions, IGenericRepository<SessionTable> sessionTables,
-    IManagementTransaction transaction) : ITableSessionService
+    IManagementTransaction transaction, IGuestAccessService guestAccess, ITableSessionOrderAccess orderAccess) : ITableSessionService
 {
+    public async Task<OrderSessionDto> GetForOrdering(Guid sessionId, Guid? tableId, string guestToken, CancellationToken ct)
+    {
+        var result = new OrderSessionDto
+        {
+            TableSessionId = sessionId
+        };
+        if (!string.IsNullOrEmpty(guestToken))
+        {
+            var guest = await guestAccess.GetMe(sessionId, guestToken, ct);
+            result.GuestAccessId = guest.GuestAccessId;
+            result.ExpiresAt = guest.ExpiresAt;
+        }
+        else
+        {
+            result.UserId = await orderAccess.RequireStaffAsync(ct);
+        }
+
+        var session = await sessions.GetForOrderingAsync(sessionId, ct)
+            ?? throw new ManagementException(404, "Table session not found.");
+        if (session.Status != "Open" || session.ClosedAt.HasValue)
+        {
+            throw new ManagementException(409, "The table session is closed.");
+        }
+
+        var activeTables = session.SessionTables.Where(link => link.Table.IsActive && link.Table.Area.IsActive)
+            .Select(link => link.TableId).Distinct().ToArray();
+        if (activeTables.Length == 0 || (tableId.HasValue && !activeTables.Contains(tableId.Value)))
+        {
+            throw new ManagementException(409, "The table is not active in this session.");
+        }
+
+        result.TableId = tableId ?? (activeTables.Length == 1 ? activeTables[0] : null);
+        return result;
+    }
+
     public async Task<TableSessionScanDto> Scan(string token, CancellationToken ct)
     {
         var initial = await qrService.Resolve(token, ct);
