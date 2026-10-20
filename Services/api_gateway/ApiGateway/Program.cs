@@ -3,6 +3,19 @@ using Grpc.Core;
 using ApiGateway.Settings;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddOptions<OrderingClientSettings>().Bind(builder.Configuration.GetSection("OrderingClient"))
+    .Validate(settings => settings.TimeoutSeconds is > 0 and <= 120, "OrderingClient timeout must be 1-120 seconds.")
+    .ValidateOnStart();
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.CartGrpc.CartGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.OrderGrpc.OrderGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
+});
 builder.Services.AddOptions<CatalogClientSettings>()
     .Bind(builder.Configuration.GetSection("CatalogClient"))
     .Validate(settings => settings.TimeoutSeconds > 0,

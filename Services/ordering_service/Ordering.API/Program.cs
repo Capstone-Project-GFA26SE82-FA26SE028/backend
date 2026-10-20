@@ -3,7 +3,7 @@ using Ordering.DAL.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddGrpc();
+Ordering.API.Extensions.OrderingServiceExtensions.AddOrderingServices(builder.Services, builder.Configuration);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -14,6 +14,9 @@ if (string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddOrderingPersistence(connectionString);
 
 var app = builder.Build();
+
+app.MapGrpcService<Ordering.API.GrpcServices.CartGrpcService>();
+app.MapGrpcService<Ordering.API.GrpcServices.OrderGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

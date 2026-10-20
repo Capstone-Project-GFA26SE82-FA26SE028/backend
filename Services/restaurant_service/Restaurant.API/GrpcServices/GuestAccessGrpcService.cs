@@ -32,6 +32,7 @@ public sealed class GuestAccessGrpcService(IGuestAccessService service) : GuestA
     {
         return new GuestAccessReply
         {
+            GuestAccessId = result.GuestAccessId.ToString(),
             TableSessionId = result.TableSessionId.ToString(),
             ExpiresAt = result.ExpiresAt.ToString("O"),
             Token = result.Token

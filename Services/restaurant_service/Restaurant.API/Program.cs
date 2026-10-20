@@ -8,6 +8,12 @@ builder.Services.AddGrpc(options =>
     options.Interceptors.Add<Restaurant.API.Management.ManagementInterceptor>();
 });
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableSessionOrderAccess, Restaurant.API.Management.IdentityTableSessionOrderAccess>();
+builder.Services.AddGrpcClient<Backend.Contracts.Identity.UserGrpc.UserGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Identity."));
+});
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IGuestAccessService, Restaurant.BLL.Implements.GuestAccessService>();
 builder.Services.AddOptions<Restaurant.Common.Settings.GuestAccessSettings>()
     .Bind(builder.Configuration.GetSection("GuestAccess"))

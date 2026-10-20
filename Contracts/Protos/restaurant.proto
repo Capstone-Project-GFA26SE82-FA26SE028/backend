@@ -14,6 +14,7 @@ message GuestAccessReply {
   string table_session_id = 1;
   string expires_at = 2;
   string token = 3;
+  string guest_access_id = 4;
 }
 
 service GuestAccessGrpc {
@@ -132,4 +133,18 @@ message TableSessionScanReply {
 }
 service TableSessionGrpc {
   rpc Scan(QrTokenRequest) returns (TableSessionScanReply);
+  rpc GetForOrdering(OrderSessionRequest) returns (OrderSessionReply);
+}
+
+message OrderSessionRequest {
+  string table_session_id = 1;
+  optional string table_id = 2;
+  string guest_token = 3;
+}
+message OrderSessionReply {
+  string table_session_id = 1;
+  optional string table_id = 2;
+  optional string user_id = 3;
+  optional string guest_access_id = 4;
+  optional string expires_at = 5;
 }
