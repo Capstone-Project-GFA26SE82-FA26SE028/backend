@@ -20,6 +20,7 @@ public sealed class ItemService(
     IOptions<ItemManagementSettings> settings,
     IOptions<CatalogManagementSettings> catalogSettings,
     IPriceRepository prices,
+    IRecipeRepository recipes,
     IOptions<PricingSettings> pricingSettings,
     TimeProvider timeProvider,
     ILogger<ItemService> logger) : IItemService
@@ -247,6 +248,12 @@ public sealed class ItemService(
                 }
 
                 var now = prices.NormalizeTimestamp(timeProvider.GetUtcNow().UtcDateTime);
+                var activeRecipes = await recipes.GetActiveForOrderAsync([id], [], now, cancellationToken);
+                if (activeRecipes.Count != 1)
+                {
+                    return (new ResponseDTO("An item can only be opened for sale with exactly one currently active recipe.", 409), null);
+                }
+
                 var standardPrices = (await prices.GetForItemAsync(id, cancellationToken))
                     .Where(price => price.Channel == allChannels
                         && !price.DailyStart.HasValue && !price.DailyEnd.HasValue

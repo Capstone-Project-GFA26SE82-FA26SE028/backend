@@ -6,9 +6,11 @@ namespace Catalog.DAL.Interfaces;
 
 public interface IItemRepository
 {
-    Task<PagedResult<Item>> GetMenuPageAsync(MenuQueryDTO query, CancellationToken cancellationToken);
+    Task<List<Item>> GetForOrderValidationAsync(Guid[] ids, CancellationToken cancellationToken);
 
-    Task<Item?> GetMenuByIdAsync(Guid id, CancellationToken cancellationToken);
+    Task<PagedResult<Item>> GetMenuPageAsync(MenuQueryDTO query, DateTime at, CancellationToken cancellationToken);
+
+    Task<Item?> GetMenuByIdAsync(Guid id, DateTime at, CancellationToken cancellationToken);
 
     Task<PagedResult<Item>> GetPageAsync(ItemQueryDTO query, CancellationToken cancellationToken);
 

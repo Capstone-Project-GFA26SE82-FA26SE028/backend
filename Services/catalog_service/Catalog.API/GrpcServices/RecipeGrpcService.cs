@@ -179,7 +179,7 @@ public sealed class RecipeGrpcService(IRecipeService service) : RecipeGrpc.Recip
         {
             RecipeVersionId = dto.RecipeVersionId.ToString(),
             Version = dto.Version,
-            EffectiveFrom = dto.EffectiveFrom.ToString("o", CultureInfo.InvariantCulture),
+            EffectiveFrom = DateTime.SpecifyKind(dto.EffectiveFrom, DateTimeKind.Utc).ToString("O", CultureInfo.InvariantCulture),
             Instructions = dto.Instructions ?? string.Empty
         };
 
@@ -195,7 +195,7 @@ public sealed class RecipeGrpcService(IRecipeService service) : RecipeGrpc.Recip
 
         if (dto.EffectiveTo.HasValue)
         {
-            info.EffectiveTo = dto.EffectiveTo.Value.ToString("o", CultureInfo.InvariantCulture);
+            info.EffectiveTo = DateTime.SpecifyKind(dto.EffectiveTo.Value, DateTimeKind.Utc).ToString("O", CultureInfo.InvariantCulture);
         }
 
         foreach (var ingredient in dto.Ingredients)
@@ -234,11 +234,19 @@ public sealed class RecipeGrpcService(IRecipeService service) : RecipeGrpc.Recip
 
     private static DateTime? ParseDateTime(string? value)
     {
-        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var offset))
+        string[] formats =
+        [
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'",
+            "yyyy-MM-dd'T'HH:mm:sszzz",
+            "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFzzz"
+        ];
+        if (DateTimeOffset.TryParseExact(value, formats, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal, out var offset))
         {
             return offset.UtcDateTime;
         }
 
-        return null;
+        throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid recipe timestamp."));
     }
 }

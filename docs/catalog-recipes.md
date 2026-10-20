@@ -110,6 +110,9 @@ Tạo thành công trả HTTP 201 kèm header `Location: /api/recipes/{recipeVer
 1. **Ràng buộc Món**: `itemId` phải tồn tại trong bảng `Item`.
 2. **Quy tắc Versioning**:
    - Số phiên bản `Version` tự tăng (`max(Version) + 1`), phiên bản đầu tiên là 1.
+   - `effectiveFrom` phải có múi giờ (`Z` hoặc offset), nằm trong khoảng SQL `datetime`. Backend chuẩn hóa UTC và độ chính xác SQL `datetime` trước khi so sánh/lưu.
+   - Phiên bản mới phải có `effectiveFrom` lớn hơn thời điểm bắt đầu của tất cả phiên bản đã tạo cho cùng món/option. Trùng thời điểm (kể cả trùng sau khi làm tròn SQL) hoặc chèn ngược lịch trả 409, không sửa lịch sử.
+   - Có thể lên lịch phiên bản mới trong tương lai. Nếu đã lên lịch ngày 25, tạo tiếp phiên bản ngày 23 bị từ chối; không tự hủy lịch ngày 25.
    - Khi tạo phiên bản mới có thời điểm `effectiveFrom`, hệ thống tự động tìm các phiên bản cũ còn mở và gán `EffectiveTo = new.EffectiveFrom` trong transaction Serializable.
    - Tra cứu phiên bản hiện tại lấy bản ghi thỏa mãn `EffectiveFrom <= at < (EffectiveTo ?? vô hạn)`.
 3. **Định lượng nguyên liệu (`RecipeIngredient`)**:
@@ -121,6 +124,8 @@ Tạo thành công trả HTTP 201 kèm header `Location: /api/recipes/{recipeVer
    - `mediaType` không rỗng, tối đa 50 ký tự (ví dụ: `image`, `video`).
    - `url` không rỗng, tối đa 2048 ký tự.
    - `displayOrder` là số không âm, phục vụ hiển thị tuần tự các bước chế biến.
+
+Món chỉ được chuyển sang `Available` khi có đúng một công thức đang hiệu lực. Menu và validate order cũng kiểm tra lại điều kiện này. Option không bắt buộc có công thức; nếu có công thức đang hiệu lực thì validate order trả `recipeVersionId` của option để Ordering lưu cùng đơn. Tham chiếu nguyên liệu/đơn vị và hệ số quy đổi vẫn chưa được xác minh với Inventory.
 
 ---
 
