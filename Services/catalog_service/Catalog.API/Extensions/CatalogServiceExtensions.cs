@@ -65,6 +65,7 @@ public static class CatalogServiceExtensions
         services.AddScoped<IOptionGroupService, OptionGroupService>();
         services.AddScoped<IOptionService, OptionService>();
         services.AddScoped<IItemOptionGroupService, ItemOptionGroupService>();
+        services.AddScoped<IRecipeService, RecipeService>();
         return services;
     }
 

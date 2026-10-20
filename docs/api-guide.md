@@ -497,6 +497,8 @@ Catalog đã có API quản lý Category, Item và Price qua Gateway. Thao tác 
 
 API quản lý OptionGroup, Option và gán nhóm vào Item đã được bổ sung; xem [Tùy chọn món và dữ liệu mẫu](catalog-options.md) để biết đủ 16 endpoint, quyền và quy tắc dữ liệu.
 
+API quản lý Công thức món (Recipe), định lượng nguyên liệu (BOM) và tài liệu chế biến (SOP) phục vụ Manager (UC_MGR_05) và Kitchen (UC_KIT_09); xem [Công thức món và định lượng](catalog-recipes.md) để biết chi tiết các endpoint và cơ chế versioning.
+
 Inventory, Ordering, Billing và Customer hiện chưa có HTTP API nghiệp vụ qua Gateway. Có model/persistence không đồng nghĩa đã có API kho, gọi món, hóa đơn, thanh toán hay khách hàng.
 
 ## 12. Thứ tự thử bằng Swagger/Postman

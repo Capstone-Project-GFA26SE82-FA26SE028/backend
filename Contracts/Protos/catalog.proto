@@ -408,3 +408,108 @@ message ItemOptionGroupListReply {
   bool is_success = 3;
   repeated ItemOptionGroupInfo items = 4;
 }
+
+service RecipeGrpc {
+  rpc CreateItemRecipe (CreateItemRecipeRequest) returns (RecipeReply);
+  rpc GetActiveItemRecipe (ActiveItemRecipeRequest) returns (RecipeReply);
+  rpc GetItemRecipeHistory (ItemRecipeHistoryRequest) returns (RecipeListReply);
+  rpc CreateOptionRecipe (CreateOptionRecipeRequest) returns (RecipeReply);
+  rpc GetActiveOptionRecipe (ActiveOptionRecipeRequest) returns (RecipeReply);
+  rpc GetOptionRecipeHistory (OptionRecipeHistoryRequest) returns (RecipeListReply);
+  rpc GetRecipeById (RecipeIdRequest) returns (RecipeReply);
+}
+
+message CreateRecipeIngredientRequest {
+  string ingredient_ref = 1;
+  string unit_ref = 2;
+  string quantity = 3;
+  string conversion_factor = 4;
+}
+
+message CreateRecipeMediaRequest {
+  string media_type = 1;
+  string url = 2;
+  int32 display_order = 3;
+}
+
+message CreateItemRecipeRequest {
+  string item_id = 1;
+  optional string effective_from = 2;
+  optional string instructions = 3;
+  repeated CreateRecipeIngredientRequest ingredients = 4;
+  repeated CreateRecipeMediaRequest media = 5;
+}
+
+message ActiveItemRecipeRequest {
+  string item_id = 1;
+  optional string at = 2;
+}
+
+message ItemRecipeHistoryRequest {
+  string item_id = 1;
+}
+
+message CreateOptionRecipeRequest {
+  string option_id = 1;
+  optional string effective_from = 2;
+  optional string instructions = 3;
+  repeated CreateRecipeIngredientRequest ingredients = 4;
+  repeated CreateRecipeMediaRequest media = 5;
+}
+
+message ActiveOptionRecipeRequest {
+  string option_id = 1;
+  optional string at = 2;
+}
+
+message OptionRecipeHistoryRequest {
+  string option_id = 1;
+}
+
+message RecipeIdRequest {
+  string recipe_version_id = 1;
+}
+
+message RecipeIngredientInfo {
+  string recipe_ingredient_id = 1;
+  string recipe_version_id = 2;
+  string ingredient_ref = 3;
+  string unit_ref = 4;
+  string quantity = 5;
+  string base_quantity_snapshot = 6;
+  string conversion_factor_snapshot = 7;
+}
+
+message RecipeMediaInfo {
+  string recipe_media_id = 1;
+  string recipe_version_id = 2;
+  string media_type = 3;
+  string url = 4;
+  int32 display_order = 5;
+}
+
+message RecipeInfo {
+  string recipe_version_id = 1;
+  optional string item_id = 2;
+  optional string option_id = 3;
+  int32 version = 4;
+  string effective_from = 5;
+  optional string effective_to = 6;
+  optional string instructions = 7;
+  repeated RecipeIngredientInfo ingredients = 8;
+  repeated RecipeMediaInfo media = 9;
+}
+
+message RecipeReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  RecipeInfo result = 4;
+}
+
+message RecipeListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated RecipeInfo items = 4;
+}

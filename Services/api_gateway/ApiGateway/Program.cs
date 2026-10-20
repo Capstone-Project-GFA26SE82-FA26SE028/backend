@@ -43,6 +43,10 @@ builder.Services.AddGrpcClient<Backend.Contracts.Catalog.ItemOptionGroupGrpc.Ite
 {
     options.Address = catalogUri;
 });
+builder.Services.AddGrpcClient<Backend.Contracts.Catalog.RecipeGrpc.RecipeGrpcClient>(options =>
+{
+    options.Address = catalogUri;
+});
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp",
