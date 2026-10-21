@@ -31,7 +31,7 @@ Kitchen được dùng `GET /api/items` và `GET /api/items/{id}` để xem tr�
 
 - `CatalogManagement:MenuManagerRoleIds`: các RoleId được quản lý menu; giữ cấu hình hiện tại `manager`.
 - `CatalogManagement:KitchenRoleIds`: các RoleId Kitchen; mặc định `kitchen`. Thay bằng RoleId thực tế nếu database dùng giá trị khác. Mảng rỗng không cấp quyền Kitchen.
-- Docker có biến `CATALOG_KITCHEN_ROLE_ID` trong `.env.example`; không tự thay đổi `.env` đang dùng.
+- Docker có biến `CATALOG_KITCHEN_ROLE_ID` trong `.env`; không tự thay đổi `.env` đang dùng.
 - `CatalogManagement:NonSellingItemAvailabilities` phải chứa `Inactive`, không chứa `Available` hay `OutOfStock`. Món tạm hết vẫn thuộc thực đơn đang kinh doanh nên tiếp tục chặn tắt Category.
 
 Lỗi chính: 400 khi trạng thái/ID/version sai định dạng; 401 khi chưa xác thực hoặc phiên/tài khoản không hợp lệ; 403 khi thiếu quyền; 404 khi không có món; 409 khi version cũ hoặc không đủ điều kiện chuyển trạng thái; 503 khi cấu hình cần thiết hoặc dịch vụ phụ thuộc không khả dụng.
