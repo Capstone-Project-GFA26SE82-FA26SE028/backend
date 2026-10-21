@@ -256,7 +256,9 @@ public sealed class OrderService(IOrderRepository orders, ICartRepository carts,
         var id = itemStation ?? settings.Value.DefaultKitchenStationId ?? await kitchen.GetOnlyActiveStationAsync(ct);
         if (!id.HasValue || !await kitchen.IsStationActiveAsync(id.Value, ct))
         {
-            throw new OrderingException(503, "Configure an active Ordering:DefaultKitchenStationId before sending orders to the kitchen.");
+            throw new OrderingException(409, itemStation.HasValue
+                ? $"Assigned kitchen station {itemStation.Value} is missing or inactive. Ask Manager to update the item routing."
+                : "No active kitchen station can be selected. Assign a station to the item or configure an active default station.");
         }
 
         return id.Value;

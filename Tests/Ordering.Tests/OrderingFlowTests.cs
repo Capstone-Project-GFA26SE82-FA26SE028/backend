@@ -137,7 +137,7 @@ public sealed class OrderingFlowTests
         });
         await app.Db.SaveChangesAsync();
         var request = new CreateOrderDTO { Items = app.Lines() };
-        await Error(503, () => app.Orders.Create(app.Session, "station", request, "", default));
+        await Error(409, () => app.Orders.Create(app.Session, "station", request, "", default));
         Assert.Empty(await app.Db.Orders.ToListAsync());
         app.ItemStation = app.Station;
         await app.Orders.Create(app.Session, "station", request, "", default);
@@ -148,6 +148,79 @@ public sealed class OrderingFlowTests
     {
         var error = await Assert.ThrowsAsync<OrderingException>(action);
         Assert.Equal(status, error.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TwoItemsRouteToDifferentStationsAndDisabledStationRollsBack(bool staff)
+    {
+        using var app = new Fixture();
+        var drink = Guid.NewGuid();
+        var bar = new KitchenStation
+        {
+            KitchenStationId = Guid.NewGuid(),
+            KitchenStationCode = "BAR",
+            KitchenStationName = "Bar",
+            IsActive = false
+        };
+        app.Db.KitchenStations.Add(bar);
+        await app.Db.SaveChangesAsync();
+        app.Routes[app.Item] = app.Station;
+        app.Routes[drink] = bar.KitchenStationId;
+        var lines = app.Lines();
+        lines.Add(new SelectionDTO
+        {
+            ItemId = drink,
+            Quantity = 1
+        });
+        OrderDTO? pending = null;
+        if (!staff)
+        {
+            var cart = await app.Carts.Create(app.Session, "guest", default);
+            cart = await app.Carts.Update(app.Session, cart.CartId, new CartWriteDTO
+            {
+                Version = cart.Version,
+                Items = lines
+            }, "guest", default);
+            pending = (await app.Orders.Create(app.Session, "guest-routing", new CreateOrderDTO
+            {
+                CartId = cart.CartId,
+                CartVersion = cart.Version
+            }, "guest", default)).Order;
+        }
+        app.Staff = true;
+        var request = new CreateOrderDTO
+        {
+            Items = lines
+        };
+        if (staff)
+        {
+            await Error(409, () => app.Orders.Create(app.Session, "routing", request, "", default));
+            Assert.Empty(await app.Db.Orders.ToListAsync());
+        }
+        else
+        {
+            await Error(409, () => app.Orders.Confirm(app.Session, pending!.OrderId,
+                pending.Version, default));
+            Assert.Equal("PendingConfirmation", (await app.Db.Orders.SingleAsync()).Status);
+        }
+        Assert.Empty(await app.Db.KitchenTasks.ToListAsync());
+        bar.IsActive = true;
+        await app.Db.SaveChangesAsync();
+        if (staff)
+        {
+            await app.Orders.Create(app.Session, "routing", request, "", default);
+        }
+        else
+        {
+            await app.Orders.Confirm(app.Session, pending!.OrderId,
+                pending.Version, default);
+        }
+        var tasks = await app.Db.KitchenTasks.Include(task => task.OrderItem).ToListAsync();
+        Assert.Equal(2, tasks.Count);
+        Assert.Equal(app.Station, tasks.Single(task => task.OrderItem.ItemRef == app.Item).KitchenStationId);
+        Assert.Equal(bar.KitchenStationId, tasks.Single(task => task.OrderItem.ItemRef == drink).KitchenStationId);
     }
 
     private sealed class Fixture : IOrderingAccess, ICatalogOrderClient, IDisposable
@@ -165,6 +238,7 @@ public sealed class OrderingFlowTests
         public Guid Recipe { get; } = Guid.NewGuid();
         public Guid Station { get; } = Guid.NewGuid();
         public Guid? ItemStation { get; set; }
+        public Dictionary<Guid, Guid> Routes { get; } = new();
         public bool Staff { get; set; }
         public bool Closed { get; set; }
         public bool Valid { get; set; } = true;
@@ -235,7 +309,7 @@ public sealed class OrderingFlowTests
                 Items = items.Select(item => new QuotedItemDTO
                 {
                     ItemId = item.ItemId,
-                    KitchenStationId = ItemStation,
+                    KitchenStationId = Routes.TryGetValue(item.ItemId, out var route) ? route : ItemStation,
                     Name = "Pho",
                     RecipeVersionId = Recipe,
                     Quantity = item.Quantity,
