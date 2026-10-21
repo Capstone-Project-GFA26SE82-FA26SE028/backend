@@ -107,18 +107,18 @@ public sealed class TableSessionService(IQrService qrService, ITableRepository t
         return await transaction.ExecuteAsync(async () =>
         {
             var table = await tables.LockForSessionAsync(initial.TableId, ct)
-                ?? throw new ManagementException(404, "Không tìm thấy bàn.");
+                ?? throw new ManagementException(404, "Table not found.");
             // Validate again under the transaction: QR/area/table may have changed while waiting.
             var resolved = await qrService.Resolve(token, ct);
             if (resolved.TableId != table.TableId)
             {
-                throw new ManagementException(409, "QR đã thay đổi. Hãy quét lại.");
+                throw new ManagementException(409, "The QR code has changed. Scan it again.");
             }
 
             var open = await sessions.GetOpenForTableAsync(table.TableId, ct);
             if (open.Count > 1)
             {
-                throw new ManagementException(409, "Bàn có nhiều phiên chưa đóng. Liên hệ nhân viên kiểm tra.");
+                throw new ManagementException(409, "The table has multiple unclosed sessions. Contact staff for assistance.");
             }
 
             var created = open.Count == 0;

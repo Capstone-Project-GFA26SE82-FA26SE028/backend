@@ -65,10 +65,10 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
     private async Task<TableDto> Save(Guid? id, TableWriteDto body, CancellationToken ct)
     {
         await access.RequireAdmin(ct);
-        var code = ManagementValidation.Required(body.TableCode, 50, "Mã bàn");
+        var code = ManagementValidation.Required(body.TableCode, 50, "Table code");
         if (body.Capacity <= 0 || !ValidPosition(body.PositionX) || !ValidPosition(body.PositionY))
         {
-            throw new ManagementException(400, "Sức chứa phải là số nguyên dương; tọa độ tối đa 8 chữ số nguyên, 2 chữ số thập phân.");
+            throw new ManagementException(400, "Capacity must be a positive integer; coordinates allow at most 8 integer digits and 2 decimal places.");
         }
 
         var entity = await transaction.ExecuteAsync(async () =>
@@ -88,13 +88,13 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
                 await EnsureIdle(item.TableId, ct);
                 if (area.RestaurantId != item.Area.RestaurantId)
                 {
-                    throw new ManagementException(409, "Không chuyển bàn sang nhà hàng khác.");
+                    throw new ManagementException(409, "A table cannot be moved to another restaurant.");
                 }
             }
 
             if (await repository.CodeExistsAsync(area.RestaurantId, code, item.TableId, ct))
             {
-                throw new ManagementException(409, "Mã bàn đã tồn tại trong nhà hàng.");
+                throw new ManagementException(409, "The table code already exists in this restaurant.");
             }
 
             item.AreaId = area.AreaId;
@@ -124,12 +124,12 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
             var area = await ActiveArea(body.AreaId, ct);
             if (area.RestaurantId != item.Area.RestaurantId)
             {
-                throw new ManagementException(409, "Không chuyển bàn sang nhà hàng khác.");
+                throw new ManagementException(409, "A table cannot be moved to another restaurant.");
             }
 
             if (await repository.CodeExistsAsync(area.RestaurantId, item.TableCode, item.TableId, ct))
             {
-                throw new ManagementException(409, "Mã bàn bị trùng tại nhà hàng đích.");
+                throw new ManagementException(409, "The table code already exists in the destination restaurant.");
             }
 
             item.Area = area;
@@ -170,7 +170,7 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
             ManagementValidation.Version(item.Version, version);
             if (await repository.HasHistoryAsync(id, ct))
             {
-                throw new ManagementException(409, "Bàn đã có QR, đặt bàn hoặc lịch sử phục vụ. Hãy ngừng sử dụng.");
+                throw new ManagementException(409, "The table has QR codes, reservations, or service history. Deactivate it instead.");
             }
 
             repository.Delete(item);
@@ -180,15 +180,15 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
 
     private async Task<Entity> Find(Guid id, CancellationToken ct)
     {
-        return await repository.GetByIdAsync(id, ct) ?? throw new ManagementException(404, "Không tìm thấy bàn.");
+        return await repository.GetByIdAsync(id, ct) ?? throw new ManagementException(404, "Table not found.");
     }
 
     private async Task<global::Restaurant.DAL.Models.Area> ActiveArea(Guid id, CancellationToken ct)
     {
-        var area = await areas.GetByIdAsync(id, ct) ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
+        var area = await areas.GetByIdAsync(id, ct) ?? throw new ManagementException(404, "Area not found.");
         if (!area.IsActive)
         {
-            throw new ManagementException(409, "Khu vực đã ngừng sử dụng.");
+            throw new ManagementException(409, "The area is inactive.");
         }
 
         return area;
@@ -198,7 +198,7 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
     {
         if (await repository.HasOpenSessionAsync(id, ct))
         {
-            throw new ManagementException(409, "Bàn còn phiên phục vụ chưa đóng.");
+            throw new ManagementException(409, "The table has an unclosed service session.");
         }
     }
 

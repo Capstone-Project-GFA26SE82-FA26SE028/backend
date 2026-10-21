@@ -59,7 +59,7 @@ public static class JwtServiceExtensions
                         await context.Response.WriteAsJsonAsync(new
                         {
                             statusCode = 401,
-                            message = "Token hoặc phiên không hợp lệ hoặc hết hạn.",
+                            message = "The token or session is invalid or expired.",
                             isSuccess = false
                         });
                     },
@@ -69,7 +69,7 @@ public static class JwtServiceExtensions
                         await context.Response.WriteAsJsonAsync(new
                         {
                             statusCode = 403,
-                            message = "Không có quyền truy cập chức năng này.",
+                            message = "You do not have permission to access this feature.",
                             isSuccess = false
                         });
                     }

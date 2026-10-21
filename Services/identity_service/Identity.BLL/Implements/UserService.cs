@@ -13,12 +13,12 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
 {
     private static ResponseDTO Missing()
     {
-        return new("Không tìm thấy user.", 404);
+        return new("User not found.", 404);
     }
 
     private static ResponseDTO Forbidden()
     {
-        return new("Bạn không có quyền quản lý user.", 403);
+        return new("You do not have permission to manage users.", 403);
     }
 
     private async Task<bool> IsAdmin(Guid actorId, CancellationToken ct)
@@ -31,7 +31,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
     public async Task<ResponseDTO> GetMe(Guid actorId, CancellationToken ct)
     {
         var user = await unitOfWork.UserRepo.FindUserAsync(actorId, ct);
-        return user is null ? Missing() : new("Thành công.", 200, true, Map(user));
+        return user is null ? Missing() : new("Success.", 200, true, Map(user));
     }
 
     public async Task<ResponseDTO> UpdateMe(Guid actorId, UpdateProfileDTO request, CancellationToken ct)
@@ -43,7 +43,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             || avatar?.Length > 2048 || (avatar is not null &&
                 (!Uri.TryCreate(avatar, UriKind.Absolute, out var uri) || (uri.Scheme != "https" && uri.Scheme != "http"))))
         {
-            return new("Tên bắt buộc (tối đa 255 ký tự), số điện thoại tối đa 20 ký tự, avatar phải là URL HTTP/HTTPS hợp lệ.", 400);
+            return new("Name is required (maximum 255 characters), phone number must not exceed 20 characters, and avatar must be a valid HTTP/HTTPS URL.", 400);
         }
 
         var user = await unitOfWork.UserRepo.FindUserAsync(actorId, ct);
@@ -70,7 +70,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
         user.AvatarUrl = avatar!;
         user.UpdatedAt = DateTime.UtcNow;
         await unitOfWork.SaveAsync(ct);
-        return new("Cập nhật hồ sơ thành công.", 200, true, Map(user));
+        return new("Profile updated successfully.", 200, true, Map(user));
     }
 
     public async Task<ResponseDTO> GetAll(Guid actorId, int page, int pageSize, string? search, CancellationToken ct, Identity.Common.DTOs.UserFilter? filter = null)
@@ -88,11 +88,11 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
 
         if (!pagination.IsValid() || search?.Length > 255 || filter?.RoleId?.Length > 50)
         {
-            return new("Phân trang hoặc từ khóa không hợp lệ. PageSize từ 1 đến 100.", 400);
+            return new("Invalid pagination or search. PageSize must be between 1 and 100.", 400);
         }
 
         var (items, count) = await unitOfWork.UserRepo.GetAllAsync(page, pageSize, search?.Trim(), ct, filter);
-        return new("Thành công.", 200, true, new PagedResult<UserDTO>(items.Select(Map).ToList(), count, page, pageSize));
+        return new("Success.", 200, true, new PagedResult<UserDTO>(items.Select(Map).ToList(), count, page, pageSize));
     }
 
     public async Task<ResponseDTO> GetById(Guid actorId, Guid userId, CancellationToken ct)
@@ -114,7 +114,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
 
         if (actorId == userId && !isActive)
         {
-            return new("Không thể tự khóa tài khoản của mình.", 400);
+            return new("You cannot deactivate your own account.", 400);
         }
 
         return AccessResponse(await unitOfWork.ExecuteInTransactionAsync(() => unitOfWork.UserRepo.ChangeAccessAsync(actorId, userId, null, isActive, settings.Value.AdminRoleIds, ct), ct));
@@ -141,7 +141,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             || avatar?.Length > 2048 || (avatar is not null
                 && (!Uri.TryCreate(avatar, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))))
         {
-            return new("Dữ liệu không hợp lệ. Mật khẩu cần ít nhất 8 ký tự và tối đa 72 byte UTF-8.", 400);
+            return new("Invalid data. Password must contain at least 8 characters and at most 72 UTF-8 bytes.", 400);
         }
 
         var user = new User
@@ -160,9 +160,9 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
         var result = await unitOfWork.ExecuteInTransactionAsync(() => unitOfWork.UserRepo.CreateEmployeeAsync(actorId, user, settings.Value.AdminRoleIds, ct), ct);
         return result.Status switch
         {
-            201 => new("Tạo tài khoản thành công.", 201, true, Map(result.User!)),
-            409 => new("Email hoặc username đã tồn tại.", 409),
-            400 => new("Role không tồn tại.", 400),
+            201 => new("Account created successfully.", 201, true, Map(result.User!)),
+            409 => new("Email or username already exists.", 409),
+            400 => new("Role does not exist.", 400),
             _ => Forbidden()
         };
     }
@@ -186,7 +186,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             || avatar?.Length > 2048 || (avatar is not null
                 && (!Uri.TryCreate(avatar, UriKind.Absolute, out var uri) || (uri.Scheme != "https" && uri.Scheme != "http"))))
         {
-            return new ResponseDTO("Thông tin tài khoản không hợp lệ.", 400);
+            return new ResponseDTO("Invalid account information.", 400);
         }
 
         return await unitOfWork.ExecuteInTransactionAsync(async () =>
@@ -204,7 +204,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
 
             if (await unitOfWork.UserRepo.LoginExistsAsync(userId, name, email, ct))
             {
-                return new ResponseDTO("Email hoặc username đã được sử dụng.", 409);
+                return new ResponseDTO("Email or username is already in use.", 409);
             }
 
             var before = Map(user);
@@ -216,7 +216,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             user.UpdatedAt = DateTime.UtcNow;
             var result = Map(user);
             unitOfWork.RecordAudit(actorId, "UPDATE_USER", "User", userId.ToString(), before, result);
-            return new ResponseDTO("Cập nhật thành công.", 200, true, result);
+            return new ResponseDTO("Updated successfully.", 200, true, result);
         }, ct);
     }
 
@@ -229,7 +229,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
 
         if (string.IsNullOrWhiteSpace(roleId) || roleId.Trim().Length > 50)
         {
-            return new("Role không hợp lệ.", 400);
+            return new("Invalid role.", 400);
         }
 
         return AccessResponse(await unitOfWork.ExecuteInTransactionAsync(() => unitOfWork.UserRepo.ChangeAccessAsync(actorId, userId, roleId.Trim(), null, settings.Value.AdminRoleIds, ct), ct));
@@ -239,11 +239,11 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
     {
         return result.Status switch
         {
-            200 => new("Cập nhật thành công.", 200, true, Map(result.User!)),
+            200 => new("Updated successfully.", 200, true, Map(result.User!)),
             404 => Missing(),
             403 => Forbidden(),
-            409 => new("Không thể loại bỏ Admin hoạt động cuối cùng.", 409),
-            _ => new("Role không tồn tại.", 400)
+            409 => new("The last active Admin cannot be removed.", 409),
+            _ => new("Role does not exist.", 400)
         };
     }
 
