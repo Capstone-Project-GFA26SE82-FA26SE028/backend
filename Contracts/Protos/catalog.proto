@@ -62,7 +62,10 @@ message CategoryListReply {
   int32 page_size = 7;
 }
 
+message SetItemKitchenStationRequest { string item_id = 1; optional string kitchen_station_id = 2; string version = 3; }
+
 service ItemGrpc {
+  rpc SetKitchenStation(SetItemKitchenStationRequest) returns (ItemReply);
   rpc Create (CreateItemRequest) returns (ItemReply);
   rpc GetAll (ItemListRequest) returns (ItemListReply);
   rpc GetById (ItemIdRequest) returns (ItemReply);
@@ -114,6 +117,7 @@ message ItemInfo {
   optional string image_url = 7;
   string availability = 8;
   string version = 9;
+  optional string kitchen_station_id = 10;
 }
 
 message ItemReply {

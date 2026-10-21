@@ -14,6 +14,11 @@ public static class CatalogServiceExtensions
         IConfiguration configuration)
     {
         services.AddHttpContextAccessor();
+        services.AddGrpcClient<Backend.Contracts.Ordering.KitchenStationGrpc.KitchenStationGrpcClient>(options =>
+        {
+            options.Address = new Uri(configuration["GrpcServices:Ordering"] ?? "https://localhost:5004");
+        });
+        services.AddScoped<IKitchenStationLookup, OrderingKitchenStationLookup>();
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.Configure<PricingSettings>(configuration.GetSection("Pricing"));
         services.AddOptions<ItemManagementSettings>()
