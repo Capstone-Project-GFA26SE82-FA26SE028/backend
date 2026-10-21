@@ -7,8 +7,31 @@ using Entity = Restaurant.DAL.Models.Table;
 namespace Restaurant.BLL.Implements;
 
 public sealed class TableService(ITableRepository repository, IAreaRepository areas,
-    IManagementTransaction transaction, IManagementAccess access) : ITableService
+    IManagementTransaction transaction, IManagementAccess access, ITableSessionOrderAccess waiterAccess) : ITableService
 {
+    public async Task<PageResult<ServiceTableDto>> GetServiceTables(ListQuery query, CancellationToken ct)
+    {
+        await waiterAccess.RequireStaffAsync(ct);
+        ManagementValidation.Query(query);
+        var page = await repository.GetServicePageAsync(query, ct);
+        return new PageResult<ServiceTableDto>
+        {
+            Items = page.Items.Select(table => new ServiceTableDto
+            {
+                TableId = table.TableId,
+                TableCode = table.TableCode,
+                AreaId = table.AreaId,
+                AreaName = table.Area.AreaName,
+                RestaurantId = table.Area.RestaurantId,
+                CleaningStatus = table.CleaningStatus,
+                OpenSessionIds = table.SessionTables.Select(link => link.TableSessionId).Distinct().ToList()
+            }).ToList(),
+            TotalCount = page.TotalCount,
+            Page = page.Page,
+            PageSize = page.PageSize
+        };
+    }
+
     public async Task<PageResult<TableDto>> GetAll(ListQuery query, CancellationToken ct)
     {
         await access.RequireAdmin(ct);

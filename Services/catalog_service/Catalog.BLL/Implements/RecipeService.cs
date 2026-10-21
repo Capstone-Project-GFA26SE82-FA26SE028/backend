@@ -91,6 +91,11 @@ public sealed class RecipeService(
             return new ResponseDTO("Item not found.", 404);
         }
 
+        if (at.HasValue)
+        {
+            await access.RequireMenuManagerAsync(cancellationToken);
+        }
+
         var queryTime = at ?? DateTime.UtcNow;
         var active = await recipes.GetActiveForItemAsync(itemId, queryTime, cancellationToken);
         if (active is null)
@@ -199,6 +204,11 @@ public sealed class RecipeService(
             return new ResponseDTO("Option not found.", 404);
         }
 
+        if (at.HasValue)
+        {
+            await access.RequireMenuManagerAsync(cancellationToken);
+        }
+
         var queryTime = at ?? DateTime.UtcNow;
         var active = await recipes.GetActiveForOptionAsync(optionId, queryTime, cancellationToken);
         if (active is null)
@@ -247,6 +257,12 @@ public sealed class RecipeService(
         if (entity is null)
         {
             return new ResponseDTO("Recipe not found.", 404);
+        }
+
+        var now = DateTime.UtcNow;
+        if (entity.EffectiveFrom > now || (entity.EffectiveTo.HasValue && now >= entity.EffectiveTo.Value))
+        {
+            await access.RequireMenuManagerAsync(cancellationToken);
         }
 
         return new ResponseDTO("Recipe retrieved successfully.", 200, true, Map(entity));

@@ -87,7 +87,18 @@ message TableInfo {
   string version = 9;
 }
 message TablePage { repeated TableInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
+message ServiceTableInfo {
+  string table_id = 1;
+  string table_code = 2;
+  string area_id = 3;
+  string area_name = 4;
+  string restaurant_id = 5;
+  string cleaning_status = 6;
+  repeated string open_session_ids = 7;
+}
+message ServiceTablePage { repeated ServiceTableInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
 service TableGrpc {
+  rpc GetServiceTables(ListRequest) returns (ServiceTablePage);
   rpc GetAll(ListRequest) returns (TablePage);
   rpc GetById(IdRequest) returns (TableInfo);
   rpc Create(TableInfo) returns (TableInfo);

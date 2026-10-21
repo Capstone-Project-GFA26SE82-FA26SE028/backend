@@ -32,7 +32,7 @@ public sealed class IdentityTableSessionOrderAccess(
             throw new ManagementException(401, "The account is invalid or inactive.");
         }
 
-        var roles = configuration.GetSection("Ordering:StaffRoleIds").Get<string[]>() ?? ["waiter", "manager", "admin"];
+        var roles = configuration.GetSection("Ordering:StaffRoleIds").Get<string[]>() ?? ["waiter"];
         if (!roles.Contains(user.RoleId, StringComparer.Ordinal))
         {
             throw new ManagementException(403, "Ordering staff permission is required.");

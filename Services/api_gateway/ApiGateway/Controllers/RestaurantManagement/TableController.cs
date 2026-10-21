@@ -10,6 +10,31 @@ namespace ApiGateway.Controllers.RestaurantManagement;
 [RequireBearerToken]
 public sealed class TableController(TableGrpc.TableGrpcClient client) : ManagementControllerBase
 {
+    [HttpGet("service")]
+    public Task<IActionResult> GetServiceTables([FromQuery] ListQuery query, CancellationToken ct)
+    {
+        return Execute(async () =>
+        {
+            var page = await client.GetServiceTablesAsync(ManagementMapping.ToWire(query), Options(ct));
+            return new PageResult<ServiceTableDto>
+            {
+                Items = page.Items.Select(table => new ServiceTableDto
+                {
+                    TableId = Guid.Parse(table.TableId),
+                    TableCode = table.TableCode,
+                    AreaId = Guid.Parse(table.AreaId),
+                    AreaName = table.AreaName,
+                    RestaurantId = Guid.Parse(table.RestaurantId),
+                    CleaningStatus = table.CleaningStatus,
+                    OpenSessionIds = table.OpenSessionIds.Select(Guid.Parse).ToList()
+                }).ToList(),
+                TotalCount = page.TotalCount,
+                Page = page.Page,
+                PageSize = page.PageSize
+            };
+        }, ct);
+    }
+
     [HttpGet]
     public Task<IActionResult> GetAll([FromQuery] ListQuery query, CancellationToken ct)
     {

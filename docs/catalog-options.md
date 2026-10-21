@@ -4,7 +4,7 @@ API quản lý Catalog ngày 20/10/2026, theo luồng Gateway → gRPC → BLL �
 
 ## Quyền và phản hồi
 
-Tất cả endpoint dưới đây yêu cầu `Authorization: Bearer <accessToken>`. Tài khoản phải đang hoạt động, token/phiên hợp lệ và RoleId thuộc `CatalogManagement:MenuManagerRoleIds` (cấu hình hiện tại: `manager`, `admin`). Kitchen không có quyền quản lý nhóm/tùy chọn/gán nhóm; quyền báo tạm hết Item vẫn theo API trạng thái món đã có.
+Tất cả endpoint dưới đây yêu cầu `Authorization: Bearer <accessToken>`. Tài khoản phải đang hoạt động, token/phiên hợp lệ và RoleId thuộc `CatalogManagement:MenuManagerRoleIds` (cấu hình hiện tại: `manager`). Kitchen không có quyền quản lý nhóm/tùy chọn/gán nhóm; quyền báo tạm hết Item vẫn theo API trạng thái món đã có.
 
 Tạo thành công trả 201 và header Location. Đọc/sửa/xóa thành công trả 200. Dữ liệu nằm trong `ResponseDTO.result`; xóa trả result null. Các ID trong ví dụ chỉ minh họa, cần thay bằng ID thật API trả về.
 
