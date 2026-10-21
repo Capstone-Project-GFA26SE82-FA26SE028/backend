@@ -19,11 +19,49 @@ public sealed class ItemService(
     ICatalogAccess access,
     IOptions<ItemManagementSettings> settings,
     IOptions<CatalogManagementSettings> catalogSettings,
+    IPriceRepository prices,
+    IRecipeRepository recipes,
+    IOptions<PricingSettings> pricingSettings,
+    TimeProvider timeProvider,
+    IKitchenStationLookup kitchenStations,
     ILogger<ItemService> logger) : IItemService
 {
-    public async Task<ResponseDTO> GetAll(ItemQueryDTO query, CancellationToken cancellationToken)
+    public async Task<ResponseDTO> SetKitchenStation(Guid id, SetItemKitchenStationDTO request, CancellationToken cancellationToken)
     {
         await access.RequireMenuManagerAsync(cancellationToken);
+        if (id == Guid.Empty || request.KitchenStationId == Guid.Empty
+            || !TryParseVersion(request.Version, out var version))
+        {
+            return new ResponseDTO("Valid item, station ID and rowversion are required.", 400);
+        }
+        return await WriteAsync(async () =>
+        {
+            var item = await items.GetByIdAsync(id, cancellationToken);
+            if (item is null)
+            {
+                return (new ResponseDTO("Item not found.", 404), (Item?)null);
+            }
+            if (!item.Version.SequenceEqual(version))
+            {
+                return (ConcurrentUpdate(), (Item?)null);
+            }
+            if (request.KitchenStationId.HasValue)
+            {
+                var error = await kitchenStations.ValidateAsync(request.KitchenStationId.Value, cancellationToken);
+                if (error is not null)
+                {
+                    return (error, (Item?)null);
+                }
+            }
+            items.SetOriginalVersion(item, version);
+            item.KitchenStationRef = request.KitchenStationId;
+            return (new ResponseDTO("Item kitchen station updated.", 200, true), item);
+        }, cancellationToken);
+    }
+
+    public async Task<ResponseDTO> GetAll(ItemQueryDTO query, CancellationToken cancellationToken)
+    {
+        await access.RequireMenuStaffAsync(cancellationToken);
         if (query is null || !query.IsValid())
         {
             return new ResponseDTO("Invalid pagination, category ID, or item filter.", 400);
@@ -42,7 +80,7 @@ public sealed class ItemService(
 
     public async Task<ResponseDTO> GetById(Guid id, CancellationToken cancellationToken)
     {
-        await access.RequireMenuManagerAsync(cancellationToken);
+        await access.RequireMenuStaffAsync(cancellationToken);
         if (id == Guid.Empty)
         {
             return new ResponseDTO("Invalid item ID.", 400);
@@ -179,6 +217,106 @@ public sealed class ItemService(
         }, cancellationToken);
     }
 
+    public async Task<ResponseDTO> SetStatus(
+        Guid id,
+        SetItemStatusDTO request,
+        CancellationToken cancellationToken)
+    {
+        if (request?.Availability == ItemAvailability.OutOfStock)
+        {
+            await access.RequireMenuStaffAsync(cancellationToken);
+        }
+        else
+        {
+            await access.RequireMenuManagerAsync(cancellationToken);
+        }
+
+        if (id == Guid.Empty)
+        {
+            return new ResponseDTO("Invalid item ID.", 400);
+        }
+
+        var availability = request?.Availability;
+        if (availability is not (ItemAvailability.Available or ItemAvailability.OutOfStock or ItemAvailability.Inactive))
+        {
+            return new ResponseDTO("Availability must be Available, OutOfStock, or Inactive.", 400);
+        }
+
+        if (!TryParseVersion(request?.Version, out var version))
+        {
+            return new ResponseDTO("Version is required and must be a Base64-encoded SQL Server rowversion.", 400);
+        }
+
+        var nonSelling = catalogSettings.Value.NonSellingItemAvailabilities;
+        if (!nonSelling.Contains(ItemAvailability.Inactive, StringComparer.Ordinal)
+            || nonSelling.Contains(ItemAvailability.Available, StringComparer.Ordinal)
+            || nonSelling.Contains(ItemAvailability.OutOfStock, StringComparer.Ordinal))
+        {
+            return new ResponseDTO("Configure non-selling statuses to include Inactive and exclude Available and OutOfStock.", 503);
+        }
+
+        return await WriteAsync(async () =>
+        {
+            var item = await items.GetByIdAsync(id, cancellationToken);
+            if (item is null)
+            {
+                return (ItemNotFound(), null);
+            }
+
+            if (!item.Version.SequenceEqual(version))
+            {
+                return (ConcurrentUpdate(), null);
+            }
+
+            if (availability == ItemAvailability.Available)
+            {
+                if (!item.Category.IsActive)
+                {
+                    return (InactiveCategory(), null);
+                }
+
+                var allChannels = pricingSettings.Value.AllChannelsCode;
+                if (string.IsNullOrWhiteSpace(allChannels))
+                {
+                    return (new ResponseDTO("Configure Pricing:AllChannelsCode before opening an item for sale.", 503), null);
+                }
+
+                var now = prices.NormalizeTimestamp(timeProvider.GetUtcNow().UtcDateTime);
+                var activeRecipes = await recipes.GetActiveForOrderAsync([id], [], now, cancellationToken);
+                if (activeRecipes.Count != 1)
+                {
+                    return (new ResponseDTO("An item can only be opened for sale with exactly one currently active recipe.", 409), null);
+                }
+
+                var standardPrices = (await prices.GetForItemAsync(id, cancellationToken))
+                    .Where(price => price.Channel == allChannels
+                        && !price.DailyStart.HasValue && !price.DailyEnd.HasValue
+                        && price.EffectiveFrom <= now
+                        && (!price.EffectiveTo.HasValue || now < price.EffectiveTo.Value))
+                    .ToArray();
+                if (standardPrices.Length != 1 || standardPrices[0].Amount < 0)
+                {
+                    return (new ResponseDTO("An item can only be opened for sale with exactly one valid, currently effective standard price.", 409), null);
+                }
+            }
+
+            if (availability == ItemAvailability.OutOfStock
+                && item.Availability is not (ItemAvailability.Available or ItemAvailability.OutOfStock))
+            {
+                return (new ResponseDTO("Only an item already offered for sale can be marked out of stock.", 409), null);
+            }
+
+            if (item.Availability == availability)
+            {
+                return (new ResponseDTO("The item already has the requested status.", 200, true), item);
+            }
+
+            items.SetOriginalVersion(item, version);
+            item.Availability = availability;
+            return (new ResponseDTO("Item status updated successfully.", 200, true), item);
+        }, cancellationToken);
+    }
+
     private async Task<ResponseDTO> WriteAsync(
         Func<Task<(ResponseDTO Response, Item? Item)>> action,
         CancellationToken cancellationToken)
@@ -289,6 +427,7 @@ public sealed class ItemService(
             Description = item.Description,
             ImageUrl = item.ImageUrl,
             Availability = item.Availability,
+            KitchenStationId = item.KitchenStationRef,
             Version = Convert.ToBase64String(item.Version)
         };
     }

@@ -20,7 +20,13 @@ var app = builder.Build();
 
 app.MapGrpcService<CategoryGrpcService>();
 app.MapGrpcService<ItemGrpcService>();
+app.MapGrpcService<MenuGrpcService>();
+app.MapGrpcService<OrderValidationGrpcService>();
 app.MapGrpcService<PriceGrpcService>();
+app.MapGrpcService<OptionGroupGrpcService>();
+app.MapGrpcService<OptionGrpcService>();
+app.MapGrpcService<ItemOptionGroupGrpcService>();
+app.MapGrpcService<RecipeGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

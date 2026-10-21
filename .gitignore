@@ -7,10 +7,9 @@
 *.db-wal
 TestResults/
 
-# Docker local credentials
-.env
+# Shared team environment is tracked; other environment overrides stay local.
 .env.*
-!.env.example
+!.env
 
 # Original pasted requirements stay local; share the Markdown specification.
 /docs/requirements/sources/*.txt

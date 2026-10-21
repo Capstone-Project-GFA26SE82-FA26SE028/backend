@@ -46,7 +46,7 @@ public abstract class CatalogControllerBase(
                 Grpc.Core.StatusCode.Unauthenticated =>
                     (401, "The token or session is invalid."),
                 Grpc.Core.StatusCode.PermissionDenied =>
-                    (403, "You do not have permission to manage the shared menu."),
+                    (403, "You do not have permission to perform this catalog operation."),
                 Grpc.Core.StatusCode.InvalidArgument =>
                     (400, "Invalid request data."),
                 Grpc.Core.StatusCode.NotFound =>

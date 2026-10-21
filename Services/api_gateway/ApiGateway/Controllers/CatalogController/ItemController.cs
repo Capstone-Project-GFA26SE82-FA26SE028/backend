@@ -125,6 +125,39 @@ public sealed class ItemController(
         }, cancellationToken);
     }
 
+    [HttpPatch("{id}/kitchen-station")]
+    public Task<IActionResult> SetKitchenStation(Guid id, SetItemKitchenStationDTO body, CancellationToken cancellationToken)
+    {
+        return Execute(async () =>
+        {
+            var request = new SetItemKitchenStationRequest
+            {
+                ItemId = id.ToString(),
+                Version = body.Version ?? string.Empty
+            };
+            if (body.KitchenStationId.HasValue)
+            {
+                request.KitchenStationId = body.KitchenStationId.Value.ToString();
+            }
+            return ToResponse(await client.SetKitchenStationAsync(request, Options(cancellationToken)));
+        }, cancellationToken);
+    }
+
+    [HttpPatch("{id}/status")]
+    public Task<IActionResult> SetStatus(Guid id, SetItemStatusDTO body, CancellationToken cancellationToken)
+    {
+        return Execute(async () =>
+        {
+            var reply = await client.SetStatusAsync(new SetItemStatusRequest
+            {
+                ItemId = id.ToString(),
+                Availability = body.Availability ?? string.Empty,
+                Version = body.Version ?? string.Empty
+            }, Options(cancellationToken));
+            return ToResponse(reply);
+        }, cancellationToken);
+    }
+
     private IActionResult ToResponse(ItemReply reply)
     {
         return StatusCode(reply.StatusCode, new ResponseDTO
@@ -148,6 +181,7 @@ public sealed class ItemController(
             Description = item.HasDescription ? item.Description : null,
             ImageUrl = item.HasImageUrl ? item.ImageUrl : null,
             Availability = item.Availability,
+            KitchenStationId = item.HasKitchenStationId ? Guid.Parse(item.KitchenStationId) : null,
             Version = item.Version
         };
     }

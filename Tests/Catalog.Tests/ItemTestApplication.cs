@@ -4,8 +4,10 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Backend.Contracts.Identity;
 using Catalog.API.Extensions;
 using Catalog.API.GrpcServices;
+using Catalog.BLL.Implements;
 using Catalog.BLL.Interfaces;
 using Catalog.DAL.Implements;
 using Catalog.DAL.Interfaces;
@@ -45,7 +47,9 @@ internal sealed class ItemTestApplication : IDisposable
 
     public HttpClient Client { get; }
 
-    public static async Task<ItemTestApplication> Create(string initialAvailability = "Inactive")
+    public static DateTimeOffset Now { get; } = new(2030, 1, 15, 8, 0, 0, TimeSpan.Zero);
+
+    public static async Task<ItemTestApplication> Create(string initialAvailability = "Inactive", IKitchenStationLookup? stationLookup = null)
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -54,8 +58,13 @@ internal sealed class ItemTestApplication : IDisposable
             ["GrpcServices:Identity"] = "http://identity.test",
             ["CatalogManagement:IdentityTimeoutSeconds"] = "5",
             ["CatalogManagement:MenuManagerRoleIds:0"] = "test-menu-manager",
+            ["CatalogManagement:MenuReaderRoleIds:0"] = "test-waiter",
+            ["CatalogManagement:KitchenRoleIds:0"] = "test-kitchen",
             ["CatalogManagement:NonSellingItemAvailabilities:0"] = "Inactive",
-            ["ItemManagement:InitialAvailability"] = initialAvailability
+            ["ItemManagement:InitialAvailability"] = initialAvailability,
+            ["Pricing:AllChannelsCode"] = "AllChannels",
+            ["Pricing:Channels:0"] = "DineIn",
+            ["Pricing:BusinessTimeZone"] = "Asia/Ho_Chi_Minh"
         }).Build();
 
         var catalog = new TestServer(new WebHostBuilder()
@@ -64,10 +73,23 @@ internal sealed class ItemTestApplication : IDisposable
                 services.AddRouting();
                 services.AddGrpc();
                 services.AddCatalogManagement(configuration);
-                services.AddScoped<ICatalogAccess, TestMenuAccess>();
+                if (stationLookup is not null)
+                {
+                    services.AddSingleton<IKitchenStationLookup>(stationLookup);
+                }
+                services.AddSingleton(new UserGrpc.UserGrpcClient(new ItemIdentityInvoker()));
+                services.AddSingleton<Backend.Contracts.Restaurant.GuestAccessGrpc.GuestAccessGrpcClient>(new MenuGuestClient());
+                services.AddSingleton<TimeProvider>(new TestClock());
                 services.AddScoped<CatalogDbContext>(_ => CreateDatabase(connection));
                 services.AddScoped<ICategoryRepository, CategoryRepository>();
                 services.AddScoped<IItemRepository, ItemRepository>();
+                services.AddScoped<IPriceRepository, PriceRepository>();
+                services.AddScoped<IOptionGroupRepository, OptionGroupRepository>();
+                services.AddScoped<IOptionRepository, OptionRepository>();
+                services.AddScoped<IItemOptionGroupRepository, ItemOptionGroupRepository>();
+                services.AddScoped<IRecipeRepository, RecipeRepository>();
+                services.AddScoped<IRecipeTransaction, RecipeTransaction>();
+                services.AddScoped<IRecipeService, RecipeService>();
                 services.AddScoped<IUnitOfWork, UnitOfWork<CatalogDbContext>>();
                 services.AddScoped<IItemTransaction, ItemTransaction>();
             })
@@ -77,6 +99,12 @@ internal sealed class ItemTestApplication : IDisposable
                 app.UseEndpoints(endpoints =>
                 {
                     endpoints.MapGrpcService<ItemGrpcService>();
+                    endpoints.MapGrpcService<MenuGrpcService>();
+                    endpoints.MapGrpcService<OrderValidationGrpcService>();
+                    endpoints.MapGrpcService<OptionGroupGrpcService>();
+                    endpoints.MapGrpcService<OptionGrpcService>();
+                    endpoints.MapGrpcService<ItemOptionGroupGrpcService>();
+                    endpoints.MapGrpcService<RecipeGrpcService>();
                 });
             }));
 
@@ -89,7 +117,31 @@ internal sealed class ItemTestApplication : IDisposable
                 {
                     settings.TimeoutSeconds = 10;
                 });
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.OrderValidationGrpc.OrderValidationGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.MenuGrpc.MenuGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
                 services.AddGrpcClient<GatewayItemGrpc.ItemGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.OptionGroupGrpc.OptionGroupGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.OptionGrpc.OptionGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.ItemOptionGroupGrpc.ItemOptionGroupGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.RecipeGrpc.RecipeGrpcClient>(options =>
                 {
                     options.Address = new Uri("http://catalog.test");
                 }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
@@ -112,6 +164,32 @@ internal sealed class ItemTestApplication : IDisposable
     public CatalogDbContext OpenDatabase()
     {
         return CreateDatabase(_connection);
+    }
+
+    public async Task<Guid> AddRecipe(Guid itemId, DateTime? from = null, DateTime? to = null)
+    {
+        await using var db = OpenDatabase();
+        var recipe = new RecipeVersion
+        {
+            RecipeVersionId = Guid.NewGuid(),
+            ItemId = itemId,
+            Version = 1,
+            EffectiveFrom = from ?? Now.AddDays(-1).UtcDateTime,
+            EffectiveTo = to,
+            Instructions = "Prepare one serving."
+        };
+        recipe.RecipeIngredients.Add(new RecipeIngredient
+        {
+            RecipeIngredientId = Guid.NewGuid(),
+            IngredientRef = Guid.NewGuid(),
+            UnitRef = Guid.NewGuid(),
+            Quantity = 100m,
+            ConversionFactorSnapshot = 0.001m,
+            BaseQuantitySnapshot = 0.1m
+        });
+        db.RecipeVersions.Add(recipe);
+        await db.SaveChangesAsync();
+        return recipe.RecipeVersionId;
     }
 
     public async Task<Guid> AddCategory(string name = "Main Courses", bool active = true)
@@ -159,22 +237,71 @@ internal sealed class ItemTestApplication : IDisposable
         return new ItemTestDbContext(new DbContextOptionsBuilder<CatalogDbContext>().UseSqlite(connection).Options);
     }
 
-    private sealed class TestMenuAccess(IHttpContextAccessor accessor) : ICatalogAccess
+    private sealed class TestClock : TimeProvider
     {
-        public Task<Guid> RequireMenuManagerAsync(CancellationToken cancellationToken)
+        public override DateTimeOffset GetUtcNow()
         {
-            var token = accessor.HttpContext?.Request.Headers.Authorization.ToString();
-            if (string.IsNullOrWhiteSpace(token) || token == "Bearer revoked")
+            return Now;
+        }
+    }
+
+    private sealed class ItemIdentityInvoker : CallInvoker
+    {
+        public override AsyncUnaryCall<TResponse> AsyncUnaryCall<TRequest, TResponse>(
+            Method<TRequest, TResponse> method, string? host, CallOptions options, TRequest request)
+        {
+            Assert.EndsWith("/GetMe", method.FullName);
+            var token = options.Headers?.FirstOrDefault(header => header.Key == "authorization")?.Value;
+            if (token == "Bearer revoked")
             {
                 throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid session."));
             }
 
-            if (token != "Bearer manager")
+            var reply = new UserReply
             {
-                throw new RpcException(new Status(StatusCode.PermissionDenied, "Access denied."));
-            }
+                StatusCode = 200,
+                IsSuccess = true,
+                Result = new UserInfo
+                {
+                    UserId = "00000000-0000-0000-0000-000000000001",
+                    RoleId = token switch
+                    {
+                        "Bearer manager" => "test-menu-manager",
+                        "Bearer kitchen" => "test-kitchen",
+                        "Bearer waiter" => "test-waiter",
+                        _ => "ordinary-user"
+                    },
+                    IsActive = token != "Bearer disabled"
+                }
+            };
+            return new AsyncUnaryCall<TResponse>(Task.FromResult((TResponse)(object)reply),
+                Task.FromResult(new Metadata()), () => Status.DefaultSuccess, () => new Metadata(), () =>
+                {
+                });
+        }
 
-            return Task.FromResult(Guid.Parse("00000000-0000-0000-0000-000000000001"));
+        public override TResponse BlockingUnaryCall<TRequest, TResponse>(
+            Method<TRequest, TResponse> method, string? host, CallOptions options, TRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override AsyncServerStreamingCall<TResponse> AsyncServerStreamingCall<TRequest, TResponse>(
+            Method<TRequest, TResponse> method, string? host, CallOptions options, TRequest request)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override AsyncClientStreamingCall<TRequest, TResponse> AsyncClientStreamingCall<TRequest, TResponse>(
+            Method<TRequest, TResponse> method, string? host, CallOptions options)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override AsyncDuplexStreamingCall<TRequest, TResponse> AsyncDuplexStreamingCall<TRequest, TResponse>(
+            Method<TRequest, TResponse> method, string? host, CallOptions options)
+        {
+            throw new NotSupportedException();
         }
     }
 

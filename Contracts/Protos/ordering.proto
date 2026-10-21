@@ -1,0 +1,49 @@
+syntax = "proto3";
+option csharp_namespace = "Backend.Contracts.Ordering";
+package ordering;
+import "google/protobuf/empty.proto";
+
+message OrderingAccess { string table_session_id = 1; string guest_token = 2; }
+message OptionSelectionInfo { string option_id = 1; int32 quantity = 2; }
+message SelectionInfo { string item_id = 1; int32 quantity = 2; optional string note = 3; repeated OptionSelectionInfo options = 4; }
+message CartCreateRequest { OrderingAccess access = 1; }
+message CartIdRequest { OrderingAccess access = 1; string cart_id = 2; string version = 3; }
+message CartUpdateRequest { OrderingAccess access = 1; string cart_id = 2; string version = 3; repeated SelectionInfo items = 4; }
+message QuotedOptionInfo { string option_id = 1; string name = 2; int32 quantity = 3; string extra_price = 4; }
+message QuotedItemInfo { string item_id = 1; string name = 2; string recipe_version_id = 3; int32 quantity = 4; string unit_price = 5; repeated QuotedOptionInfo options = 6; optional string kitchen_station_id = 7; }
+message QuoteErrorInfo { int32 line_index = 1; string code = 2; string message = 3; }
+message QuoteInfo { bool is_valid = 1; string message = 2; string evaluated_at = 3; optional string total_amount = 4; repeated QuotedItemInfo items = 5; repeated QuoteErrorInfo errors = 6; }
+message CartInfo { string cart_id = 1; string table_session_id = 2; string expires_at = 3; string version = 4; repeated SelectionInfo items = 5; QuoteInfo quote = 6; }
+service CartGrpc {
+  rpc Create(CartCreateRequest) returns (CartInfo);
+  rpc GetById(CartIdRequest) returns (CartInfo);
+  rpc Update(CartUpdateRequest) returns (CartInfo);
+  rpc Delete(CartIdRequest) returns (google.protobuf.Empty);
+}
+message CreateOrderRequest { OrderingAccess access = 1; string idempotency_key = 2; optional string cart_id = 3; optional string cart_version = 4; optional string table_id = 5; repeated SelectionInfo items = 6; }
+message OrderIdRequest { OrderingAccess access = 1; string order_id = 2; string version = 3; }
+message OrderListRequest { OrderingAccess access = 1; int32 page = 2; int32 page_size = 3; }
+message OrderLineInfo { string order_item_id = 1; string item_id = 2; optional string recipe_version_id = 3; string name_snapshot = 4; int32 quantity = 5; string unit_price_snapshot = 6; string line_total = 7; optional string note = 8; string status = 9; repeated QuotedOptionInfo options = 10; }
+message OrderInfo { string order_id = 1; string order_number = 2; string table_session_id = 3; string source = 4; string status = 5; string version = 6; optional string created_by = 7; string created_at = 8; optional string confirmed_by = 9; optional string confirmed_at = 10; string total_amount = 11; repeated OrderLineInfo items = 12; }
+message CreateOrderReply { OrderInfo result = 1; bool created = 2; }
+message OrderListReply { repeated OrderInfo items = 1; }
+service OrderGrpc {
+  rpc Create(CreateOrderRequest) returns (CreateOrderReply);
+  rpc GetById(OrderIdRequest) returns (OrderInfo);
+  rpc GetAll(OrderListRequest) returns (OrderListReply);
+  rpc Confirm(OrderIdRequest) returns (OrderInfo);
+}
+
+message KitchenStationIdRequest { string id = 1; }
+message KitchenStationWriteRequest { string id = 1; string code = 2; string name = 3; }
+message KitchenStationStatusRequest { string id = 1; bool is_active = 2; }
+message KitchenStationListRequest { int32 page = 1; int32 page_size = 2; optional string search = 3; optional bool is_active = 4; }
+message KitchenStationInfo { string id = 1; string code = 2; string name = 3; bool is_active = 4; }
+message KitchenStationPage { repeated KitchenStationInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
+service KitchenStationGrpc {
+  rpc Create(KitchenStationWriteRequest) returns (KitchenStationInfo);
+  rpc GetAll(KitchenStationListRequest) returns (KitchenStationPage);
+  rpc GetById(KitchenStationIdRequest) returns (KitchenStationInfo);
+  rpc Update(KitchenStationWriteRequest) returns (KitchenStationInfo);
+  rpc SetStatus(KitchenStationStatusRequest) returns (KitchenStationInfo);
+}

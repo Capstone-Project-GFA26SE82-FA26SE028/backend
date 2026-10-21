@@ -14,6 +14,11 @@ public static class CatalogServiceExtensions
         IConfiguration configuration)
     {
         services.AddHttpContextAccessor();
+        services.AddGrpcClient<Backend.Contracts.Ordering.KitchenStationGrpc.KitchenStationGrpcClient>(options =>
+        {
+            options.Address = new Uri(configuration["GrpcServices:Ordering"] ?? "https://localhost:5004");
+        });
+        services.AddScoped<IKitchenStationLookup, OrderingKitchenStationLookup>();
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.Configure<PricingSettings>(configuration.GetSection("Pricing"));
         services.AddOptions<ItemManagementSettings>()
@@ -29,12 +34,18 @@ public static class CatalogServiceExtensions
             .PostConfigure(settings =>
             {
                 settings.MenuManagerRoleIds = RemoveEmptyValues(settings.MenuManagerRoleIds);
+                settings.MenuReaderRoleIds = RemoveEmptyValues(settings.MenuReaderRoleIds);
+                settings.KitchenRoleIds = RemoveEmptyValues(settings.KitchenRoleIds);
                 settings.NonSellingItemAvailabilities = RemoveEmptyValues(
                     settings.NonSellingItemAvailabilities);
             })
             .Validate(settings => settings.MenuManagerRoleIds is not null
                 && settings.MenuManagerRoleIds.All(IsValidValue),
                 "MenuManagerRoleIds must contain actual, non-empty RoleIds.")
+            .Validate(settings => settings.KitchenRoleIds.All(IsValidValue),
+                "KitchenRoleIds must contain actual, non-empty RoleIds.")
+            .Validate(settings => settings.MenuReaderRoleIds.All(IsValidValue),
+                "MenuReaderRoleIds must contain actual, non-empty RoleIds.")
             .Validate(settings => settings.NonSellingItemAvailabilities is not null
                 && settings.NonSellingItemAvailabilities.All(IsValidValue),
                 "NonSellingItemAvailabilities must contain actual status values.")
@@ -54,10 +65,29 @@ public static class CatalogServiceExtensions
         {
             options.Address = identityUri;
         });
+        services.AddGrpcClient<Backend.Contracts.Restaurant.GuestAccessGrpc.GuestAccessGrpcClient>(options =>
+        {
+            var address = configuration["GrpcServices:Restaurant"];
+            if (!Uri.TryCreate(address, UriKind.Absolute, out var restaurantUri)
+                || (restaurantUri.Scheme != Uri.UriSchemeHttp && restaurantUri.Scheme != Uri.UriSchemeHttps))
+            {
+                throw new InvalidOperationException("Configure GrpcServices:Restaurant.");
+            }
+
+            options.Address = restaurantUri;
+        });
+        services.AddScoped<IMenuAccess, MenuAccess>();
+        services.AddScoped<IMenuService, MenuService>();
+        services.AddScoped<IOrderValidationService, OrderValidationService>();
         services.AddScoped<ICatalogAccess, IdentityCatalogAccess>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<IPriceService, PriceService>();
+        services.AddScoped<OptionWriteExecutor>();
+        services.AddScoped<IOptionGroupService, OptionGroupService>();
+        services.AddScoped<IOptionService, OptionService>();
+        services.AddScoped<IItemOptionGroupService, ItemOptionGroupService>();
+        services.AddScoped<IRecipeService, RecipeService>();
         return services;
     }
 

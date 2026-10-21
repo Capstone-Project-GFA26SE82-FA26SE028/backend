@@ -9,6 +9,16 @@ namespace Catalog.API.GrpcServices;
 
 public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBase
 {
+    public override async Task<ItemReply> SetKitchenStation(SetItemKitchenStationRequest request, ServerCallContext context)
+    {
+        return ToReply(await service.SetKitchenStation(ParseId(request.ItemId, "item"),
+            new SetItemKitchenStationDTO
+            {
+                KitchenStationId = request.HasKitchenStationId ? ParseId(request.KitchenStationId, "station") : null,
+                Version = request.Version
+            }, context.CancellationToken));
+    }
+
     public override async Task<ItemReply> Create(CreateItemRequest request, ServerCallContext context)
     {
         var response = await service.Create(new CreateItemDTO
@@ -67,6 +77,16 @@ public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBas
         return ToReply(response);
     }
 
+    public override async Task<ItemReply> SetStatus(SetItemStatusRequest request, ServerCallContext context)
+    {
+        var response = await service.SetStatus(ParseId(request.ItemId, "item"), new SetItemStatusDTO
+        {
+            Availability = request.Availability,
+            Version = request.Version
+        }, context.CancellationToken);
+        return ToReply(response);
+    }
+
     private static Guid ParseId(string value, string resource)
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
@@ -100,6 +120,10 @@ public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBas
             Availability = item.Availability,
             Version = item.Version
         };
+        if (item.KitchenStationId.HasValue)
+        {
+            result.KitchenStationId = item.KitchenStationId.Value.ToString();
+        }
         if (item.Description is not null)
         {
             result.Description = item.Description;

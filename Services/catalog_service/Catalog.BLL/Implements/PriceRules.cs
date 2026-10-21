@@ -1,10 +1,67 @@
 using System.Globalization;
 using Catalog.DAL.Models;
+using Catalog.Common.Settings;
 
 namespace Catalog.BLL.Implements;
 
 internal static class PriceRules
 {
+    public static Price? ResolveForSale(IEnumerable<Price> prices, string channel,
+        PricingSettings settings, DateTime at, TimeZoneInfo timeZone)
+    {
+        var candidates = prices.Where(price =>
+            (price.Channel == channel || price.Channel == settings.AllChannelsCode)
+            && AppliesAt(price, at, timeZone)).ToArray();
+        var standard = candidates.Where(price => price.Channel == settings.AllChannelsCode
+            && !price.DailyStart.HasValue && !price.DailyEnd.HasValue).ToArray();
+        if (standard.Length != 1 || standard[0].Amount < 0 || candidates.Length == 0)
+        {
+            return null;
+        }
+
+        var priority = candidates.Max(price => Priority(price, channel));
+        var selected = candidates.Where(price => Priority(price, channel) == priority).ToArray();
+        return selected.Length == 1 && selected[0].Amount >= 0 ? selected[0] : null;
+    }
+
+    public static int Priority(Price price, string channel)
+    {
+        return (price.DailyStart.HasValue ? 2 : 0) + (price.Channel == channel ? 1 : 0);
+    }
+
+    public static bool TryConfiguration(PricingSettings configuration, out TimeZoneInfo timeZone)
+    {
+        timeZone = TimeZoneInfo.Utc;
+        if (!ValidChannel(configuration.AllChannelsCode) || configuration.Channels is not { Length: > 0 }
+            || !configuration.Channels.All(ValidChannel)
+            || configuration.Channels.Distinct(StringComparer.OrdinalIgnoreCase).Count() != configuration.Channels.Length
+            || configuration.Channels.Contains(configuration.AllChannelsCode, StringComparer.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(configuration.BusinessTimeZone))
+        {
+            return false;
+        }
+
+        try
+        {
+            timeZone = TimeZoneInfo.FindSystemTimeZoneById(configuration.BusinessTimeZone);
+            return true;
+        }
+        catch (TimeZoneNotFoundException)
+        {
+            return false;
+        }
+        catch (InvalidTimeZoneException)
+        {
+            return false;
+        }
+    }
+
+    private static bool ValidChannel(string value)
+    {
+        return !string.IsNullOrWhiteSpace(value) && value.Length <= 50
+            && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
+    }
+
     private static readonly string[] TimestampFormats =
     [
         "yyyy-MM-dd'T'HH:mm:ss'Z'",

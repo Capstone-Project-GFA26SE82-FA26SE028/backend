@@ -253,6 +253,11 @@ internal sealed class PriceTestApplication : IDisposable
 
     private sealed class TestMenuAccess(IHttpContextAccessor accessor) : ICatalogAccess
     {
+        public Task<Guid> RequireMenuStaffAsync(CancellationToken cancellationToken)
+        {
+            return RequireMenuManagerAsync(cancellationToken);
+        }
+
         public Task<Guid> RequireMenuManagerAsync(CancellationToken cancellationToken)
         {
             var token = accessor.HttpContext?.Request.Headers.Authorization.ToString();

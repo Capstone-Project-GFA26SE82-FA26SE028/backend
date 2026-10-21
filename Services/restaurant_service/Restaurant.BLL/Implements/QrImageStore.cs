@@ -28,7 +28,7 @@ public sealed class QrImageStore(string directory) : IQrImageStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            throw new ManagementException(503, "Không lưu được ảnh QR. Kiểm tra kho lưu ảnh.");
+            throw new ManagementException(503, "Unable to save the QR image. Check the image store.");
         }
         finally
         {
@@ -51,11 +51,11 @@ public sealed class QrImageStore(string directory) : IQrImageStore
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         {
-            throw new ManagementException(404, "Chưa có ảnh QR lưu trữ. Hãy tạo lại QR nếu cần ảnh.");
+            throw new ManagementException(404, "No stored QR image is available. Regenerate the QR code if an image is needed.");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            throw new ManagementException(503, "Không đọc được kho ảnh QR.");
+            throw new ManagementException(503, "Unable to read the QR image store.");
         }
     }
 }
