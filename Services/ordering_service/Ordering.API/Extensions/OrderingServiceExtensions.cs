@@ -18,6 +18,13 @@ public static class OrderingServiceExtensions
             options.Interceptors.Add<OrderingInterceptor>();
         });
         services.AddHttpContextAccessor();
+        services.Configure<KitchenStationSettings>(configuration.GetSection("KitchenStationManagement"));
+        services.AddGrpcClient<Backend.Contracts.Identity.UserGrpc.UserGrpcClient>(options =>
+        {
+            options.Address = Address(configuration, "Identity");
+        });
+        services.AddScoped<IKitchenStationAccess, IdentityKitchenStationAccess>();
+        services.AddScoped<IKitchenStationService, KitchenStationService>();
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddOptions<OrderingSettings>().Bind(configuration.GetSection("Ordering"))
             .Validate(settings => settings.DependencyTimeoutSeconds is > 0 and <= 60, "Dependency timeout must be 1-60 seconds.")

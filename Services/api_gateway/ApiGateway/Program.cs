@@ -16,6 +16,11 @@ builder.Services.AddGrpcClient<Backend.Contracts.Ordering.OrderGrpc.OrderGrpcCli
     options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
         ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
 });
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.KitchenStationGrpc.KitchenStationGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
+});
 builder.Services.AddOptions<CatalogClientSettings>()
     .Bind(builder.Configuration.GetSection("CatalogClient"))
     .Validate(settings => settings.TimeoutSeconds > 0,

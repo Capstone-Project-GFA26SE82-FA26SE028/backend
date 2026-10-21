@@ -17,6 +17,7 @@ public static class PersistenceExtensions
         {
             options.UseSqlServer(connectionString);
         });
+        services.AddScoped<Ordering.DAL.Interfaces.IKitchenStationRepository, Ordering.DAL.Implements.KitchenStationRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork<OrderingDbContext>>();
         services.AddScoped<Ordering.DAL.Interfaces.ICartRepository, Ordering.DAL.Implements.CartRepository>();
         services.AddScoped<Ordering.DAL.Interfaces.IOrderRepository, Ordering.DAL.Implements.OrderRepository>();
