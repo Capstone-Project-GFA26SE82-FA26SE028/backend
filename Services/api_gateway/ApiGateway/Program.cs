@@ -105,7 +105,7 @@ builder.Services.AddSwaggerGen(options =>
 var identityAddress =
     builder.Configuration["GrpcServices:Identity"]
     ?? throw new InvalidOperationException(
-        "Thiếu cấu hình GrpcServices:Identity");
+        "GrpcServices:Identity is not configured.");
 
 builder.Services.AddGrpcClient<IdentityGrpc.IdentityGrpcClient>(
     options => options.Address = new Uri(identityAddress));
@@ -184,14 +184,14 @@ app.MapGet("/api/identity/ping", async (
     {
         return Results.Problem(
             statusCode: 503,
-            detail: "Identity service hiện không khả dụng.");
+            detail: "The Identity service is currently unavailable.");
     }
     catch (RpcException ex)
         when (ex.StatusCode == StatusCode.DeadlineExceeded)
     {
         return Results.Problem(
             statusCode: 504,
-            detail: "Identity service phản hồi quá thời gian.");
+            detail: "The Identity service timed out.");
     }
 });
 

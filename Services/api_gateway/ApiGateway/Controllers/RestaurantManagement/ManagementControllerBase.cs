@@ -31,7 +31,7 @@ public abstract class ManagementControllerBase : ControllerBase
                 return response;
             }
 
-            return StatusCode(status, new ResponseDTO("Thành công.", status, true, result));
+            return StatusCode(status, new ResponseDTO("Success.", status, true, result));
         }
         catch (GatewayRequestException ex)
         {
@@ -50,7 +50,7 @@ public abstract class ManagementControllerBase : ControllerBase
                 Grpc.Core.StatusCode.DeadlineExceeded => 504,
                 _ => 502
             };
-            var message = code < 500 ? ex.Status.Detail : "Dịch vụ chưa sẵn sàng hoặc không xử lý được yêu cầu.";
+            var message = code < 500 ? ex.Status.Detail : "The service is unavailable or unable to process the request.";
             return StatusCode(code, new ResponseDTO(message, code));
         }
     }

@@ -11,7 +11,7 @@ internal static class ManagementMapping
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new GatewayRequestException(400, "ID phải là GUID khác rỗng.");
+            throw new GatewayRequestException(400, "ID must be a non-empty GUID.");
         }
 
         return id;
@@ -27,7 +27,7 @@ internal static class ManagementMapping
         if (!decimal.TryParse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
             CultureInfo.InvariantCulture, out var number))
         {
-            throw new GatewayRequestException(400, "Tọa độ không hợp lệ.");
+            throw new GatewayRequestException(400, "Invalid coordinates.");
         }
 
         return number;
