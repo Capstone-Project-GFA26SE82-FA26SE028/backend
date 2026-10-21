@@ -143,6 +143,7 @@ message TableSessionScanReply {
   bool is_new_session = 8;
 }
 service TableSessionGrpc {
+  rpc OpenForWaiter(IdRequest) returns (TableSessionScanReply);
   rpc Scan(QrTokenRequest) returns (TableSessionScanReply);
   rpc GetForOrdering(OrderSessionRequest) returns (OrderSessionReply);
 }
