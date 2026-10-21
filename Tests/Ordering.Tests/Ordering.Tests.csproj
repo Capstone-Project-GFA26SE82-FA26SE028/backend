@@ -13,4 +13,8 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.24" />
     <ProjectReference Include="../../Services/ordering_service/Ordering.API/Ordering.API.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="../../Services/ordering_service/Ordering.API/appsettings.json" Link="station-local.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../Services/ordering_service/Ordering.API/appsettings.Docker.json" Link="station-docker.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

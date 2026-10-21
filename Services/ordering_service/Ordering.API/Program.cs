@@ -15,6 +15,8 @@ builder.Services.AddOrderingPersistence(connectionString);
 
 var app = builder.Build();
 
+app.MapGrpcService<Ordering.API.GrpcServices.KitchenStationGrpcService>();
+
 app.MapGrpcService<Ordering.API.GrpcServices.CartGrpcService>();
 app.MapGrpcService<Ordering.API.GrpcServices.OrderGrpcService>();
 
