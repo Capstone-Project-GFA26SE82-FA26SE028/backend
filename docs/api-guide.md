@@ -6,8 +6,7 @@
 
 Frontend/Postman gọi Gateway; Gateway gọi gRPC đến Identity, Restaurant hoặc Catalog. Cần chạy các service tương ứng và cấu hình database.
 
-- Local profile HTTPS: `https://localhost:5000`; Swagger: `https://localhost:5000/swagger`.
-- Local profile HTTP: `http://localhost:15000`.
+- Gateway local profile `http`: `http://localhost:5000`; Swagger: `http://localhost:5000/swagger`.
 - Docker: `http://localhost:5000` theo port mapping hiện tại.
 - Body JSON: header `Content-Type: application/json`.
 - API có xác thực: header `Authorization: Bearer <accessToken>`.
