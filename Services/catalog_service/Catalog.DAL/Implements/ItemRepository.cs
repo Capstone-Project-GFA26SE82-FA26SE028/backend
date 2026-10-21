@@ -9,6 +9,60 @@ namespace Catalog.DAL.Implements;
 public sealed class ItemRepository(
     CatalogDbContext context) : IItemRepository
 {
+    public Task<List<Item>> GetForOrderValidationAsync(Guid[] ids, CancellationToken cancellationToken)
+    {
+        return context.Items.AsNoTracking().Where(item => ids.Contains(item.ItemId))
+            .Include(item => item.Category)
+            .Include(item => item.Prices)
+            .Include(item => item.ItemOptionGroups)
+                .ThenInclude(link => link.OptionGroup)
+                .ThenInclude(group => group.Options)
+            .AsSplitQuery()
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<PagedResult<Item>> GetMenuPageAsync(MenuQueryDTO query, DateTime at, CancellationToken cancellationToken)
+    {
+        var source = MenuSource(at);
+        if (query.CategoryId.HasValue)
+        {
+            source = source.Where(item => item.CategoryId == query.CategoryId.Value);
+        }
+
+        var search = query.Search?.Trim().Normalize().ToUpperInvariant();
+        if (!string.IsNullOrEmpty(search))
+        {
+            source = source.Where(item => item.ItemName.ToUpper().Contains(search)
+                || item.ItemCode.ToUpper().Contains(search));
+        }
+
+        var count = await source.CountAsync(cancellationToken);
+        var items = await source.OrderBy(item => item.ItemName).ThenBy(item => item.ItemId)
+            .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
+            .ToListAsync(cancellationToken);
+        return new PagedResult<Item>(items, count, query.Page, query.PageSize);
+    }
+
+    public Task<Item?> GetMenuByIdAsync(Guid id, DateTime at, CancellationToken cancellationToken)
+    {
+        return MenuSource(at).SingleOrDefaultAsync(item => item.ItemId == id, cancellationToken);
+    }
+
+    private IQueryable<Item> MenuSource(DateTime at)
+    {
+        return context.Items.AsNoTracking()
+            .Include(item => item.RecipeVersions.Where(recipe => recipe.EffectiveFrom <= at
+                && (!recipe.EffectiveTo.HasValue || at < recipe.EffectiveTo)))
+            .Where(item => item.Category.IsActive
+                && (item.Availability == "Available" || item.Availability == "OutOfStock"))
+            .Include(item => item.Category)
+            .Include(item => item.Prices)
+            .Include(item => item.ItemOptionGroups)
+                .ThenInclude(link => link.OptionGroup)
+                .ThenInclude(group => group.Options)
+            .AsSplitQuery();
+    }
+
     public async Task<PagedResult<Item>> GetPageAsync(
         ItemQueryDTO query,
         CancellationToken cancellationToken)

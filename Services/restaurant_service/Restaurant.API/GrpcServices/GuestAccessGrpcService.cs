@@ -22,7 +22,7 @@ public sealed class GuestAccessGrpcService(IGuestAccessService service) : GuestA
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new ManagementException(400, "Mã phiên bàn không hợp lệ.");
+            throw new ManagementException(400, "Invalid table session ID.");
         }
 
         return id;
@@ -32,6 +32,7 @@ public sealed class GuestAccessGrpcService(IGuestAccessService service) : GuestA
     {
         return new GuestAccessReply
         {
+            GuestAccessId = result.GuestAccessId.ToString(),
             TableSessionId = result.TableSessionId.ToString(),
             ExpiresAt = result.ExpiresAt.ToString("O"),
             Token = result.Token

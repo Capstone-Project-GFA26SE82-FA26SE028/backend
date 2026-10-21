@@ -17,15 +17,15 @@ public sealed class ManagementTransaction(IUnitOfWork unitOfWork) : IManagementT
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new ManagementException(409, "Dữ liệu đã thay đổi. Hãy tải lại trước khi thao tác.");
+            throw new ManagementException(409, "The data has changed. Reload before continuing.");
         }
         catch (DbUpdateException ex) when (ex.InnerException is SqlException sql && sql.Number is 2601 or 2627 or 547 or 1205)
         {
-            throw new ManagementException(409, "Dữ liệu trùng hoặc đang được sử dụng.");
+            throw new ManagementException(409, "The data already exists or is in use.");
         }
         catch (SqlException ex) when (ex.Number == 1205)
         {
-            throw new ManagementException(409, "Có thao tác đồng thời. Hãy tải lại và thử lại.");
+            throw new ManagementException(409, "A concurrent operation was detected. Reload and try again.");
         }
     }
 }

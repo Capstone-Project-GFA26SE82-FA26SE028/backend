@@ -53,6 +53,8 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 services.AddScoped<RestaurantDbContext>(_ => new TestDb(_connection));
                 services.RemoveAll<IManagementAccess>();
                 services.AddScoped<IManagementAccess, TestAccess>();
+                services.RemoveAll<restaurantapi::Backend.Contracts.Identity.UserGrpc.UserGrpcClient>();
+                services.AddSingleton<restaurantapi::Backend.Contracts.Identity.UserGrpc.UserGrpcClient, WaiterIdentityClient>();
             });
         });
         using (var scope = _restaurant.Services.CreateScope())

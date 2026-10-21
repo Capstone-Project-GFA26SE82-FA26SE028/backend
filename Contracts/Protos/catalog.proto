@@ -62,11 +62,21 @@ message CategoryListReply {
   int32 page_size = 7;
 }
 
+message SetItemKitchenStationRequest { string item_id = 1; optional string kitchen_station_id = 2; string version = 3; }
+
 service ItemGrpc {
+  rpc SetKitchenStation(SetItemKitchenStationRequest) returns (ItemReply);
   rpc Create (CreateItemRequest) returns (ItemReply);
   rpc GetAll (ItemListRequest) returns (ItemListReply);
   rpc GetById (ItemIdRequest) returns (ItemReply);
   rpc Update (UpdateItemRequest) returns (ItemReply);
+  rpc SetStatus (SetItemStatusRequest) returns (ItemReply);
+}
+
+message SetItemStatusRequest {
+  string item_id = 1;
+  string availability = 2;
+  string version = 3;
 }
 
 message CreateItemRequest {
@@ -107,6 +117,7 @@ message ItemInfo {
   optional string image_url = 7;
   string availability = 8;
   string version = 9;
+  optional string kitchen_station_id = 10;
 }
 
 message ItemReply {
@@ -235,4 +246,404 @@ message AppliedPriceReply {
   string message = 2;
   bool is_success = 3;
   AppliedPriceInfo result = 4;
+}
+
+service OptionGroupGrpc {
+  rpc Create (CreateOptionGroupRequest) returns (OptionGroupReply);
+  rpc GetAll (OptionGroupListRequest) returns (OptionGroupListReply);
+  rpc GetById (OptionGroupIdRequest) returns (OptionGroupReply);
+  rpc Update (UpdateOptionGroupRequest) returns (OptionGroupReply);
+  rpc Delete (OptionGroupIdRequest) returns (OptionGroupReply);
+}
+
+message CreateOptionGroupRequest {
+  string option_group_name = 1;
+}
+
+message UpdateOptionGroupRequest {
+  string option_group_id = 1;
+  string option_group_name = 2;
+}
+
+message OptionGroupIdRequest {
+  string option_group_id = 1;
+}
+
+message OptionGroupListRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional string search = 3;
+}
+
+message OptionGroupInfo {
+  string option_group_id = 1;
+  string option_group_name = 2;
+}
+
+message OptionGroupReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  OptionGroupInfo result = 4;
+}
+
+message OptionGroupListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated OptionGroupInfo items = 4;
+  int32 total_count = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+service OptionGrpc {
+  rpc Create (CreateOptionRequest) returns (OptionReply);
+  rpc GetAll (OptionListRequest) returns (OptionListReply);
+  rpc GetById (OptionIdRequest) returns (OptionReply);
+  rpc Update (UpdateOptionRequest) returns (OptionReply);
+  rpc SetStatus (SetOptionStatusRequest) returns (OptionReply);
+  rpc Delete (OptionIdRequest) returns (OptionReply);
+}
+
+message CreateOptionRequest {
+  string option_group_id = 1;
+  string option_name = 2;
+  string extra_price = 3;
+}
+
+message UpdateOptionRequest {
+  string option_id = 1;
+  string option_name = 2;
+  string extra_price = 3;
+}
+
+message SetOptionStatusRequest {
+  string option_id = 1;
+  string availability = 2;
+}
+
+message OptionIdRequest {
+  string option_id = 1;
+}
+
+message OptionListRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional string search = 3;
+  optional string option_group_id = 4;
+  optional string availability = 5;
+}
+
+message OptionInfo {
+  string option_id = 1;
+  string option_group_id = 2;
+  string option_name = 3;
+  string extra_price = 4;
+  string availability = 5;
+}
+
+message OptionReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  OptionInfo result = 4;
+}
+
+message OptionListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated OptionInfo items = 4;
+  int32 total_count = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+
+service ItemOptionGroupGrpc {
+  rpc Create (CreateItemOptionGroupRequest) returns (ItemOptionGroupReply);
+  rpc GetAll (ItemOptionGroupListRequest) returns (ItemOptionGroupListReply);
+  rpc GetById (ItemOptionGroupIdRequest) returns (ItemOptionGroupReply);
+  rpc Update (UpdateItemOptionGroupRequest) returns (ItemOptionGroupReply);
+  rpc Delete (ItemOptionGroupIdRequest) returns (ItemOptionGroupReply);
+}
+
+message CreateItemOptionGroupRequest {
+  string item_id = 1;
+  string option_group_id = 2;
+  optional int32 min_selection = 3;
+  optional int32 max_selection = 4;
+}
+
+message UpdateItemOptionGroupRequest {
+  string item_id = 1;
+  string option_group_id = 2;
+  optional int32 min_selection = 3;
+  optional int32 max_selection = 4;
+}
+
+message ItemOptionGroupIdRequest {
+  string item_id = 1;
+  string option_group_id = 2;
+}
+
+message ItemOptionGroupListRequest {
+  string item_id = 1;
+}
+
+message ItemOptionGroupInfo {
+  string item_id = 1;
+  string option_group_id = 2;
+  string option_group_name = 3;
+  int32 min_selection = 4;
+  int32 max_selection = 5;
+}
+
+message ItemOptionGroupReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  ItemOptionGroupInfo result = 4;
+}
+
+message ItemOptionGroupListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated ItemOptionGroupInfo items = 4;
+}
+
+service RecipeGrpc {
+  rpc CreateItemRecipe (CreateItemRecipeRequest) returns (RecipeReply);
+  rpc GetActiveItemRecipe (ActiveItemRecipeRequest) returns (RecipeReply);
+  rpc GetItemRecipeHistory (ItemRecipeHistoryRequest) returns (RecipeListReply);
+  rpc CreateOptionRecipe (CreateOptionRecipeRequest) returns (RecipeReply);
+  rpc GetActiveOptionRecipe (ActiveOptionRecipeRequest) returns (RecipeReply);
+  rpc GetOptionRecipeHistory (OptionRecipeHistoryRequest) returns (RecipeListReply);
+  rpc GetRecipeById (RecipeIdRequest) returns (RecipeReply);
+}
+
+message CreateRecipeIngredientRequest {
+  string ingredient_ref = 1;
+  string unit_ref = 2;
+  string quantity = 3;
+  string conversion_factor = 4;
+}
+
+message CreateRecipeMediaRequest {
+  string media_type = 1;
+  string url = 2;
+  int32 display_order = 3;
+}
+
+message CreateItemRecipeRequest {
+  string item_id = 1;
+  optional string effective_from = 2;
+  optional string instructions = 3;
+  repeated CreateRecipeIngredientRequest ingredients = 4;
+  repeated CreateRecipeMediaRequest media = 5;
+}
+
+message ActiveItemRecipeRequest {
+  string item_id = 1;
+  optional string at = 2;
+}
+
+message ItemRecipeHistoryRequest {
+  string item_id = 1;
+}
+
+message CreateOptionRecipeRequest {
+  string option_id = 1;
+  optional string effective_from = 2;
+  optional string instructions = 3;
+  repeated CreateRecipeIngredientRequest ingredients = 4;
+  repeated CreateRecipeMediaRequest media = 5;
+}
+
+message ActiveOptionRecipeRequest {
+  string option_id = 1;
+  optional string at = 2;
+}
+
+message OptionRecipeHistoryRequest {
+  string option_id = 1;
+}
+
+message RecipeIdRequest {
+  string recipe_version_id = 1;
+}
+
+message RecipeIngredientInfo {
+  string recipe_ingredient_id = 1;
+  string recipe_version_id = 2;
+  string ingredient_ref = 3;
+  string unit_ref = 4;
+  string quantity = 5;
+  string base_quantity_snapshot = 6;
+  string conversion_factor_snapshot = 7;
+}
+
+message RecipeMediaInfo {
+  string recipe_media_id = 1;
+  string recipe_version_id = 2;
+  string media_type = 3;
+  string url = 4;
+  int32 display_order = 5;
+}
+
+message RecipeInfo {
+  string recipe_version_id = 1;
+  optional string item_id = 2;
+  optional string option_id = 3;
+  int32 version = 4;
+  string effective_from = 5;
+  optional string effective_to = 6;
+  optional string instructions = 7;
+  repeated RecipeIngredientInfo ingredients = 8;
+  repeated RecipeMediaInfo media = 9;
+}
+
+message RecipeReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  RecipeInfo result = 4;
+}
+
+message RecipeListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated RecipeInfo items = 4;
+}
+
+
+service MenuGrpc {
+  rpc GetAll (MenuListRequest) returns (MenuListReply);
+  rpc GetById (MenuItemRequest) returns (MenuItemReply);
+}
+message MenuAccessRequest {
+  optional string table_session_id = 1;
+  string guest_token = 2;
+}
+message MenuListRequest {
+  MenuAccessRequest access = 1;
+  string channel = 2;
+  optional string category_id = 3;
+  optional string search = 4;
+  int32 page = 5;
+  int32 page_size = 6;
+}
+message MenuItemRequest {
+  MenuAccessRequest access = 1;
+  string channel = 2;
+  string item_id = 3;
+}
+message MenuOptionInfo {
+  string option_id = 1;
+  string option_name = 2;
+  string extra_price = 3;
+  string availability = 4;
+  bool can_select = 5;
+}
+message MenuOptionGroupInfo {
+  string option_group_id = 1;
+  string option_group_name = 2;
+  int32 min_selection = 3;
+  int32 max_selection = 4;
+  repeated MenuOptionInfo options = 5;
+}
+message MenuItemInfo {
+  string item_id = 1;
+  string category_id = 2;
+  string category_name = 3;
+  string item_code = 4;
+  string item_name = 5;
+  optional string description = 6;
+  optional string image_url = 7;
+  string availability = 8;
+  optional string price = 9;
+  optional string price_id = 10;
+  string channel = 11;
+  string evaluated_at = 12;
+  bool can_order = 13;
+  optional string unavailable_reason = 14;
+  repeated MenuOptionGroupInfo option_groups = 15;
+}
+message MenuListReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  repeated MenuItemInfo items = 4;
+  int32 total_count = 5;
+  int32 page = 6;
+  int32 page_size = 7;
+}
+message MenuItemReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  MenuItemInfo result = 4;
+}
+
+// Read-only quotation. Ordering must call again when submitting an order.
+service OrderValidationGrpc {
+  rpc ValidateOrderItems (ValidateOrderItemsRequest) returns (OrderValidationReply);
+}
+message ValidateOrderItemsRequest {
+  MenuAccessRequest access = 1;
+  string channel = 2;
+  repeated OrderSelection items = 3;
+}
+message OrderSelection {
+  string item_id = 1;
+  int32 quantity = 2;
+  repeated OrderOptionSelection options = 3;
+}
+message OrderOptionSelection {
+  string option_id = 1;
+  int32 quantity = 2;
+}
+message OrderValidationReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  OrderValidationResult result = 4;
+}
+message OrderValidationResult {
+  string channel = 1;
+  string evaluated_at = 2;
+  optional string total_amount = 3;
+  repeated ValidatedOrderItem items = 4;
+  repeated OrderValidationError errors = 5;
+}
+message ValidatedOrderItem {
+  int32 line_index = 1;
+  string item_id = 2;
+  string name_snapshot = 3;
+  string price_id = 4;
+  string recipe_version_id = 5;
+  int32 quantity = 6;
+  string unit_price_snapshot = 7;
+  string options_total_per_unit = 8;
+  string unit_total = 9;
+  string line_total = 10;
+  repeated ValidatedOrderOption options = 11;
+  optional string kitchen_station_id = 12;
+}
+message ValidatedOrderOption {
+  string option_id = 1;
+  string name_snapshot = 2;
+  string extra_price_snapshot = 3;
+  int32 quantity = 4;
+  optional string recipe_version_id = 5;
+}
+message OrderValidationError {
+  int32 line_index = 1;
+  string item_id = 2;
+  optional string option_id = 3;
+  optional string option_group_id = 4;
+  string code = 5;
+  string message = 6;
 }

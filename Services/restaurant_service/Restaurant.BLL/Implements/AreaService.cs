@@ -42,15 +42,15 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
     private async Task<AreaDto> Save(Guid? id, AreaWriteDto body, CancellationToken ct)
     {
         await access.RequireAdmin(ct);
-        var code = ManagementValidation.Required(body.AreaCode, 50, "Mã khu vực");
-        var name = ManagementValidation.Required(body.AreaName, 100, "Tên khu vực");
+        var code = ManagementValidation.Required(body.AreaCode, 50, "Area code");
+        var name = ManagementValidation.Required(body.AreaName, 100, "Area name");
         var serviceType = ManagementValidation.Required(body.ServiceType, 50, "ServiceType");
         var spaceType = ManagementValidation.Required(body.SpaceType, 50, "SpaceType");
         var entity = await transaction.ExecuteAsync(async () =>
         {
             if (await restaurants.GetByIdAsync(body.RestaurantId, ct) is null)
             {
-                throw new ManagementException(404, "Không tìm thấy nhà hàng.");
+                throw new ManagementException(404, "Restaurant not found.");
             }
 
             var item = id.HasValue ? await Find(id.Value, ct) : new Area
@@ -61,12 +61,12 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
             };
             if (item.RestaurantId != body.RestaurantId)
             {
-                throw new ManagementException(409, "Không chuyển khu vực sang nhà hàng khác.");
+                throw new ManagementException(409, "An area cannot be moved to another restaurant.");
             }
 
             if (await repository.CodeExistsAsync(body.RestaurantId, code, item.AreaId, ct))
             {
-                throw new ManagementException(409, "Mã khu vực đã tồn tại trong nhà hàng.");
+                throw new ManagementException(409, "The area code already exists in this restaurant.");
             }
 
             item.AreaCode = code;
@@ -91,7 +91,7 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
             var entity = await Find(id, ct);
             if (!active && await repository.HasOpenSessionsAsync(id, ct))
             {
-                throw new ManagementException(409, "Khu vực còn phiên phục vụ chưa đóng.");
+                throw new ManagementException(409, "The area has an unclosed service session.");
             }
 
             entity.IsActive = active;
@@ -107,7 +107,7 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
             var entity = await Find(id, ct);
             if (await repository.HasTablesAsync(id, ct))
             {
-                throw new ManagementException(409, "Khu vực còn bàn. Hãy chuyển bàn hoặc ngừng sử dụng khu vực.");
+                throw new ManagementException(409, "The area still contains tables. Move the tables or deactivate the area.");
             }
 
             repository.Delete(entity);
@@ -117,7 +117,7 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
 
     private async Task<Area> Find(Guid id, CancellationToken ct)
     {
-        return await repository.GetByIdAsync(id, ct) ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
+        return await repository.GetByIdAsync(id, ct) ?? throw new ManagementException(404, "Area not found.");
     }
 
     internal static AreaDto Map(Area item)
