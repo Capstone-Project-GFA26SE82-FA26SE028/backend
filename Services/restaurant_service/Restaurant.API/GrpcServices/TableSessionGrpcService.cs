@@ -1,3 +1,4 @@
+using Restaurant.API.Management;
 using Backend.Contracts.Restaurant;
 using Grpc.Core;
 using Restaurant.BLL.Interfaces;
@@ -6,6 +7,22 @@ namespace Restaurant.API.GrpcServices;
 
 public sealed class TableSessionGrpcService(ITableSessionService service) : TableSessionGrpc.TableSessionGrpcBase
 {
+    public override async Task<TableSessionScanReply> OpenForWaiter(IdRequest request, ServerCallContext context)
+    {
+        var result = await service.OpenForWaiter(ManagementMapping.Id(request.Id), context.CancellationToken);
+        return new TableSessionScanReply
+        {
+            TableSessionId = result.TableSessionId.ToString(),
+            TableId = result.TableId.ToString(),
+            TableCode = result.TableCode,
+            AreaId = result.AreaId.ToString(),
+            RestaurantId = result.RestaurantId.ToString(),
+            Status = result.Status,
+            OpenedAt = result.OpenedAt.ToString("O"),
+            IsNewSession = result.IsNewSession
+        };
+    }
+
     public override async Task<OrderSessionReply> GetForOrdering(OrderSessionRequest request, ServerCallContext context)
     {
         if (!Guid.TryParse(request.TableSessionId, out var id) || id == Guid.Empty

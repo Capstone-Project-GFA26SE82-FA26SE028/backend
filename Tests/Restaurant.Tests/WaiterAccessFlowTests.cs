@@ -86,6 +86,74 @@ public sealed partial class GatewayFlowTests
         Assert.Equal(StatusCode.PermissionDenied, orderAccessError.StatusCode);
     }
 
+    [Fact]
+    public async Task WaiterOpensWithoutQrAndGuestScanReusesSession()
+    {
+        var restaurant = await CreateRestaurant();
+        var area = await CreateArea(restaurant.RestaurantId, "OPEN");
+        var table = await CreateTable(area.AreaId);
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "waiter");
+        var route = $"/api/table-sessions/tables/{table.TableId}/open";
+        var first = await Read<TableSessionScanDto>(await _http.PostAsync(route, null));
+        var second = await Read<TableSessionScanDto>(await _http.PostAsync(route, null));
+        Assert.True(first.IsNewSession);
+        Assert.False(second.IsNewSession);
+        Assert.Equal(first.TableSessionId, second.TableSessionId);
+        using (var scope = _restaurant.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<RestaurantDbContext>();
+            Assert.Single(await db.TableSessions.ToListAsync());
+            Assert.Single(await db.SessionTables.ToListAsync());
+            Assert.Empty(await db.GuestAccesses.ToListAsync());
+        }
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "admin");
+        var qr = await Read<QrCreatedDto>(await _http.PostAsync($"/api/qr/tables/{table.TableId}", null), HttpStatusCode.Created);
+        var scanned = await Read<TableSessionScanDto>(await Scan(qr.Token));
+        Assert.Equal(first.TableSessionId, scanned.TableSessionId);
+        Assert.False(scanned.IsNewSession);
+    }
+
+    [Theory]
+    [InlineData("admin", 403)]
+    [InlineData("manager", 403)]
+    [InlineData("kitchen", 403)]
+    [InlineData("", 401)]
+    public async Task OnlyWaiterMayOpenSession(string role, int status)
+    {
+        _http.DefaultRequestHeaders.Authorization = string.IsNullOrEmpty(role)
+            ? null : new AuthenticationHeaderValue("Bearer", role);
+        var response = await _http.PostAsync($"/api/table-sessions/tables/{Guid.NewGuid()}/open", null);
+        Assert.Equal(status, (int)response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WaiterCannotOpenInactiveTableOrArea(bool disableTable)
+    {
+        var restaurant = await CreateRestaurant();
+        var area = await CreateArea(restaurant.RestaurantId, "OFF");
+        var table = await CreateTable(area.AreaId);
+        using (var scope = _restaurant.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<RestaurantDbContext>();
+            if (disableTable)
+            {
+                (await db.Tables.SingleAsync()).IsActive = false;
+            }
+            else
+            {
+                (await db.Areas.SingleAsync()).IsActive = false;
+            }
+            await db.SaveChangesAsync();
+        }
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "waiter");
+        var response = await _http.PostAsync($"/api/table-sessions/tables/{table.TableId}/open", null);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var verification = _restaurant.Services.CreateScope();
+        Assert.Empty(await verification.ServiceProvider.GetRequiredService<RestaurantDbContext>().TableSessions.ToListAsync());
+    }
+
     private sealed class WaiterIdentityClient : IdentityClient
     {
         public override AsyncUnaryCall<IdentityReply> GetMeAsync(IdentityRequest request, Metadata? headers = null,

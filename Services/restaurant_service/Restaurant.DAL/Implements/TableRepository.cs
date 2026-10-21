@@ -42,22 +42,31 @@ public sealed class TableRepository(RestaurantDbContext db) : GenericRepository<
         };
     }
 
-    public Task<TableEntity?> LockForSessionAsync(Guid id, CancellationToken ct)
+    public async Task<TableEntity?> LockForSessionAsync(Guid id, CancellationToken ct)
     {
         if (_context.Database.CurrentTransaction is null)
         {
             throw new InvalidOperationException("Opening a table session requires a transaction.");
         }
 
+        TableEntity? table;
         if (_context.Database.IsSqlServer())
         {
             // Serialize scans for this table across processes until the transaction commits.
-            return _context.Tables.FromSqlInterpolated(
+            table = await _context.Tables.FromSqlInterpolated(
                 $"SELECT * FROM [Table] WITH (UPDLOCK, HOLDLOCK) WHERE [TableId] = {id}")
                 .SingleOrDefaultAsync(ct);
         }
 
-        return GetByIdAsync(id, ct);
+        else
+        {
+            table = await GetByIdAsync(id, ct);
+        }
+        if (table is not null)
+        {
+            await _context.Entry(table).Reference(value => value.Area).LoadAsync(ct);
+        }
+        return table;
     }
 
     public async Task<PageResult<global::Restaurant.DAL.Models.Table>> GetPageAsync(ListQuery query, CancellationToken ct)
