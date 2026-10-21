@@ -29,7 +29,7 @@ Kitchen được dùng `GET /api/items` và `GET /api/items/{id}` để xem tr�
 
 ## Cấu hình
 
-- `CatalogManagement:MenuManagerRoleIds`: các RoleId được quản lý menu; giữ cấu hình hiện tại `manager`, `admin`.
+- `CatalogManagement:MenuManagerRoleIds`: các RoleId được quản lý menu; giữ cấu hình hiện tại `manager`.
 - `CatalogManagement:KitchenRoleIds`: các RoleId Kitchen; mặc định `kitchen`. Thay bằng RoleId thực tế nếu database dùng giá trị khác. Mảng rỗng không cấp quyền Kitchen.
 - Docker có biến `CATALOG_KITCHEN_ROLE_ID` trong `.env.example`; không tự thay đổi `.env` đang dùng.
 - `CatalogManagement:NonSellingItemAvailabilities` phải chứa `Inactive`, không chứa `Available` hay `OutOfStock`. Món tạm hết vẫn thuộc thực đơn đang kinh doanh nên tiếp tục chặn tắt Category.

@@ -10,10 +10,12 @@ Tất cả endpoint yêu cầu header `Authorization: Bearer <accessToken>`.
 
 | Thao tác | Role được phép | Ghi chú |
 | :--- | :--- | :--- |
-| Tạo phiên bản công thức mới | `MenuManagerRoleIds` (`manager`, `admin`) | Tự động tăng `Version` và đóng `EffectiveTo` của phiên bản cũ đang hoạt động |
-| Xem lịch sử công thức của món | `MenuManagerRoleIds` (`manager`, `admin`) | Trả về toàn bộ danh sách phiên bản sắp xếp theo Version giảm dần |
-| Xem công thức đang hiệu lực | `MenuManagerRoleIds` + `KitchenRoleIds` (`manager`, `admin`, `kitchen`) | Trả về phiên bản thỏa mãn `EffectiveFrom <= at < EffectiveTo` |
-| Xem chi tiết một phiên bản | `MenuManagerRoleIds` + `KitchenRoleIds` (`manager`, `admin`, `kitchen`) | Xem đầy đủ nguyên liệu, định lượng và media |
+| Tạo phiên bản công thức mới | `MenuManagerRoleIds` (`manager`) | Tự động tăng `Version` và đóng `EffectiveTo` của phiên bản cũ đang hoạt động |
+| Xem lịch sử công thức của món | `MenuManagerRoleIds` (`manager`) | Trả về toàn bộ danh sách phiên bản sắp xếp theo Version giảm dần |
+| Xem công thức đang hiệu lực | `MenuManagerRoleIds` + `KitchenRoleIds` (`manager`, `kitchen`) | Trả về phiên bản thỏa mãn `EffectiveFrom <= at < EffectiveTo` |
+| Xem chi tiết một phiên bản | `MenuManagerRoleIds` + `KitchenRoleIds` (`manager`, `kitchen`) | Kitchen chỉ xem phiên bản đang hiệu lực; Manager xem mọi phiên bản |
+
+Tham số `at` chỉ dành cho Manager; Kitchen phải bỏ `at` để dùng thời điểm hiện tại của server.
 
 Tạo thành công trả HTTP 201 kèm header `Location: /api/recipes/{recipeVersionId}`. Đọc thành công trả HTTP 200. Dữ liệu nằm trong `ResponseDTO.result`.
 
@@ -25,14 +27,14 @@ Tạo thành công trả HTTP 201 kèm header `Location: /api/recipes/{recipeVer
 | Method | Route | Chức năng | Quyền |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/items/{itemId}/recipes` | Tạo phiên bản công thức mới cho món | Manager |
-| `GET` | `/api/items/{itemId}/recipes/active?at=2026-10-20T08:00:00Z` | Lấy công thức đang hiệu lực của món | Manager, Kitchen |
+| `GET` | `/api/items/{itemId}/recipes/active` | Lấy công thức đang hiệu lực của món | Manager, Kitchen |
 | `GET` | `/api/items/{itemId}/recipes` | Xem toàn bộ lịch sử các phiên bản công thức của món | Manager |
 
 ### 2.2. Công thức cho Tùy chọn / Topping / Size (Option Recipes)
 | Method | Route | Chức năng | Quyền |
 | :--- | :--- | :--- | :--- |
 | `POST` | `/api/options/{optionId}/recipes` | Tạo phiên bản công thức mới cho option | Manager |
-| `GET` | `/api/options/{optionId}/recipes/active?at=2026-10-20T08:00:00Z` | Lấy công thức đang hiệu lực của option | Manager, Kitchen |
+| `GET` | `/api/options/{optionId}/recipes/active` | Lấy công thức đang hiệu lực của option | Manager, Kitchen |
 | `GET` | `/api/options/{optionId}/recipes` | Xem toàn bộ lịch sử các phiên bản công thức của option | Manager |
 
 ### 2.3. Xem chi tiết công thức
@@ -141,3 +143,5 @@ Test `RecipeFlowTests.cs` bao phủ:
 - Kitchen lấy công thức đang hiệu lực (thành công 200); Kitchen cố tình tạo mới trả 403 Forbidden.
 - Bắt lỗi dữ liệu: món không tồn tại (404), danh sách nguyên liệu rỗng (400), định lượng <= 0 (400), trùng nguyên liệu (400).
 - Xem lịch sử các phiên bản công thức theo thứ tự giảm dần.
+
+Chi tiết phân quyền và giới hạn phiên bản công thức: [Phân quyền backend](backend-permissions.md).

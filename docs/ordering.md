@@ -1,4 +1,4 @@
-﻿# Giỏ hàng và gửi đơn Ordering
+# Giỏ hàng và gửi đơn Ordering
 
 Dùng nguyên schema Ordering hiện có, không cần migration hoặc SQL nâng cấp.
 
@@ -25,7 +25,7 @@ Gateway gọi Ordering bằng gRPC. Ordering xác minh phiên/quyền tại Rest
 | GET | `/orders?page=1&pageSize=20` | Cùng phạm vi quyền; pageSize tối đa100 |
 | POST | `/orders/{orderId}/confirm` | Staff xác nhận đơn khách bằng version |
 
-Khách dùng cookie HttpOnly `guest_access_{sessionId:N}` do Gateway cấp, fetch cần `credentials: "include"`. Staff dùng `Authorization: Bearer <access-token>`. Nếu có Authorization, Gateway chọn staff và không fallback sang cookie khách. Restaurant xác minh tài khoản còn hoạt động; `Ordering:StaffRoleIds` mặc định `waiter`, `manager`, `admin`. Catalog vẫn áp dụng quyền đọc menu đã cấu hình.
+Khách dùng cookie HttpOnly `guest_access_{sessionId:N}` do Gateway cấp, fetch cần `credentials: "include"`. Staff dùng `Authorization: Bearer <access-token>`. Nếu có Authorization, Gateway chọn staff và không fallback sang cookie khách. Restaurant xác minh tài khoản còn hoạt động; `Ordering:StaffRoleIds` mặc định `waiter`. Catalog vẫn áp dụng quyền đọc menu đã cấu hình.
 
 Tất cả API trên cần phiên còn mở và có bàn/area hoạt động. Khi phiên có nhiều bàn, POST order phải chỉ rõ `tableId` thuộc phiên. Cart chỉ dành cho khách.
 
@@ -118,3 +118,5 @@ Trạm bếp ưu tiên `Item.KitchenStationRef` từ Catalog, rồi `Ordering:De
 Gateway: `GrpcServices:Ordering` (local `https://localhost:5004`), `OrderingClient:TimeoutSeconds` mặc định30. Ordering: `GrpcServices:Restaurant`, `GrpcServices:Catalog`, `Ordering:DependencyTimeoutSeconds` mặc định5, tùy chọn `Ordering:DefaultKitchenStationId` là ID trạm active đã tồn tại.
 
 `Tests/Ordering.Tests` kiểm thử business service với repository/transaction thật trên SQLite trong RAM, giả lập Restaurant/Catalog và rowversion. Bao gồm quyền sở hữu, giỏ cũ, thay thế lựa chọn, snapshot, gửi lặp, xác nhận lặp, rollback khi món không hợp lệ và chọn trạm bếp. Chưa kiểm chứng khóa đồng thời SQL Server hay toàn luồng HTTP/gRPC với các service chạy thật. Không chạy migration hoặc ghi DB thật trong các test này.
+
+Chi tiết phân quyền và giới hạn phiên bản công thức: [Phân quyền backend](backend-permissions.md).

@@ -9,6 +9,39 @@ namespace Restaurant.DAL.Implements;
 
 public sealed class TableRepository(RestaurantDbContext db) : GenericRepository<global::Restaurant.DAL.Models.Table, RestaurantDbContext>(db), ITableRepository
 {
+    public async Task<PageResult<TableEntity>> GetServicePageAsync(ListQuery query, CancellationToken ct)
+    {
+        var source = _context.Tables.AsNoTracking().Where(table => table.IsActive && table.Area.IsActive);
+        if (query.RestaurantId.HasValue)
+        {
+            source = source.Where(table => table.Area.RestaurantId == query.RestaurantId.Value);
+        }
+
+        if (query.AreaId.HasValue)
+        {
+            source = source.Where(table => table.AreaId == query.AreaId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            source = source.Where(table => table.TableCode.Contains(query.Search.Trim()));
+        }
+
+        var count = await source.CountAsync(ct);
+        var tables = await source.Include(table => table.Area)
+            .Include(table => table.SessionTables.Where(link => link.ReleasedAt == null
+                && link.TableSession.Status == "Open" && link.TableSession.ClosedAt == null))
+            .OrderBy(table => table.TableCode).ThenBy(table => table.TableId)
+            .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).AsSplitQuery().ToListAsync(ct);
+        return new PageResult<TableEntity>
+        {
+            Items = tables,
+            TotalCount = count,
+            Page = query.Page,
+            PageSize = query.PageSize
+        };
+    }
+
     public Task<TableEntity?> LockForSessionAsync(Guid id, CancellationToken ct)
     {
         if (_context.Database.CurrentTransaction is null)
