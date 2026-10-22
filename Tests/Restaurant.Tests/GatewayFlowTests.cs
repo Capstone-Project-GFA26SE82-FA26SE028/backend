@@ -55,6 +55,8 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 services.AddSingleton<TimeProvider>(_reservationClock);
                 services.RemoveAll<IManagementAccess>();
                 services.AddScoped<IManagementAccess, TestAccess>();
+                services.RemoveAll<IStaffIdentity>();
+                services.AddScoped<IStaffIdentity, TestStaffIdentity>();
                 services.RemoveAll<restaurantapi::Backend.Contracts.Identity.UserGrpc.UserGrpcClient>();
                 services.AddSingleton<restaurantapi::Backend.Contracts.Identity.UserGrpc.UserGrpcClient, WaiterIdentityClient>();
             });
@@ -91,6 +93,19 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
         });
         _http = _gateway.CreateClient();
         _http.DefaultRequestHeaders.Authorization = new("Bearer", "admin");
+    }
+
+    [Fact]
+    public void ReservationExpirationWorkerUsesTheBoundConfiguration()
+    {
+        var workers = _restaurant.Services.GetServices<Microsoft.Extensions.Hosting.IHostedService>();
+        Assert.Single(workers.OfType<restaurantapi::Restaurant.API.Reservations.ReservationExpirationWorker>());
+        var settings = _restaurant.Services
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<Restaurant.Common.Settings.ReservationSettings>>().Value;
+        Assert.False(settings.ExpirationEnabled);
+        Assert.Equal(120, settings.DefaultDurationMinutes);
+        Assert.Equal(30, settings.HoldBeforeMinutes);
+        Assert.Equal(30, settings.HoldAfterMinutes);
     }
 
     [Fact]

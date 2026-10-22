@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using ApiGateway.DTOs.Restaurant;
 using Backend.Contracts.Identity;
 using Backend.Contracts.Restaurant;
@@ -155,7 +156,7 @@ public sealed partial class ReservationSqlServerTests : IAsyncLifetime
         using (var scope = _restaurant.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RestaurantDbContext>();
-            await db.Database.EnsureCreatedAsync();
+            await InitializeRestaurantSchema();
             await db.Database.ExecuteSqlRawAsync("ALTER DATABASE CURRENT SET READ_COMMITTED_SNAPSHOT OFF WITH ROLLBACK IMMEDIATE");
         }
 
@@ -180,6 +181,43 @@ public sealed partial class ReservationSqlServerTests : IAsyncLifetime
             });
         });
         _http = _gateway.CreateClient();
+    }
+
+    private async Task InitializeRestaurantSchema()
+    {
+        var connection = new SqlConnectionStringBuilder(_restaurantConnection);
+        const string prefix = "CodexReservationRestaurant_";
+        var databaseName = connection.InitialCatalog;
+        if (!databaseName.StartsWith(prefix, StringComparison.Ordinal)
+            || !Guid.TryParseExact(databaseName[prefix.Length..], "N", out _))
+        {
+            throw new InvalidOperationException("Only an isolated reservation test database can be initialized.");
+        }
+
+        var environment = _restaurant.Services.GetRequiredService<IWebHostEnvironment>();
+        var schemaPath = Path.GetFullPath(Path.Combine(environment.ContentRootPath,
+            "..", "..", "..", "docker", "sql", "schema", "RestaurantDb.sql"));
+        var schema = await File.ReadAllTextAsync(schemaPath);
+        connection.InitialCatalog = "master";
+        await using (var master = new SqlConnection(connection.ConnectionString))
+        {
+            await master.OpenAsync();
+            await using var create = new SqlCommand($"CREATE DATABASE [{databaseName}]", master);
+            await create.ExecuteNonQueryAsync();
+        }
+
+        await using var restaurant = new SqlConnection(_restaurantConnection);
+        await restaurant.OpenAsync();
+        foreach (var batch in Regex.Split(schema, @"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(batch))
+            {
+                continue;
+            }
+
+            await using var command = new SqlCommand(batch, restaurant);
+            await command.ExecuteNonQueryAsync();
+        }
     }
 
     [SqlServerFact]
