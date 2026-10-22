@@ -3,6 +3,37 @@ using Grpc.Core;
 using ApiGateway.Settings;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.StockLotGrpc.StockLotGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]!);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.StockIssueGrpc.StockIssueGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]!);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.UnitGrpc.UnitGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]!);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.IngredientUnitGrpc.IngredientUnitGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]!);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.IngredientGrpc.IngredientGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Inventory."));
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.GoodsReceiptGrpc.GoodsReceiptGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Inventory."));
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.StockMovementGrpc.StockMovementGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Inventory."));
+});
 builder.Services.AddOptions<OrderingClientSettings>().Bind(builder.Configuration.GetSection("OrderingClient"))
     .Validate(settings => settings.TimeoutSeconds is > 0 and <= 120, "OrderingClient timeout must be 1-120 seconds.")
     .ValidateOnStart();
