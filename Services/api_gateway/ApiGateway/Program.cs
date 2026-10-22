@@ -182,6 +182,16 @@ builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.GuestAccessGrpc.Gues
     options.Address = new Uri(restaurantAddress);
 });
 
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.ReservationGrpc.ReservationGrpcClient>(options =>
+{
+    options.Address = new Uri(restaurantAddress);
+});
+
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantStaffGrpc.RestaurantStaffGrpcClient>(options =>
+{
+    options.Address = new Uri(restaurantAddress);
+});
+
 var app = builder.Build();
 
 

@@ -125,6 +125,12 @@ public sealed class TableRepository(RestaurantDbContext db) : GenericRepository<
         return _context.SessionTables.AnyAsync(x => x.TableId == id && x.TableSession.ClosedAt == null, ct);
     }
 
+    public async Task<IReadOnlyList<TableEntity>> GetForReservationAreaAsync(Guid areaId, CancellationToken ct)
+    {
+        return await GetAll().AsNoTracking().Where(table => table.AreaId == areaId)
+            .OrderBy(table => table.TableCode).ThenBy(table => table.TableId).ToListAsync(ct);
+    }
+
     public Task<bool> HasHistoryAsync(Guid id, CancellationToken ct)
     {
         return _context.Tables.AnyAsync(x => x.TableId == id

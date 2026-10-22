@@ -15,5 +15,6 @@
     <ProjectReference Include="../../Services/api_gateway/ApiGateway/ApiGateway.csproj" />
     <ProjectReference Include="../../Services/restaurant_service/Restaurant.API/Restaurant.API.csproj" Aliases="restaurantapi" />
     <ProjectReference Include="../../Services/restaurant_service/Restaurant.BLL/Restaurant.BLL.csproj" />
+    <ProjectReference Include="../../Services/identity_service/Identity.API/Identity.API.csproj" Aliases="identityapi" />
   </ItemGroup>
 </Project>

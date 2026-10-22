@@ -19,4 +19,6 @@ public interface ITableRepository : IGenericRepository<global::Restaurant.DAL.Mo
 
     Task<bool> HasHistoryAsync(Guid id, CancellationToken ct);
 
+    Task<IReadOnlyList<TableEntity>> GetForReservationAreaAsync(Guid areaId, CancellationToken ct);
+
 }
