@@ -11,13 +11,15 @@ public sealed class RecipeFlowTests
     [Fact]
     public async Task CreateRecipe_ValidRequest_Returns201CreatedAndCalculatesSnapshot()
     {
-        using var app = await ItemTestApplication.Create();
+        var inventory = new TestInventoryLookup();
+        using var app = await ItemTestApplication.Create(inventoryLookup: inventory);
         var itemId = await OptionTestData.Item(app, "Beef Noodle");
 
         var ing1 = Guid.NewGuid();
         var unit1 = Guid.NewGuid();
         var ing2 = Guid.NewGuid();
         var unit2 = Guid.NewGuid();
+        inventory.Factors[(ing2, unit2)] = 0.001m;
 
         var response = await app.Client.PostAsJsonAsync($"/api/items/{itemId}/recipes", new
         {

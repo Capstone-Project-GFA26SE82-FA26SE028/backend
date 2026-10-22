@@ -66,4 +66,4 @@ docker compose logs --tail 100 gateway identity restaurant catalog ordering
 - Swagger lên nhưng API chưa đáp ứng ngay: chờ service hoàn tất startup và kiểm tra logs.
 - Các service Restaurant/Catalog/Ordering/Customer/Inventory/Billing có `/health/ready` trên cổng HTTP/2 nội bộ. Readiness chỉ kiểm tra kết nối DB.
 
-Customer, Inventory và Billing hiện có nền tảng persistence/health; Docker chạy được các service không có nghĩa tất cả API nghiệp vụ đã được triển khai.
+Inventory có API nguyên liệu, nhập kho và lịch sử tồn; xem [hướng dẫn Inventory](inventory.md). Customer và Billing hiện có nền tảng persistence/health; Docker chạy được các service không có nghĩa tất cả API nghiệp vụ đã được triển khai.
