@@ -1,3 +1,4 @@
+using System.Data.SqlTypes;
 using Catalog.DAL.Interfaces;
 using Catalog.DAL.Models;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +7,27 @@ namespace Catalog.DAL.Implements;
 
 public sealed class RecipeRepository(CatalogDbContext context) : IRecipeRepository
 {
+    public DateTime NormalizeTimestamp(DateTime utc)
+    {
+        return DateTime.SpecifyKind(new SqlDateTime(utc).Value, DateTimeKind.Utc);
+    }
+
+    public Task<DateTime?> GetLatestEffectiveFromAsync(Guid? itemId, Guid? optionId, CancellationToken cancellationToken)
+    {
+        return context.RecipeVersions.Where(version => version.ItemId == itemId && version.OptionId == optionId)
+            .Select(version => (DateTime?)version.EffectiveFrom).MaxAsync(cancellationToken);
+    }
+
+    public Task<List<RecipeVersion>> GetActiveForOrderAsync(Guid[] itemIds, Guid[] optionIds, DateTime at,
+        CancellationToken cancellationToken)
+    {
+        return context.RecipeVersions.AsNoTracking()
+            .Where(version => ((version.ItemId.HasValue && itemIds.Contains(version.ItemId.Value))
+                    || (version.OptionId.HasValue && optionIds.Contains(version.OptionId.Value)))
+                && version.EffectiveFrom <= at && (!version.EffectiveTo.HasValue || at < version.EffectiveTo))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<RecipeVersion?> GetActiveForItemAsync(
         Guid itemId,
         DateTime at,

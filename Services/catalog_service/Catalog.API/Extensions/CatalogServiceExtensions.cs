@@ -14,6 +14,17 @@ public static class CatalogServiceExtensions
         IConfiguration configuration)
     {
         services.AddHttpContextAccessor();
+        services.AddGrpcClient<Backend.Contracts.Inventory.IngredientUnitGrpc.IngredientUnitGrpcClient>(options =>
+        {
+            options.Address = new Uri(configuration["GrpcServices:Inventory"]
+                ?? throw new InvalidOperationException("Configure GrpcServices:Inventory."));
+        });
+        services.AddScoped<IInventoryRecipeLookup, InventoryRecipeLookup>();
+        services.AddGrpcClient<Backend.Contracts.Ordering.KitchenStationGrpc.KitchenStationGrpcClient>(options =>
+        {
+            options.Address = new Uri(configuration["GrpcServices:Ordering"] ?? "https://localhost:5004");
+        });
+        services.AddScoped<IKitchenStationLookup, OrderingKitchenStationLookup>();
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.Configure<PricingSettings>(configuration.GetSection("Pricing"));
         services.AddOptions<ItemManagementSettings>()
@@ -73,6 +84,7 @@ public static class CatalogServiceExtensions
         });
         services.AddScoped<IMenuAccess, MenuAccess>();
         services.AddScoped<IMenuService, MenuService>();
+        services.AddScoped<IOrderValidationService, OrderValidationService>();
         services.AddScoped<ICatalogAccess, IdentityCatalogAccess>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IItemService, ItemService>();

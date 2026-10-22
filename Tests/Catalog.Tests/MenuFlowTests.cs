@@ -260,6 +260,7 @@ public sealed class MenuFlowTests
         }
 
         await db.SaveChangesAsync();
+        await app.AddRecipe(item.ItemId);
         return item.ItemId;
     }
 

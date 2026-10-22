@@ -20,10 +20,45 @@ public sealed class ItemService(
     IOptions<ItemManagementSettings> settings,
     IOptions<CatalogManagementSettings> catalogSettings,
     IPriceRepository prices,
+    IRecipeRepository recipes,
     IOptions<PricingSettings> pricingSettings,
     TimeProvider timeProvider,
+    IKitchenStationLookup kitchenStations,
     ILogger<ItemService> logger) : IItemService
 {
+    public async Task<ResponseDTO> SetKitchenStation(Guid id, SetItemKitchenStationDTO request, CancellationToken cancellationToken)
+    {
+        await access.RequireMenuManagerAsync(cancellationToken);
+        if (id == Guid.Empty || request.KitchenStationId == Guid.Empty
+            || !TryParseVersion(request.Version, out var version))
+        {
+            return new ResponseDTO("Valid item, station ID and rowversion are required.", 400);
+        }
+        return await WriteAsync(async () =>
+        {
+            var item = await items.GetByIdAsync(id, cancellationToken);
+            if (item is null)
+            {
+                return (new ResponseDTO("Item not found.", 404), (Item?)null);
+            }
+            if (!item.Version.SequenceEqual(version))
+            {
+                return (ConcurrentUpdate(), (Item?)null);
+            }
+            if (request.KitchenStationId.HasValue)
+            {
+                var error = await kitchenStations.ValidateAsync(request.KitchenStationId.Value, cancellationToken);
+                if (error is not null)
+                {
+                    return (error, (Item?)null);
+                }
+            }
+            items.SetOriginalVersion(item, version);
+            item.KitchenStationRef = request.KitchenStationId;
+            return (new ResponseDTO("Item kitchen station updated.", 200, true), item);
+        }, cancellationToken);
+    }
+
     public async Task<ResponseDTO> GetAll(ItemQueryDTO query, CancellationToken cancellationToken)
     {
         await access.RequireMenuStaffAsync(cancellationToken);
@@ -247,6 +282,12 @@ public sealed class ItemService(
                 }
 
                 var now = prices.NormalizeTimestamp(timeProvider.GetUtcNow().UtcDateTime);
+                var activeRecipes = await recipes.GetActiveForOrderAsync([id], [], now, cancellationToken);
+                if (activeRecipes.Count != 1)
+                {
+                    return (new ResponseDTO("An item can only be opened for sale with exactly one currently active recipe.", 409), null);
+                }
+
                 var standardPrices = (await prices.GetForItemAsync(id, cancellationToken))
                     .Where(price => price.Channel == allChannels
                         && !price.DailyStart.HasValue && !price.DailyEnd.HasValue
@@ -386,6 +427,7 @@ public sealed class ItemService(
             Description = item.Description,
             ImageUrl = item.ImageUrl,
             Availability = item.Availability,
+            KitchenStationId = item.KitchenStationRef,
             Version = Convert.ToBase64String(item.Version)
         };
     }

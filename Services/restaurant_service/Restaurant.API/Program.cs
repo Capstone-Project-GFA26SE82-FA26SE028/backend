@@ -8,13 +8,12 @@ builder.Services.AddGrpc(options =>
     options.Interceptors.Add<Restaurant.API.Management.ManagementInterceptor>();
 });
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
-builder.Services.Configure<Restaurant.Common.Settings.ReservationSettings>(builder.Configuration.GetSection("Reservations"));
-builder.Services.AddScoped<Restaurant.BLL.Interfaces.IStaffIdentity, Restaurant.API.Management.IdentityStaffAccess>();
-builder.Services.AddScoped<Restaurant.BLL.Interfaces.IReservationAccess, Restaurant.BLL.Implements.ReservationAccess>();
-builder.Services.AddScoped<Restaurant.BLL.Interfaces.IReservationService, Restaurant.BLL.Implements.ReservationService>();
-builder.Services.AddScoped<Restaurant.BLL.Interfaces.IReservationExpirationService, Restaurant.BLL.Implements.ReservationExpirationService>();
-builder.Services.AddHostedService<Restaurant.API.Reservations.ReservationExpirationWorker>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableSessionOrderAccess, Restaurant.API.Management.IdentityTableSessionOrderAccess>();
+builder.Services.AddGrpcClient<Backend.Contracts.Identity.UserGrpc.UserGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Identity."));
+});
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IGuestAccessService, Restaurant.BLL.Implements.GuestAccessService>();
 builder.Services.AddOptions<Restaurant.Common.Settings.GuestAccessSettings>()
     .Bind(builder.Configuration.GetSection("GuestAccess"))
