@@ -39,6 +39,12 @@ builder.Services.AddGrpcClient<Backend.Contracts.Identity.AccessGrpc.AccessGrpcC
         ?? throw new InvalidOperationException("Configure GrpcServices:Identity."));
 });
 
+builder.Services.AddGrpcClient<Backend.Contracts.Identity.UserGrpc.UserGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Identity."));
+});
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
@@ -47,6 +53,8 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 builder.Services.AddRestaurantPersistence(connectionString);
 
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantStaffService, Restaurant.BLL.Implements.RestaurantStaffService>();
+
 var app = builder.Build();
 
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantGrpcService>();
@@ -54,6 +62,8 @@ app.MapGrpcService<Restaurant.API.GrpcServices.AreaGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.TableGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.QrGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.TableSessionGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.ReservationGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantStaffGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.GuestAccessGrpcService>();
 
 app.MapGet("/health/live", () =>
