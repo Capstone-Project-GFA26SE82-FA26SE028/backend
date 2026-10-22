@@ -5,6 +5,10 @@ for database in IdentityDb RestaurantDb OrderingDb InventoryDb CatalogDb Custome
     "${sqlcmd[@]}" -d master -Q "IF DB_ID(N'$database') IS NULL CREATE DATABASE [$database] COLLATE SQL_Latin1_General_CP1_CI_AS;"
     initialized=$("${sqlcmd[@]}" -d "$database" -h -1 -W -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.extended_properties WHERE class = 0 AND name = N'DockerBootstrapVersion';" | tr -d '[:space:]')
     if [[ "$initialized" == "1" ]]; then
+        if [[ "$database" == "InventoryDb" ]]; then
+            "${sqlcmd[@]}" -d "$database" -i /init/upgrades/InventoryUnits.sql
+            "${sqlcmd[@]}" -d "$database" -i /init/upgrades/InventoryFifo.sql
+        fi
         echo "$database already initialized; keeping existing data."
         continue
     fi
@@ -34,4 +38,8 @@ GO
     "${sqlcmd[@]}" -d "$database" -i "$script"
     rm "$script"
     echo "$database initialized."
+    if [[ "$database" == "InventoryDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/InventoryUnits.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/InventoryFifo.sql
+    fi
 done

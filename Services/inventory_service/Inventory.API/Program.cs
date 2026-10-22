@@ -3,7 +3,25 @@ using Inventory.DAL.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddGrpc();
+builder.Services.AddGrpc(options =>
+{
+    options.Interceptors.Add<Inventory.API.GrpcServices.InventoryInterceptor>();
+});
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddGrpcClient<Backend.Contracts.Identity.UserGrpc.UserGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Identity."));
+});
+builder.Services.AddScoped<Inventory.BLL.Interfaces.IInventoryAccess, Inventory.API.Clients.IdentityInventoryAccess>();
+builder.Services.AddScoped<Inventory.BLL.Services.IngredientService>();
+builder.Services.AddScoped<Inventory.BLL.Services.StockLotService>();
+builder.Services.AddScoped<Inventory.BLL.Services.StockIssueService>();
+builder.Services.AddScoped<Inventory.BLL.Services.UnitService>();
+builder.Services.AddScoped<Inventory.BLL.Services.IngredientUnitService>();
+builder.Services.AddScoped<Inventory.BLL.Services.GoodsReceiptService>();
+builder.Services.AddScoped<Inventory.BLL.Services.StockMovementService>();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -14,6 +32,14 @@ if (string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddInventoryPersistence(connectionString);
 
 var app = builder.Build();
+
+app.MapGrpcService<Inventory.API.GrpcServices.IngredientGrpcService>();
+app.MapGrpcService<Inventory.API.GrpcServices.StockLotGrpcService>();
+app.MapGrpcService<Inventory.API.GrpcServices.StockIssueGrpcService>();
+app.MapGrpcService<Inventory.API.GrpcServices.UnitGrpcService>();
+app.MapGrpcService<Inventory.API.GrpcServices.IngredientUnitGrpcService>();
+app.MapGrpcService<Inventory.API.GrpcServices.GoodsReceiptGrpcService>();
+app.MapGrpcService<Inventory.API.GrpcServices.StockMovementGrpcService>();
 
 app.MapGet("/health/live", () =>
 {
