@@ -14,7 +14,8 @@ public sealed class RecipeService(
     IOptionRepository options,
     ICatalogAccess access,
     IRecipeTransaction transaction,
-    ILogger<RecipeService> logger) : IRecipeService
+    ILogger<RecipeService> logger,
+    IInventoryRecipeLookup inventory) : IRecipeService
 {
     public async Task<ResponseDTO> CreateItemRecipe(
         Guid itemId,
@@ -38,6 +39,12 @@ public sealed class RecipeService(
         if (item is null)
         {
             return new ResponseDTO("Item not found.", 404);
+        }
+
+        var inventoryError = await ResolveIngredients(request, cancellationToken);
+        if (inventoryError is not null)
+        {
+            return inventoryError;
         }
 
         var effectiveFrom = recipes.NormalizeTimestamp(request.EffectiveFrom ?? DateTime.UtcNow);
@@ -151,6 +158,12 @@ public sealed class RecipeService(
         if (option is null)
         {
             return new ResponseDTO("Option not found.", 404);
+        }
+
+        var inventoryError = await ResolveIngredients(request, cancellationToken);
+        if (inventoryError is not null)
+        {
+            return inventoryError;
         }
 
         var effectiveFrom = recipes.NormalizeTimestamp(request.EffectiveFrom ?? DateTime.UtcNow);
@@ -283,6 +296,35 @@ public sealed class RecipeService(
         }
     }
 
+    private async Task<ResponseDTO?> ResolveIngredients(CreateRecipeVersionDTO request, CancellationToken ct)
+    {
+        foreach (var ingredient in request.Ingredients)
+        {
+            var (factor, error) = await inventory.ResolveAsync(ingredient.IngredientRef, ingredient.UnitRef, ct);
+            if (error is not null)
+            {
+                return error;
+            }
+            decimal quantity;
+            try
+            {
+                quantity = checked(ingredient.Quantity * factor);
+            }
+            catch (OverflowException)
+            {
+                return new ResponseDTO("Converted recipe quantity exceeds the supported range.", 400);
+            }
+            if (factor <= 0 || factor > 999999999999.999999m || decimal.Round(factor, 6) != factor
+                || quantity <= 0 || quantity > 999999999999.999999m || decimal.Round(quantity, 6) != quantity
+                || ingredient.Quantity > 999999999999.999999m || decimal.Round(ingredient.Quantity, 6) != ingredient.Quantity)
+            {
+                return new ResponseDTO("Recipe quantity must fit decimal(18,6) without rounding.", 400);
+            }
+            ingredient.ConversionFactor = factor;
+        }
+        return null;
+    }
+
     private static ResponseDTO? ValidateRecipe(CreateRecipeVersionDTO request)
     {
         if (request is null)
@@ -298,7 +340,7 @@ public sealed class RecipeService(
             return new ResponseDTO("EffectiveFrom must be a UTC timestamp within the SQL datetime range.", 400);
         }
 
-        if (request.Ingredients is null || request.Ingredients.Count == 0)
+        if (request.Ingredients is null || request.Ingredients.Count is < 1 or > 100)
         {
             return new ResponseDTO("Recipe must have at least one ingredient.", 400);
         }
@@ -306,7 +348,7 @@ public sealed class RecipeService(
         var ingredientRefs = new HashSet<Guid>();
         foreach (var ingredient in request.Ingredients)
         {
-            if (ingredient.IngredientRef == Guid.Empty || ingredient.UnitRef == Guid.Empty)
+            if (ingredient is null || ingredient.IngredientRef == Guid.Empty || ingredient.UnitRef == Guid.Empty)
             {
                 return new ResponseDTO("Invalid ingredient reference or unit reference.", 400);
             }

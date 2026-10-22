@@ -49,7 +49,7 @@ internal sealed class ItemTestApplication : IDisposable
 
     public static DateTimeOffset Now { get; } = new(2030, 1, 15, 8, 0, 0, TimeSpan.Zero);
 
-    public static async Task<ItemTestApplication> Create(string initialAvailability = "Inactive", IKitchenStationLookup? stationLookup = null)
+    public static async Task<ItemTestApplication> Create(string initialAvailability = "Inactive", IKitchenStationLookup? stationLookup = null, IInventoryRecipeLookup? inventoryLookup = null)
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -73,6 +73,7 @@ internal sealed class ItemTestApplication : IDisposable
                 services.AddRouting();
                 services.AddGrpc();
                 services.AddCatalogManagement(configuration);
+                services.AddSingleton<IInventoryRecipeLookup>(inventoryLookup ?? new TestInventoryLookup());
                 if (stationLookup is not null)
                 {
                     services.AddSingleton<IKitchenStationLookup>(stationLookup);
