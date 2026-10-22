@@ -23,6 +23,8 @@ SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[Reservation](
 	[ReservationId] [uniqueidentifier] NOT NULL,
+	[RestaurantId] [uniqueidentifier] NOT NULL,
+	[RequestedAreaId] [uniqueidentifier] NOT NULL,
 	[ContactName] [varchar](255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[Phone] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[PartySize] [int] NOT NULL,
@@ -31,6 +33,9 @@ CREATE TABLE [dbo].[Reservation](
 	[HoldUntil] [datetime] NULL,
 	[Status] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[ApprovedByRef] [uniqueidentifier] NULL,
+	[ConfirmedAt] [datetime] NULL,
+	[CancelledAt] [datetime] NULL,
+	[CancelledByRef] [uniqueidentifier] NULL,
  CONSTRAINT [PK_Reservation] PRIMARY KEY CLUSTERED 
 (
 	[ReservationId] ASC
@@ -268,4 +273,26 @@ ALTER TABLE [dbo].[Qr]  WITH CHECK ADD  CONSTRAINT [FK_Qr_Table] FOREIGN KEY([Ta
 REFERENCES [dbo].[Table] ([TableId])
 GO
 ALTER TABLE [dbo].[Qr] CHECK CONSTRAINT [FK_Qr_Table]
+GO
+CREATE TABLE [dbo].[RestaurantStaff]
+(
+    [RestaurantId] uniqueidentifier NOT NULL,
+    [UserIdRef] uniqueidentifier NOT NULL,
+    [IsActive] bit NOT NULL,
+    CONSTRAINT [PK_RestaurantStaff] PRIMARY KEY ([RestaurantId], [UserIdRef]),
+    CONSTRAINT [FK_RestaurantStaff_Restaurant] FOREIGN KEY ([RestaurantId])
+        REFERENCES [dbo].[Restaurant] ([RestaurantId])
+);
+GO
+ALTER TABLE [dbo].[Reservation] WITH CHECK ADD CONSTRAINT [FK_Reservation_Restaurant]
+    FOREIGN KEY ([RestaurantId]) REFERENCES [dbo].[Restaurant] ([RestaurantId]);
+GO
+ALTER TABLE [dbo].[Reservation] WITH CHECK ADD CONSTRAINT [FK_Reservation_RequestedArea]
+    FOREIGN KEY ([RequestedAreaId]) REFERENCES [dbo].[Area] ([AreaId]);
+GO
+CREATE INDEX [IX_Reservation_RestaurantId_Status_StartAt]
+    ON [dbo].[Reservation] ([RestaurantId], [Status], [StartAt]);
+GO
+CREATE INDEX [IX_Reservation_RequestedAreaId]
+    ON [dbo].[Reservation] ([RequestedAreaId]);
 GO

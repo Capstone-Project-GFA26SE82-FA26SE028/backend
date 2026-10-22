@@ -160,3 +160,141 @@ message OrderSessionReply {
   optional string guest_access_id = 4;
   optional string expires_at = 5;
 }
+
+
+service ReservationGrpc {
+  rpc Reject(ReservationIdRequest) returns (ReservationInfo);
+  rpc Confirm(ConfirmReservationRequest) returns (ReservationInfo);
+  rpc CheckIn(ReservationIdRequest) returns (ReservationInfo);
+  rpc Cancel(ReservationIdRequest) returns (ReservationInfo);
+  rpc Update(UpdateReservationRequest) returns (ReservationInfo);
+  rpc Create(CreateReservationRequest) returns (ReservationInfo);
+  rpc GetAll(ReservationListRequest) returns (ReservationPage);
+  rpc GetById(ReservationIdRequest) returns (ReservationInfo);
+  rpc GetAvailability(ReservationAvailabilityRequest) returns (ReservationAvailabilityReply);
+}
+
+message CreateReservationRequest {
+  string restaurant_id = 1;
+  string requested_area_id = 2;
+  string contact_name = 3;
+  string phone = 4;
+  int32 party_size = 5;
+  string start_at = 6;
+}
+
+message ReservationIdRequest {
+  string reservation_id = 1;
+}
+
+message ReservationListRequest {
+  optional string assigned_restaurant_id = 1;
+  optional string assigned_area_id = 2;
+  bool unassigned_only = 3;
+  optional string status = 4;
+  optional string from = 5;
+  optional string to = 6;
+  int32 page = 7;
+  int32 page_size = 8;
+  optional string restaurant_id = 9;
+  optional string requested_area_id = 10;
+}
+
+message ReservationInfo {
+  string reservation_id = 1;
+  string contact_name = 2;
+  string phone = 3;
+  int32 party_size = 4;
+  string start_at = 5;
+  string end_at = 6;
+  optional string hold_until = 7;
+  string status = 8;
+  optional string approved_by_ref = 9;
+  optional string assigned_restaurant_id = 10;
+  optional string assigned_area_id = 11;
+  bool has_consistent_assignment = 12;
+  optional string table_session_id = 13;
+  repeated string assigned_table_ids = 14;
+  string restaurant_id = 15;
+  string requested_area_id = 16;
+  optional string confirmed_at = 17;
+  optional string cancelled_at = 18;
+  optional string cancelled_by_ref = 19;
+}
+
+message ReservationPage {
+  repeated ReservationInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ReservationAvailabilityRequest {
+  string restaurant_id = 1;
+  string area_id = 2;
+  int32 party_size = 3;
+  string start_at = 4;
+}
+
+message ReservationTableAvailabilityInfo {
+  string table_id = 1;
+  string table_code = 2;
+  int32 capacity = 3;
+  string cleaning_status = 4;
+  bool is_schedule_available = 5;
+  repeated string reasons = 6;
+}
+
+message ReservationAvailabilityReply {
+  string restaurant_id = 1;
+  string area_id = 2;
+  int32 party_size = 3;
+  string evaluated_at = 4;
+  string start_at = 5;
+  string end_at = 6;
+  string hold_starts_at = 7;
+  string hold_until = 8;
+  string blocked_until = 9;
+  int32 available_capacity = 10;
+  bool has_enough_capacity = 11;
+  bool requires_staff_layout_review = 12;
+  repeated string reasons = 13;
+  repeated ReservationTableAvailabilityInfo tables = 14;
+}
+
+
+message ConfirmReservationRequest {
+  string reservation_id = 1;
+  repeated string table_ids = 2;
+}
+
+message UpdateReservationRequest {
+  string reservation_id = 1;
+  string start_at = 2;
+  repeated string table_ids = 3;
+}
+
+service RestaurantStaffGrpc {
+  rpc Create(RestaurantStaffRequest) returns (RestaurantStaffInfo);
+  rpc GetAll(RestaurantStaffListRequest) returns (RestaurantStaffListReply);
+  rpc Delete(RestaurantStaffRequest) returns (RestaurantStaffInfo);
+}
+
+message RestaurantStaffRequest {
+  string restaurant_id = 1;
+  string user_id_ref = 2;
+}
+
+message RestaurantStaffListRequest {
+  string restaurant_id = 1;
+}
+
+message RestaurantStaffInfo {
+  string restaurant_id = 1;
+  string user_id_ref = 2;
+  bool is_active = 3;
+}
+
+message RestaurantStaffListReply {
+  repeated RestaurantStaffInfo items = 1;
+}

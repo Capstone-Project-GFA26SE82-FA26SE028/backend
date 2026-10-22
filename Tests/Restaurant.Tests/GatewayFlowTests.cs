@@ -44,6 +44,7 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Qr:MenuBaseUrl"] = "https://menu.example.test/menu",
+                    ["Reservations:ExpirationEnabled"] = "false",
                     ["Qr:ImageDirectory"] = _qrDirectory
                 });
             });
@@ -51,8 +52,11 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
             {
                 services.RemoveAll<RestaurantDbContext>();
                 services.AddScoped<RestaurantDbContext>(_ => new TestDb(_connection));
+                services.AddSingleton<TimeProvider>(_reservationClock);
                 services.RemoveAll<IManagementAccess>();
                 services.AddScoped<IManagementAccess, TestAccess>();
+                services.RemoveAll<IStaffIdentity>();
+                services.AddScoped<IStaffIdentity, TestStaffIdentity>();
                 services.RemoveAll<restaurantapi::Backend.Contracts.Identity.UserGrpc.UserGrpcClient>();
                 services.AddSingleton<restaurantapi::Backend.Contracts.Identity.UserGrpc.UserGrpcClient, WaiterIdentityClient>();
             });
@@ -79,12 +83,29 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
                 services.AddGrpcClient<GuestAccessGrpc.GuestAccessGrpcClient>()
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
+                services.AddGrpcClient<RestaurantStaffGrpc.RestaurantStaffGrpcClient>()
+                    .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
+                services.AddGrpcClient<ReservationGrpc.ReservationGrpcClient>()
+                    .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
                 services.AddGrpcClient<TableSessionGrpc.TableSessionGrpcClient>()
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
             });
         });
         _http = _gateway.CreateClient();
         _http.DefaultRequestHeaders.Authorization = new("Bearer", "admin");
+    }
+
+    [Fact]
+    public void ReservationExpirationWorkerUsesTheBoundConfiguration()
+    {
+        var workers = _restaurant.Services.GetServices<Microsoft.Extensions.Hosting.IHostedService>();
+        Assert.Single(workers.OfType<restaurantapi::Restaurant.API.Reservations.ReservationExpirationWorker>());
+        var settings = _restaurant.Services
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<Restaurant.Common.Settings.ReservationSettings>>().Value;
+        Assert.False(settings.ExpirationEnabled);
+        Assert.Equal(120, settings.DefaultDurationMinutes);
+        Assert.Equal(30, settings.HoldBeforeMinutes);
+        Assert.Equal(30, settings.HoldAfterMinutes);
     }
 
     [Fact]
@@ -329,6 +350,34 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
             }
 
             Directory.Delete(_qrDirectory);
+        }
+    }
+
+    private sealed class TestStaffIdentity(IHttpContextAccessor accessor) : IStaffIdentity
+    {
+        public Task<Restaurant.Common.DTOs.StaffActorDto> GetUserAsync(Guid userId, CancellationToken ct)
+        {
+            return Task.FromResult(new Restaurant.Common.DTOs.StaffActorDto
+            {
+                UserId = userId,
+                RoleId = "waiter"
+            });
+        }
+
+        public Task<Restaurant.Common.DTOs.StaffActorDto> GetCurrentAsync(CancellationToken ct)
+        {
+            var token = accessor.HttpContext!.Request.Headers.Authorization.ToString();
+            if (token is "" or "Bearer revoked")
+            {
+                throw new ManagementException(401, "Invalid session.");
+            }
+
+            return Task.FromResult(new Restaurant.Common.DTOs.StaffActorDto
+            {
+                UserId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                RoleId = token.Replace("Bearer ", string.Empty),
+                IsAdministrator = token == "Bearer admin"
+            });
         }
     }
 
