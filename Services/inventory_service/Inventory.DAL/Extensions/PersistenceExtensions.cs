@@ -18,6 +18,17 @@ public static class PersistenceExtensions
             options.UseSqlServer(connectionString);
         });
         services.AddScoped<IUnitOfWork, UnitOfWork<InventoryDbContext>>();
+        services.AddScoped<IGenericRepository<StockIssue>, GenericRepository<StockIssue, InventoryDbContext>>();
+        services.AddScoped<Repositories.StockIssueRepository>();
+        services.AddScoped<Repositories.StockLotRepository>();
+        services.AddScoped<IGenericRepository<Unit>, GenericRepository<Unit, InventoryDbContext>>();
+        services.AddScoped<IGenericRepository<IngredientUnit>, GenericRepository<IngredientUnit, InventoryDbContext>>();
+        services.AddScoped<InventoryTransaction>();
+        services.AddScoped<Repositories.UnitRepository>();
+        services.AddScoped<Repositories.IngredientUnitRepository>();
+        services.AddScoped<Repositories.IngredientRepository>();
+        services.AddScoped<Repositories.GoodsReceiptRepository>();
+        services.AddScoped<Repositories.StockMovementRepository>();
         services.AddScoped<IGenericRepository<global::Inventory.DAL.Models.GoodsReceipt>, GenericRepository<global::Inventory.DAL.Models.GoodsReceipt, InventoryDbContext>>();
         services.AddScoped<IGenericRepository<global::Inventory.DAL.Models.GoodsReceiptItem>, GenericRepository<global::Inventory.DAL.Models.GoodsReceiptItem, InventoryDbContext>>();
         services.AddScoped<IGenericRepository<global::Inventory.DAL.Models.Ingredient>, GenericRepository<global::Inventory.DAL.Models.Ingredient, InventoryDbContext>>();
