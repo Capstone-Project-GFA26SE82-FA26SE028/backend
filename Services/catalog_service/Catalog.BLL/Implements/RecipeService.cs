@@ -1,10 +1,10 @@
-using System.Data;
 using Catalog.BLL.Interfaces;
 using Catalog.Common.DTOs;
 using Catalog.DAL.Interfaces;
 using Catalog.DAL.Models;
 using Shared.Common.DTOs;
-using Shared.Persistence.Interfaces;
+using Catalog.Common.Exceptions;
+using Microsoft.Extensions.Logging;
 
 namespace Catalog.BLL.Implements;
 
@@ -13,7 +13,9 @@ public sealed class RecipeService(
     IItemRepository items,
     IOptionRepository options,
     ICatalogAccess access,
-    IUnitOfWork unitOfWork) : IRecipeService
+    IRecipeTransaction transaction,
+    ILogger<RecipeService> logger,
+    IInventoryRecipeLookup inventory) : IRecipeService
 {
     public async Task<ResponseDTO> CreateItemRecipe(
         Guid itemId,
@@ -39,10 +41,22 @@ public sealed class RecipeService(
             return new ResponseDTO("Item not found.", 404);
         }
 
-        var effectiveFrom = request.EffectiveFrom ?? DateTime.UtcNow;
-
-        return await unitOfWork.ExecuteInTransactionAsync(async () =>
+        var inventoryError = await ResolveIngredients(request, cancellationToken);
+        if (inventoryError is not null)
         {
+            return inventoryError;
+        }
+
+        var effectiveFrom = recipes.NormalizeTimestamp(request.EffectiveFrom ?? DateTime.UtcNow);
+
+        return await WriteAsync(async () =>
+        {
+            var latest = await recipes.GetLatestEffectiveFromAsync(itemId, null, cancellationToken);
+            if (latest.HasValue && effectiveFrom <= latest.Value)
+            {
+                return new ResponseDTO("A new recipe must start after the latest scheduled version. Equal or earlier start times are not allowed.", 409);
+            }
+
             await recipes.CloseActiveVersionForItemAsync(itemId, effectiveFrom, cancellationToken);
 
             var nextVersion = await recipes.GetNextVersionNumberForItemAsync(itemId, cancellationToken);
@@ -63,7 +77,7 @@ public sealed class RecipeService(
             await recipes.AddAsync(entity, cancellationToken);
 
             return new ResponseDTO("Recipe created successfully.", 201, true, Map(entity));
-        }, IsolationLevel.Serializable, cancellationToken);
+        }, cancellationToken);
     }
 
     public async Task<ResponseDTO> GetActiveItemRecipe(
@@ -82,6 +96,11 @@ public sealed class RecipeService(
         if (item is null)
         {
             return new ResponseDTO("Item not found.", 404);
+        }
+
+        if (at.HasValue)
+        {
+            await access.RequireMenuManagerAsync(cancellationToken);
         }
 
         var queryTime = at ?? DateTime.UtcNow;
@@ -141,10 +160,22 @@ public sealed class RecipeService(
             return new ResponseDTO("Option not found.", 404);
         }
 
-        var effectiveFrom = request.EffectiveFrom ?? DateTime.UtcNow;
-
-        return await unitOfWork.ExecuteInTransactionAsync(async () =>
+        var inventoryError = await ResolveIngredients(request, cancellationToken);
+        if (inventoryError is not null)
         {
+            return inventoryError;
+        }
+
+        var effectiveFrom = recipes.NormalizeTimestamp(request.EffectiveFrom ?? DateTime.UtcNow);
+
+        return await WriteAsync(async () =>
+        {
+            var latest = await recipes.GetLatestEffectiveFromAsync(null, optionId, cancellationToken);
+            if (latest.HasValue && effectiveFrom <= latest.Value)
+            {
+                return new ResponseDTO("A new recipe must start after the latest scheduled version. Equal or earlier start times are not allowed.", 409);
+            }
+
             await recipes.CloseActiveVersionForOptionAsync(optionId, effectiveFrom, cancellationToken);
 
             var nextVersion = await recipes.GetNextVersionNumberForOptionAsync(optionId, cancellationToken);
@@ -165,7 +196,7 @@ public sealed class RecipeService(
             await recipes.AddAsync(entity, cancellationToken);
 
             return new ResponseDTO("Recipe created successfully.", 201, true, Map(entity));
-        }, IsolationLevel.Serializable, cancellationToken);
+        }, cancellationToken);
     }
 
     public async Task<ResponseDTO> GetActiveOptionRecipe(
@@ -184,6 +215,11 @@ public sealed class RecipeService(
         if (option is null)
         {
             return new ResponseDTO("Option not found.", 404);
+        }
+
+        if (at.HasValue)
+        {
+            await access.RequireMenuManagerAsync(cancellationToken);
         }
 
         var queryTime = at ?? DateTime.UtcNow;
@@ -236,7 +272,57 @@ public sealed class RecipeService(
             return new ResponseDTO("Recipe not found.", 404);
         }
 
+        var now = DateTime.UtcNow;
+        if (entity.EffectiveFrom > now || (entity.EffectiveTo.HasValue && now >= entity.EffectiveTo.Value))
+        {
+            await access.RequireMenuManagerAsync(cancellationToken);
+        }
+
         return new ResponseDTO("Recipe retrieved successfully.", 200, true, Map(entity));
+    }
+
+    private async Task<ResponseDTO> WriteAsync(Func<Task<ResponseDTO>> action, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await transaction.ExecuteAsync(action, cancellationToken);
+        }
+        catch (RecipePersistenceException exception)
+        {
+            logger.LogWarning(exception, "Recipe version could not be persisted.");
+            return exception.IsConflict
+                ? new ResponseDTO("Recipe data changed concurrently. Reload and try again.", 409)
+                : new ResponseDTO("The recipe data store is unavailable.", 503);
+        }
+    }
+
+    private async Task<ResponseDTO?> ResolveIngredients(CreateRecipeVersionDTO request, CancellationToken ct)
+    {
+        foreach (var ingredient in request.Ingredients)
+        {
+            var (factor, error) = await inventory.ResolveAsync(ingredient.IngredientRef, ingredient.UnitRef, ct);
+            if (error is not null)
+            {
+                return error;
+            }
+            decimal quantity;
+            try
+            {
+                quantity = checked(ingredient.Quantity * factor);
+            }
+            catch (OverflowException)
+            {
+                return new ResponseDTO("Converted recipe quantity exceeds the supported range.", 400);
+            }
+            if (factor <= 0 || factor > 999999999999.999999m || decimal.Round(factor, 6) != factor
+                || quantity <= 0 || quantity > 999999999999.999999m || decimal.Round(quantity, 6) != quantity
+                || ingredient.Quantity > 999999999999.999999m || decimal.Round(ingredient.Quantity, 6) != ingredient.Quantity)
+            {
+                return new ResponseDTO("Recipe quantity must fit decimal(18,6) without rounding.", 400);
+            }
+            ingredient.ConversionFactor = factor;
+        }
+        return null;
     }
 
     private static ResponseDTO? ValidateRecipe(CreateRecipeVersionDTO request)
@@ -246,7 +332,15 @@ public sealed class RecipeService(
             return new ResponseDTO("Recipe request cannot be empty.", 400);
         }
 
-        if (request.Ingredients is null || request.Ingredients.Count == 0)
+        if (request.EffectiveFrom.HasValue
+            && (request.EffectiveFrom.Value.Kind != DateTimeKind.Utc
+                || request.EffectiveFrom.Value < new DateTime(1753, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+                || request.EffectiveFrom.Value > new DateTime(9999, 12, 31, 23, 59, 59, 997, DateTimeKind.Utc)))
+        {
+            return new ResponseDTO("EffectiveFrom must be a UTC timestamp within the SQL datetime range.", 400);
+        }
+
+        if (request.Ingredients is null || request.Ingredients.Count is < 1 or > 100)
         {
             return new ResponseDTO("Recipe must have at least one ingredient.", 400);
         }
@@ -254,7 +348,7 @@ public sealed class RecipeService(
         var ingredientRefs = new HashSet<Guid>();
         foreach (var ingredient in request.Ingredients)
         {
-            if (ingredient.IngredientRef == Guid.Empty || ingredient.UnitRef == Guid.Empty)
+            if (ingredient is null || ingredient.IngredientRef == Guid.Empty || ingredient.UnitRef == Guid.Empty)
             {
                 return new ResponseDTO("Invalid ingredient reference or unit reference.", 400);
             }

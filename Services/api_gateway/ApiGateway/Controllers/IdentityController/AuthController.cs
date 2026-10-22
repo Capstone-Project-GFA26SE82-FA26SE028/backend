@@ -138,14 +138,14 @@ public sealed class AuthController(IdentityGrpc.IdentityGrpcClient client) : Con
         {
             var (status, message) = ex.StatusCode switch
             {
-                Grpc.Core.StatusCode.Unavailable => (503, "Identity service hiện không khả dụng."),
-                Grpc.Core.StatusCode.DeadlineExceeded => (504, "Identity service phản hồi quá thời gian."),
-                Grpc.Core.StatusCode.InvalidArgument => (400, "Thông tin đăng nhập không hợp lệ."),
-                Grpc.Core.StatusCode.Unauthenticated => (401, "Thông tin xác thực không hợp lệ."),
-                Grpc.Core.StatusCode.PermissionDenied => (403, "Không có quyền truy cập."),
+                Grpc.Core.StatusCode.Unavailable => (503, "The Identity service is currently unavailable."),
+                Grpc.Core.StatusCode.DeadlineExceeded => (504, "The Identity service timed out."),
+                Grpc.Core.StatusCode.InvalidArgument => (400, "Invalid sign-in information."),
+                Grpc.Core.StatusCode.Unauthenticated => (401, "Invalid credentials."),
+                Grpc.Core.StatusCode.PermissionDenied => (403, "Access denied."),
                 _ => (502, string.IsNullOrWhiteSpace(ex.Status.Detail)
-                    ? "Không thể xử lý phản hồi từ Identity service."
-                    : $"Identity service gặp lỗi: {ex.Status.Detail}")
+                    ? "Unable to process the response from the Identity service."
+                    : $"Identity service error: {ex.Status.Detail}")
             };
             return StatusCode(status, new ResponseDTO { StatusCode = status, Message = message, IsSuccess = false });
         }

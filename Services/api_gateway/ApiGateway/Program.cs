@@ -3,6 +3,55 @@ using Grpc.Core;
 using ApiGateway.Settings;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.StockLotGrpc.StockLotGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]!);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.StockIssueGrpc.StockIssueGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]!);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.UnitGrpc.UnitGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]!);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.IngredientUnitGrpc.IngredientUnitGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]!);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.IngredientGrpc.IngredientGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Inventory."));
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.GoodsReceiptGrpc.GoodsReceiptGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Inventory."));
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Inventory.StockMovementGrpc.StockMovementGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Inventory."));
+});
+builder.Services.AddOptions<OrderingClientSettings>().Bind(builder.Configuration.GetSection("OrderingClient"))
+    .Validate(settings => settings.TimeoutSeconds is > 0 and <= 120, "OrderingClient timeout must be 1-120 seconds.")
+    .ValidateOnStart();
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.CartGrpc.CartGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.OrderGrpc.OrderGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.KitchenStationGrpc.KitchenStationGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
+});
 builder.Services.AddOptions<CatalogClientSettings>()
     .Bind(builder.Configuration.GetSection("CatalogClient"))
     .Validate(settings => settings.TimeoutSeconds > 0,
@@ -18,6 +67,10 @@ if (!Uri.TryCreate(catalogAddress, UriKind.Absolute, out var catalogUri)
 }
 
 builder.Services.AddGrpcClient<Backend.Contracts.Catalog.CategoryGrpc.CategoryGrpcClient>(options =>
+{
+    options.Address = catalogUri;
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Catalog.OrderValidationGrpc.OrderValidationGrpcClient>(options =>
 {
     options.Address = catalogUri;
 });
@@ -83,7 +136,7 @@ builder.Services.AddSwaggerGen(options =>
 var identityAddress =
     builder.Configuration["GrpcServices:Identity"]
     ?? throw new InvalidOperationException(
-        "Thiếu cấu hình GrpcServices:Identity");
+        "GrpcServices:Identity is not configured.");
 
 builder.Services.AddGrpcClient<IdentityGrpc.IdentityGrpcClient>(
     options => options.Address = new Uri(identityAddress));
@@ -172,14 +225,14 @@ app.MapGet("/api/identity/ping", async (
     {
         return Results.Problem(
             statusCode: 503,
-            detail: "Identity service hiện không khả dụng.");
+            detail: "The Identity service is currently unavailable.");
     }
     catch (RpcException ex)
         when (ex.StatusCode == StatusCode.DeadlineExceeded)
     {
         return Results.Problem(
             statusCode: 504,
-            detail: "Identity service phản hồi quá thời gian.");
+            detail: "The Identity service timed out.");
     }
 });
 

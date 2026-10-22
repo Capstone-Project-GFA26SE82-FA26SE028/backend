@@ -35,7 +35,7 @@ fetch(`/api/menu?tableSessionId=${sessionId}`, {
 
 Gateway lấy token từ cookie tương ứng và chuyển đến Catalog. Catalog gọi `GuestAccessGrpc.GetMe` tại Restaurant để kiểm tra token, đúng phiên bàn, hết hạn/thu hồi và trạng thái phiên. Không lấy token từ query. Nếu truyền `tableSessionId`, API dùng quyền khách, không fallback sang Bearer token.
 
-**Waiter:** gửi `Authorization: Bearer <accessToken>`, không truyền `tableSessionId`. Catalog xác thực tài khoản/phiên qua Identity và kiểm tra role thuộc `CatalogManagement:MenuReaderRoleIds` hoặc `MenuManagerRoleIds`. Cấu hình mặc định cho phép waiter, manager, admin; không mở quyền cho mọi tài khoản đăng nhập.
+**Waiter:** gửi `Authorization: Bearer <accessToken>`, không truyền `tableSessionId`. Catalog xác thực tài khoản/phiên qua Identity và kiểm tra role thuộc `CatalogManagement:MenuReaderRoleIds` hoặc `MenuManagerRoleIds`. Cấu hình mặc định cho phép waiter, manager; không mở quyền cho mọi tài khoản đăng nhập.
 
 Các quyền quản trị món/giá/option giữ nguyên. Menu gRPC cũng thực hiện kiểm tra quyền, không chỉ Gateway.
 
@@ -49,7 +49,8 @@ Các quyền quản trị món/giá/option giữ nguyên. Menu gRPC cũng thực
 - Giá dùng giờ server và `Pricing:BusinessTimeZone`, cùng thứ tự ưu tiên với `GetAppliedPrice`: giá theo giờ đúng kênh → theo giờ mọi kênh → giá thường đúng kênh → giá thường mọi kênh.
 - Cần đúng một giá chuẩn hiện hành và đúng một giá ưu tiên cao nhất, không âm. Thiếu/xung đột giá: `price = null`, `priceId = null`, không cho đặt, lý do `PriceUnavailable`.
 - Nếu nhóm bắt buộc không có option nào chọn được, lý do là `RequiredOptionsUnavailable`.
-- `canOrder` là khả năng đặt sơ bộ khi đọc menu. Việc kiểm tra số lượng, min/max và chốt giá khi gửi đơn sẽ thuộc luồng validate order.
+- Món phải có đúng một công thức đang hiệu lực mới được mở bán. Nếu dữ liệu cũ đang `Available` nhưng thiếu hoặc chồng công thức, menu vẫn chặn đặt: `canOrder = false`, lý do `RecipeUnavailable`.
+- `canOrder` là khả năng đặt sơ bộ khi đọc menu. Kiểm tra số lượng, min/max và lấy snapshot giá qua [POST /api/menu/validate-order-items](catalog-order-validation.md). Ordering cần gọi lại khi gửi đơn.
 - Không trả BOM, hướng dẫn bếp, token khách hoặc dữ liệu quản trị recipe.
 - Phản hồi có `Cache-Control: no-store`.
 
@@ -97,3 +98,5 @@ dotnet test Tests/Catalog.Tests/Catalog.Tests.csproj --no-restore
 ```
 
 `MenuFlowTests` kiểm tra HTTP → gRPC → BLL → repository bằng SQLite; Identity và GuestAccess là test doubles. Cần chạy smoke test với Identity, Restaurant và SQL Server thật trước triển khai.
+
+Chi tiết phân quyền và giới hạn phiên bản công thức: [Phân quyền backend](backend-permissions.md).

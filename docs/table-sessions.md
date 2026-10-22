@@ -84,3 +84,18 @@ Trong `Services/restaurant_service/Restaurant.API/appsettings.json`:
 Có thể đổi thành 2, 24, 0.5... (lớn hơn 0, tối đa 8760 giờ), hoặc dùng biến môi trường `GuestAccess__LifetimeHours`. Khởi động lại Restaurant.API sau khi đổi. Thời hạn mới áp dụng cho lần join tiếp theo; cookie đã cấp giữ thời hạn cũ. Gateway lấy đúng thời điểm hết hạn từ Restaurant, không cần cấu hình trùng ở Gateway. Phiên đóng vẫn mất quyền ngay dù chưa tới thời hạn.
 
 Luồng gọi món chưa triển khai; khi bổ sung phải gọi GuestAccessGrpc.GetMe để xác minh token và phiên, không tin riêng tableSessionId gửi từ client. Chưa có API đóng phiên hoặc liên kết tích điểm. Test tích hợp dùng SQLite kiểm tra join, mã sai thử lại, cookie, cấu hình thời hạn, thu hồi/hết hạn/đóng phiên; khóa đồng thời SQL Server chưa kiểm thử với database thật.
+## Waiter mở phiên trực tiếp
+
+POST /api/table-sessions/tables/{tableId}/open, không có body, yêu cầu bearer token Waiter.
+Không yêu cầu QR, SĐT hay mã khách. Trả 200 với result giống API scan;
+isNewSession=true khi tạo, false khi dùng lại phiên đang Open.
+Bàn và khu vực phải active; không tìm thấy bàn trả 404; nhiều phiên chưa đóng
+hoặc phiên chưa đóng nhưng không Open trả 409. Role khác trả 403; thiếu token trả 401.
+
+API khóa bàn trong transaction như Scan để tránh tạo trùng giữa waiter và khách.
+Không tạo GuestAccess, không đặt mã tham gia và không tạo đơn ở bước mở phiên.
+Khách quét QR sau đó dùng lại phiên và vẫn phải qua kiểm tra GuestAccess.
+Mặc định PartySize=1 như luồng Scan hiện tại. Không thay đổi schema.
+
+TestUI Waiter: chọn Mở phiên trên thẻ bàn, sau đó chọn món và gửi đơn.
+Chạy lại Gateway và Restaurant sau khi build để nạp RPC/route mới.

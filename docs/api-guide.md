@@ -6,8 +6,7 @@
 
 Frontend/Postman gọi Gateway; Gateway gọi gRPC đến Identity, Restaurant hoặc Catalog. Cần chạy các service tương ứng và cấu hình database.
 
-- Local profile HTTPS: `https://localhost:5000`; Swagger: `https://localhost:5000/swagger`.
-- Local profile HTTP: `http://localhost:15000`.
+- Gateway local profile `http`: `http://localhost:5000`; Swagger: `http://localhost:5000/swagger`.
 - Docker: `http://localhost:5000` theo port mapping hiện tại.
 - Body JSON: header `Content-Type: application/json`.
 - API có xác thực: header `Authorization: Bearer <accessToken>`.
@@ -497,11 +496,15 @@ Catalog đã có API quản lý Category, Item và Price qua Gateway. Thao tác 
 
 API đọc thực đơn cho khách và waiter: `GET /api/menu`, `GET /api/menu/{id}`. Hỗ trợ giá hiện tại, nhóm option, trạng thái bán, tìm kiếm và phân trang; xem [Menu cho khách và waiter](catalog-menu.md) để biết cách dùng cookie GuestAccess hoặc Bearer token.
 
+`POST /api/menu/validate-order-items` kiểm tra lựa chọn, số lượng, giá và công thức hiện hành, trả snapshot cho luồng Ordering. Xem [Validate lựa chọn đặt món](catalog-order-validation.md). Món chưa có công thức đang hiệu lực không được chuyển sang `Available`.
+
 API quản lý OptionGroup, Option và gán nhóm vào Item đã được bổ sung; xem [Tùy chọn món và dữ liệu mẫu](catalog-options.md) để biết đủ 16 endpoint, quyền và quy tắc dữ liệu.
 
 API quản lý Công thức món (Recipe), định lượng nguyên liệu (BOM) và tài liệu chế biến (SOP) phục vụ Manager (UC_MGR_05) và Kitchen (UC_KIT_09); xem [Công thức món và định lượng](catalog-recipes.md) để biết chi tiết các endpoint và cơ chế versioning.
 
-Inventory, Ordering, Billing và Customer hiện chưa có HTTP API nghiệp vụ qua Gateway. Có model/persistence không đồng nghĩa đã có API kho, gọi món, hóa đơn, thanh toán hay khách hàng.
+Ordering đã có API giỏ khách, gửi đơn, đọc đơn và waiter xác nhận. Xem [Luồng Ordering và dữ liệu mẫu](ordering.md).
+
+Inventory, Billing và Customer hiện chưa có HTTP API nghiệp vụ qua Gateway. Có model/persistence không đồng nghĩa đã có API kho, gọi món, hóa đơn, thanh toán hay khách hàng.
 
 ## 12. Thứ tự thử bằng Swagger/Postman
 

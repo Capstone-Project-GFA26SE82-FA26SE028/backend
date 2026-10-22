@@ -2,6 +2,7 @@ namespace Catalog.Common.DTOs;
 
 public sealed class ItemDTO
 {
+    public Guid? KitchenStationId { get; set; }
     public Guid ItemId { get; set; }
     public Guid CategoryId { get; set; }
     public string CategoryName { get; set; } = string.Empty;

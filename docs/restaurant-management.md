@@ -8,7 +8,7 @@ Phạm vi đợt này: UC_ADM_11, UC_ADM_07, UC_ADM_08, UC_ADM_09. Chỉ dùng m
 
 Chạy đồng thời Identity.API, Restaurant.API và ApiGateway. Restaurant dùng connection string trong User Secrets đã cấu hình; database phải có schema Restaurant hiện tại.
 
-- Gateway local: https://localhost:5000/swagger.
+- Gateway local: http://localhost:5000/swagger.
 - Restaurant local: https://localhost:5002, HTTP/2.
 - Restaurant gọi Identity qua cấu hình GrpcServices:Identity để xác minh token, phiên còn hiệu lực, tài khoản active và vai trò Admin.
 - Danh sách mã vai trò Admin lấy từ UserManagement:AdminRoleIds của Identity. Không hardcode tên vai trò trong Restaurant hoặc chỉ tin role do client gửi.

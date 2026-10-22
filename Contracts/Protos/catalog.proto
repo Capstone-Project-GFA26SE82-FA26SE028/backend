@@ -62,7 +62,10 @@ message CategoryListReply {
   int32 page_size = 7;
 }
 
+message SetItemKitchenStationRequest { string item_id = 1; optional string kitchen_station_id = 2; string version = 3; }
+
 service ItemGrpc {
+  rpc SetKitchenStation(SetItemKitchenStationRequest) returns (ItemReply);
   rpc Create (CreateItemRequest) returns (ItemReply);
   rpc GetAll (ItemListRequest) returns (ItemListReply);
   rpc GetById (ItemIdRequest) returns (ItemReply);
@@ -114,6 +117,7 @@ message ItemInfo {
   optional string image_url = 7;
   string availability = 8;
   string version = 9;
+  optional string kitchen_station_id = 10;
 }
 
 message ItemReply {
@@ -581,4 +585,65 @@ message MenuItemReply {
   string message = 2;
   bool is_success = 3;
   MenuItemInfo result = 4;
+}
+
+// Read-only quotation. Ordering must call again when submitting an order.
+service OrderValidationGrpc {
+  rpc ValidateOrderItems (ValidateOrderItemsRequest) returns (OrderValidationReply);
+}
+message ValidateOrderItemsRequest {
+  MenuAccessRequest access = 1;
+  string channel = 2;
+  repeated OrderSelection items = 3;
+}
+message OrderSelection {
+  string item_id = 1;
+  int32 quantity = 2;
+  repeated OrderOptionSelection options = 3;
+}
+message OrderOptionSelection {
+  string option_id = 1;
+  int32 quantity = 2;
+}
+message OrderValidationReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  OrderValidationResult result = 4;
+}
+message OrderValidationResult {
+  string channel = 1;
+  string evaluated_at = 2;
+  optional string total_amount = 3;
+  repeated ValidatedOrderItem items = 4;
+  repeated OrderValidationError errors = 5;
+}
+message ValidatedOrderItem {
+  int32 line_index = 1;
+  string item_id = 2;
+  string name_snapshot = 3;
+  string price_id = 4;
+  string recipe_version_id = 5;
+  int32 quantity = 6;
+  string unit_price_snapshot = 7;
+  string options_total_per_unit = 8;
+  string unit_total = 9;
+  string line_total = 10;
+  repeated ValidatedOrderOption options = 11;
+  optional string kitchen_station_id = 12;
+}
+message ValidatedOrderOption {
+  string option_id = 1;
+  string name_snapshot = 2;
+  string extra_price_snapshot = 3;
+  int32 quantity = 4;
+  optional string recipe_version_id = 5;
+}
+message OrderValidationError {
+  int32 line_index = 1;
+  string item_id = 2;
+  optional string option_id = 3;
+  optional string option_group_id = 4;
+  string code = 5;
+  string message = 6;
 }

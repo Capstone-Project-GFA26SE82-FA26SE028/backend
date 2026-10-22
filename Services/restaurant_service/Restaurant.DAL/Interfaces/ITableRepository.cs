@@ -7,7 +7,7 @@ namespace Restaurant.DAL.Interfaces;
 
 public interface ITableRepository : IGenericRepository<global::Restaurant.DAL.Models.Table>
 {
-    Task<TableEntity?> LockForReservationAsync(Guid id, CancellationToken ct);
+    Task<PageResult<TableEntity>> GetServicePageAsync(ListQuery query, CancellationToken ct);
 
     Task<TableEntity?> LockForSessionAsync(Guid id, CancellationToken ct);
 

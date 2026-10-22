@@ -33,7 +33,7 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
         await access.RequireAdmin(ct);
         if (!await repository.AnyAsync(x => x.QrId == id, ct))
         {
-            throw new ManagementException(404, "Không tìm thấy QR.");
+            throw new ManagementException(404, "QR code not found.");
         }
 
         return await images.ReadAsync(id, ct);
@@ -48,7 +48,7 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
     {
         if (expectedQrId == Guid.Empty)
         {
-            throw new ManagementException(400, "Phải gửi ExpectedQrId của mã QR hiện tại.");
+            throw new ManagementException(400, "ExpectedQrId must identify the current QR code.");
         }
 
         return Issue(tableId, expectedQrId, ct);
@@ -59,7 +59,7 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
         await access.RequireAdmin(ct);
         if (tableId == Guid.Empty)
         {
-            throw new ManagementException(400, "TableId không hợp lệ.");
+            throw new ManagementException(400, "Invalid TableId.");
         }
 
         if (!Uri.TryCreate(settings.Value.MenuBaseUrl, UriKind.Absolute, out var baseUri)
@@ -67,27 +67,27 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
             || !string.IsNullOrEmpty(baseUri.Fragment) || !string.IsNullOrEmpty(baseUri.Query)
             || !string.IsNullOrEmpty(baseUri.UserInfo) || settings.Value.MenuBaseUrl.Length > 1024)
         {
-            throw new ManagementException(503, "Cấu hình Qr:MenuBaseUrl phải là URL HTTP/HTTPS không chứa query hoặc fragment.");
+            throw new ManagementException(503, "Qr:MenuBaseUrl must be an HTTP/HTTPS URL without a query or fragment.");
         }
 
         return await transaction.ExecuteAsync(async () =>
         {
             var table = await tables.GetByIdAsync(tableId, ct)
-                ?? throw new ManagementException(404, "Không tìm thấy bàn.");
+                ?? throw new ManagementException(404, "Table not found.");
             if (!table.IsActive || table.Area is null || !table.Area.IsActive)
             {
-                throw new ManagementException(409, "Bàn phải đang hoạt động và thuộc khu vực đang hoạt động.");
+                throw new ManagementException(409, "The table and its area must be active.");
             }
 
             var active = await repository.GetActiveAsync(tableId, ct);
             if (!expectedQrId.HasValue && active.Count > 0)
             {
-                throw new ManagementException(409, "Bàn đã có QR. Dùng chức năng tạo lại với mã QR hiện tại.");
+                throw new ManagementException(409, "The table already has a QR code. Regenerate it using the current QR code ID.");
             }
 
             if (expectedQrId.HasValue && !active.Any(x => x.QrId == expectedQrId.Value))
             {
-                throw new ManagementException(409, "QR đã thay đổi hoặc không thuộc bàn. Hãy tải lại danh sách.");
+                throw new ManagementException(409, "The QR code has changed or belongs to another table. Reload the list.");
             }
 
             var now = DateTime.UtcNow;
@@ -129,13 +129,13 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
     {
         if (string.IsNullOrEmpty(token) || token.Length != 64 || !token.All(Uri.IsHexDigit))
         {
-            throw new ManagementException(404, "QR không hợp lệ hoặc đã bị thu hồi.");
+            throw new ManagementException(404, "The QR code is invalid or has been revoked.");
         }
 
         var qr = await repository.FindByHashAsync(Hash(token), ct);
         if (qr is null || !qr.Table.IsActive || !qr.Table.Area.IsActive)
         {
-            throw new ManagementException(404, "QR không hợp lệ hoặc đã bị thu hồi.");
+            throw new ManagementException(404, "The QR code is invalid or has been revoked.");
         }
 
         return new QrTableDto

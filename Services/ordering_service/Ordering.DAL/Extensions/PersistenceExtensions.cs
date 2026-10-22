@@ -17,7 +17,12 @@ public static class PersistenceExtensions
         {
             options.UseSqlServer(connectionString);
         });
+        services.AddScoped<Ordering.DAL.Interfaces.IKitchenStationRepository, Ordering.DAL.Implements.KitchenStationRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork<OrderingDbContext>>();
+        services.AddScoped<Ordering.DAL.Interfaces.ICartRepository, Ordering.DAL.Implements.CartRepository>();
+        services.AddScoped<Ordering.DAL.Interfaces.IOrderRepository, Ordering.DAL.Implements.OrderRepository>();
+        services.AddScoped<Ordering.DAL.Interfaces.IKitchenTaskRepository, Ordering.DAL.Implements.KitchenTaskRepository>();
+        services.AddScoped<Ordering.DAL.Interfaces.IOrderingTransaction, Ordering.DAL.Implements.OrderingTransaction>();
         services.AddScoped<IGenericRepository<global::Ordering.DAL.Models.CancellationRequest>, GenericRepository<global::Ordering.DAL.Models.CancellationRequest, OrderingDbContext>>();
         services.AddScoped<IGenericRepository<global::Ordering.DAL.Models.Cart>, GenericRepository<global::Ordering.DAL.Models.Cart, OrderingDbContext>>();
         services.AddScoped<IGenericRepository<global::Ordering.DAL.Models.CartItem>, GenericRepository<global::Ordering.DAL.Models.CartItem, OrderingDbContext>>();

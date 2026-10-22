@@ -1,0 +1,145 @@
+using System.Globalization;
+using Backend.Contracts.Ordering;
+using ApiGateway.DTOs.Ordering;
+
+namespace ApiGateway.Controllers.Ordering;
+
+internal static class OrderingMapping
+{
+    public static OptionSelectionDTO Map(OptionSelectionInfo value)
+    {
+        return new OptionSelectionDTO
+        {
+            OptionId = Guid.Parse(value.OptionId),
+            Quantity = value.Quantity
+        };
+    }
+
+    public static SelectionDTO Map(SelectionInfo value)
+    {
+        return new SelectionDTO
+        {
+            ItemId = Guid.Parse(value.ItemId),
+            Quantity = value.Quantity,
+            Note = value.HasNote ? value.Note : null,
+            Options = value.Options.Select(Map).ToList()
+        };
+    }
+
+    public static QuotedOptionDTO Map(QuotedOptionInfo value)
+    {
+        return new QuotedOptionDTO
+        {
+            OptionId = Guid.Parse(value.OptionId),
+            Name = value.Name,
+            Quantity = value.Quantity,
+            ExtraPrice = decimal.Parse(value.ExtraPrice, CultureInfo.InvariantCulture)
+        };
+    }
+
+    public static QuotedItemDTO Map(QuotedItemInfo value)
+    {
+        return new QuotedItemDTO
+        {
+            ItemId = Guid.Parse(value.ItemId),
+            Name = value.Name,
+            RecipeVersionId = Guid.Parse(value.RecipeVersionId),
+            KitchenStationId = value.HasKitchenStationId ? Guid.Parse(value.KitchenStationId) : null,
+            Quantity = value.Quantity,
+            UnitPrice = decimal.Parse(value.UnitPrice, CultureInfo.InvariantCulture),
+            Options = value.Options.Select(Map).ToList()
+        };
+    }
+
+    public static QuoteErrorDTO Map(QuoteErrorInfo value)
+    {
+        return new QuoteErrorDTO
+        {
+            LineIndex = value.LineIndex,
+            Code = value.Code,
+            Message = value.Message
+        };
+    }
+
+    public static QuoteDTO Map(QuoteInfo value)
+    {
+        return new QuoteDTO
+        {
+            IsValid = value.IsValid,
+            Message = value.Message,
+            EvaluatedAt = DateTimeOffset.Parse(value.EvaluatedAt, CultureInfo.InvariantCulture),
+            TotalAmount = value.HasTotalAmount ? decimal.Parse(value.TotalAmount, CultureInfo.InvariantCulture) : null,
+            Items = value.Items.Select(Map).ToList(),
+            Errors = value.Errors.Select(Map).ToList()
+        };
+    }
+
+    public static CartDTO Map(CartInfo value)
+    {
+        return new CartDTO
+        {
+            CartId = Guid.Parse(value.CartId),
+            TableSessionId = Guid.Parse(value.TableSessionId),
+            ExpiresAt = DateTimeOffset.Parse(value.ExpiresAt, CultureInfo.InvariantCulture),
+            Version = value.Version,
+            Items = value.Items.Select(Map).ToList(),
+            Quote = value.Quote is null ? null : Map(value.Quote)
+        };
+    }
+
+    public static OrderLineDTO Map(OrderLineInfo value)
+    {
+        return new OrderLineDTO
+        {
+            OrderItemId = Guid.Parse(value.OrderItemId),
+            ItemId = Guid.Parse(value.ItemId),
+            RecipeVersionId = value.HasRecipeVersionId ? Guid.Parse(value.RecipeVersionId) : null,
+            NameSnapshot = value.NameSnapshot,
+            Quantity = value.Quantity,
+            UnitPriceSnapshot = decimal.Parse(value.UnitPriceSnapshot, CultureInfo.InvariantCulture),
+            LineTotal = decimal.Parse(value.LineTotal, CultureInfo.InvariantCulture),
+            Note = value.HasNote ? value.Note : null,
+            Status = value.Status,
+            Options = value.Options.Select(Map).ToList()
+        };
+    }
+
+    public static OrderDTO Map(OrderInfo value)
+    {
+        return new OrderDTO
+        {
+            OrderId = Guid.Parse(value.OrderId),
+            OrderNumber = value.OrderNumber,
+            TableSessionId = Guid.Parse(value.TableSessionId),
+            Source = value.Source,
+            Status = value.Status,
+            Version = value.Version,
+            CreatedBy = value.HasCreatedBy ? Guid.Parse(value.CreatedBy) : null,
+            CreatedAt = DateTimeOffset.Parse(value.CreatedAt, CultureInfo.InvariantCulture),
+            ConfirmedBy = value.HasConfirmedBy ? Guid.Parse(value.ConfirmedBy) : null,
+            ConfirmedAt = value.HasConfirmedAt ? DateTimeOffset.Parse(value.ConfirmedAt, CultureInfo.InvariantCulture) : null,
+            TotalAmount = decimal.Parse(value.TotalAmount, CultureInfo.InvariantCulture),
+            Items = value.Items.Select(Map).ToList()
+        };
+    }
+
+    public static SelectionInfo WriteSelection(SelectionDTO value)
+    {
+        var result = new SelectionInfo
+        {
+            ItemId = value.ItemId.ToString(),
+            Quantity = value.Quantity
+        };
+        if (value.Note is not null)
+        {
+            result.Note = value.Note;
+        }
+
+        result.Options.AddRange(value.Options.Select(option => new OptionSelectionInfo
+        {
+            OptionId = option.OptionId.ToString(),
+            Quantity = option.Quantity
+        }));
+        return result;
+    }
+}

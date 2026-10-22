@@ -9,6 +9,33 @@ namespace Restaurant.API.GrpcServices;
 
 public sealed class TableGrpcService(ITableService service) : TableGrpc.TableGrpcBase
 {
+    public override async Task<ServiceTablePage> GetServiceTables(ListRequest request, ServerCallContext context)
+    {
+        var page = await service.GetServiceTables(ManagementMapping.ToDto(request), context.CancellationToken);
+        var result = new ServiceTablePage
+        {
+            TotalCount = page.TotalCount,
+            Page = page.Page,
+            PageSize = page.PageSize
+        };
+        foreach (var table in page.Items)
+        {
+            var item = new ServiceTableInfo
+            {
+                TableId = table.TableId.ToString(),
+                TableCode = table.TableCode,
+                AreaId = table.AreaId.ToString(),
+                AreaName = table.AreaName,
+                RestaurantId = table.RestaurantId.ToString(),
+                CleaningStatus = table.CleaningStatus
+            };
+            item.OpenSessionIds.AddRange(table.OpenSessionIds.Select(id => id.ToString()));
+            result.Items.Add(item);
+        }
+
+        return result;
+    }
+
     public override async Task<TablePage> GetAll(ListRequest request, ServerCallContext context)
     {
         var page = await service.GetAll(ManagementMapping.ToDto(request), context.CancellationToken);
