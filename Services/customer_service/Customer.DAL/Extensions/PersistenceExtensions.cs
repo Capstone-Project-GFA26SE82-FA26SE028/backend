@@ -18,6 +18,10 @@ public static class PersistenceExtensions
             options.UseSqlServer(connectionString);
         });
         services.AddScoped<IUnitOfWork, UnitOfWork<CustomerDbContext>>();
+        services.AddScoped<Customer.DAL.Interfaces.ICustomerRepository, Customer.DAL.Implements.CustomerRepository>();
+        services.AddScoped<Customer.DAL.Interfaces.ILoyaltyRepository, Customer.DAL.Implements.LoyaltyRepository>();
+        services.AddScoped<Customer.DAL.Interfaces.IFeedbackRepository, Customer.DAL.Implements.FeedbackRepository>();
+        services.AddScoped<Customer.DAL.Interfaces.ICustomerTransaction, Customer.DAL.Implements.CustomerTransaction>();
         services.AddScoped<IGenericRepository<global::Customer.DAL.Models.Customer>, GenericRepository<global::Customer.DAL.Models.Customer, CustomerDbContext>>();
         services.AddScoped<IGenericRepository<global::Customer.DAL.Models.Feedback>, GenericRepository<global::Customer.DAL.Models.Feedback, CustomerDbContext>>();
         services.AddScoped<IGenericRepository<global::Customer.DAL.Models.FeedbackAccess>, GenericRepository<global::Customer.DAL.Models.FeedbackAccess, CustomerDbContext>>();
