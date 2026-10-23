@@ -8,12 +8,22 @@ using Ordering.DAL.Models;
 
 namespace Ordering.BLL.Implements;
 
-public sealed class OrderService(IOrderRepository orders, ICartRepository carts, IKitchenTaskRepository kitchen,
-    IOrderingTransaction transaction, IOrderingAccess access, ICatalogOrderClient catalog,
-    IOptions<OrderingSettings> settings, TimeProvider clock) : IOrderService
+public sealed class OrderService(
+    IOrderRepository orders,
+    ICartRepository carts,
+    IKitchenTaskRepository kitchen,
+    IOrderingTransaction transaction,
+    IOrderingAccess access,
+    ICatalogOrderClient catalog,
+    IOptions<OrderingSettings> settings,
+    TimeProvider clock) : IOrderService
 {
-    public async Task<(OrderDTO Order, bool Created)> Create(Guid sessionId, string key, CreateOrderDTO request,
-        string guestToken, CancellationToken ct)
+    public async Task<(OrderDTO Order, bool Created)> Create(
+        Guid sessionId,
+        string key,
+        CreateOrderDTO request,
+        string guestToken,
+        CancellationToken ct)
     {
         var actor = await access.RequireAsync(sessionId, request.TableId, guestToken, ct);
         if (string.IsNullOrWhiteSpace(key) || key.Length > 128 || key.Any(char.IsControl) || key != key.Trim())
@@ -63,6 +73,7 @@ public sealed class OrderService(IOrderRepository orders, ICartRepository carts,
                 })
             })
         });
+
         var result = await transaction.ExecuteAsync(async () =>
         {
             var existing = await orders.GetByKeyAsync(scopedKey, ct);
@@ -100,6 +111,7 @@ public sealed class OrderService(IOrderRepository orders, ICartRepository carts,
                     stations[snapshot.ItemId] = await Station(snapshot.KitchenStationId, ct);
                 }
             }
+
             // Recheck the session immediately before persisting. No distributed lock is held in Restaurant.
             await access.RequireAsync(sessionId, actor.TableId, guestToken, ct);
             var now = clock.GetUtcNow().UtcDateTime;
@@ -118,6 +130,7 @@ public sealed class OrderService(IOrderRepository orders, ICartRepository carts,
                 ConfirmedAt = actor.IsGuest ? null : now,
                 ConfirmedByRef = actor.UserId
             };
+
             for (var index = 0; index < quote.Items.Count; index++)
             {
                 var snapshot = quote.Items[index];
@@ -142,6 +155,7 @@ public sealed class OrderService(IOrderRepository orders, ICartRepository carts,
                         Quantity = option.Quantity
                     }).ToList()
                 };
+
                 order.OrderItems.Add(item);
                 if (!actor.IsGuest)
                 {
@@ -157,6 +171,7 @@ public sealed class OrderService(IOrderRepository orders, ICartRepository carts,
 
             return (Order: order, Created: true);
         }, ct);
+
         return (Map(result.Order), result.Created);
     }
 
@@ -169,6 +184,7 @@ public sealed class OrderService(IOrderRepository orders, ICartRepository carts,
             CheckOrder(found, actor);
             return found!;
         }, ct);
+
         return Map(order);
     }
 
@@ -180,8 +196,13 @@ public sealed class OrderService(IOrderRepository orders, ICartRepository carts,
             throw new OrderingException(400, "Invalid pagination.");
         }
 
-        var result = await transaction.ExecuteAsync(() => orders.GetAllAsync(sessionId,
-            actor.IsGuest ? actor.Scope : null, page, pageSize, ct), ct);
+        var result = await transaction.ExecuteAsync(() => orders.GetAllAsync(
+            sessionId,
+            actor.IsGuest ? actor.Scope : null,
+            page,
+            pageSize,
+            ct), ct);
+
         return result.Select(Map).ToList();
     }
 
@@ -223,6 +244,7 @@ public sealed class OrderService(IOrderRepository orders, ICartRepository carts,
                     Quantity = option.Quantity
                 }).ToList()
             }).ToList();
+
             var quote = await catalog.ValidateAsync(actor, string.Empty, lines, ct);
             if (!quote.IsValid)
             {
@@ -234,6 +256,7 @@ public sealed class OrderService(IOrderRepository orders, ICartRepository carts,
             {
                 stations[snapshot.ItemId] = await Station(snapshot.KitchenStationId, ct);
             }
+
             await access.RequireAsync(sessionId, null, string.Empty, ct);
             var now = clock.GetUtcNow().UtcDateTime;
             orders.SetOriginalVersion(found, expected);
@@ -248,6 +271,77 @@ public sealed class OrderService(IOrderRepository orders, ICartRepository carts,
 
             return found;
         }, ct);
+
+        return Map(order);
+    }
+
+    public async Task<OrderDTO> ServeItem(Guid sessionId, Guid id, Guid orderItemId, string? version, CancellationToken ct)
+    {
+        var actor = await access.RequireAsync(sessionId, null, string.Empty, ct);
+        if (actor.IsGuest || !actor.UserId.HasValue)
+        {
+            throw new OrderingException(403, "Staff permission is required to serve order items.");
+        }
+
+        var order = await transaction.ExecuteAsync(async () =>
+        {
+            var found = await orders.GetByIdAsync(id, ct);
+            CheckOrder(found, actor);
+
+            if (!string.IsNullOrEmpty(version))
+            {
+                var expected = new byte[8];
+                if (!Convert.TryFromBase64String(version, expected, out var size) || size != 8)
+                {
+                    throw new OrderingException(400, "A valid order rowversion is required.");
+                }
+
+                if (found!.Version is not null && !found.Version.SequenceEqual(expected))
+                {
+                    throw new OrderingException(409, "The order changed. Reload before serving.");
+                }
+            }
+
+            var item = found!.OrderItems.FirstOrDefault(i => i.OrderItemId == orderItemId);
+            if (item is null)
+            {
+                throw new OrderingException(404, "Order item not found.");
+            }
+
+            if (!string.Equals(item.Status, "Ready", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new OrderingException(400, $"Cannot serve item in '{item.Status}' status. Must be 'Ready'.");
+            }
+
+            item.Status = "Served";
+            var now = clock.GetUtcNow().UtcDateTime;
+
+            foreach (var task in item.KitchenTasks)
+            {
+                if (string.Equals(task.Status, "Ready", StringComparison.OrdinalIgnoreCase))
+                {
+                    task.Status = "Served";
+                    task.Events.Add(new Event
+                    {
+                        EventId = Guid.NewGuid(),
+                        KitchenTaskId = task.KitchenTaskId,
+                        FromStatus = "Ready",
+                        ToStatus = "Served",
+                        ActorUserRef = actor.UserId,
+                        OccurredAt = now
+                    });
+                }
+            }
+
+            var allServed = found.OrderItems.All(i => i.Status == "Served" || i.Status == "Cancelled");
+            if (allServed)
+            {
+                found.Status = "Served";
+            }
+
+            return found;
+        }, ct);
+
         return Map(order);
     }
 
@@ -320,6 +414,7 @@ public sealed class OrderService(IOrderRepository orders, ICartRepository carts,
                 ExtraPrice = option.ExtraPriceSnapshot
             }).ToList()
         }).ToList();
+
         return new OrderDTO
         {
             OrderId = order.OrderId,

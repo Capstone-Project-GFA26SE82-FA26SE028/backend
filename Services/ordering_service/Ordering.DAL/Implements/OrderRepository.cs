@@ -37,7 +37,13 @@ public sealed class OrderRepository(OrderingDbContext db) : IOrderRepository
 
     private static IQueryable<Order> Details(IQueryable<Order> query)
     {
-        return query.Include(order => order.OrderItems).ThenInclude(item => item.OrderItemOptions).AsSplitQuery();
+        return query
+            .Include(order => order.OrderItems)
+                .ThenInclude(item => item.OrderItemOptions)
+            .Include(order => order.OrderItems)
+                .ThenInclude(item => item.KitchenTasks)
+                    .ThenInclude(task => task.Events)
+            .AsSplitQuery();
     }
 
     public void Create(Order order)
