@@ -178,4 +178,70 @@ internal static class OrderingMapping
             }).ToList()
         };
     }
+
+    public static KitchenTaskOptionInfo Map(KitchenTaskOptionDTO value)
+    {
+        return new KitchenTaskOptionInfo
+        {
+            OptionId = value.OptionId.ToString(),
+            Name = value.Name,
+            Quantity = value.Quantity
+        };
+    }
+
+    public static KitchenTaskInfo Map(KitchenTaskDTO value)
+    {
+        var result = new KitchenTaskInfo
+        {
+            KitchenTaskId = value.KitchenTaskId.ToString(),
+            KitchenStationId = value.KitchenStationId.ToString(),
+            KitchenStationCode = value.KitchenStationCode,
+            KitchenStationName = value.KitchenStationName,
+            OrderItemId = value.OrderItemId.ToString(),
+            OrderId = value.OrderId.ToString(),
+            OrderNumber = value.OrderNumber,
+            TableSessionId = value.TableSessionId.ToString(),
+            ItemId = value.ItemId.ToString(),
+            NameSnapshot = value.NameSnapshot,
+            Quantity = value.Quantity,
+            Status = value.Status,
+            Priority = value.Priority,
+            QueuedAt = value.QueuedAt.ToString("O", CultureInfo.InvariantCulture),
+            Version = value.Version
+        };
+
+        if (value.OriginalTableId.HasValue)
+        {
+            result.OriginalTableId = value.OriginalTableId.Value.ToString();
+        }
+
+        if (value.Note is not null)
+        {
+            result.Note = value.Note;
+        }
+
+        if (value.CookingAt.HasValue)
+        {
+            result.CookingAt = value.CookingAt.Value.ToString("O", CultureInfo.InvariantCulture);
+        }
+
+        if (value.ReadyAt.HasValue)
+        {
+            result.ReadyAt = value.ReadyAt.Value.ToString("O", CultureInfo.InvariantCulture);
+        }
+
+        result.Options.AddRange(value.Options.Select(Map));
+        return result;
+    }
+
+    public static KitchenSummaryReply Map(KitchenSummaryDTO value)
+    {
+        return new KitchenSummaryReply
+        {
+            PendingCount = value.PendingCount,
+            CookingCount = value.CookingCount,
+            ReadyCount = value.ReadyCount,
+            AvgCookingTimeMinutes = value.AvgCookingTimeMinutes
+        };
+    }
 }

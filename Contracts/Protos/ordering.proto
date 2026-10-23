@@ -27,11 +27,13 @@ message OrderLineInfo { string order_item_id = 1; string item_id = 2; optional s
 message OrderInfo { string order_id = 1; string order_number = 2; string table_session_id = 3; string source = 4; string status = 5; string version = 6; optional string created_by = 7; string created_at = 8; optional string confirmed_by = 9; optional string confirmed_at = 10; string total_amount = 11; repeated OrderLineInfo items = 12; }
 message CreateOrderReply { OrderInfo result = 1; bool created = 2; }
 message OrderListReply { repeated OrderInfo items = 1; }
+message ServeOrderItemRequest { OrderingAccess access = 1; string order_id = 2; string order_item_id = 3; optional string version = 4; }
 service OrderGrpc {
   rpc Create(CreateOrderRequest) returns (CreateOrderReply);
   rpc GetById(OrderIdRequest) returns (OrderInfo);
   rpc GetAll(OrderListRequest) returns (OrderListReply);
   rpc Confirm(OrderIdRequest) returns (OrderInfo);
+  rpc ServeItem(ServeOrderItemRequest) returns (OrderInfo);
 }
 
 message KitchenStationIdRequest { string id = 1; }
@@ -46,4 +48,61 @@ service KitchenStationGrpc {
   rpc GetById(KitchenStationIdRequest) returns (KitchenStationInfo);
   rpc Update(KitchenStationWriteRequest) returns (KitchenStationInfo);
   rpc SetStatus(KitchenStationStatusRequest) returns (KitchenStationInfo);
+}
+
+message KitchenTaskIdRequest { string id = 1; }
+message KitchenTaskStatusRequest { string id = 1; string status = 2; optional string version = 3; }
+message KitchenTaskPriorityRequest { string id = 1; int32 priority = 2; optional string version = 3; }
+message KitchenTaskListRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional string kitchen_station_id = 3;
+  optional string status = 4;
+  optional string order_id = 5;
+  optional string table_session_id = 6;
+}
+message KitchenTaskOptionInfo { string option_id = 1; string name = 2; int32 quantity = 3; }
+message KitchenTaskInfo {
+  string kitchen_task_id = 1;
+  string kitchen_station_id = 2;
+  string kitchen_station_code = 3;
+  string kitchen_station_name = 4;
+  string order_item_id = 5;
+  string order_id = 6;
+  string order_number = 7;
+  string table_session_id = 8;
+  optional string original_table_id = 9;
+  string item_id = 10;
+  string name_snapshot = 11;
+  int32 quantity = 12;
+  optional string note = 13;
+  string status = 14;
+  int32 priority = 15;
+  string queued_at = 16;
+  optional string cooking_at = 17;
+  optional string ready_at = 18;
+  string version = 19;
+  repeated KitchenTaskOptionInfo options = 20;
+}
+message KitchenTaskPage {
+  repeated KitchenTaskInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+message KitchenSummaryRequest {
+  optional string kitchen_station_id = 1;
+}
+message KitchenSummaryReply {
+  int32 pending_count = 1;
+  int32 cooking_count = 2;
+  int32 ready_count = 3;
+  double avg_cooking_time_minutes = 4;
+}
+service KitchenTaskGrpc {
+  rpc GetAll(KitchenTaskListRequest) returns (KitchenTaskPage);
+  rpc GetById(KitchenTaskIdRequest) returns (KitchenTaskInfo);
+  rpc SetStatus(KitchenTaskStatusRequest) returns (KitchenTaskInfo);
+  rpc SetPriority(KitchenTaskPriorityRequest) returns (KitchenTaskInfo);
+  rpc GetSummary(KitchenSummaryRequest) returns (KitchenSummaryReply);
 }
