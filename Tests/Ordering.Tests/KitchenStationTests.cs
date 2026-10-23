@@ -96,6 +96,15 @@ public sealed class KitchenStationTests
             }
             return Task.CompletedTask;
         }
+
+        public Task<Guid> RequireKitchenTaskAccessAsync(CancellationToken ct)
+        {
+            if (Denied)
+            {
+                throw new OrderingException(403, "Forbidden");
+            }
+            return Task.FromResult(Guid.Parse("10000000-0000-0000-0000-000000000005"));
+        }
     }
 
     private sealed class Fixture : IDisposable

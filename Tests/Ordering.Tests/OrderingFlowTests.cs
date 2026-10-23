@@ -68,6 +68,35 @@ public sealed class OrderingFlowTests
     }
 
     [Fact]
+    public async Task ServeItemRequiresStaffAndReadyStatus()
+    {
+        using var app = new Fixture();
+        var cart = await app.FilledCart();
+        var created = await app.Orders.Create(app.Session, "submit-serve", new CreateOrderDTO
+        {
+            CartId = cart.CartId,
+            CartVersion = cart.Version
+        }, "guest", default);
+        app.Staff = true;
+        var confirmed = await app.Orders.Confirm(app.Session, created.Order.OrderId, created.Order.Version, default);
+        var orderItem = Assert.Single(confirmed.Items);
+
+        await Error(400, () => app.Orders.ServeItem(app.Session, confirmed.OrderId, orderItem.OrderItemId, null, default));
+
+        var dbItem = await app.Db.OrderItems.FirstAsync(i => i.OrderItemId == orderItem.OrderItemId);
+        dbItem.Status = "Ready";
+        await app.Db.SaveChangesAsync();
+
+        app.Staff = false;
+        await Error(403, () => app.Orders.ServeItem(app.Session, confirmed.OrderId, orderItem.OrderItemId, null, default));
+
+        app.Staff = true;
+        var served = await app.Orders.ServeItem(app.Session, confirmed.OrderId, orderItem.OrderItemId, null, default);
+        Assert.Equal("Served", served.Status);
+        Assert.Equal("Served", Assert.Single(served.Items).Status);
+    }
+
+    [Fact]
     public async Task CartOwnershipVersionAndReplacementSurviveReload()
     {
         using var app = new Fixture();
