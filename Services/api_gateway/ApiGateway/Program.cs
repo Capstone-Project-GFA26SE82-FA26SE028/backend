@@ -197,6 +197,19 @@ builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantStaffGrpc.
     options.Address = new Uri(restaurantAddress);
 });
 
+var customerAddress = builder.Configuration["GrpcServices:Customer"]
+    ?? "https://localhost:5005";
+
+builder.Services.AddGrpcClient<Backend.Contracts.Customer.CustomerGrpc.CustomerGrpcClient>(options =>
+{
+    options.Address = new Uri(customerAddress);
+});
+
+builder.Services.AddGrpcClient<Backend.Contracts.Customer.FeedbackGrpc.FeedbackGrpcClient>(options =>
+{
+    options.Address = new Uri(customerAddress);
+});
+
 var app = builder.Build();
 
 
