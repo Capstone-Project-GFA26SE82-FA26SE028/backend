@@ -1,6 +1,6 @@
 using System.Globalization;
-using Backend.Contracts.Ordering;
 using ApiGateway.DTOs.Ordering;
+using Backend.Contracts.Ordering;
 
 namespace ApiGateway.Controllers.Ordering;
 
@@ -141,5 +141,48 @@ internal static class OrderingMapping
             Quantity = option.Quantity
         }));
         return result;
+    }
+
+    public static object Map(KitchenTaskInfo value)
+    {
+        return new
+        {
+            KitchenTaskId = Guid.Parse(value.KitchenTaskId),
+            KitchenStationId = Guid.Parse(value.KitchenStationId),
+            value.KitchenStationCode,
+            value.KitchenStationName,
+            OrderItemId = Guid.Parse(value.OrderItemId),
+            OrderId = Guid.Parse(value.OrderId),
+            value.OrderNumber,
+            TableSessionId = Guid.Parse(value.TableSessionId),
+            OriginalTableId = value.HasOriginalTableId ? Guid.Parse(value.OriginalTableId) : (Guid?)null,
+            ItemId = Guid.Parse(value.ItemId),
+            value.NameSnapshot,
+            value.Quantity,
+            Note = value.HasNote ? value.Note : null,
+            value.Status,
+            value.Priority,
+            QueuedAt = DateTimeOffset.Parse(value.QueuedAt, CultureInfo.InvariantCulture),
+            CookingAt = value.HasCookingAt ? DateTimeOffset.Parse(value.CookingAt, CultureInfo.InvariantCulture) : (DateTimeOffset?)null,
+            ReadyAt = value.HasReadyAt ? DateTimeOffset.Parse(value.ReadyAt, CultureInfo.InvariantCulture) : (DateTimeOffset?)null,
+            value.Version,
+            Options = value.Options.Select(o => new
+            {
+                OptionId = Guid.Parse(o.OptionId),
+                o.Name,
+                o.Quantity
+            }).ToList()
+        };
+    }
+
+    public static object Map(KitchenSummaryReply value)
+    {
+        return new
+        {
+            value.PendingCount,
+            value.CookingCount,
+            value.ReadyCount,
+            value.AvgCookingTimeMinutes
+        };
     }
 }
