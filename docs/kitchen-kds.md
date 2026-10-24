@@ -68,7 +68,7 @@ Tất cả các API yêu cầu Bearer Token qua ApiGateway (`http://localhost:50
 
 ## 4. Hướng dẫn trải nghiệm trên TestUI (`kitchen.html`)
 
-1. Mở trình duyệt tại `http://localhost:3300/kitchen.html` (hoặc mở từ `index.html`).
+1. Mở trình duyệt tại `http://localhost:5173/menu` (hoặc mở từ `index.html`).
 2. Nếu chưa đăng nhập, bấm nút **"Đăng nhập Kitchen ngay"** (tài khoản mẫu: `kitchen@gmail.com` / `123`).
 3. Chọn trạm bếp làm việc (ví dụ: `Tất cả trạm`, `Bếp nóng (HOT)`, `Quầy bar (BAR)`).
 4. Quan sát các cột Kanban:
