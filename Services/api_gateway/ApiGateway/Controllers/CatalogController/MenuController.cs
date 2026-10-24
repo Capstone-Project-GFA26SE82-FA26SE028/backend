@@ -107,6 +107,7 @@ public sealed class MenuController(
             EvaluatedAt = DateTimeOffset.Parse(item.EvaluatedAt, CultureInfo.InvariantCulture),
             CanOrder = item.CanOrder,
             UnavailableReason = item.HasUnavailableReason ? item.UnavailableReason : null,
+            PreparationTimeMinutes = item.HasPreparationTimeMinutes ? item.PreparationTimeMinutes : null,
             OptionGroups = item.OptionGroups.Select(group => new MenuOptionGroupDTO
             {
                 OptionGroupId = Guid.Parse(group.OptionGroupId),

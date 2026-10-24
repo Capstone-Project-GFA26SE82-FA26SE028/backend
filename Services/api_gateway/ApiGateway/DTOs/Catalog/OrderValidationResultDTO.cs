@@ -22,6 +22,7 @@ public sealed class ValidatedOrderItemDTO
     public decimal OptionsTotalPerUnit { get; set; }
     public decimal UnitTotal { get; set; }
     public decimal LineTotal { get; set; }
+    public int? PreparationTimeMinutes { get; set; } = 10;
     public List<ValidatedOrderOptionDTO> Options { get; set; } = [];
 }
 

@@ -178,6 +178,7 @@ public sealed class OrderValidationService(
             PriceId = price.PriceId,
             RecipeVersionId = recipeVersions[0].RecipeVersionId,
             KitchenStationId = item.KitchenStationRef,
+            PreparationTimeMinutes = item.PreparationTimeMinutes,
             Quantity = selection.Quantity,
             UnitPriceSnapshot = price.Amount,
             OptionsTotalPerUnit = optionsTotal,

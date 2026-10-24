@@ -1,0 +1,150 @@
+syntax = "proto3";
+option csharp_namespace = "Backend.Contracts.Customer";
+package customer;
+import "google/protobuf/empty.proto";
+
+message PhoneRequest {
+  string phone = 1;
+}
+
+message CustomerIdRequest {
+  string customer_id = 1;
+}
+
+message CreateCustomerRequest {
+  string phone = 1;
+  string name = 2;
+}
+
+message LoyaltyTierInfo {
+  string loyalty_tier_id = 1;
+  string loyalty_tier_code = 2;
+  string loyalty_tier_name = 3;
+  string required_spend = 4;
+  string discount_percent = 5;
+}
+
+message LoyaltyTierListReply {
+  repeated LoyaltyTierInfo items = 1;
+}
+
+message CustomerInfo {
+  string customer_id = 1;
+  string normalized_phone = 2;
+  string customer_name = 3;
+  string loyalty_tier_id = 4;
+  string loyalty_tier_name = 5;
+  string loyalty_tier_code = 6;
+  string discount_percent = 7;
+  int32 available_points = 8;
+  string total_spent = 9;
+}
+
+message EarnPointsRequest {
+  string customer_id = 1;
+  string bill_id = 2;
+  string final_amount = 3;
+}
+
+message EarnPointsReply {
+  int32 points_earned = 1;
+  int32 new_total_points = 2;
+  string loyalty_tier_name = 3;
+  bool tier_upgraded = 4;
+}
+
+message ReservePointsRequest {
+  string customer_id = 1;
+  string bill_id = 2;
+  int32 points = 3;
+}
+
+message ReservePointsReply {
+  string point_reservation_id = 1;
+  int32 reserved_points = 2;
+  string discount_amount = 3;
+  int32 remaining_points = 4;
+}
+
+message BillIdRequest {
+  string bill_id = 1;
+}
+
+service CustomerGrpc {
+  rpc GetOrCreate(CreateCustomerRequest) returns (CustomerInfo);
+  rpc GetByPhone(PhoneRequest) returns (CustomerInfo);
+  rpc GetById(CustomerIdRequest) returns (CustomerInfo);
+  rpc GetTiers(google.protobuf.Empty) returns (LoyaltyTierListReply);
+  rpc EarnPoints(EarnPointsRequest) returns (EarnPointsReply);
+  rpc ReservePoints(ReservePointsRequest) returns (ReservePointsReply);
+  rpc CommitPoints(BillIdRequest) returns (google.protobuf.Empty);
+  rpc CancelPoints(BillIdRequest) returns (google.protobuf.Empty);
+}
+
+message FeedbackAccessRequest {
+  string order_ref = 1;
+}
+
+message FeedbackAccessReply {
+  string access_token = 1;
+}
+
+message FeedbackItemInfo {
+  string order_item_ref = 1;
+  int32 star = 2;
+  optional string comment = 3;
+}
+
+message SubmitFeedbackRequest {
+  string order_ref = 1;
+  optional string access_token = 2;
+  optional string customer_id = 3;
+  int32 star = 4;
+  optional string comment = 5;
+  repeated FeedbackItemInfo items = 6;
+}
+
+message FeedbackInfo {
+  string feedback_id = 1;
+  string order_ref = 2;
+  optional string customer_id = 3;
+  optional string customer_name = 4;
+  int32 star = 5;
+  optional string comment = 6;
+  string submitted_at = 7;
+  repeated FeedbackItemInfo items = 8;
+}
+
+message FeedbackOrderRequest {
+  string order_ref = 1;
+}
+
+message FeedbackListRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional int32 star = 3;
+}
+
+message FeedbackListReply {
+  repeated FeedbackInfo items = 1;
+  int32 total_count = 2;
+}
+
+message FeedbackSummaryReply {
+  double average_rating = 1;
+  int32 total_feedbacks = 2;
+  int32 star5_count = 3;
+  int32 star4_count = 4;
+  int32 star3_count = 5;
+  int32 star2_count = 6;
+  int32 star1_count = 7;
+}
+
+service FeedbackGrpc {
+  rpc CreateAccess(FeedbackAccessRequest) returns (FeedbackAccessReply);
+  rpc Submit(SubmitFeedbackRequest) returns (FeedbackInfo);
+  rpc GetByOrder(FeedbackOrderRequest) returns (FeedbackInfo);
+  rpc GetAll(FeedbackListRequest) returns (FeedbackListReply);
+  rpc GetSummary(google.protobuf.Empty) returns (FeedbackSummaryReply);
+}
+

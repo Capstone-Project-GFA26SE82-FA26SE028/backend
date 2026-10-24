@@ -1,6 +1,6 @@
 using System.Globalization;
-using Backend.Contracts.Ordering;
 using ApiGateway.DTOs.Ordering;
+using Backend.Contracts.Ordering;
 
 namespace ApiGateway.Controllers.Ordering;
 
@@ -111,6 +111,7 @@ internal static class OrderingMapping
             OrderId = Guid.Parse(value.OrderId),
             OrderNumber = value.OrderNumber,
             TableSessionId = Guid.Parse(value.TableSessionId),
+            Channel = value.HasChannel ? value.Channel : "DineIn",
             Source = value.Source,
             Status = value.Status,
             Version = value.Version,
@@ -141,5 +142,93 @@ internal static class OrderingMapping
             Quantity = option.Quantity
         }));
         return result;
+    }
+
+    public static object Map(KitchenTaskInfo value)
+    {
+        return new
+        {
+            KitchenTaskId = Guid.Parse(value.KitchenTaskId),
+            KitchenStationId = Guid.Parse(value.KitchenStationId),
+            value.KitchenStationCode,
+            value.KitchenStationName,
+            OrderItemId = Guid.Parse(value.OrderItemId),
+            OrderId = Guid.Parse(value.OrderId),
+            value.OrderNumber,
+            TableSessionId = Guid.Parse(value.TableSessionId),
+            OriginalTableId = value.HasOriginalTableId ? Guid.Parse(value.OriginalTableId) : (Guid?)null,
+            ItemId = Guid.Parse(value.ItemId),
+            value.NameSnapshot,
+            value.Quantity,
+            Note = value.HasNote ? value.Note : null,
+            value.Status,
+            value.Priority,
+            QueuedAt = DateTimeOffset.Parse(value.QueuedAt, CultureInfo.InvariantCulture),
+            CookingAt = value.HasCookingAt ? DateTimeOffset.Parse(value.CookingAt, CultureInfo.InvariantCulture) : (DateTimeOffset?)null,
+            ReadyAt = value.HasReadyAt ? DateTimeOffset.Parse(value.ReadyAt, CultureInfo.InvariantCulture) : (DateTimeOffset?)null,
+            EstimatedMinutes = value.HasEstimatedMinutes ? value.EstimatedMinutes : (int?)null,
+            DueAt = value.HasDueAt ? DateTimeOffset.Parse(value.DueAt, CultureInfo.InvariantCulture) : (DateTimeOffset?)null,
+            value.IsLate,
+            value.Version,
+            Options = value.Options.Select(o => new
+            {
+                OptionId = Guid.Parse(o.OptionId),
+                o.Name,
+                o.Quantity
+            }).ToList()
+        };
+    }
+
+    public static object Map(KitchenSummaryReply value)
+    {
+        return new
+        {
+            value.PendingCount,
+            value.CookingCount,
+            value.ReadyCount,
+            value.AvgCookingTimeMinutes
+        };
+    }
+
+    public static object Map(KitchenBatchGroupInfo value)
+    {
+        return new
+        {
+            ItemId = Guid.Parse(value.ItemId),
+            value.ItemName,
+            KitchenStationId = Guid.Parse(value.KitchenStationId),
+            value.KitchenStationName,
+            value.TotalQuantity,
+            Tasks = value.Tasks.Select(t => new
+            {
+                KitchenTaskId = Guid.Parse(t.KitchenTaskId),
+                OrderId = Guid.Parse(t.OrderId),
+                t.OrderNumber,
+                t.TableCode,
+                t.Quantity,
+                Note = t.HasNote ? t.Note : null,
+                t.Priority,
+                EstimatedMinutes = t.HasEstimatedMinutes ? t.EstimatedMinutes : (int?)null,
+                QueuedAt = DateTimeOffset.Parse(t.QueuedAt, CultureInfo.InvariantCulture)
+            }).ToList()
+        };
+    }
+
+    public static object Map(KitchenBatchActionReply value)
+    {
+        return new
+        {
+            value.AffectedCount,
+            value.Status
+        };
+    }
+
+    public static object Map(FireCourseReply value)
+    {
+        return new
+        {
+            value.ActivatedCount,
+            value.Message
+        };
     }
 }

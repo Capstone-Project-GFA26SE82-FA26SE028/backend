@@ -26,7 +26,8 @@ public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBas
             CategoryId = ParseId(request.CategoryId, "category"),
             ItemName = request.ItemName,
             Description = request.HasDescription ? request.Description : null,
-            ImageUrl = request.HasImageUrl ? request.ImageUrl : null
+            ImageUrl = request.HasImageUrl ? request.ImageUrl : null,
+            PreparationTimeMinutes = request.HasPreparationTimeMinutes ? request.PreparationTimeMinutes : null
         }, context.CancellationToken);
         return ToReply(response);
     }
@@ -72,6 +73,7 @@ public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBas
             ItemName = request.ItemName,
             Description = request.HasDescription ? request.Description : null,
             ImageUrl = request.HasImageUrl ? request.ImageUrl : null,
+            PreparationTimeMinutes = request.HasPreparationTimeMinutes ? request.PreparationTimeMinutes : null,
             Version = request.Version
         }, context.CancellationToken);
         return ToReply(response);
@@ -120,6 +122,10 @@ public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBas
             Availability = item.Availability,
             Version = item.Version
         };
+        if (item.PreparationTimeMinutes.HasValue)
+        {
+            result.PreparationTimeMinutes = item.PreparationTimeMinutes.Value;
+        }
         if (item.KitchenStationId.HasValue)
         {
             result.KitchenStationId = item.KitchenStationId.Value.ToString();
