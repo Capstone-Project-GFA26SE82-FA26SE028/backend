@@ -78,6 +78,10 @@ public sealed class MenuGrpcService(IMenuService service) : MenuGrpc.MenuGrpcBas
             EvaluatedAt = item.EvaluatedAt.ToString("O", CultureInfo.InvariantCulture),
             CanOrder = item.CanOrder
         };
+        if (item.PreparationTimeMinutes.HasValue)
+        {
+            result.PreparationTimeMinutes = item.PreparationTimeMinutes.Value;
+        }
         if (item.Description is not null)
         {
             result.Description = item.Description;

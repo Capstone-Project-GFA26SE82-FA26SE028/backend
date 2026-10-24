@@ -149,7 +149,10 @@ public sealed class ItemService(
                 Description = description,
                 ImageUrl = imageUrl,
                 Availability = initialAvailability,
-                KitchenStationRef = null
+                KitchenStationRef = null,
+                PreparationTimeMinutes = request?.PreparationTimeMinutes.HasValue == true && request.PreparationTimeMinutes.Value > 0
+                    ? request.PreparationTimeMinutes.Value
+                    : null
             };
             items.Create(item);
             return (new ResponseDTO("Item created successfully.", 201, true), item);
@@ -213,6 +216,10 @@ public sealed class ItemService(
             item.ItemName = name;
             item.Description = description;
             item.ImageUrl = imageUrl;
+            if (request?.PreparationTimeMinutes.HasValue == true)
+            {
+                item.PreparationTimeMinutes = request.PreparationTimeMinutes.Value > 0 ? request.PreparationTimeMinutes.Value : null;
+            }
             return (new ResponseDTO("Item updated successfully.", 200, true), item);
         }, cancellationToken);
     }
@@ -428,6 +435,7 @@ public sealed class ItemService(
             ImageUrl = item.ImageUrl,
             Availability = item.Availability,
             KitchenStationId = item.KitchenStationRef,
+            PreparationTimeMinutes = item.PreparationTimeMinutes,
             Version = Convert.ToBase64String(item.Version)
         };
     }

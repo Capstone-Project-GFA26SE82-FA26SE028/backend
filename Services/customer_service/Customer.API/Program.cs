@@ -1,3 +1,5 @@
+using Customer.API.GrpcServices;
+using Customer.BLL.Extensions;
 using Customer.DAL.Extensions;
 using Customer.DAL.Models;
 
@@ -12,8 +14,12 @@ if (string.IsNullOrWhiteSpace(connectionString))
 }
 
 builder.Services.AddCustomerPersistence(connectionString);
+builder.Services.AddCustomerBusinessServices();
 
 var app = builder.Build();
+
+app.MapGrpcService<CustomerGrpcService>();
+app.MapGrpcService<FeedbackGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

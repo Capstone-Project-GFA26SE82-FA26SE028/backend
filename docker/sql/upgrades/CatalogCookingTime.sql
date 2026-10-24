@@ -1,0 +1,6 @@
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+IF COL_LENGTH('dbo.Item', 'PreparationTimeMinutes') IS NULL
+    ALTER TABLE dbo.Item ADD PreparationTimeMinutes INT NULL;
+COMMIT TRANSACTION;
+

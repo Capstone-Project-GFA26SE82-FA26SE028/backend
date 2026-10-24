@@ -36,6 +36,11 @@ public sealed class ItemController(
                 request.ImageUrl = body.ImageUrl;
             }
 
+            if (body.PreparationTimeMinutes.HasValue)
+            {
+                request.PreparationTimeMinutes = body.PreparationTimeMinutes.Value;
+            }
+
             var reply = await client.CreateAsync(request, Options(cancellationToken));
             if (reply.IsSuccess && reply.StatusCode == 201 && reply.Result is not null)
             {
@@ -120,6 +125,11 @@ public sealed class ItemController(
                 request.ImageUrl = body.ImageUrl;
             }
 
+            if (body.PreparationTimeMinutes.HasValue)
+            {
+                request.PreparationTimeMinutes = body.PreparationTimeMinutes.Value;
+            }
+
             var reply = await client.UpdateAsync(request, Options(cancellationToken));
             return ToResponse(reply);
         }, cancellationToken);
@@ -182,6 +192,7 @@ public sealed class ItemController(
             ImageUrl = item.HasImageUrl ? item.ImageUrl : null,
             Availability = item.Availability,
             KitchenStationId = item.HasKitchenStationId ? Guid.Parse(item.KitchenStationId) : null,
+            PreparationTimeMinutes = item.HasPreparationTimeMinutes ? item.PreparationTimeMinutes : null,
             Version = item.Version
         };
     }
