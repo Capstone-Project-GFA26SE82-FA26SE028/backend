@@ -20,5 +20,15 @@ public interface IKitchenTaskService
     Task<KitchenTaskDTO> SetPriority(Guid id, int priority, string? version, CancellationToken ct);
 
     Task<KitchenSummaryDTO> GetSummary(Guid? stationId, CancellationToken ct);
+
+    Task<List<KitchenBatchGroupDTO>> GetBatches(Guid? stationId, CancellationToken ct);
+
+    Task<(int AffectedCount, string Status)> StartBatch(List<Guid> taskIds, CancellationToken ct);
+
+    Task<(int AffectedCount, string Status)> CompleteBatch(List<Guid> taskIds, CancellationToken ct);
+
+    Task<KitchenTaskDTO> RemakeTask(Guid id, string reason, CancellationToken ct);
+
+    Task<FireCourseResultDTO> FireCourse(Guid sessionId, Guid? orderId, string course, CancellationToken ct);
 }
 

@@ -217,7 +217,254 @@ public sealed class KitchenTaskService(
         };
     }
 
-    private static KitchenTaskDTO Map(KitchenTask task)
+    public async Task<List<KitchenBatchGroupDTO>> GetBatches(Guid? stationId, CancellationToken ct)
+    {
+        await access.RequireKitchenTaskAccessAsync(ct);
+        var tasks = await repository.GetPendingForBatchesAsync(stationId, ct);
+
+        var groups = tasks
+            .GroupBy(t => new { t.OrderItem.ItemRef, t.KitchenStationId })
+            .Select(g =>
+            {
+                var first = g.First();
+                return new KitchenBatchGroupDTO
+                {
+                    ItemId = g.Key.ItemRef,
+                    ItemName = first.OrderItem?.NameSnapshot ?? string.Empty,
+                    KitchenStationId = g.Key.KitchenStationId,
+                    KitchenStationName = first.KitchenStation?.KitchenStationName ?? string.Empty,
+                    TotalQuantity = g.Sum(x => x.Quantity),
+                    Tasks = g.Select(t => new KitchenBatchItemDTO
+                    {
+                        KitchenTaskId = t.KitchenTaskId,
+                        OrderId = t.OrderItem.OrderId,
+                        OrderNumber = t.OrderItem.Order?.OrderNumber ?? string.Empty,
+                        TableCode = t.OrderItem.Order?.TableSessionRef.ToString() ?? string.Empty,
+                        Quantity = t.Quantity,
+                        Note = t.OrderItem.Note,
+                        Priority = t.Priority,
+                        EstimatedMinutes = t.EstimatedMinutes,
+                        QueuedAt = t.QueuedAt
+                    }).ToList()
+                };
+            })
+            .OrderByDescending(b => b.TotalQuantity)
+            .ToList();
+
+        return groups;
+    }
+
+    public async Task<(int AffectedCount, string Status)> StartBatch(List<Guid> taskIds, CancellationToken ct)
+    {
+        var actorId = await access.RequireKitchenTaskAccessAsync(ct);
+        if (taskIds is null || taskIds.Count == 0)
+        {
+            throw new OrderingException(400, "Provide at least one kitchen task ID to start.");
+        }
+
+        return await transaction.ExecuteAsync(async () =>
+        {
+            var tasks = await repository.GetByIdsForUpdateAsync(taskIds, ct);
+            var now = clock.GetUtcNow().UtcDateTime;
+            int count = 0;
+
+            foreach (var task in tasks)
+            {
+                if (string.Equals(task.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    task.Status = "Cooking";
+                    task.CookingAt = now;
+                    if (task.OrderItem is not null)
+                    {
+                        task.OrderItem.Status = "Cooking";
+                    }
+
+                    task.Events.Add(new Event
+                    {
+                        EventId = Guid.NewGuid(),
+                        KitchenTaskId = task.KitchenTaskId,
+                        FromStatus = "Pending",
+                        ToStatus = "Cooking",
+                        ActorUserRef = actorId,
+                        OccurredAt = now
+                    });
+                    count++;
+                }
+            }
+
+            return (count, "Cooking");
+        }, ct);
+    }
+
+    public async Task<(int AffectedCount, string Status)> CompleteBatch(List<Guid> taskIds, CancellationToken ct)
+    {
+        var actorId = await access.RequireKitchenTaskAccessAsync(ct);
+        if (taskIds is null || taskIds.Count == 0)
+        {
+            throw new OrderingException(400, "Provide at least one kitchen task ID to complete.");
+        }
+
+        return await transaction.ExecuteAsync(async () =>
+        {
+            var tasks = await repository.GetByIdsForUpdateAsync(taskIds, ct);
+            var now = clock.GetUtcNow().UtcDateTime;
+            int count = 0;
+
+            foreach (var task in tasks)
+            {
+                if (string.Equals(task.Status, "Cooking", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(task.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+                {
+                    var fromStatus = task.Status;
+                    task.Status = "Ready";
+                    task.ReadyAt = now;
+                    if (task.CookingAt is null)
+                    {
+                        task.CookingAt = now;
+                    }
+
+                    if (task.OrderItem is not null)
+                    {
+                        task.OrderItem.Status = "Ready";
+                        if (task.OrderItem.Order is not null)
+                        {
+                            var allReady = task.OrderItem.Order.OrderItems.All(
+                                i => i.Status == "Ready" || i.Status == "Served" || i.Status == "Cancelled");
+                            if (allReady)
+                            {
+                                task.OrderItem.Order.Status = "Ready";
+                            }
+                        }
+                    }
+
+                    task.Events.Add(new Event
+                    {
+                        EventId = Guid.NewGuid(),
+                        KitchenTaskId = task.KitchenTaskId,
+                        FromStatus = fromStatus,
+                        ToStatus = "Ready",
+                        ActorUserRef = actorId,
+                        OccurredAt = now
+                    });
+                    count++;
+                }
+            }
+
+            return (count, "Ready");
+        }, ct);
+    }
+
+    public async Task<KitchenTaskDTO> RemakeTask(Guid id, string reason, CancellationToken ct)
+    {
+        var actorId = await access.RequireKitchenTaskAccessAsync(ct);
+        if (id == Guid.Empty)
+        {
+            throw new OrderingException(400, "Invalid kitchen task ID.");
+        }
+
+        return await transaction.ExecuteAsync(async () =>
+        {
+            var task = await repository.GetByIdForUpdateAsync(id, ct)
+                ?? throw new OrderingException(404, "Kitchen task not found.");
+
+            var fromStatus = task.Status;
+            task.Status = "Cancelled";
+            var now = clock.GetUtcNow().UtcDateTime;
+
+            task.Events.Add(new Event
+            {
+                EventId = Guid.NewGuid(),
+                KitchenTaskId = task.KitchenTaskId,
+                FromStatus = fromStatus,
+                ToStatus = "Cancelled",
+                ActorUserRef = actorId,
+                OccurredAt = now
+            });
+
+            var remakeReason = string.IsNullOrWhiteSpace(reason) ? "Làm lại do sự cố bếp" : reason.Trim();
+            var newTask = new KitchenTask
+            {
+                KitchenTaskId = Guid.NewGuid(),
+                KitchenStationId = task.KitchenStationId,
+                OrderItemId = task.OrderItemId,
+                BatchNumber = 1,
+                Quantity = task.Quantity,
+                Status = "Pending",
+                Priority = 999,
+                EstimatedMinutes = task.EstimatedMinutes,
+                QueuedAt = now,
+                Events = new List<Event>
+                {
+                    new Event
+                    {
+                        EventId = Guid.NewGuid(),
+                        ToStatus = "Pending",
+                        ActorUserRef = actorId,
+                        OccurredAt = now
+                    }
+                }
+            };
+
+            if (task.OrderItem is not null)
+            {
+                task.OrderItem.Status = "Pending";
+                task.OrderItem.Note = string.IsNullOrEmpty(task.OrderItem.Note)
+                    ? $"[LÀM LẠI] {remakeReason}"
+                    : $"{task.OrderItem.Note} [LÀM LẠI] {remakeReason}";
+            }
+
+            repository.Create(newTask);
+            return Map(newTask);
+        }, ct);
+    }
+
+    public async Task<FireCourseResultDTO> FireCourse(Guid sessionId, Guid? orderId, string course, CancellationToken ct)
+    {
+        var actorId = await access.RequireKitchenTaskAccessAsync(ct);
+        if (sessionId == Guid.Empty)
+        {
+            throw new OrderingException(400, "Invalid table session ID.");
+        }
+
+        return await transaction.ExecuteAsync(async () =>
+        {
+            var holdTasks = await repository.GetHoldTasksAsync(sessionId, orderId, ct);
+            var now = clock.GetUtcNow().UtcDateTime;
+            int count = 0;
+
+            foreach (var task in holdTasks)
+            {
+                task.Status = "Pending";
+                task.Priority = 85;
+                task.QueuedAt = now;
+                if (task.OrderItem is not null)
+                {
+                    task.OrderItem.Status = "Pending";
+                }
+
+                task.Events.Add(new Event
+                {
+                    EventId = Guid.NewGuid(),
+                    KitchenTaskId = task.KitchenTaskId,
+                    FromStatus = "Hold",
+                    ToStatus = "Pending",
+                    ActorUserRef = actorId,
+                    OccurredAt = now
+                });
+                count++;
+            }
+
+            return new FireCourseResultDTO
+            {
+                ActivatedCount = count,
+                Message = count > 0
+                    ? $"Đã kích hoạt {count} món '{course ?? "Tráng miệng"}' cho bếp chế biến."
+                    : "Không có món nào đang ở trạng thái giữ (Hold) cần kích hoạt."
+            };
+        }, ct);
+    }
+
+    private KitchenTaskDTO Map(KitchenTask task)
     {
         var effectiveStatus = string.Equals(task.OrderItem?.Status, "Served", StringComparison.OrdinalIgnoreCase)
             ? "Served"
@@ -243,6 +490,13 @@ public sealed class KitchenTaskService(
             QueuedAt = task.QueuedAt,
             CookingAt = task.CookingAt,
             ReadyAt = task.ReadyAt,
+            EstimatedMinutes = task.EstimatedMinutes,
+            DueAt = task.CookingAt.HasValue && task.EstimatedMinutes.HasValue && task.EstimatedMinutes.Value > 0
+                ? task.CookingAt.Value.AddMinutes(task.EstimatedMinutes.Value)
+                : null,
+            IsLate = task.CookingAt.HasValue && !task.ReadyAt.HasValue
+                && task.EstimatedMinutes.HasValue && task.EstimatedMinutes.Value > 0
+                && task.CookingAt.Value.AddMinutes(task.EstimatedMinutes.Value) < clock.GetUtcNow().UtcDateTime,
             Version = task.Version is not null ? Convert.ToBase64String(task.Version) : string.Empty,
             Options = task.OrderItem?.OrderItemOptions?.Select(o => new KitchenTaskOptionDTO
             {

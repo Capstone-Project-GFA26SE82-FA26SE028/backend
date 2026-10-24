@@ -68,5 +68,109 @@ public sealed class KitchenTaskGrpcService(IKitchenTaskService service) : Kitche
             stationId,
             context.CancellationToken));
     }
+
+    public override async Task<KitchenBatchListReply> GetBatches(KitchenBatchListRequest request, ServerCallContext context)
+    {
+        Guid? stationId = request.HasKitchenStationId && Guid.TryParse(request.KitchenStationId, out var parsedStation)
+            ? parsedStation : null;
+
+        var batches = await service.GetBatches(stationId, context.CancellationToken);
+        var reply = new KitchenBatchListReply();
+
+        foreach (var b in batches)
+        {
+            var group = new KitchenBatchGroupInfo
+            {
+                ItemId = b.ItemId.ToString(),
+                ItemName = b.ItemName,
+                KitchenStationId = b.KitchenStationId.ToString(),
+                KitchenStationName = b.KitchenStationName,
+                TotalQuantity = b.TotalQuantity
+            };
+
+            foreach (var t in b.Tasks)
+            {
+                var itemInfo = new KitchenBatchItemInfo
+                {
+                    KitchenTaskId = t.KitchenTaskId.ToString(),
+                    OrderId = t.OrderId.ToString(),
+                    OrderNumber = t.OrderNumber,
+                    TableCode = t.TableCode,
+                    Quantity = t.Quantity,
+                    Priority = t.Priority,
+                    QueuedAt = t.QueuedAt.ToString("o")
+                };
+
+                if (t.EstimatedMinutes.HasValue && t.EstimatedMinutes.Value > 0)
+                {
+                    itemInfo.EstimatedMinutes = t.EstimatedMinutes.Value;
+                }
+
+                if (t.EstimatedMinutes.HasValue && t.EstimatedMinutes.Value > 0)
+                {
+                    itemInfo.EstimatedMinutes = t.EstimatedMinutes.Value;
+                }
+
+                if (!string.IsNullOrEmpty(t.Note))
+                {
+                    itemInfo.Note = t.Note;
+                }
+
+                group.Tasks.Add(itemInfo);
+            }
+
+            reply.Batches.Add(group);
+        }
+
+        return reply;
+    }
+
+    public override async Task<KitchenBatchActionReply> StartBatch(KitchenBatchActionRequest request, ServerCallContext context)
+    {
+        var ids = request.TaskIds.Select(Guid.Parse).ToList();
+        var (count, status) = await service.StartBatch(ids, context.CancellationToken);
+        return new KitchenBatchActionReply
+        {
+            AffectedCount = count,
+            Status = status
+        };
+    }
+
+    public override async Task<KitchenBatchActionReply> CompleteBatch(KitchenBatchActionRequest request, ServerCallContext context)
+    {
+        var ids = request.TaskIds.Select(Guid.Parse).ToList();
+        var (count, status) = await service.CompleteBatch(ids, context.CancellationToken);
+        return new KitchenBatchActionReply
+        {
+            AffectedCount = count,
+            Status = status
+        };
+    }
+
+    public override async Task<KitchenTaskInfo> RemakeTask(KitchenTaskRemakeRequest request, ServerCallContext context)
+    {
+        return OrderingMapping.Map(await service.RemakeTask(
+            Guid.Parse(request.Id),
+            request.Reason,
+            context.CancellationToken));
+    }
+
+    public override async Task<FireCourseReply> FireCourse(FireCourseRequest request, ServerCallContext context)
+    {
+        Guid? orderId = request.HasOrderId && Guid.TryParse(request.OrderId, out var parsedOrder)
+            ? parsedOrder : null;
+
+        var result = await service.FireCourse(
+            Guid.Parse(request.TableSessionId),
+            orderId,
+            request.Course,
+            context.CancellationToken);
+
+        return new FireCourseReply
+        {
+            ActivatedCount = result.ActivatedCount,
+            Message = result.Message
+        };
+    }
 }
 

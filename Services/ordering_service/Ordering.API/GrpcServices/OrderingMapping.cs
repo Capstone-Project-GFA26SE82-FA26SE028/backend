@@ -60,6 +60,11 @@ internal static class OrderingMapping
             result.KitchenStationId = value.KitchenStationId.Value.ToString();
         }
 
+        if (value.PreparationTimeMinutes.HasValue && value.PreparationTimeMinutes.Value > 0)
+        {
+            result.PreparationTimeMinutes = value.PreparationTimeMinutes.Value;
+        }
+
         return result;
     }
 
@@ -143,7 +148,8 @@ internal static class OrderingMapping
             Status = value.Status,
             Version = value.Version,
             CreatedAt = value.CreatedAt.ToString("O", CultureInfo.InvariantCulture),
-            TotalAmount = value.TotalAmount.ToString(CultureInfo.InvariantCulture)
+            TotalAmount = value.TotalAmount.ToString(CultureInfo.InvariantCulture),
+            Channel = value.Channel
         };
         if (value.CreatedBy.HasValue)
         {
@@ -207,6 +213,7 @@ internal static class OrderingMapping
             Status = value.Status,
             Priority = value.Priority,
             QueuedAt = value.QueuedAt.ToString("O", CultureInfo.InvariantCulture),
+            IsLate = value.IsLate,
             Version = value.Version
         };
 
@@ -228,6 +235,21 @@ internal static class OrderingMapping
         if (value.ReadyAt.HasValue)
         {
             result.ReadyAt = value.ReadyAt.Value.ToString("O", CultureInfo.InvariantCulture);
+        }
+
+        if (value.EstimatedMinutes.HasValue && value.EstimatedMinutes.Value > 0)
+        {
+            result.EstimatedMinutes = value.EstimatedMinutes.Value;
+        }
+
+        if (value.EstimatedMinutes.HasValue && value.EstimatedMinutes.Value > 0)
+        {
+            result.EstimatedMinutes = value.EstimatedMinutes.Value;
+        }
+
+        if (value.DueAt.HasValue)
+        {
+            result.DueAt = value.DueAt.Value.ToString("O", CultureInfo.InvariantCulture);
         }
 
         result.Options.AddRange(value.Options.Select(Map));

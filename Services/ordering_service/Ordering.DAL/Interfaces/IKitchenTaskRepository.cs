@@ -26,4 +26,10 @@ public interface IKitchenTaskRepository
     Task<(int Pending, int Cooking, int Ready, double AvgCookingMinutes)> GetSummaryAsync(
         Guid? stationId,
         CancellationToken ct);
+
+    Task<List<KitchenTask>> GetPendingForBatchesAsync(Guid? stationId, CancellationToken ct);
+
+    Task<List<KitchenTask>> GetByIdsForUpdateAsync(IEnumerable<Guid> ids, CancellationToken ct);
+
+    Task<List<KitchenTask>> GetHoldTasksAsync(Guid sessionId, Guid? orderId, CancellationToken ct);
 }
