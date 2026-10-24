@@ -1,0 +1,19 @@
+services:
+  ollama:
+    extends:
+      file: compose.ai.yaml
+      service: ollama
+  ai-model-init:
+    extends:
+      file: compose.ai.yaml
+      service: ai-model-init
+  ai:
+    extends:
+      file: compose.ai.yaml
+      service: ai
+  gateway:
+    extends:
+      file: compose.ai.yaml
+      service: gateway
+volumes:
+  ai-models:

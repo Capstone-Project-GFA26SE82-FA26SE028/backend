@@ -4,6 +4,7 @@ COPY Shared/Shared.Common/ Shared/Shared.Common/
 COPY Services/api_gateway/ApiGateway/ApiGateway.csproj Services/api_gateway/ApiGateway/
 RUN dotnet restore Services/api_gateway/ApiGateway/ApiGateway.csproj
 COPY Contracts/ Contracts/
+COPY Services/ai_service/AI.API/Protos/ Services/ai_service/AI.API/Protos/
 COPY Services/api_gateway/ApiGateway/ Services/api_gateway/ApiGateway/
 RUN dotnet publish Services/api_gateway/ApiGateway/ApiGateway.csproj -c Release --no-restore -o /app/publish /p:UseAppHost=false
 
