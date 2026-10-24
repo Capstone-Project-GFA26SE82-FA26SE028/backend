@@ -25,6 +25,7 @@ public static class OrderingServiceExtensions
         });
         services.AddScoped<IKitchenStationAccess, IdentityKitchenStationAccess>();
         services.AddScoped<IKitchenStationService, KitchenStationService>();
+        services.AddScoped<IKitchenTaskService, KitchenTaskService>();
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddOptions<OrderingSettings>().Bind(configuration.GetSection("Ordering"))
             .Validate(settings => settings.DependencyTimeoutSeconds is > 0 and <= 60, "Dependency timeout must be 1-60 seconds.")

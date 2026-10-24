@@ -31,6 +31,7 @@ public sealed class CreateOrderDTO
     public Guid? CartId { get; set; }
     public string? CartVersion { get; set; }
     public Guid? TableId { get; set; }
+    public string? Channel { get; set; }
     public List<SelectionDTO> Items { get; set; } = [];
 }
 
@@ -91,6 +92,7 @@ public sealed class OrderDTO
     public Guid OrderId { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
     public Guid TableSessionId { get; set; }
+    public string Channel { get; set; } = "DineIn";
     public string Source { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string Version { get; set; } = string.Empty;

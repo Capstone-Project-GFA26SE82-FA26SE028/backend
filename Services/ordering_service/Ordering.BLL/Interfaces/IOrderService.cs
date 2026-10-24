@@ -11,4 +11,6 @@ public interface IOrderService
     Task<List<OrderDTO>> GetAll(Guid sessionId, int page, int pageSize, string guestToken, CancellationToken ct);
 
     Task<OrderDTO> Confirm(Guid sessionId, Guid id, string version, CancellationToken ct);
+
+    Task<OrderDTO> ServeItem(Guid sessionId, Guid id, Guid orderItemId, string? version, CancellationToken ct);
 }

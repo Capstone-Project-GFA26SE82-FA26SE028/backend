@@ -84,6 +84,7 @@ message CreateItemRequest {
   string item_name = 2;
   optional string description = 3;
   optional string image_url = 4;
+  optional int32 preparation_time_minutes = 5;
 }
 
 message UpdateItemRequest {
@@ -93,6 +94,7 @@ message UpdateItemRequest {
   optional string description = 4;
   optional string image_url = 5;
   string version = 6;
+  optional int32 preparation_time_minutes = 7;
 }
 
 message ItemIdRequest {
@@ -118,6 +120,7 @@ message ItemInfo {
   string availability = 8;
   string version = 9;
   optional string kitchen_station_id = 10;
+  optional int32 preparation_time_minutes = 11;
 }
 
 message ItemReply {
@@ -570,6 +573,7 @@ message MenuItemInfo {
   bool can_order = 13;
   optional string unavailable_reason = 14;
   repeated MenuOptionGroupInfo option_groups = 15;
+  optional int32 preparation_time_minutes = 16;
 }
 message MenuListReply {
   int32 status_code = 1;
@@ -631,6 +635,7 @@ message ValidatedOrderItem {
   string line_total = 10;
   repeated ValidatedOrderOption options = 11;
   optional string kitchen_station_id = 12;
+  optional int32 preparation_time_minutes = 13;
 }
 message ValidatedOrderOption {
   string option_id = 1;

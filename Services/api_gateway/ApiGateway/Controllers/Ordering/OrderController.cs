@@ -45,6 +45,11 @@ public sealed class OrderController(OrderGrpc.OrderGrpcClient client, IOptions<O
                 request.TableId = body.TableId.Value.ToString();
             }
 
+            if (!string.IsNullOrWhiteSpace(body.Channel))
+            {
+                request.Channel = body.Channel;
+            }
+
             request.Items.AddRange(body.Items.Select(OrderingMapping.WriteSelection));
             var reply = await client.CreateAsync(request, Options(ct));
             if (reply.Created)
@@ -91,5 +96,28 @@ public sealed class OrderController(OrderGrpc.OrderGrpcClient client, IOptions<O
             OrderId = id.ToString(),
             Version = body.Version ?? string.Empty
         }, Options(ct)))), ct);
+    }
+
+    [HttpPost("{id:guid}/items/{orderItemId:guid}/serve")]
+    [RequireBearerToken]
+    public Task<IActionResult> ServeItem(Guid sessionId, Guid id, Guid orderItemId, ServeOrderItemDTO body, CancellationToken ct)
+    {
+        return Execute(async () =>
+        {
+            var request = new ServeOrderItemRequest
+            {
+                Access = Access(sessionId),
+                OrderId = id.ToString(),
+                OrderItemId = orderItemId.ToString()
+            };
+
+            if (!string.IsNullOrEmpty(body.Version))
+            {
+                request.Version = body.Version;
+            }
+
+            var reply = await client.ServeItemAsync(request, Options(ct));
+            return Result(OrderingMapping.Map(reply));
+        }, ct);
     }
 }

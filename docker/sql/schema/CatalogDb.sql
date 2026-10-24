@@ -41,6 +41,7 @@ CREATE TABLE [dbo].[Item](
 	[ImageUrl] [varchar](max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[Availability] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[KitchenStationRef] [uniqueidentifier] NULL,
+	[PreparationTimeMinutes] [int] NULL,
 	[Version] [timestamp] NOT NULL,
  CONSTRAINT [PK_Item] PRIMARY KEY CLUSTERED 
 (

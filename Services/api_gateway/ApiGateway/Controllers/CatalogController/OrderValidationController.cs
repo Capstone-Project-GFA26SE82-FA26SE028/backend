@@ -85,6 +85,7 @@ public sealed class OrderValidationController(
                 OptionsTotalPerUnit = Money(item.OptionsTotalPerUnit),
                 UnitTotal = Money(item.UnitTotal),
                 LineTotal = Money(item.LineTotal),
+                PreparationTimeMinutes = item.HasPreparationTimeMinutes ? item.PreparationTimeMinutes : null,
                 Options = item.Options.Select(option => new ValidatedOrderOptionDTO
                 {
                     OptionId = Guid.Parse(option.OptionId),

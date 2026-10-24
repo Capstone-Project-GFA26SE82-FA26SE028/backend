@@ -7,4 +7,5 @@ public sealed class UpdateItemDTO
     public string? Description { get; set; }
     public string? ImageUrl { get; set; }
     public string? Version { get; set; }
+    public int? PreparationTimeMinutes { get; set; }
 }

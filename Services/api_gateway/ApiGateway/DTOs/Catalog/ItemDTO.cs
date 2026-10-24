@@ -12,4 +12,5 @@ public sealed class ItemDTO
     public string? ImageUrl { get; set; }
     public string Availability { get; set; } = string.Empty;
     public string Version { get; set; } = string.Empty;
+    public int? PreparationTimeMinutes { get; set; } = 10;
 }

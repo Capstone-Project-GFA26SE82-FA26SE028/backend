@@ -34,7 +34,7 @@ ID cố định của T01: `20000000-0000-0000-0000-000000000011`; T02/T03 kết
 Docker kết nối `sqlserver:1433` trong mạng nội bộ, không dùng database SQL trên máy host và không publish cổng SQL. Các connection string `*_DB_CONNECTION` của cấu hình Docker cũ không còn được sử dụng. Cấu hình chạy .NET local vẫn độc lập trong appsettings/User Secrets.
 
 - `GATEWAY_HTTP_PORT=5000`: cổng Gateway trên máy.
-- `QR_MENU_BASE_URL`: địa chỉ trang FE mà khách mở sau khi quét QR. Mặc định `http://localhost:3300/customer.html`; đổi theo FE của nhóm. localhost trên điện thoại là chính điện thoại.
+- `QR_MENU_BASE_URL`: địa chỉ trang FE mà khách mở sau khi quét QR. Mặc định `http://localhost:5173/menu`; đổi theo FE của nhóm. localhost trên điện thoại là chính điện thoại.
 - TestUI không nằm trong Compose. TestUI gọi Gateway tại `http://localhost:5000`, khớp với `GATEWAY_HTTP_PORT=5000`.
 
 Gateway chỉ publish trên loopback. Các service gRPC chỉ dùng HTTP/2 trong mạng Docker: Identity 5001, Restaurant 5002, Catalog 5003, Ordering 5004, Customer 5005, Inventory 5006, Billing 5007. Không cần dev HTTPS certificate trong container.

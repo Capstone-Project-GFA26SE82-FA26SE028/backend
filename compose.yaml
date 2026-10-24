@@ -72,7 +72,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=RestaurantDb;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env};Encrypt=True;TrustServerCertificate=True"
-      Qr__MenuBaseUrl: ${QR_MENU_BASE_URL:-http://localhost:3300/customer.html}
+      Qr__MenuBaseUrl: ${QR_MENU_BASE_URL:-http://localhost:5173/menu}
       Qr__ImageDirectory: /app/App_Data/qr-images
     volumes:
       - qr-images:/app/App_Data/qr-images

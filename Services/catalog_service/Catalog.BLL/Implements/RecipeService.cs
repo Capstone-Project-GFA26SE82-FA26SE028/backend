@@ -117,7 +117,7 @@ public sealed class RecipeService(
         Guid itemId,
         CancellationToken cancellationToken)
     {
-        await access.RequireMenuManagerAsync(cancellationToken);
+        await access.RequireMenuStaffAsync(cancellationToken);
 
         if (itemId == Guid.Empty)
         {
@@ -236,7 +236,7 @@ public sealed class RecipeService(
         Guid optionId,
         CancellationToken cancellationToken)
     {
-        await access.RequireMenuManagerAsync(cancellationToken);
+        await access.RequireMenuStaffAsync(cancellationToken);
 
         if (optionId == Guid.Empty)
         {
