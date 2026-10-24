@@ -6,9 +6,15 @@ for database in IdentityDb RestaurantDb OrderingDb InventoryDb CatalogDb Custome
     initialized=$("${sqlcmd[@]}" -d "$database" -h -1 -W -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM sys.extended_properties WHERE class = 0 AND name = N'DockerBootstrapVersion';" | tr -d '[:space:]')
     if [[ "$initialized" == "1" ]]; then
         if [[ "$database" == "InventoryDb" ]]; then
-            "${sqlcmd[@]}" -d "$database" -i /init/upgrades/InventoryUnits.sql
-            "${sqlcmd[@]}" -d "$database" -i /init/upgrades/InventoryFifo.sql
-        fi
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/InventoryUnits.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/InventoryFifo.sql
+    fi
+    if [[ "$database" == "CatalogDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/CatalogCookingTime.sql
+    fi
+    if [[ "$database" == "OrderingDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/OrderingCookingTime.sql
+    fi
         echo "$database already initialized; keeping existing data."
         continue
     fi
@@ -41,5 +47,11 @@ GO
     if [[ "$database" == "InventoryDb" ]]; then
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/InventoryUnits.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/InventoryFifo.sql
+    fi
+    if [[ "$database" == "CatalogDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/CatalogCookingTime.sql
+    fi
+    if [[ "$database" == "OrderingDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/OrderingCookingTime.sql
     fi
 done

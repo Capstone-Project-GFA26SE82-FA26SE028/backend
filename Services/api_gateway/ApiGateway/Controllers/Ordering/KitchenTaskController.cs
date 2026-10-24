@@ -134,5 +134,84 @@ public sealed class KitchenTaskController(
             return Result(OrderingMapping.Map(reply));
         }, ct);
     }
+
+    [HttpGet("batches")]
+    public Task<IActionResult> GetBatches(CancellationToken ct, [FromQuery] Guid? kitchenStationId = null)
+    {
+        return Execute(async () =>
+        {
+            var request = new KitchenBatchListRequest();
+            if (kitchenStationId.HasValue)
+            {
+                request.KitchenStationId = kitchenStationId.Value.ToString();
+            }
+
+            var reply = await client.GetBatchesAsync(request, Options(ct));
+            return Result(reply.Batches.Select(OrderingMapping.Map).ToList());
+        }, ct);
+    }
+
+    [HttpPost("batches/start")]
+    public Task<IActionResult> StartBatch([FromBody] KitchenBatchActionDTO body, CancellationToken ct)
+    {
+        return Execute(async () =>
+        {
+            var request = new KitchenBatchActionRequest();
+            request.TaskIds.AddRange(body.TaskIds.Select(id => id.ToString()));
+
+            var reply = await client.StartBatchAsync(request, Options(ct));
+            return Result(OrderingMapping.Map(reply));
+        }, ct);
+    }
+
+    [HttpPost("batches/complete")]
+    public Task<IActionResult> CompleteBatch([FromBody] KitchenBatchActionDTO body, CancellationToken ct)
+    {
+        return Execute(async () =>
+        {
+            var request = new KitchenBatchActionRequest();
+            request.TaskIds.AddRange(body.TaskIds.Select(id => id.ToString()));
+
+            var reply = await client.CompleteBatchAsync(request, Options(ct));
+            return Result(OrderingMapping.Map(reply));
+        }, ct);
+    }
+
+    [HttpPost("{id:guid}/remake")]
+    public Task<IActionResult> RemakeTask(Guid id, [FromBody] KitchenTaskRemakeDTO body, CancellationToken ct)
+    {
+        return Execute(async () =>
+        {
+            var request = new KitchenTaskRemakeRequest
+            {
+                Id = id.ToString(),
+                Reason = body.Reason
+            };
+
+            var reply = await client.RemakeTaskAsync(request, Options(ct));
+            return Result(OrderingMapping.Map(reply));
+        }, ct);
+    }
+
+    [HttpPost("fire-course")]
+    public Task<IActionResult> FireCourse([FromBody] FireCourseRequestDTO body, CancellationToken ct)
+    {
+        return Execute(async () =>
+        {
+            var request = new FireCourseRequest
+            {
+                TableSessionId = body.TableSessionId.ToString(),
+                Course = body.Course
+            };
+
+            if (body.OrderId.HasValue)
+            {
+                request.OrderId = body.OrderId.Value.ToString();
+            }
+
+            var reply = await client.FireCourseAsync(request, Options(ct));
+            return Result(OrderingMapping.Map(reply));
+        }, ct);
+    }
 }
 

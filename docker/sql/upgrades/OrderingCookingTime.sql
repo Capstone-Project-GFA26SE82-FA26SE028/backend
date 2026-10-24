@@ -1,0 +1,6 @@
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+IF COL_LENGTH('dbo.KitchenTask', 'EstimatedMinutes') IS NULL
+    ALTER TABLE dbo.KitchenTask ADD EstimatedMinutes INT NULL;
+COMMIT TRANSACTION;
+

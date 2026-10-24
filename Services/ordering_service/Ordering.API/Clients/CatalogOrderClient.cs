@@ -88,6 +88,7 @@ public sealed class CatalogOrderClient(OrderValidationGrpc.OrderValidationGrpcCl
                 Name = item.NameSnapshot,
                 RecipeVersionId = Guid.Parse(item.RecipeVersionId),
                 KitchenStationId = item.HasKitchenStationId ? Guid.Parse(item.KitchenStationId) : null,
+                PreparationTimeMinutes = item.HasPreparationTimeMinutes ? item.PreparationTimeMinutes : null,
                 Quantity = item.Quantity,
                 UnitPrice = decimal.Parse(item.UnitPriceSnapshot, CultureInfo.InvariantCulture),
                 Options = item.Options.Select(option => new QuotedOptionDTO
