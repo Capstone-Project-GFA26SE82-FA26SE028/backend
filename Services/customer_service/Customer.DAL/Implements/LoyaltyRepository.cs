@@ -10,7 +10,7 @@ public sealed class LoyaltyRepository(CustomerDbContext db) : ILoyaltyRepository
     {
         return db.LoyaltyTiers
             .AsNoTracking()
-            .OrderBy(t => t.RequiredSpend)
+            .OrderBy(t => (double)t.RequiredSpend)
             .ToListAsync(ct);
     }
 
@@ -22,7 +22,7 @@ public sealed class LoyaltyRepository(CustomerDbContext db) : ILoyaltyRepository
     public Task<LoyaltyTier?> GetDefaultTierAsync(CancellationToken ct)
     {
         return db.LoyaltyTiers
-            .OrderBy(t => t.RequiredSpend)
+            .OrderBy(t => (double)t.RequiredSpend)
             .FirstOrDefaultAsync(ct);
     }
 
@@ -30,7 +30,7 @@ public sealed class LoyaltyRepository(CustomerDbContext db) : ILoyaltyRepository
     {
         return db.LoyaltyTiers
             .Where(t => t.RequiredSpend <= totalSpend)
-            .OrderByDescending(t => t.RequiredSpend)
+            .OrderByDescending(t => (double)t.RequiredSpend)
             .FirstOrDefaultAsync(ct);
     }
 
@@ -59,11 +59,12 @@ public sealed class LoyaltyRepository(CustomerDbContext db) : ILoyaltyRepository
 
     public async Task<decimal> GetTotalSpentAsync(Guid customerId, CancellationToken ct)
     {
-        var totalSpent = await db.LoyaltyEntries
+        var spends = await db.LoyaltyEntries
             .Where(e => e.CustomerId == customerId && e.Type == "Earn")
-            .SumAsync(e => (decimal?)e.EligibleSpend, ct) ?? 0m;
+            .Select(e => e.EligibleSpend)
+            .ToListAsync(ct);
 
-        return totalSpent;
+        return spends.Sum();
     }
 
     public Task<PointReservation?> GetReservationByBillAsync(Guid billId, CancellationToken ct)
