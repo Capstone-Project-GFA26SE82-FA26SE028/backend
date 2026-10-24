@@ -72,6 +72,10 @@ public sealed class OrderValidationGrpcService(IOrderValidationService service) 
                 UnitTotal = Money(item.UnitTotal),
                 LineTotal = Money(item.LineTotal)
             };
+            if (item.PreparationTimeMinutes.HasValue)
+            {
+                mapped.PreparationTimeMinutes = item.PreparationTimeMinutes.Value;
+            }
             if (item.KitchenStationId.HasValue)
             {
                 mapped.KitchenStationId = item.KitchenStationId.Value.ToString();

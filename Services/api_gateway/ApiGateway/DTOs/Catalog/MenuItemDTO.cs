@@ -16,6 +16,7 @@ public sealed class MenuItemDTO
     public DateTimeOffset EvaluatedAt { get; set; }
     public bool CanOrder { get; set; }
     public string? UnavailableReason { get; set; }
+    public int? PreparationTimeMinutes { get; set; } = 10;
     public List<MenuOptionGroupDTO> OptionGroups { get; set; } = [];
 }
 
