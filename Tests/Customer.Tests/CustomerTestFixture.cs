@@ -25,7 +25,7 @@ public sealed class CustomerTestFixture : IDisposable
             .UseSqlite(_connection)
             .Options;
 
-        Db = new CustomerDbContext(options);
+        Db = new TestCustomerDbContext(options);
         Db.Database.EnsureCreated();
 
         Clock = new TestTimeProvider(new DateTimeOffset(2026, 10, 23, 12, 0, 0, TimeSpan.Zero));
@@ -90,5 +90,17 @@ public sealed class CustomerTestFixture : IDisposable
     {
         Db.Dispose();
         _connection.Dispose();
+    }
+
+    private sealed class TestCustomerDbContext(DbContextOptions<CustomerDbContext> options) : CustomerDbContext(options)
+    {
+        protected override void OnModelCreating(ModelBuilder builder)
+        {
+            base.OnModelCreating(builder);
+            builder.Entity<Customer.DAL.Models.Customer>()
+                .Property(x => x.Version)
+                .IsRowVersion()
+                .HasDefaultValue(new byte[8]);
+        }
     }
 }
