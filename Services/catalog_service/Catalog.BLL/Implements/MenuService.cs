@@ -137,6 +137,7 @@ public sealed class MenuService(
             EvaluatedAt = new DateTimeOffset(DateTime.SpecifyKind(now, DateTimeKind.Utc)),
             CanOrder = reason is null,
             UnavailableReason = reason,
+            PreparationTimeMinutes = item.PreparationTimeMinutes,
             OptionGroups = groups
         };
     }
