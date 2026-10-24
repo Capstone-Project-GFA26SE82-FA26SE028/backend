@@ -3,6 +3,9 @@ using Grpc.Core;
 using ApiGateway.Settings;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables().AddCommandLine(args);
+ApiGateway.Extensions.AIServiceExtensions.AddAssistantClients(builder.Services, builder.Configuration);
 builder.Services.AddGrpcClient<Backend.Contracts.Inventory.StockLotGrpc.StockLotGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]!);

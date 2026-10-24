@@ -1,0 +1,52 @@
+syntax = "proto3";
+option csharp_namespace = "Backend.Contracts.AI";
+package ai;
+
+message GuestAccess {
+  string table_session_id = 1;
+  string guest_token = 2;
+}
+message ConversationTurn { string role = 1; string content = 2; }
+message ChatRequest {
+  GuestAccess access = 1;
+  string message = 2;
+  repeated ConversationTurn history = 3;
+}
+message RecommendationRequest {
+  GuestAccess access = 1;
+  string cart_id = 2;
+  int32 limit = 3;
+}
+message MenuCard {
+  string item_id = 1;
+  string category_id = 2;
+  string item_name = 3;
+  string category_name = 4;
+  optional string description = 5;
+  optional string image_url = 6;
+  optional string price = 7;
+  optional string price_id = 8;
+  string availability = 9;
+  bool can_order = 10;
+  optional string unavailable_reason = 11;
+  string channel = 12;
+  string evaluated_at = 13;
+  bool requires_option_selection = 14;
+}
+message SuggestedItem { MenuCard item = 1; string reason = 2; }
+message ChatReply {
+  string answer = 1;
+  repeated MenuCard items = 2;
+  bool search_limited = 3;
+  string evaluated_at = 4;
+}
+message RecommendationReply {
+  string cart_id = 1;
+  string cart_version = 2;
+  string message = 3;
+  repeated SuggestedItem items = 4;
+  bool search_limited = 5;
+  string evaluated_at = 6;
+}
+service ChatGrpc { rpc Chat(ChatRequest) returns (ChatReply); }
+service RecommendationGrpc { rpc Recommend(RecommendationRequest) returns (RecommendationReply); }
