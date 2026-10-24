@@ -45,6 +45,11 @@ public sealed class OrderController(OrderGrpc.OrderGrpcClient client, IOptions<O
                 request.TableId = body.TableId.Value.ToString();
             }
 
+            if (!string.IsNullOrWhiteSpace(body.Channel))
+            {
+                request.Channel = body.Channel;
+            }
+
             request.Items.AddRange(body.Items.Select(OrderingMapping.WriteSelection));
             var reply = await client.CreateAsync(request, Options(ct));
             if (reply.Created)
