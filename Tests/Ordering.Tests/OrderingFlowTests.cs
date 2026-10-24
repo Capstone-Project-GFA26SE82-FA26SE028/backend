@@ -68,6 +68,35 @@ public sealed class OrderingFlowTests
     }
 
     [Fact]
+    public async Task ServeItemRequiresStaffAndReadyStatus()
+    {
+        using var app = new Fixture();
+        var cart = await app.FilledCart();
+        var created = await app.Orders.Create(app.Session, "submit-serve", new CreateOrderDTO
+        {
+            CartId = cart.CartId,
+            CartVersion = cart.Version
+        }, "guest", default);
+        app.Staff = true;
+        var confirmed = await app.Orders.Confirm(app.Session, created.Order.OrderId, created.Order.Version, default);
+        var orderItem = Assert.Single(confirmed.Items);
+
+        await Error(400, () => app.Orders.ServeItem(app.Session, confirmed.OrderId, orderItem.OrderItemId, null, default));
+
+        var dbItem = await app.Db.OrderItems.FirstAsync(i => i.OrderItemId == orderItem.OrderItemId);
+        dbItem.Status = "Ready";
+        await app.Db.SaveChangesAsync();
+
+        app.Staff = false;
+        await Error(403, () => app.Orders.ServeItem(app.Session, confirmed.OrderId, orderItem.OrderItemId, null, default));
+
+        app.Staff = true;
+        var served = await app.Orders.ServeItem(app.Session, confirmed.OrderId, orderItem.OrderItemId, null, default);
+        Assert.Equal("Served", served.Status);
+        Assert.Equal("Served", Assert.Single(served.Items).Status);
+    }
+
+    [Fact]
     public async Task CartOwnershipVersionAndReplacementSurviveReload()
     {
         using var app = new Fixture();
@@ -105,7 +134,7 @@ public sealed class OrderingFlowTests
     }
 
     [Fact]
-    public async Task StaffOrderUsesStationAndGuestCannotReadIt()
+    public async Task StaffOrderUsesStationAndGuestInSameSessionCanReadIt()
     {
         using var app = new Fixture();
         app.Staff = true;
@@ -117,8 +146,9 @@ public sealed class OrderingFlowTests
         Assert.Equal(app.Station, (await app.Db.KitchenTasks.SingleAsync()).KitchenStationId);
         Assert.Equal(app.User, created.Order.ConfirmedBy);
         app.Staff = false;
-        await Error(404, () => app.Orders.GetById(app.Session, created.Order.OrderId, "guest", default));
-        Assert.Empty(await app.Orders.GetAll(app.Session, 1, 20, "guest", default));
+        var guestOrder = await app.Orders.GetById(app.Session, created.Order.OrderId, "guest", default);
+        Assert.Equal(created.Order.OrderId, guestOrder.OrderId);
+        Assert.Single(await app.Orders.GetAll(app.Session, 1, 20, "guest", default));
         app.Closed = true;
         await Error(409, () => app.Carts.Create(app.Session, "guest", default));
     }
@@ -223,6 +253,75 @@ public sealed class OrderingFlowTests
         Assert.Equal(bar.KitchenStationId, tasks.Single(task => task.OrderItem.ItemRef == drink).KitchenStationId);
     }
 
+    [Fact]
+    public async Task CourseSequencingAssignsProperInitialStatusAndPriorityBasedOnChannel()
+    {
+        using var app = new Fixture();
+        var dessert = Guid.NewGuid();
+        var appetizer = Guid.NewGuid();
+        var slowCook = Guid.NewGuid();
+
+        app.Names[dessert] = "Chè khúc bạch";
+        app.Names[appetizer] = "Gỏi ngó sen tôm thịt";
+        app.Names[slowCook] = "Bò hầm tiêu xanh";
+
+        app.Routes[dessert] = app.Station;
+        app.Routes[appetizer] = app.Station;
+        app.Routes[slowCook] = app.Station;
+
+        app.Staff = true;
+
+        // 1. DineIn Order
+        var dineInOrder = await app.Orders.Create(app.Session, "dinein-seq", new CreateOrderDTO
+        {
+            Channel = "DineIn",
+            Items =
+            [
+                new SelectionDTO { ItemId = dessert, Quantity = 1 },
+                new SelectionDTO { ItemId = appetizer, Quantity = 1 },
+                new SelectionDTO { ItemId = slowCook, Quantity = 1 }
+            ]
+        }, "", default);
+
+        var tasks = await app.Db.KitchenTasks.Include(t => t.OrderItem).ToListAsync();
+        var dessertTask = tasks.Single(t => t.OrderItem.ItemRef == dessert);
+        var appTask = tasks.Single(t => t.OrderItem.ItemRef == appetizer);
+        var slowTask = tasks.Single(t => t.OrderItem.ItemRef == slowCook);
+
+        // DineIn: Dessert is placed on Hold (Priority 20)
+        Assert.Equal("Hold", dessertTask.Status);
+        Assert.Equal(20, dessertTask.Priority);
+
+        // Appetizer: Pending, Priority 100
+        Assert.Equal("Pending", appTask.Status);
+        Assert.Equal(100, appTask.Priority);
+
+        // Slow-cook: Pending, Priority 70
+        Assert.Equal("Pending", slowTask.Status);
+        Assert.Equal(70, slowTask.Priority);
+
+        // 2. Takeaway Order
+        var takeawayDessert = Guid.NewGuid();
+        app.Names[takeawayDessert] = "Chè đậu đỏ";
+        app.Routes[takeawayDessert] = app.Station;
+
+        var takeawayOrder = await app.Orders.Create(app.Session, "takeaway-seq", new CreateOrderDTO
+        {
+            Channel = "Takeaway",
+            Items =
+            [
+                new SelectionDTO { ItemId = takeawayDessert, Quantity = 1 }
+            ]
+        }, "", default);
+
+        var takeawayTask = await app.Db.KitchenTasks.Include(t => t.OrderItem)
+            .SingleAsync(t => t.OrderItem.ItemRef == takeawayDessert);
+
+        // Takeaway: No course delay/Hold, immediate cooking queue
+        Assert.Equal("Pending", takeawayTask.Status);
+        Assert.Equal(50, takeawayTask.Priority);
+    }
+
     private sealed class Fixture : IOrderingAccess, ICatalogOrderClient, IDisposable
     {
         private readonly SqliteConnection connection = new("Data Source=:memory:");
@@ -239,6 +338,7 @@ public sealed class OrderingFlowTests
         public Guid Station { get; } = Guid.NewGuid();
         public Guid? ItemStation { get; set; }
         public Dictionary<Guid, Guid> Routes { get; } = new();
+        public Dictionary<Guid, string> Names { get; } = new();
         public bool Staff { get; set; }
         public bool Closed { get; set; }
         public bool Valid { get; set; } = true;
@@ -310,7 +410,7 @@ public sealed class OrderingFlowTests
                 {
                     ItemId = item.ItemId,
                     KitchenStationId = Routes.TryGetValue(item.ItemId, out var route) ? route : ItemStation,
-                    Name = "Pho",
+                    Name = Names.TryGetValue(item.ItemId, out var name) ? name : "Pho",
                     RecipeVersionId = Recipe,
                     Quantity = item.Quantity,
                     UnitPrice = Price,

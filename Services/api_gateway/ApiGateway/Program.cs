@@ -52,6 +52,11 @@ builder.Services.AddGrpcClient<Backend.Contracts.Ordering.KitchenStationGrpc.Kit
     options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
         ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
 });
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.KitchenTaskGrpc.KitchenTaskGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
+});
 builder.Services.AddOptions<CatalogClientSettings>()
     .Bind(builder.Configuration.GetSection("CatalogClient"))
     .Validate(settings => settings.TimeoutSeconds > 0,
@@ -190,6 +195,19 @@ builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.ReservationGrpc.Rese
 builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantStaffGrpc.RestaurantStaffGrpcClient>(options =>
 {
     options.Address = new Uri(restaurantAddress);
+});
+
+var customerAddress = builder.Configuration["GrpcServices:Customer"]
+    ?? "https://localhost:5005";
+
+builder.Services.AddGrpcClient<Backend.Contracts.Customer.CustomerGrpc.CustomerGrpcClient>(options =>
+{
+    options.Address = new Uri(customerAddress);
+});
+
+builder.Services.AddGrpcClient<Backend.Contracts.Customer.FeedbackGrpc.FeedbackGrpcClient>(options =>
+{
+    options.Address = new Uri(customerAddress);
 });
 
 var app = builder.Build();

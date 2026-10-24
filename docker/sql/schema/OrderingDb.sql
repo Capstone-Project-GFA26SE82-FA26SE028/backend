@@ -175,6 +175,7 @@ CREATE TABLE [dbo].[KitchenTask](
 	[Quantity] [int] NOT NULL,
 	[Status] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[Priority] [int] NOT NULL,
+	[EstimatedMinutes] [int] NULL,
 	[QueuedAt] [datetime] NOT NULL,
 	[CookingAt] [datetime] NULL,
 	[ReadyAt] [datetime] NULL,
