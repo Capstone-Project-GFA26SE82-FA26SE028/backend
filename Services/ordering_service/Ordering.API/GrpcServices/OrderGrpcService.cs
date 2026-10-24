@@ -18,6 +18,7 @@ public sealed class OrderGrpcService(IOrderService service) : OrderGrpc.OrderGrp
                 CartId = request.HasCartId ? Guid.Parse(request.CartId) : null,
                 CartVersion = request.HasCartVersion ? request.CartVersion : null,
                 TableId = request.HasTableId ? Guid.Parse(request.TableId) : null,
+                Channel = request.HasChannel ? request.Channel : null,
                 Items = request.Items.Select(OrderingMapping.ReadSelection).ToList()
             },
             access.GuestToken,

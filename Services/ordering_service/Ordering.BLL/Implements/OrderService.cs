@@ -121,7 +121,7 @@ public sealed class OrderService(
                 OrderId = orderId,
                 OrderNumber = $"ORD-{orderId:N}",
                 TableSessionRef = sessionId,
-                Channel = "DineIn",
+                Channel = !string.IsNullOrWhiteSpace(request.Channel) ? request.Channel : "DineIn",
                 CreatedByRef = actor.UserId,
                 IdempotencyKey = scopedKey,
                 RequestHash = requestHash,
@@ -159,7 +159,12 @@ public sealed class OrderService(
                 order.OrderItems.Add(item);
                 if (!actor.IsGuest)
                 {
-                    Enqueue(item, stations[item.ItemRef], actor.UserId!.Value, now);
+                    var (initialStatus, priority) = DetermineCourseAndPriority(item.NameSnapshot, order.Channel);
+                    item.Status = initialStatus;
+                    var estimatedMinutes = snapshot.PreparationTimeMinutes.HasValue && snapshot.PreparationTimeMinutes.Value > 0
+                        ? snapshot.PreparationTimeMinutes.Value
+                        : (int?)null;
+                    Enqueue(item, stations[item.ItemRef], actor.UserId!.Value, now, initialStatus, priority, estimatedMinutes);
                 }
             }
 
@@ -198,7 +203,7 @@ public sealed class OrderService(
 
         var result = await transaction.ExecuteAsync(() => orders.GetAllAsync(
             sessionId,
-            actor.IsGuest ? actor.Scope : null,
+            null,
             page,
             pageSize,
             ct), ct);
@@ -252,9 +257,11 @@ public sealed class OrderService(
             }
 
             var stations = new Dictionary<Guid, Guid>();
+            var prepTimes = new Dictionary<Guid, int?>();
             foreach (var snapshot in quote.Items)
             {
                 stations[snapshot.ItemId] = await Station(snapshot.KitchenStationId, ct);
+                prepTimes[snapshot.ItemId] = snapshot.PreparationTimeMinutes;
             }
 
             await access.RequireAsync(sessionId, null, string.Empty, ct);
@@ -265,8 +272,12 @@ public sealed class OrderService(
             found.ConfirmedByRef = actor.UserId;
             foreach (var item in found.OrderItems)
             {
-                item.Status = "Pending";
-                Enqueue(item, stations[item.ItemRef], actor.UserId.Value, now);
+                var (initialStatus, priority) = DetermineCourseAndPriority(item.NameSnapshot, found.Channel);
+                item.Status = initialStatus;
+                var estimatedMinutes = prepTimes.TryGetValue(item.ItemRef, out var pt) && pt.HasValue && pt.Value > 0
+                    ? pt.Value
+                    : (int?)null;
+                Enqueue(item, stations[item.ItemRef], actor.UserId.Value, now, initialStatus, priority, estimatedMinutes);
             }
 
             return found;
@@ -358,7 +369,7 @@ public sealed class OrderService(
         return id.Value;
     }
 
-    private void Enqueue(OrderItem item, Guid station, Guid actorId, DateTime now)
+    private void Enqueue(OrderItem item, Guid station, Guid actorId, DateTime now, string status, int priority, int? estimatedMinutes)
     {
         kitchen.Create(new KitchenTask
         {
@@ -368,15 +379,16 @@ public sealed class OrderService(
             OrderItemId = item.OrderItemId,
             BatchNumber = 1,
             Quantity = item.Quantity,
-            Status = "Pending",
-            Priority = 0,
+            Status = status,
+            Priority = priority,
+            EstimatedMinutes = estimatedMinutes,
             QueuedAt = now,
             Events = new List<Event>
             {
                 new Event
                 {
                     EventId = Guid.NewGuid(),
-                    ToStatus = "Pending",
+                    ToStatus = status,
                     ActorUserRef = actorId,
                     OccurredAt = now
                 }
@@ -384,10 +396,54 @@ public sealed class OrderService(
         });
     }
 
+    private static (string Status, int Priority) DetermineCourseAndPriority(string name, string? channel)
+    {
+        if (string.Equals(channel, "Takeaway", StringComparison.OrdinalIgnoreCase))
+        {
+            return ("Pending", 50);
+        }
+
+        var lower = name.ToLowerInvariant();
+        if (lower.Contains("kem") || lower.Contains("chè") || lower.Contains("che") || lower.Contains("flan")
+            || lower.Contains("tráng miệng") || lower.Contains("trang mieng") || lower.Contains("pudding")
+            || lower.Contains("trái cây") || lower.Contains("trai cay") || lower.Contains("bánh ngọt"))
+        {
+            return ("Hold", 20);
+        }
+
+        if (lower.Contains("khai vị") || lower.Contains("khai vi") || lower.Contains("salad")
+            || lower.Contains("gỏi") || lower.Contains("goi") || lower.Contains("súp") || lower.Contains("soup")
+            || lower.Contains("khoai tây") || lower.Contains("chả giò") || lower.Contains("cha gio"))
+        {
+            return ("Pending", 100);
+        }
+
+        if (lower.Contains("trà") || lower.Contains("tra") || lower.Contains("cà phê") || lower.Contains("ca phe")
+            || lower.Contains("nước") || lower.Contains("nuoc") || lower.Contains("sinh tố")
+            || lower.Contains("soda") || lower.Contains("bia") || lower.Contains("juice"))
+        {
+            return ("Pending", 90);
+        }
+
+        if (lower.Contains("nướng") || lower.Contains("nuong") || lower.Contains("hầm") || lower.Contains("ham")
+            || lower.Contains("tiềm") || lower.Contains("tiem") || lower.Contains("lẩu") || lower.Contains("lau")
+            || lower.Contains("quay") || lower.Contains("ninh") || lower.Contains("nguyên con"))
+        {
+            return ("Pending", 70);
+        }
+
+        if (lower.Contains("xào") || lower.Contains("xao") || lower.Contains("chiên") || lower.Contains("chien")
+            || lower.Contains("lúc lắc") || lower.Contains("áp chảo") || lower.Contains("mì") || lower.Contains("mi"))
+        {
+            return ("Pending", 50);
+        }
+
+        return ("Pending", 40);
+    }
+
     private static void CheckOrder(Order? order, OrderingActor actor)
     {
-        if (order is null || order.TableSessionRef != actor.SessionId
-            || (actor.IsGuest && !order.IdempotencyKey.StartsWith(actor.Scope, StringComparison.Ordinal)))
+        if (order is null || order.TableSessionRef != actor.SessionId)
         {
             throw new OrderingException(404, "Order not found.");
         }
@@ -420,6 +476,7 @@ public sealed class OrderService(
             OrderId = order.OrderId,
             OrderNumber = order.OrderNumber,
             TableSessionId = order.TableSessionRef!.Value,
+            Channel = order.Channel,
             Source = order.CreatedByRef.HasValue ? "Staff" : "Guest",
             Status = order.Status,
             Version = Convert.ToBase64String(order.Version),
