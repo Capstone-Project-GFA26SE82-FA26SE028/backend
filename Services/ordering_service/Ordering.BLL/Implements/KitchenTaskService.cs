@@ -10,6 +10,7 @@ public sealed class KitchenTaskService(
     IKitchenTaskRepository repository,
     IOrderingTransaction transaction,
     IKitchenStationAccess access,
+    ICookingInventoryClient cookingClient,
     TimeProvider clock) : IKitchenTaskService
 {
     public async Task<KitchenTaskPageDTO> GetAll(
@@ -91,6 +92,7 @@ public sealed class KitchenTaskService(
 
             var now = clock.GetUtcNow().UtcDateTime;
             var fromStatus = task.Status;
+            var eventId = Guid.NewGuid();
 
             if (string.Equals(status, "Cooking", StringComparison.OrdinalIgnoreCase))
             {
@@ -98,6 +100,8 @@ public sealed class KitchenTaskService(
                 {
                     throw new OrderingException(400, $"Cannot start cooking a task in '{task.Status}' status. Must be 'Pending'.");
                 }
+
+                await cookingClient.DeductCookingIngredientsAsync(eventId, [task], ct);
 
                 task.Status = "Cooking";
                 task.CookingAt = now;
@@ -157,7 +161,7 @@ public sealed class KitchenTaskService(
 
             task.Events.Add(new Event
             {
-                EventId = Guid.NewGuid(),
+                EventId = eventId,
                 KitchenTaskId = task.KitchenTaskId,
                 FromStatus = fromStatus,
                 ToStatus = task.Status,
@@ -265,31 +269,40 @@ public sealed class KitchenTaskService(
         return await transaction.ExecuteAsync(async () =>
         {
             var tasks = await repository.GetByIdsForUpdateAsync(taskIds, ct);
+            var pendingTasks = tasks
+                .Where(t => string.Equals(t.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (pendingTasks.Count == 0)
+            {
+                return (0, "Cooking");
+            }
+
+            var batchEventId = Guid.NewGuid();
+            await cookingClient.DeductCookingIngredientsAsync(batchEventId, pendingTasks, ct);
+
             var now = clock.GetUtcNow().UtcDateTime;
             int count = 0;
 
-            foreach (var task in tasks)
+            foreach (var task in pendingTasks)
             {
-                if (string.Equals(task.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+                task.Status = "Cooking";
+                task.CookingAt = now;
+                if (task.OrderItem is not null)
                 {
-                    task.Status = "Cooking";
-                    task.CookingAt = now;
-                    if (task.OrderItem is not null)
-                    {
-                        task.OrderItem.Status = "Cooking";
-                    }
-
-                    task.Events.Add(new Event
-                    {
-                        EventId = Guid.NewGuid(),
-                        KitchenTaskId = task.KitchenTaskId,
-                        FromStatus = "Pending",
-                        ToStatus = "Cooking",
-                        ActorUserRef = actorId,
-                        OccurredAt = now
-                    });
-                    count++;
+                    task.OrderItem.Status = "Cooking";
                 }
+
+                task.Events.Add(new Event
+                {
+                    EventId = Guid.NewGuid(),
+                    KitchenTaskId = task.KitchenTaskId,
+                    FromStatus = "Pending",
+                    ToStatus = "Cooking",
+                    ActorUserRef = actorId,
+                    OccurredAt = now
+                });
+                count++;
             }
 
             return (count, "Cooking");

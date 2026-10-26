@@ -38,6 +38,15 @@ public static class OrderingServiceExtensions
         {
             options.Address = Address(configuration, "Catalog");
         });
+        services.AddGrpcClient<Backend.Contracts.Catalog.RecipeGrpc.RecipeGrpcClient>(options =>
+        {
+            options.Address = Address(configuration, "Catalog");
+        });
+        services.AddGrpcClient<Backend.Contracts.Inventory.StockIssueGrpc.StockIssueGrpcClient>(options =>
+        {
+            options.Address = Address(configuration, "Inventory");
+        });
+        services.AddScoped<ICookingInventoryClient, CookingInventoryClient>();
         services.AddScoped<IOrderingAccess, RestaurantOrderingAccess>();
         services.AddScoped<ICatalogOrderClient, CatalogOrderClient>();
         services.AddScoped<ICartService, CartService>();

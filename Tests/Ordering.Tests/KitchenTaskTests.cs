@@ -266,6 +266,104 @@ public sealed class KitchenTaskTests
         Assert.NotNull(readyDto.ReadyAt);
     }
 
+    [Fact]
+    public async Task SetStatus_ToCooking_DeductsInventorySuccessfully()
+    {
+        using var fixture = new Fixture();
+        var (task, _) = await fixture.SeedTaskAsync("Pending", 1);
+
+        var result = await fixture.Service.SetStatus(task.KitchenTaskId, "Cooking", null, default);
+
+        Assert.Equal("Cooking", result.Status);
+        Assert.Single(fixture.CookingClient.Calls);
+        var call = fixture.CookingClient.Calls[0];
+        Assert.NotEqual(Guid.Empty, call.EventId);
+        Assert.Single(call.Tasks);
+        Assert.Equal(task.KitchenTaskId, call.Tasks[0].KitchenTaskId);
+    }
+
+    [Fact]
+    public async Task SetStatus_ToCooking_InsufficientStock_Throws409AndTaskRemainsPending()
+    {
+        using var fixture = new Fixture();
+        var (task, _) = await fixture.SeedTaskAsync("Pending", 1);
+        fixture.CookingClient.ShouldThrowInsufficientStock = true;
+        fixture.CookingClient.ErrorMessage = "Nguyên liệu 'Thịt bò' không đủ tồn kho khả dụng để chế biến món.";
+
+        var ex = await Assert.ThrowsAsync<OrderingException>(() =>
+            fixture.Service.SetStatus(task.KitchenTaskId, "Cooking", null, default));
+
+        Assert.Equal(409, ex.StatusCode);
+        Assert.Contains("không đủ tồn kho", ex.Message);
+
+        var taskInDb = await fixture.Db.KitchenTasks.FirstAsync(t => t.KitchenTaskId == task.KitchenTaskId);
+        Assert.Equal("Pending", taskInDb.Status);
+        Assert.Null(taskInDb.CookingAt);
+    }
+
+    [Fact]
+    public async Task StartBatch_DeductsInventoryForBatchAndStartsCooking()
+    {
+        using var fixture = new Fixture();
+        var (task1, stationId) = await fixture.SeedTaskAsync("Pending", 1);
+        var (task2, _) = await fixture.SeedTaskAsync("Pending", 2, stationId);
+
+        var (count, status) = await fixture.Service.StartBatch([task1.KitchenTaskId, task2.KitchenTaskId], default);
+
+        Assert.Equal(2, count);
+        Assert.Equal("Cooking", status);
+        Assert.Single(fixture.CookingClient.Calls);
+        var call = fixture.CookingClient.Calls[0];
+        Assert.Equal(2, call.Tasks.Count);
+        Assert.Contains(call.Tasks, t => t.KitchenTaskId == task1.KitchenTaskId);
+        Assert.Contains(call.Tasks, t => t.KitchenTaskId == task2.KitchenTaskId);
+
+        var dbTask1 = await fixture.Db.KitchenTasks.FirstAsync(t => t.KitchenTaskId == task1.KitchenTaskId);
+        var dbTask2 = await fixture.Db.KitchenTasks.FirstAsync(t => t.KitchenTaskId == task2.KitchenTaskId);
+        Assert.Equal("Cooking", dbTask1.Status);
+        Assert.Equal("Cooking", dbTask2.Status);
+    }
+
+    [Fact]
+    public async Task StartBatch_InsufficientStock_RollsBackAllTasks()
+    {
+        using var fixture = new Fixture();
+        var (task1, stationId) = await fixture.SeedTaskAsync("Pending", 1);
+        var (task2, _) = await fixture.SeedTaskAsync("Pending", 2, stationId);
+        fixture.CookingClient.ShouldThrowInsufficientStock = true;
+
+        var ex = await Assert.ThrowsAsync<OrderingException>(() =>
+            fixture.Service.StartBatch([task1.KitchenTaskId, task2.KitchenTaskId], default));
+
+        Assert.Equal(409, ex.StatusCode);
+
+        var dbTask1 = await fixture.Db.KitchenTasks.FirstAsync(t => t.KitchenTaskId == task1.KitchenTaskId);
+        var dbTask2 = await fixture.Db.KitchenTasks.FirstAsync(t => t.KitchenTaskId == task2.KitchenTaskId);
+        Assert.Equal("Pending", dbTask1.Status);
+        Assert.Equal("Pending", dbTask2.Status);
+    }
+
+    public sealed class FakeCookingInventoryClient : ICookingInventoryClient
+    {
+        public List<(Guid EventId, IReadOnlyList<KitchenTask> Tasks)> Calls { get; } = [];
+        public bool ShouldThrowInsufficientStock { get; set; }
+        public string ErrorMessage { get; set; } = "Insufficient stock.";
+
+        public Task DeductCookingIngredientsAsync(
+            Guid cookingEventId,
+            IReadOnlyList<KitchenTask> tasks,
+            CancellationToken ct)
+        {
+            if (ShouldThrowInsufficientStock)
+            {
+                throw new OrderingException(409, ErrorMessage);
+            }
+
+            Calls.Add((cookingEventId, tasks));
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class Access : IKitchenStationAccess
     {
         public bool Denied { get; set; }
@@ -313,6 +411,8 @@ public sealed class KitchenTaskTests
         public TestTimeProvider Clock { get; } = new();
         public KitchenTaskService Service { get; }
 
+        public FakeCookingInventoryClient CookingClient { get; } = new();
+
         public Fixture()
         {
             connection.Open();
@@ -323,6 +423,7 @@ public sealed class KitchenTaskTests
                 new KitchenTaskRepository(Db),
                 new OrderingTransaction(new UnitOfWork<OrderingDbContext>(Db)),
                 Access,
+                CookingClient,
                 Clock);
         }
 

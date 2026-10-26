@@ -1,6 +1,7 @@
 using System.Globalization;
 using Backend.Contracts.Inventory;
 using Inventory.Common;
+using Inventory.Common.DTOs;
 using Inventory.DAL.Models;
 
 namespace Inventory.API.GrpcServices;
@@ -81,7 +82,7 @@ internal static class InventoryMapping
 
     public static MovementInfo Map(StockMovement value)
     {
-        return new MovementInfo
+        var info = new MovementInfo
         {
             Id = value.StockMovementId.ToString(),
             StockIssueId = value.StockIssueId?.ToString() ?? "",
@@ -93,5 +94,45 @@ internal static class InventoryMapping
             Reason = value.Reason ?? "",
             CreatedAt = DateTime.SpecifyKind(value.CreatedAt, DateTimeKind.Utc).ToString("O")
         };
+
+        if (value.CookingEventRef.HasValue)
+        {
+            info.CookingEventRef = value.CookingEventRef.Value.ToString();
+        }
+
+        if (value.OrderItemRef.HasValue)
+        {
+            info.OrderItemRef = value.OrderItemRef.Value.ToString();
+        }
+
+        return info;
+    }
+
+    public static MovementInfo Map(CookingMovementDTO value)
+    {
+        var info = new MovementInfo
+        {
+            Id = value.StockMovementId.ToString(),
+            StockIssueId = value.StockIssueId?.ToString() ?? "",
+            IngredientId = value.IngredientId.ToString(),
+            ReceiptItemId = value.GoodsReceiptItemId?.ToString() ?? "",
+            MovementType = value.MovementType,
+            QuantityChange = value.QuantityChange.ToString(CultureInfo.InvariantCulture),
+            PerformedBy = value.PerformedByRef?.ToString() ?? "",
+            Reason = value.Reason ?? "",
+            CreatedAt = DateTime.SpecifyKind(value.CreatedAt, DateTimeKind.Utc).ToString("O")
+        };
+
+        if (value.CookingEventRef.HasValue)
+        {
+            info.CookingEventRef = value.CookingEventRef.Value.ToString();
+        }
+
+        if (value.OrderItemRef.HasValue)
+        {
+            info.OrderItemRef = value.OrderItemRef.Value.ToString();
+        }
+
+        return info;
     }
 }
