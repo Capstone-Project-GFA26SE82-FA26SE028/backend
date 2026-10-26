@@ -27,6 +27,47 @@ public sealed class StockIssueGrpcService(StockIssueService service) : StockIssu
         return Map(await service.GetById(InventoryMapping.Id(request.Id), context.CancellationToken));
     }
 
+    public override async Task<CookingDeductionReply> DeductForCooking(CookingDeductionRequest request, ServerCallContext context)
+    {
+        var dto = new CookingDeductionDTO
+        {
+            CookingEventId = InventoryMapping.Id(request.CookingEventId),
+            Items = request.Items.Select(item => new CookingItemDeductionDTO
+            {
+                TaskId = InventoryMapping.Id(item.TaskId),
+                OrderItemId = InventoryMapping.Id(item.OrderItemId),
+                DishName = item.DishName ?? string.Empty,
+                Quantity = item.Quantity,
+                Ingredients = item.Ingredients.Select(line => new StockIssueLineDTO
+                {
+                    IngredientId = InventoryMapping.Id(line.IngredientId),
+                    Quantity = InventoryMapping.Decimal(line.Quantity)
+                }).ToList()
+            }).ToList()
+        };
+
+        var result = await service.DeductForCooking(dto, context.CancellationToken);
+
+        var reply = new CookingDeductionReply
+        {
+            IsSuccess = true,
+            StatusCode = 200,
+            Message = "Cooking inventory deducted successfully.",
+            StockIssueId = result.StockIssueId.ToString()
+        };
+
+        reply.Movements.AddRange(result.Movements.Select(InventoryMapping.Map));
+        reply.LowStockAlerts.AddRange(result.LowStockAlerts.Select(alert => new LowStockAlert
+        {
+            IngredientId = alert.IngredientId.ToString(),
+            IngredientName = alert.IngredientName,
+            CurrentStock = alert.CurrentStock.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture),
+            Threshold = alert.Threshold.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture)
+        }));
+
+        return reply;
+    }
+
     private static StockIssueInfo Map(StockIssue issue)
     {
         var reply = new StockIssueInfo

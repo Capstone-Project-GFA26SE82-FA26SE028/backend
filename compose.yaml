@@ -72,10 +72,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=RestaurantDb;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env};Encrypt=True;TrustServerCertificate=True"
+      Cloudinary__CloudName: ${CLOUDINARY_CLOUD_NAME:-}
+      Cloudinary__ApiKey: ${CLOUDINARY_API_KEY:-}
+      Cloudinary__ApiSecret: ${CLOUDINARY_API_SECRET:-}
       Qr__MenuBaseUrl: ${QR_MENU_BASE_URL:-http://localhost:5173/menu}
-      Qr__ImageDirectory: /app/App_Data/qr-images
-    volumes:
-      - qr-images:/app/App_Data/qr-images
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -91,6 +91,9 @@ services:
       ASPNETCORE_ENVIRONMENT: Docker
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=CatalogDb;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env};Encrypt=True;TrustServerCertificate=True"
       GrpcServices__Identity: http://identity:5001
+      Cloudinary__CloudName: ${CLOUDINARY_CLOUD_NAME:-}
+      Cloudinary__ApiKey: ${CLOUDINARY_API_KEY:-}
+      Cloudinary__ApiSecret: ${CLOUDINARY_API_SECRET:-}
       CatalogManagement__MenuManagerRoleIds__0: ${CATALOG_MENU_MANAGER_ROLE_ID:-manager}
       CatalogManagement__KitchenRoleIds__0: ${CATALOG_KITCHEN_ROLE_ID:-kitchen}
       CatalogManagement__MenuReaderRoleIds__0: ${CATALOG_MENU_READER_ROLE_ID:-waiter}
@@ -160,7 +163,6 @@ services:
       - backend
 volumes:
   sql-data:
-  qr-images:
 networks:
   backend:
     driver: bridge

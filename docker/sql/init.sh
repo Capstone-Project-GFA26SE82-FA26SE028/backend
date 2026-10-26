@@ -12,6 +12,9 @@ for database in IdentityDb RestaurantDb OrderingDb InventoryDb CatalogDb Custome
     if [[ "$database" == "CatalogDb" ]]; then
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/CatalogCookingTime.sql
     fi
+    if [[ "$database" == "RestaurantDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/RestaurantCloudinary.sql
+    fi
     if [[ "$database" == "OrderingDb" ]]; then
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/OrderingCookingTime.sql
     fi
@@ -50,6 +53,9 @@ GO
     fi
     if [[ "$database" == "CatalogDb" ]]; then
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/CatalogCookingTime.sql
+    fi
+    if [[ "$database" == "RestaurantDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/RestaurantCloudinary.sql
     fi
     if [[ "$database" == "OrderingDb" ]]; then
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/OrderingCookingTime.sql

@@ -37,9 +37,15 @@ public sealed class IdentityInventoryAccess(UserGrpc.UserGrpcClient client, IHtt
             "Receive" => "ReceiverRoleIds",
             "Issue" => "IssuerRoleIds",
             "Read" => "ReaderRoleIds",
+            "Cooking" => "CookingRoleIds",
             _ => throw new InventoryException(403, "Unknown inventory permission.")
         };
-        var allowed = configuration.GetSection($"InventoryAccess:{section}").Get<string[]>() ?? [];
+        var configured = configuration.GetSection($"InventoryAccess:{section}").Get<string[]>();
+        var allowed = configured is not null && configured.Length > 0
+            ? configured
+            : operation == "Cooking"
+                ? ["kitchen", "manager", "admin"]
+                : [];
         if (!allowed.Contains(reply.Result.RoleId, StringComparer.Ordinal))
         {
             throw new InventoryException(403, "You do not have permission for this inventory operation.");

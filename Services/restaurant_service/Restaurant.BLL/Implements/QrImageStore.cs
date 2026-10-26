@@ -1,61 +1,32 @@
 using Restaurant.BLL.Interfaces;
 using Restaurant.Common.Exceptions;
+using Shared.Common.Images;
 
 namespace Restaurant.BLL.Implements;
 
-public sealed class QrImageStore(string directory) : IQrImageStore
+public sealed class QrImageStore(IImageStorage storage) : IQrImageStore
 {
-    private readonly string _directory = Path.GetFullPath(directory);
-
-    private string ImagePath(Guid id)
-    {
-        return Path.Combine(_directory, id.ToString("N") + ".png");
-    }
-
-    public bool Exists(Guid id)
-    {
-        return File.Exists(ImagePath(id));
-    }
-
-    public async Task SaveAsync(Guid id, byte[] png, CancellationToken ct)
-    {
-        var temporary = Path.Combine(_directory, id.ToString("N") + ".tmp");
-        try
-        {
-            Directory.CreateDirectory(_directory);
-            await File.WriteAllBytesAsync(temporary, png, ct);
-            File.Move(temporary, ImagePath(id));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            throw new ManagementException(503, "Unable to save the QR image. Check the image store.");
-        }
-        finally
-        {
-            try
-            {
-                File.Delete(temporary);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // A failed temporary-file cleanup must not hide the original error.
-            }
-        }
-    }
-
-    public async Task<byte[]> ReadAsync(Guid id, CancellationToken ct)
+    public async Task<string> SaveAsync(Guid id, byte[] png, CancellationToken ct)
     {
         try
         {
-            return await File.ReadAllBytesAsync(ImagePath(id), ct);
+            return await storage.UploadAsync(png, $"restaurant/qr/{id:N}", ct);
         }
-        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        catch (ImageStorageException ex)
         {
-            throw new ManagementException(404, "No stored QR image is available. Regenerate the QR code if an image is needed.");
+            throw new ManagementException(ex.StatusCode, ex.Message);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+    }
+
+    public async Task<byte[]> ReadAsync(string url, CancellationToken ct)
+    {
+        try
         {
-            throw new ManagementException(503, "Unable to read the QR image store.");
+            return await storage.ReadAsync(url, ct);
+        }
+        catch (ImageStorageException ex)
+        {
+            throw new ManagementException(ex.StatusCode, ex.Message);
         }
     }
 }

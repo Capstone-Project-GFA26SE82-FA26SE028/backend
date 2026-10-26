@@ -13,6 +13,8 @@ public partial class Qr
 
     public string TokenHash { get; set; }
 
+    public string ImageUrl { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime? RevokedAt { get; set; }

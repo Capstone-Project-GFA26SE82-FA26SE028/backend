@@ -49,7 +49,7 @@ internal sealed class ItemTestApplication : IDisposable
 
     public static DateTimeOffset Now { get; } = new(2030, 1, 15, 8, 0, 0, TimeSpan.Zero);
 
-    public static async Task<ItemTestApplication> Create(string initialAvailability = "Inactive", IKitchenStationLookup? stationLookup = null, IInventoryRecipeLookup? inventoryLookup = null)
+    public static async Task<ItemTestApplication> Create(string initialAvailability = "Inactive", IKitchenStationLookup? stationLookup = null, IInventoryRecipeLookup? inventoryLookup = null, TestImageStorage? imageStorage = null)
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -73,6 +73,7 @@ internal sealed class ItemTestApplication : IDisposable
                 services.AddRouting();
                 services.AddGrpc();
                 services.AddCatalogManagement(configuration);
+                services.AddSingleton<Shared.Common.Images.IImageStorage>(imageStorage ?? new TestImageStorage());
                 services.AddSingleton<IInventoryRecipeLookup>(inventoryLookup ?? new TestInventoryLookup());
                 if (stationLookup is not null)
                 {
@@ -100,6 +101,7 @@ internal sealed class ItemTestApplication : IDisposable
                 app.UseEndpoints(endpoints =>
                 {
                     endpoints.MapGrpcService<ItemGrpcService>();
+                    endpoints.MapGrpcService<ItemImageGrpcService>();
                     endpoints.MapGrpcService<MenuGrpcService>();
                     endpoints.MapGrpcService<OrderValidationGrpcService>();
                     endpoints.MapGrpcService<OptionGroupGrpcService>();
@@ -114,6 +116,10 @@ internal sealed class ItemTestApplication : IDisposable
             {
                 services.AddRouting();
                 services.AddControllers().AddApplicationPart(typeof(GatewayItemController).Assembly);
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.ItemImageGrpc.ItemImageGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
                 services.Configure<GatewayCatalogClientSettings>(settings =>
                 {
                     settings.TimeoutSeconds = 10;

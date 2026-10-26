@@ -31,12 +31,18 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
     public async Task<byte[]> GetImage(Guid id, CancellationToken ct)
     {
         await access.RequireAdmin(ct);
-        if (!await repository.AnyAsync(x => x.QrId == id, ct))
+        var qr = await repository.GetByIdAsync(id, ct);
+        if (qr is null)
         {
             throw new ManagementException(404, "QR code not found.");
         }
 
-        return await images.ReadAsync(id, ct);
+        if (string.IsNullOrWhiteSpace(qr.ImageUrl))
+        {
+            throw new ManagementException(404, "No Cloudinary image is available. Regenerate the QR code.");
+        }
+
+        return await images.ReadAsync(qr.ImageUrl, ct);
     }
 
     public Task<QrCreatedDto> Create(Guid tableId, CancellationToken ct)
@@ -111,9 +117,8 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
                 CreatedAt = now,
                 TokenHash = Hash(token)
             };
-            // Persist the complete image before committing the database transaction.
-            // If commit fails, any orphan file is inaccessible without a matching database row.
-            await images.SaveAsync(entity.QrId, image, ct);
+            // Upload before commit so a failed upload cannot revoke the current QR.
+            entity.ImageUrl = await images.SaveAsync(entity.QrId, image, ct);
             repository.Add(entity);
             return new QrCreatedDto
             {
@@ -157,7 +162,7 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
         return new QrDto
         {
             QrId = qr.QrId,
-            ImageUrl = images.Exists(qr.QrId) ? $"/api/qr/{qr.QrId}/image" : null,
+            ImageUrl = qr.ImageUrl,
             TableId = qr.TableId,
             TableCode = qr.Table.TableCode,
             AreaId = qr.Table.AreaId,

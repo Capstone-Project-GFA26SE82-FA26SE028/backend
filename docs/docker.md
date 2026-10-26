@@ -34,6 +34,7 @@ ID cố định của T01: `20000000-0000-0000-0000-000000000011`; T02/T03 kết
 Docker kết nối `sqlserver:1433` trong mạng nội bộ, không dùng database SQL trên máy host và không publish cổng SQL. Các connection string `*_DB_CONNECTION` của cấu hình Docker cũ không còn được sử dụng. Cấu hình chạy .NET local vẫn độc lập trong appsettings/User Secrets.
 
 - `GATEWAY_HTTP_PORT=5000`: cổng Gateway trên máy.
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`: cấu hình upload QR và ảnh món ăn; xem [cloudinary.md](cloudinary.md).
 - `QR_MENU_BASE_URL`: địa chỉ trang FE mà khách mở sau khi quét QR. Mặc định `http://localhost:5173/menu`; đổi theo FE của nhóm. localhost trên điện thoại là chính điện thoại.
 - TestUI không nằm trong Compose. TestUI gọi Gateway tại `http://localhost:5000`, khớp với `GATEWAY_HTTP_PORT=5000`.
 
@@ -50,7 +51,7 @@ docker compose down
 docker compose up -d --build
 ```
 
-`down` giữ dữ liệu trong volume `sql-data` và ảnh QR trong `qr-images`. **Không dùng `down -v` nếu muốn giữ dữ liệu**: tùy chọn này xóa cả database Docker và ảnh QR. Đổi mật khẩu trong `.env` không tự đổi mật khẩu SQL đã lưu trong volume.
+`down` giữ dữ liệu trong volume `sql-data`; ảnh QR lưu trên Cloudinary. **Không dùng `down -v` nếu muốn giữ dữ liệu**: tùy chọn này xóa database Docker; ảnh Cloudinary không bị xóa. Đổi mật khẩu trong `.env` không tự đổi mật khẩu SQL đã lưu trong volume.
 
 ## Kiểm tra và xử lý lỗi
 

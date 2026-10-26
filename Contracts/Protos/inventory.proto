@@ -110,6 +110,8 @@ message MovementInfo {
   string reason = 7;
   string created_at = 8;
   optional string stock_issue_id = 9;
+  optional string cooking_event_ref = 10;
+  optional string order_item_ref = 11;
 }
 
 service StockLotGrpc {
@@ -118,6 +120,7 @@ service StockLotGrpc {
 service StockIssueGrpc {
   rpc Create (StockIssueWriteRequest) returns (StockIssueInfo);
   rpc GetById (InventoryIdRequest) returns (StockIssueInfo);
+  rpc DeductForCooking (CookingDeductionRequest) returns (CookingDeductionReply);
 }
 message StockLotInfo {
   string receipt_item_id = 1;
@@ -153,4 +156,33 @@ message MovementPage {
   int32 total_count = 2;
   int32 page = 3;
   int32 page_size = 4;
+}
+
+message CookingItemDeduction {
+  string task_id = 1;
+  string order_item_id = 2;
+  string dish_name = 3;
+  int32 quantity = 4;
+  repeated StockIssueLine ingredients = 5;
+}
+
+message CookingDeductionRequest {
+  string cooking_event_id = 1;
+  repeated CookingItemDeduction items = 2;
+}
+
+message LowStockAlert {
+  string ingredient_id = 1;
+  string ingredient_name = 2;
+  string current_stock = 3;
+  string threshold = 4;
+}
+
+message CookingDeductionReply {
+  bool is_success = 1;
+  int32 status_code = 2;
+  string message = 3;
+  string stock_issue_id = 4;
+  repeated MovementInfo movements = 5;
+  repeated LowStockAlert low_stock_alerts = 6;
 }

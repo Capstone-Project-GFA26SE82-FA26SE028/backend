@@ -29,12 +29,17 @@ builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableService, Restaurant.B
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IQrService, Restaurant.BLL.Implements.QrService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableSessionService, Restaurant.BLL.Implements.TableSessionService>();
 builder.Services.Configure<Restaurant.Common.Settings.QrSettings>(builder.Configuration.GetSection("Qr"));
-builder.Services.AddSingleton<Restaurant.BLL.Interfaces.IQrImageStore>(provider =>
+builder.Services.AddSingleton(builder.Configuration.GetSection("Cloudinary")
+    .Get<Shared.Common.Images.CloudinarySettings>() ?? new Shared.Common.Images.CloudinarySettings());
+builder.Services.AddHttpClient<Shared.Common.Images.IImageStorage, Shared.Common.Images.CloudinaryImageStorage>()
+    .ConfigurePrimaryHttpMessageHandler(() =>
 {
-    var settings = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Restaurant.Common.Settings.QrSettings>>().Value;
-    var environment = provider.GetRequiredService<IHostEnvironment>();
-    return new Restaurant.BLL.Implements.QrImageStore(Path.GetFullPath(settings.ImageDirectory, environment.ContentRootPath));
+    return new HttpClientHandler
+    {
+        AllowAutoRedirect = false
+    };
 });
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IQrImageStore, Restaurant.BLL.Implements.QrImageStore>();
 builder.Services.AddGrpcClient<Backend.Contracts.Identity.AccessGrpc.AccessGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]

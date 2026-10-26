@@ -96,6 +96,10 @@ builder.Services.AddGrpcClient<Backend.Contracts.Catalog.PriceGrpc.PriceGrpcClie
 });
 
 builder.Services.AddControllers();
+builder.Services.AddGrpcClient<Backend.Contracts.Catalog.ItemImageGrpc.ItemImageGrpcClient>(options =>
+{
+    options.Address = catalogUri;
+});
 builder.Services.AddGrpcClient<Backend.Contracts.Catalog.OptionGroupGrpc.OptionGroupGrpcClient>(options =>
 {
     options.Address = catalogUri;
