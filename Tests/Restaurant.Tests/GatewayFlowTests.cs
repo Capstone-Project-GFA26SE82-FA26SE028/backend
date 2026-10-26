@@ -25,7 +25,7 @@ namespace Restaurant.Tests;
 public sealed partial class GatewayFlowTests : IAsyncLifetime
 {
     private readonly SqliteConnection _connection = new("Data Source=:memory:");
-    private readonly string _qrDirectory = Path.Combine(Path.GetTempPath(), "backend-qr-tests", Guid.NewGuid().ToString("N"));
+    private readonly TestQrImageStore _qrImages = new();
     private WebApplicationFactory<RestaurantMarker> _restaurant = null!;
     private WebApplicationFactory<ApiGateway.ApiAssembly> _gateway = null!;
     private HttpClient _http = null!;
@@ -44,13 +44,14 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Qr:MenuBaseUrl"] = "https://menu.example.test/menu",
-                    ["Reservations:ExpirationEnabled"] = "false",
-                    ["Qr:ImageDirectory"] = _qrDirectory
+                    ["Reservations:ExpirationEnabled"] = "false"
                 });
             });
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<RestaurantDbContext>();
+                services.RemoveAll<IQrImageStore>();
+                services.AddSingleton<IQrImageStore>(_qrImages);
                 services.AddScoped<RestaurantDbContext>(_ => new TestDb(_connection));
                 services.AddSingleton<TimeProvider>(_reservationClock);
                 services.RemoveAll<IManagementAccess>();
@@ -342,15 +343,6 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
         }
 
         await _connection.DisposeAsync();
-        if (Directory.Exists(_qrDirectory))
-        {
-            foreach (var file in Directory.GetFiles(_qrDirectory))
-            {
-                File.Delete(file);
-            }
-
-            Directory.Delete(_qrDirectory);
-        }
     }
 
     private sealed class TestStaffIdentity(IHttpContextAccessor accessor) : IStaffIdentity

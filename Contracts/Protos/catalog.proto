@@ -4,6 +4,13 @@ option csharp_namespace = "Backend.Contracts.Catalog";
 
 package catalog;
 
+service ItemImageGrpc {
+  rpc Upload (ItemImageUploadRequest) returns (ItemImageUploadReply);
+}
+
+message ItemImageUploadRequest { bytes image = 1; }
+message ItemImageUploadReply { string image_url = 1; }
+
 service CategoryGrpc {
   rpc Create (CreateCategoryRequest) returns (CategoryReply);
   rpc GetAll (CategoryListRequest) returns (CategoryListReply);

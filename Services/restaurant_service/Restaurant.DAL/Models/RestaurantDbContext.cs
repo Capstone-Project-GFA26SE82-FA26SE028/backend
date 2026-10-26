@@ -117,6 +117,7 @@ public partial class RestaurantDbContext : DbContext
             entity.ToTable("Qr");
 
             entity.Property(e => e.QrId).ValueGeneratedNever();
+            entity.Property(e => e.ImageUrl).HasMaxLength(2048).IsUnicode(false);
             entity.Property(e => e.CreatedAt).HasColumnType("datetime");
             entity.Property(e => e.RevokedAt).HasColumnType("datetime");
             entity.Property(e => e.TokenHash)
