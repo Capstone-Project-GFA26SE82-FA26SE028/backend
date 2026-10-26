@@ -10,16 +10,16 @@ namespace Restaurant.BLL.Implements;
 
 public sealed class RestaurantStaffService(IManagementAccess access, IStaffIdentity identity,
     IRestaurantStaffRepository staff, IRestaurantRepository restaurants, IReservationTransaction transaction,
-    IOptions<ReservationSettings> settings) : IRestaurantStaffService
+    IOptions<RestaurantStaffSettings> settings) : IRestaurantStaffService
 {
     public async Task<RestaurantStaffDto> Create(Guid restaurantId, Guid userId, CancellationToken ct)
     {
         await access.RequireAdmin(ct);
         ValidateIds(restaurantId, userId);
         var employee = await identity.GetUserAsync(userId, ct);
-        if (!settings.Value.StaffRoleIds.Contains(employee.RoleId, StringComparer.Ordinal))
+        if (!settings.Value.AssignableRoleIds.Contains(employee.RoleId, StringComparer.Ordinal))
         {
-            throw new ManagementException(403, "Only configured Waiter/Cashier accounts can receive a reservation assignment.");
+            throw new ManagementException(403, "Only configured employee roles can receive a restaurant assignment.");
         }
 
         return await transaction.ExecuteAsync(async () =>

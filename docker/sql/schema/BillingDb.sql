@@ -31,6 +31,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[CashRegister](
 	[CashRegisterId] [uniqueidentifier] NOT NULL,
+	[RestaurantId] [uniqueidentifier] NOT NULL,
 	[Code] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
  CONSTRAINT [PK_CashRegister] PRIMARY KEY CLUSTERED 
 (

@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+option csharp_namespace = "Backend.Contracts.Billing";
+package billing;
+
+service CashRegisterGrpc {
+  rpc Create(CreateCashRegisterRequest) returns (CashRegisterInfo);
+  rpc GetAll(CashRegisterListRequest) returns (CashRegisterPage);
+  rpc GetById(CashRegisterIdRequest) returns (CashRegisterInfo);
+}
+
+message CreateCashRegisterRequest {
+  string restaurant_id = 1;
+  string code = 2;
+}
+
+message CashRegisterListRequest {
+  optional string restaurant_id = 1;
+  optional string search = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message CashRegisterIdRequest {
+  string cash_register_id = 1;
+}
+
+message CashRegisterInfo {
+  string cash_register_id = 1;
+  string restaurant_id = 2;
+  string code = 3;
+}
+
+message CashRegisterPage {
+  repeated CashRegisterInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}

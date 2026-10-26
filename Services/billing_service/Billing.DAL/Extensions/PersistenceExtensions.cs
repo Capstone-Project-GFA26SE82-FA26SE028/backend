@@ -1,4 +1,6 @@
 using Billing.DAL.Models;
+using Billing.DAL.Interfaces;
+using Billing.DAL.Implements;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shared.Persistence.Interfaces;
@@ -18,6 +20,7 @@ public static class PersistenceExtensions
             options.UseSqlServer(connectionString);
         });
         services.AddScoped<IUnitOfWork, UnitOfWork<BillingDbContext>>();
+        services.AddScoped<ICashRegisterRepository, CashRegisterRepository>();
         services.AddScoped<IGenericRepository<global::Billing.DAL.Models.Bill>, GenericRepository<global::Billing.DAL.Models.Bill, BillingDbContext>>();
         services.AddScoped<IGenericRepository<global::Billing.DAL.Models.BillAdjustment>, GenericRepository<global::Billing.DAL.Models.BillAdjustment, BillingDbContext>>();
         services.AddScoped<IGenericRepository<global::Billing.DAL.Models.BillLine>, GenericRepository<global::Billing.DAL.Models.BillLine, BillingDbContext>>();

@@ -200,6 +200,7 @@ public partial class BillingDbContext : DbContext
             entity.ToTable("CashRegister");
 
             entity.Property(e => e.CashRegisterId).ValueGeneratedNever();
+            entity.Property(e => e.RestaurantId).IsRequired();
             entity.Property(e => e.Code)
                 .IsRequired()
                 .HasMaxLength(50)

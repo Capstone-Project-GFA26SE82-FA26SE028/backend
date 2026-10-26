@@ -1,9 +1,11 @@
 using Billing.DAL.Extensions;
 using Billing.DAL.Models;
+using Billing.API.Extensions;
+using Billing.API.GrpcServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddGrpc();
+builder.Services.AddCashRegisters(builder.Configuration);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -14,6 +16,8 @@ if (string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddBillingPersistence(connectionString);
 
 var app = builder.Build();
+
+app.MapGrpcService<CashRegisterGrpcService>();
 
 app.MapGet("/health/live", () =>
 {
