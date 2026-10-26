@@ -9,6 +9,30 @@ service CashRegisterGrpc {
   rpc GetById(CashRegisterIdRequest) returns (CashRegisterInfo);
 }
 
+service CashShiftGrpc {
+  rpc Open(OpenCashShiftRequest) returns (CashShiftInfo);
+  rpc GetCurrent(CashShiftRegisterRequest) returns (CashShiftInfo);
+}
+
+message CashShiftRegisterRequest {
+  string cash_register_id = 1;
+}
+
+message OpenCashShiftRequest {
+  string cash_register_id = 1;
+  optional string opening_cash = 2;
+}
+
+message CashShiftInfo {
+  string cash_shift_id = 1;
+  string cash_register_id = 2;
+  string restaurant_id = 3;
+  string cashier_user_ref = 4;
+  string opening_cash = 5;
+  string opened_at = 6;
+  string status = 7;
+}
+
 message CreateCashRegisterRequest {
   string restaurant_id = 1;
   string code = 2;

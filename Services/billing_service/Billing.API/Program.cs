@@ -5,7 +5,7 @@ using Billing.API.GrpcServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddCashRegisters(builder.Configuration);
+builder.Services.AddBillingServices(builder.Configuration);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -18,6 +18,7 @@ builder.Services.AddBillingPersistence(connectionString);
 var app = builder.Build();
 
 app.MapGrpcService<CashRegisterGrpcService>();
+app.MapGrpcService<CashShiftGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

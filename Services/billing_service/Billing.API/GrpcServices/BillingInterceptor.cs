@@ -37,7 +37,7 @@ public sealed class BillingInterceptor(ILogger<BillingInterceptor> logger) : Int
         catch (Exception error)
         {
             logger.LogError(error, "Billing RPC failed: {Method}", context.Method);
-            throw new RpcException(new Status(StatusCode.Internal, "Unable to process the cash register request."));
+            throw new RpcException(new Status(StatusCode.Internal, "Unable to process the billing request."));
         }
     }
 }

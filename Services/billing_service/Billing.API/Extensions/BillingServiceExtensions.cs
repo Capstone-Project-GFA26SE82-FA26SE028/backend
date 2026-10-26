@@ -10,7 +10,7 @@ namespace Billing.API.Extensions;
 
 public static class BillingServiceExtensions
 {
-    public static IServiceCollection AddCashRegisters(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddBillingServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddGrpc(options =>
         {
@@ -42,6 +42,8 @@ public static class BillingServiceExtensions
         });
         services.AddScoped<IBillingAccess, RestaurantBillingAccess>();
         services.AddScoped<ICashRegisterService, CashRegisterService>();
+        services.AddScoped<ICashShiftService, CashShiftService>();
+        services.AddSingleton<TimeProvider>(TimeProvider.System);
         return services;
     }
 }

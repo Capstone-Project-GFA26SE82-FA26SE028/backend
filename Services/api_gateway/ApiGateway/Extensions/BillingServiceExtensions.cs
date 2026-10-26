@@ -5,7 +5,7 @@ namespace ApiGateway.Extensions;
 
 public static class BillingServiceExtensions
 {
-    public static IServiceCollection AddCashRegisterClient(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddBillingClients(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<BillingClientSettings>()
             .Bind(configuration.GetSection("BillingClient"))
@@ -19,6 +19,10 @@ public static class BillingServiceExtensions
         }
 
         services.AddGrpcClient<CashRegisterGrpc.CashRegisterGrpcClient>(options =>
+        {
+            options.Address = uri;
+        });
+        services.AddGrpcClient<CashShiftGrpc.CashShiftGrpcClient>(options =>
         {
             options.Address = uri;
         });

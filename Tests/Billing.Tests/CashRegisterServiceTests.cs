@@ -256,6 +256,11 @@ public sealed class CashRegisterServiceTests
 
     private sealed class FakeRepository : ICashRegisterRepository
     {
+        public Task<CashRegister?> LockByIdAsync(Guid id, CancellationToken cancellationToken)
+        {
+            return GetByIdAsync(id, cancellationToken);
+        }
+
         public List<CashRegister> Values { get; } = [];
         public Guid? LockedRestaurant { get; private set; }
         public bool LockGranted { get; set; } = true;

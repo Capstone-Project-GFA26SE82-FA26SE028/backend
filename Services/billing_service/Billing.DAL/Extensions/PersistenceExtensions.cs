@@ -28,6 +28,7 @@ public static class PersistenceExtensions
         services.AddScoped<IGenericRepository<global::Billing.DAL.Models.CashMovement>, GenericRepository<global::Billing.DAL.Models.CashMovement, BillingDbContext>>();
         services.AddScoped<IGenericRepository<global::Billing.DAL.Models.CashRegister>, GenericRepository<global::Billing.DAL.Models.CashRegister, BillingDbContext>>();
         services.AddScoped<IGenericRepository<global::Billing.DAL.Models.CashShift>, GenericRepository<global::Billing.DAL.Models.CashShift, BillingDbContext>>();
+        services.AddScoped<ICashShiftRepository, CashShiftRepository>();
         services.AddScoped<IGenericRepository<global::Billing.DAL.Models.DiscountLimit>, GenericRepository<global::Billing.DAL.Models.DiscountLimit, BillingDbContext>>();
         services.AddScoped<IGenericRepository<global::Billing.DAL.Models.ElectronicInvoice>, GenericRepository<global::Billing.DAL.Models.ElectronicInvoice, BillingDbContext>>();
         services.AddScoped<IGenericRepository<global::Billing.DAL.Models.Payment>, GenericRepository<global::Billing.DAL.Models.Payment, BillingDbContext>>();

@@ -12,6 +12,19 @@ namespace Billing.DAL.Implements;
 public sealed class CashRegisterRepository(BillingDbContext db)
     : GenericRepository<CashRegister, BillingDbContext>(db), ICashRegisterRepository
 {
+    public Task<CashRegister?> LockByIdAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_context.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("An active transaction is required to lock a cash register.");
+        }
+
+        var source = _context.Database.IsSqlServer()
+            ? _context.CashRegisters.FromSqlInterpolated($"SELECT * FROM dbo.CashRegister WITH (UPDLOCK, HOLDLOCK) WHERE CashRegisterId = {id}")
+            : _context.CashRegisters.Where(register => register.CashRegisterId == id);
+        return source.SingleOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<PagedResult<CashRegister>> GetPageAsync(CashRegisterQueryDTO query,
         IReadOnlyList<Guid>? restaurantIds, CancellationToken cancellationToken)
     {
