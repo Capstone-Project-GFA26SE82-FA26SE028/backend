@@ -19,6 +19,11 @@ public sealed class BillGrpcService(IBillService service) : BillGrpc.BillGrpcBas
         return Map(await service.GetById(Id(request.BillId), context.CancellationToken));
     }
 
+    public override async Task<BillInfo> Refresh(BillIdRequest request, ServerCallContext context)
+    {
+        return Map(await service.Refresh(Id(request.BillId), context.CancellationToken));
+    }
+
     public override async Task<BillPage> GetAll(BillListRequest request, ServerCallContext context)
     {
         var result = await service.GetAll(new BillQueryDTO

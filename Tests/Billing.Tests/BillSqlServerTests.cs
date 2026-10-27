@@ -119,6 +119,77 @@ public sealed class BillSqlServerTests : IAsyncLifetime
 
     private static async Task<int> Create(BillingDbContext db, BillServiceTests.BillSource source)
     {
+        try
+        {
+            await Service(db, source).Create(source.Value.TableSessionId, default);
+            return 201;
+        }
+        catch (BillingException error)
+        {
+            return error.StatusCode;
+        }
+    }
+
+    [BillingSqlServerFact]
+    public async Task ConcurrentRefreshRequestsSerializeAndDoNotDuplicateItems()
+    {
+        var source = new BillServiceTests.BillSource();
+        await using var setup = Context();
+        var bill = await Service(setup, source).Create(source.Value.TableSessionId, default);
+        var originalId = bill.Items[0].BillLineId;
+        source.Value.Items[0].Quantity = 2;
+        source.Value.Items.Add(new BillSourceLineDTO
+        {
+            OrderItemId = Guid.NewGuid(),
+            OriginalTableId = source.Value.Items[0].OriginalTableId,
+            Quantity = 1,
+            Item = new BillItemSnapshot
+            {
+                OrderId = Guid.NewGuid(),
+                ItemId = Guid.NewGuid(),
+                Name = "SQL snapshot drink",
+                BaseUnitPrice = 10,
+                Status = "Served"
+            }
+        });
+        await using var first = Context();
+        await using var second = Context();
+        var results = await Task.WhenAll(Service(first, source).Refresh(bill.BillId, default),
+            Service(second, source).Refresh(bill.BillId, default));
+        Assert.All(results, value => Assert.Equal(476m, value.TotalAmount));
+        await using var check = Context();
+        var stored = await check.Bills.Include(value => value.BillLines).SingleAsync();
+        Assert.Equal(412.50m, stored.SubTotal);
+        Assert.Equal(2, stored.BillLines.Count);
+        Assert.Contains(stored.BillLines, line => line.BillLineId == originalId);
+        Assert.NotEqual(bill.Version, Convert.ToBase64String(stored.Version));
+        Assert.Empty(await check.Payments.ToListAsync());
+    }
+
+    [BillingSqlServerFact]
+    public async Task RefreshWaitingOnBillLockRechecksPaidStateAfterCommit()
+    {
+        var source = new BillServiceTests.BillSource();
+        await using var setup = Context();
+        var bill = await Service(setup, source).Create(source.Value.TableSessionId, default);
+        await using var writer = Context();
+        await using var transaction = await writer.Database.BeginTransactionAsync();
+        await writer.Database.ExecuteSqlInterpolatedAsync($"UPDATE dbo.Bill SET Status = 'Paid', PaidAt = GETUTCDATE() WHERE BillId = {bill.BillId}");
+        await using var refresher = Context();
+        var refresh = Service(refresher, source).Refresh(bill.BillId, default);
+        await Task.Delay(150);
+        Assert.False(refresh.IsCompleted);
+        await transaction.CommitAsync();
+        var error = await Assert.ThrowsAsync<BillingException>(() => refresh);
+        Assert.Equal(409, error.StatusCode);
+        await using var check = Context();
+        var stored = await check.Bills.AsNoTracking().SingleAsync();
+        Assert.Equal("Paid", stored.Status);
+        Assert.Equal(bill.TotalAmount, stored.TotalAmount);
+    }
+
+    private static BillService Service(BillingDbContext db, BillServiceTests.BillSource source)
+    {
         var identity = new ShiftIdentity
         {
             Scope = new BillingAccessScope
@@ -128,7 +199,7 @@ public sealed class BillSqlServerTests : IAsyncLifetime
                 RestaurantIds = [source.Value.RestaurantId]
             }
         };
-        var service = new BillService(new BillRepository(db), new TaxFeePolicyRepository(db),
+        return new BillService(new BillRepository(db), new TaxFeePolicyRepository(db),
             new UnitOfWork<BillingDbContext>(db), identity, source, Options.Create(new CashRegisterAccessSettings
             {
                 CashierRoleIds = ["cashier"],
@@ -138,15 +209,6 @@ public sealed class BillSqlServerTests : IAsyncLifetime
                 Currency = "VND",
                 OrderPriceBasis = "Exclusive"
             }), TimeProvider.System);
-        try
-        {
-            await service.Create(source.Value.TableSessionId, default);
-            return 201;
-        }
-        catch (BillingException error)
-        {
-            return error.StatusCode;
-        }
     }
 
     private BillingDbContext Context()

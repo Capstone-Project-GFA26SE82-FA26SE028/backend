@@ -16,6 +16,23 @@ namespace Billing.Tests;
 public sealed class BillGatewayTests
 {
     [Fact]
+    public async Task RefreshForwardsBillIdAndEmployeeTokenWithoutClientAmounts()
+    {
+        var billId = Guid.NewGuid();
+        await using var app = await Start(new BillingUnaryInvoker((method, request, options) =>
+        {
+            Assert.EndsWith("/Refresh", method);
+            Assert.Equal(billId.ToString(), Assert.IsType<Wire.BillIdRequest>(request).BillId);
+            Assert.Equal("Bearer cashier-session", Assert.Single(options.Headers!).Value);
+            return Reply(billId);
+        }));
+        using var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "cashier-session");
+        using var response = await client.PostAsync($"/api/bills/{billId}/refresh", null);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task CreateForwardsSessionAndBearerAndPreservesNullCogs()
     {
         var session = Guid.NewGuid();

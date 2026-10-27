@@ -95,6 +95,7 @@ message CashRegisterPage {
 
 service BillGrpc {
   rpc Create(CreateBillRequest) returns (BillInfo);
+  rpc Refresh(BillIdRequest) returns (BillInfo);
   rpc GetAll(BillListRequest) returns (BillPage);
   rpc GetById(BillIdRequest) returns (BillInfo);
 }

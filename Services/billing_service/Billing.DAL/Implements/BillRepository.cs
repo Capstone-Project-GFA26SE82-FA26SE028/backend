@@ -48,6 +48,23 @@ public sealed class BillRepository(BillingDbContext db) : GenericRepository<Bill
             .SingleOrDefaultAsync(bill => bill.BillId == id, ct);
     }
 
+    public Task<Bill?> GetForRefreshAsync(Guid id, CancellationToken ct)
+    {
+        if (_context.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("An active transaction is required to lock a bill for refresh.");
+        }
+
+        var query = _context.Database.IsSqlServer()
+            ? _context.Bills.FromSqlInterpolated($"SELECT * FROM dbo.Bill WITH (UPDLOCK, HOLDLOCK) WHERE BillId = {id}")
+            : _context.Bills.Where(bill => bill.BillId == id);
+        return query.Include(bill => bill.BillLines)
+            .Include(bill => bill.Payments)
+            .Include(bill => bill.BillAdjustments)
+            .Include(bill => bill.VoucherRedemptions)
+            .SingleOrDefaultAsync(ct);
+    }
+
     public async Task<PagedResult<Bill>> GetPageAsync(BillQueryDTO query, IReadOnlyList<Guid>? restaurantIds, CancellationToken ct)
     {
         var source = _context.Bills.AsNoTracking();

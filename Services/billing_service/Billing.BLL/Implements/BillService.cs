@@ -83,7 +83,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             foreach (var line in snapshot.Items)
             {
                 line.Item.SourceFingerprint = fingerprint;
-                var unitPrice = Money(line.Item.BaseUnitPrice + line.Item.Options.Sum(option => option.ExtraPrice * option.Quantity));
+                var unitPrice = UnitPrice(line.Item);
                 var total = Money(unitPrice * line.Quantity);
                 result.SubTotal = Money(result.SubTotal + total);
                 result.BillLines.Add(new BillLine
@@ -101,11 +101,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
                 });
             }
 
-            result.ServiceAmount = Money(decimal.Round(result.SubTotal * result.ServiceRateSnapshot, 2, MidpointRounding.AwayFromZero));
-            result.VatAmount = Money(decimal.Round((result.SubTotal + result.ServiceAmount) * result.VatRateSnapshot, 2, MidpointRounding.AwayFromZero));
-            result.TotalAmount = Money(decimal.Round(result.SubTotal + result.ServiceAmount + result.VatAmount, 0, MidpointRounding.AwayFromZero));
-            Allocate(result.BillLines, result.SubTotal, result.ServiceAmount, (line, value) => line.ServiceAllocated = value);
-            Allocate(result.BillLines, result.SubTotal, result.VatAmount, (line, value) => line.VatAllocated = value);
+            CalculateTotals(result, result.ServiceRateSnapshot, result.VatRateSnapshot);
             var latest = await source.GetBySessionAsync(tableSessionId, ct);
             ValidateSource(latest, tableSessionId);
             if (Fingerprint(latest) != fingerprint)
@@ -119,6 +115,200 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         var dto = Map(bill);
         dto.SourceStatus = "MatchedAtCreation";
         return dto;
+    }
+
+    public async Task<BillDTO> Refresh(Guid id, CancellationToken ct)
+    {
+        var actor = await access.GetCurrentScopeAsync(null, ct);
+        RequireRole(actor, true);
+        if (id == Guid.Empty)
+        {
+            throw new BillingException(400, "A valid bill ID is required.");
+        }
+
+        var bill = await unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            var stored = await bills.GetForRefreshAsync(id, ct)
+                ?? throw new BillingException(404, "Bill not found.");
+            RequireBranch(actor, stored.RestaurantId);
+            var verified = await access.GetCurrentScopeAsync(stored.RestaurantId, ct);
+            RequireRole(verified, true);
+            if (actor.UserId != verified.UserId)
+            {
+                throw new BillingException(401, "The employee session changed. Sign in again.");
+            }
+
+            RequireBranch(verified, stored.RestaurantId);
+            if (stored.Status != "Unpaid" || stored.PaidAt.HasValue || stored.Payments.Count != 0)
+            {
+                throw new BillingException(409, "Only an unpaid bill without payment records can be refreshed.");
+            }
+
+            if (stored.Currency != "VND" || settings.Value.OrderPriceBasis != "Exclusive"
+                || stored.DiscountAmount != 0 || stored.BillAdjustments.Count != 0
+                || stored.VoucherRedemptions.Count != 0 || stored.BillLines.Any(line => line.DiscountAllocated != 0)
+                || stored.VatRateSnapshot is < 0 or > 1 || stored.ServiceRateSnapshot is < 0 or > 1)
+            {
+                throw new BillingException(409, "This bill cannot be refreshed using the supported exclusive-price, undiscounted VND calculation.");
+            }
+
+            var sessions = stored.BillLines.Select(line => line.TableSessionRef).Distinct().ToArray();
+            if (sessions.Length != 1 || sessions[0] == Guid.Empty
+                || stored.BillLines.Select(line => line.OrderItemRef).Distinct().Count() != stored.BillLines.Count)
+            {
+                throw new BillingException(409, "The bill must contain a verifiable single-session snapshot without duplicate order items.");
+            }
+
+            var sessionId = sessions[0];
+            var snapshot = await source.GetBySessionAsync(sessionId, ct);
+            ValidateSource(snapshot, sessionId, requireItems: false);
+            if (snapshot.RestaurantId != stored.RestaurantId)
+            {
+                throw new BillingException(409, "The order source does not belong to this bill's restaurant.");
+            }
+
+            if (snapshot.PendingOrderCount != 0)
+            {
+                throw new BillingException(409, "Resolve orders awaiting waiter confirmation before refreshing the bill.");
+            }
+
+            var fingerprint = Fingerprint(snapshot);
+            var draft = BuildRefresh(stored, snapshot, fingerprint);
+            var latest = await source.GetBySessionAsync(sessionId, ct);
+            ValidateSource(latest, sessionId, requireItems: false);
+            if (Fingerprint(latest) != fingerprint)
+            {
+                throw new BillingException(409, "Order data changed while refreshing the bill. Review the orders and retry.");
+            }
+
+            foreach (var updated in draft.BillLines)
+            {
+                var existing = stored.BillLines.SingleOrDefault(line => line.OrderItemRef == updated.OrderItemRef);
+                if (existing is null)
+                {
+                    stored.BillLines.Add(updated);
+                    continue;
+                }
+
+                existing.ItemSnapshot = updated.ItemSnapshot;
+                existing.Quantity = updated.Quantity;
+                existing.UnitPriceSnapshot = updated.UnitPriceSnapshot;
+                existing.OriginalTableRef = updated.OriginalTableRef;
+                existing.ComboGroupRef = updated.ComboGroupRef;
+                existing.VatAllocated = updated.VatAllocated;
+                existing.ServiceAllocated = updated.ServiceAllocated;
+            }
+
+            stored.SubTotal = draft.SubTotal;
+            stored.ServiceAmount = draft.ServiceAmount;
+            stored.VatAmount = draft.VatAmount;
+            stored.TotalAmount = draft.TotalAmount;
+            return stored;
+        }, ct);
+        var result = Map(bill);
+        result.SourceStatus = "MatchedAtRefresh";
+        return result;
+    }
+
+    private static Bill BuildRefresh(Bill stored, BillSourceDTO snapshot, string fingerprint)
+    {
+        var draft = new Bill();
+        var current = snapshot.Items.ToDictionary(line => line.OrderItemId);
+        foreach (var previous in stored.BillLines)
+        {
+            BillItemSnapshot item;
+            try
+            {
+                item = JsonSerializer.Deserialize<BillItemSnapshot>(previous.ItemSnapshot)
+                    ?? throw new JsonException();
+            }
+            catch (JsonException)
+            {
+                throw new BillingException(409, "The stored item snapshot cannot be verified for refresh.");
+            }
+
+            if (item.ItemId == Guid.Empty || item.OrderId == Guid.Empty || string.IsNullOrEmpty(item.SourceFingerprint))
+            {
+                throw new BillingException(409, "The stored item snapshot cannot be verified for refresh.");
+            }
+
+            var quantity = 0;
+            var price = previous.UnitPriceSnapshot;
+            var table = previous.OriginalTableRef;
+            var combo = previous.ComboGroupRef;
+            if (current.Remove(previous.OrderItemRef, out var line))
+            {
+                if (item.OrderId != line.Item.OrderId || item.ItemId != line.Item.ItemId)
+                {
+                    throw new BillingException(409, "An order item changed identity. Review the source before refreshing.");
+                }
+
+                item = line.Item;
+                quantity = line.Quantity;
+                price = UnitPrice(item);
+                table = line.OriginalTableId;
+                combo = line.ComboGroupId;
+            }
+            else
+            {
+                item.Status = "Cancelled";
+            }
+
+            item.SourceFingerprint = fingerprint;
+            draft.BillLines.Add(new BillLine
+            {
+                BillLineId = previous.BillLineId,
+                BillId = stored.BillId,
+                OrderItemRef = previous.OrderItemRef,
+                TableSessionRef = snapshot.TableSessionId,
+                OriginalTableRef = table,
+                ComboGroupRef = combo,
+                Quantity = quantity,
+                UnitPriceSnapshot = price,
+                CogsSnapshot = previous.CogsSnapshot,
+                ItemSnapshot = JsonSerializer.Serialize(item)
+            });
+        }
+
+        foreach (var line in current.Values)
+        {
+            line.Item.SourceFingerprint = fingerprint;
+            draft.BillLines.Add(new BillLine
+            {
+                BillLineId = Guid.NewGuid(),
+                BillId = stored.BillId,
+                OrderItemRef = line.OrderItemId,
+                TableSessionRef = snapshot.TableSessionId,
+                OriginalTableRef = line.OriginalTableId,
+                ComboGroupRef = line.ComboGroupId,
+                Quantity = line.Quantity,
+                UnitPriceSnapshot = UnitPrice(line.Item),
+                CogsSnapshot = null,
+                ItemSnapshot = JsonSerializer.Serialize(line.Item)
+            });
+        }
+
+        foreach (var line in draft.BillLines)
+        {
+            draft.SubTotal = Money(draft.SubTotal + Money(line.Quantity * line.UnitPriceSnapshot));
+        }
+
+        CalculateTotals(draft, stored.ServiceRateSnapshot, stored.VatRateSnapshot);
+        return draft;
+    }
+
+    private static decimal UnitPrice(BillItemSnapshot item)
+    {
+        return Money(item.BaseUnitPrice + item.Options.Sum(option => option.ExtraPrice * option.Quantity));
+    }
+
+    private static void CalculateTotals(Bill bill, decimal serviceRate, decimal vatRate)
+    {
+        bill.ServiceAmount = Money(decimal.Round(bill.SubTotal * serviceRate, 2, MidpointRounding.AwayFromZero));
+        bill.VatAmount = Money(decimal.Round((bill.SubTotal + bill.ServiceAmount) * vatRate, 2, MidpointRounding.AwayFromZero));
+        bill.TotalAmount = Money(decimal.Round(bill.SubTotal + bill.ServiceAmount + bill.VatAmount, 0, MidpointRounding.AwayFromZero));
+        Allocate(bill.BillLines, bill.SubTotal, bill.ServiceAmount, (line, value) => line.ServiceAllocated = value);
+        Allocate(bill.BillLines, bill.SubTotal, bill.VatAmount, (line, value) => line.VatAllocated = value);
     }
 
     public async Task<PagedResult<BillDTO>> GetAll(BillQueryDTO query, CancellationToken ct)
@@ -196,7 +386,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         var manager = roles.Value.ManagerRoleIds.Contains(actor.RoleId, StringComparer.Ordinal);
         if (create ? actor.IsAdministrator || !cashier : !actor.IsAdministrator && !cashier && !manager)
         {
-            throw new BillingException(403, create ? "Only a Cashier can create bills." : "Billing read permission is required.");
+            throw new BillingException(403, create ? "Only a Cashier can create or refresh bills." : "Billing read permission is required.");
         }
 
         if (!actor.IsAdministrator && actor.RestaurantIds.Count == 0)
@@ -321,9 +511,14 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             result.Warnings.Add("Ingredient cost data is unavailable. Complete COGS and profit cannot be calculated.");
         }
 
-        if (result.Items.Any(line => line.Item.Status != "Served"))
+        if (result.Items.Any(line => line.Quantity > 0 && line.Item.Status != "Served"))
         {
             result.Warnings.Add("Some items were not served when this bill was created.");
+        }
+
+        if (result.Items.Count > 0 && result.Items.All(line => line.Quantity == 0))
+        {
+            result.Warnings.Add("All previously billed items are cancelled. Zero-quantity lines retain the bill's session history.");
         }
 
         return result;

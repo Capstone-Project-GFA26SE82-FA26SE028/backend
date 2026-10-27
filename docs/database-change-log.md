@@ -163,6 +163,40 @@ Kiểm chứng đợt này:
 - Đã dừng/xóa các container kiểm thử TaxPolicyCheck và xóa bốn database tạm của lượt này, giữ nguyên các database thường. Bằng chứng test cục bộ ở .ai/billing-tax-policies (Git ignore).
 - Khởi động lại đúng Billing/Gateway với image mới; Swagger cổng 5000 có ba API chính sách. Không sửa/push repository Database-SQLServer vì đợt này không đổi SQL hoặc ERD.
 
+## Đợt làm mới bill chưa thanh toán — 2026-10-28
+
+**Không có thay đổi schema.** Không thêm/sửa/xóa bảng, cột, kiểu dữ liệu, NULL/NOT NULL, DEFAULT, PK, FK, UNIQUE, CHECK hoặc index. Không có script upgrade, migration hoặc scaffold mới; không sửa repository Database-SQLServer.
+
+### Dữ liệu và ERD
+
+- Tái sử dụng Bill và BillLine có sẵn trong BillingDb. Giữ nguyên BillId, BillNumber, RestaurantId, Status, Currency, VatRateSnapshot và ServiceRateSnapshot.
+- Cập nhật Bill.SubTotal, ServiceAmount, VatAmount, TotalAmount từ snapshot Ordering. Bill.Version là rowversion có sẵn, SQL Server tự cập nhật khi header thay đổi; không thêm token hoặc kiểu Version mới.
+- Ghép dòng theo BillLine.OrderItemRef, giữ BillLineId của dòng đã có. Cập nhật Quantity, ItemSnapshot, UnitPriceSnapshot, OriginalTableRef, ComboGroupRef, VatAllocated và ServiceAllocated; món mới có dòng mới và CogsSnapshot = NULL. Giá lấy từ snapshot Ordering, không lấy lại giá Catalog.
+- Món đã hủy giữ dòng cũ với Quantity = 0, snapshot Status = Cancelled và phần thuế/phí phân bổ bằng 0. Khi hủy hết món, bill vẫn Unpaid, tổng bằng 0, không tự xác nhận đã thu tiền. Giữ các dòng này để không mất liên kết BillLine.TableSessionRef và ngăn tạo bill thứ hai cho phiên.
+- BillLine.ItemSnapshot tiếp tục lưu SourceFingerprint trong JSON đã có, không thêm cột. Cập nhật fingerprint cho cả dòng số lượng 0 để đọc lại vẫn đánh giá đúng Current/Stale.
+- Quan hệ không đổi: Bill 1–n BillLine là FK thật; Restaurant 1–n Bill và TableSession 1–n BillLine là tham chiếu logic xuyên service. Không có dây ERD mới hoặc FK xuyên database.
+
+### API và quy tắc
+
+- `POST /api/bills/{id}/refresh`, không có request body. Đăng nhập Cashier, có phân công hiện hành tại chi nhánh của bill. Admin/Manager chỉ giữ quyền đọc hiện có, không được refresh.
+- Gateway → BillGrpc.Refresh → BillService.Refresh → BillRepository.GetForRefreshAsync → UnitOfWork/BillingDbContext. Không sửa nghiệp vụ hoặc database của Ordering/Restaurant/Identity.
+- Chỉ xử lý Status = Unpaid, PaidAt = NULL và chưa có bất kỳ Payment nào. Bill có giảm giá, adjustment hoặc voucher chưa được hỗ trợ trong đợt này và bị chặn rõ ràng; không xóa dữ liệu này để tính lại.
+- Giữ mức VAT/phí snapshot lúc lập bill, kể cả khi chính sách mới đã hiệu lực. Giữ quy ước giá chưa VAT/phí, VND, làm tròn VAT/phí đến 2 chữ số và tổng đến đơn vị đồng theo AwayFromZero.
+- Ordering cung cấp số lượng đã được xác nhận sau khi trừ phần hủy. Nếu còn đơn PendingConfirmation, refresh trả 409. Không cộng tổng mới vào tổng cũ; tính lại từ toàn bộ snapshot đủ điều kiện và không ghi trùng OrderItemId.
+- DAL đọc bill với UPDLOCK/HOLDLOCK trong transaction; BLL kiểm tra lại trạng thái, tài khoản và phân công dưới khóa. Hai refresh cùng bill được tuần tự hóa. Request lặp với cùng nguồn giữ đúng số dòng, ID và số tiền.
+- Đọc nguồn hai lần trước khi áp thay đổi; nếu khác nhau thì trả 409 và không lưu. Đây chưa phải khóa phân tán với Ordering: nguồn vẫn có thể đổi sau lần đọc cuối; GetById tiếp tục phát hiện Stale. Đợt này chưa triển khai chốt món hoặc thu tiền. Khi làm thanh toán phải phối hợp cùng khóa bill và cơ chế chốt nguồn riêng.
+- Không thể refresh bill cũ thiếu snapshot xác minh, nhiều phiên hoặc trùng OrderItemRef; trả 409, không tự suy ra phiên/chi nhánh. Thiếu giá vốn vẫn trả NULL và cảnh báo như trước.
+
+### Kiểm chứng
+
+- Build toàn Backend.sln đạt; các cảnh báo nullable hiện có nằm ngoài phạm vi sửa.
+- Test Billing bằng SQLite/client giả lập: 186 pass; 16 test điều kiện SQL không được tính là pass khi chưa có kết nối.
+- Toàn solution sau thay đổi: 760 pass, 53 conditional skip, 0 fail. Các test skip thuộc nhiều service, không được tính là kiểm chứng tích hợp thật.
+- SQL Server thật: 5 test BillSqlServerTests pass, không skip; gồm tạo bill đồng thời, hai refresh không ghi trùng và refresh chờ khóa phải đọc lại Paid sau commit. Nguồn Ordering/quyền trong các test SQL này là client giả lập.
+- Gateway thật: 42 kiểm tra đạt với Identity/Restaurant/Ordering/Billing và SQL Server thật. Bao phủ thêm món, hủy một phần/toàn bộ, thêm lại sau hủy, snapshot VAT/phí, request lặp/đồng thời, Paid, pending, vai trò, khác chi nhánh và thu hồi phân công. Đơn được seed trong database kiểm thử riêng; không tuyên bố đã kiểm thử lại toàn bộ luồng tạo/duyệt đơn của Ordering.
+- Log và kết quả cục bộ ở `.ai/billing-refresh/` (Git ignore). Không seed hoặc sửa dữ liệu nghiệp vụ thường. Không commit/push đợt này; người dùng tự xem diff và quyết định.
+- Đã dừng/xóa nhóm container billing-refresh-check và xóa bốn database BillRefreshCheck của lượt thử. Build lại và khởi động Billing/Gateway thường; Swagger cổng 5000 đã có POST /api/bills/{id}/refresh.
+
 Request mẫu tạo chính sách ngay (tỷ lệ minh họa cho test, không phải khuyến nghị mức thuế):
 
 ```json

@@ -53,6 +53,16 @@ public sealed class BillController(BillGrpc.BillGrpcClient client, IOptions<Bill
         }, ct);
     }
 
+    [HttpPost("{id:guid}/refresh")]
+    [ProducesResponseType(typeof(ResponseDTO<BillDTO>), StatusCodes.Status200OK)]
+    public Task<IActionResult> Refresh(Guid id, CancellationToken ct)
+    {
+        return Execute(async options => Map(await client.RefreshAsync(new BillIdRequest
+        {
+            BillId = id.ToString()
+        }, options)), ct);
+    }
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(ResponseDTO<BillDTO>), StatusCodes.Status200OK)]
     public Task<IActionResult> GetById(Guid id, CancellationToken ct)

@@ -267,6 +267,7 @@ public sealed class BillServiceTests
     {
         public int Calls { get; private set; }
         public bool ChangeOnSecondRead { get; set; }
+        public int? ChangeOnCall { get; set; }
         public BillingException? Error { get; set; }
         public BillSourceDTO Value { get; } = new()
         {
@@ -309,7 +310,7 @@ public sealed class BillServiceTests
                 throw Error;
             }
 
-            if (ChangeOnSecondRead && Calls == 2)
+            if ((ChangeOnSecondRead && Calls == 2) || Calls == ChangeOnCall)
             {
                 Value.Items[0].Quantity++;
             }
