@@ -17,6 +17,8 @@ public partial class OrderingDbContext : DbContext
     {
     }
 
+    public virtual DbSet<CheckoutLock> CheckoutLocks { get; set; }
+
     public virtual DbSet<CancellationRequest> CancellationRequests { get; set; }
 
     public virtual DbSet<Cart> Carts { get; set; }
@@ -267,6 +269,27 @@ public partial class OrderingDbContext : DbContext
                 .HasForeignKey(d => d.OrderItemId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ServiceRecord_OrderItem");
+        });
+
+        modelBuilder.Entity<CheckoutLock>(entity =>
+        {
+            entity.HasKey(e => e.CheckoutId);
+
+            entity.ToTable("CheckoutLock");
+
+            entity.HasIndex(e => e.TableSessionRef, "UX_CheckoutLock_ActiveSession")
+                .IsUnique()
+                .HasFilter("([ReleasedAt] IS NULL)");
+
+            entity.Property(e => e.CheckoutId).ValueGeneratedNever();
+            entity.Property(e => e.SourceHash)
+                .HasMaxLength(64)
+                .IsUnicode(false)
+                .IsFixedLength();
+            entity.Property(e => e.Status)
+                .IsRequired()
+                .HasMaxLength(20)
+                .IsUnicode(false);
         });
 
         OnModelCreatingPartial(modelBuilder);

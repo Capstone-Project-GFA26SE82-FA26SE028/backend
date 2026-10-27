@@ -8,6 +8,7 @@ namespace Billing.DAL.Interfaces;
 public interface IBillRepository : IGenericRepository<Bill>
 {
     Task<bool> LockSessionAsync(Guid sessionId, CancellationToken ct);
+    Task<BillCheckout?> GetActiveCheckoutAsync(Guid sessionId, CancellationToken ct);
     Task<bool> SessionHasBillAsync(Guid sessionId, CancellationToken ct);
     Task<Bill?> GetDetailsAsync(Guid id, CancellationToken ct);
     Task<Bill?> GetForRefreshAsync(Guid id, CancellationToken ct);

@@ -22,6 +22,8 @@ public static class PersistenceExtensions
         services.AddScoped<IUnitOfWork, UnitOfWork<BillingDbContext>>();
         services.AddScoped<ICashRegisterRepository, CashRegisterRepository>();
         services.AddScoped<IBillRepository, BillRepository>();
+        services.AddScoped<IBillCheckoutRepository, BillCheckoutRepository>();
+        services.AddScoped<IGenericRepository<BillCheckout>, GenericRepository<BillCheckout, BillingDbContext>>();
         services.AddScoped<ITaxFeePolicyRepository, TaxFeePolicyRepository>();
         services.AddScoped<IGenericRepository<global::Billing.DAL.Models.Bill>, GenericRepository<global::Billing.DAL.Models.Bill, BillingDbContext>>();
         services.AddScoped<IGenericRepository<global::Billing.DAL.Models.BillAdjustment>, GenericRepository<global::Billing.DAL.Models.BillAdjustment, BillingDbContext>>();

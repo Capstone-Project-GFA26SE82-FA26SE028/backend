@@ -1,6 +1,6 @@
 # Nhật ký thay đổi database / SQL / ERD
 
-Cập nhật nhật ký: 2026-10-27. Mốc kiểm kê ban đầu: 2026-10-26. Phạm vi kiểm kê: lịch sử Git của checkout `feature/Billing`, bảy script `docker/sql/schema`, toàn bộ `docker/sql/upgrades`, model/DbContext và metadata SQL Server Docker của bảy database. Đây là bằng chứng tại một môi trường, không xác nhận database của máy thành viên khác đã nâng cấp.
+Cập nhật nhật ký: 2026-10-28. Mốc kiểm kê ban đầu: 2026-10-26. Phạm vi kiểm kê: lịch sử Git của checkout `feature/Billing`, bảy script `docker/sql/schema`, toàn bộ `docker/sql/upgrades`, model/DbContext và metadata SQL Server Docker của bảy database. Đây là bằng chứng tại một môi trường, không xác nhận database của máy thành viên khác đã nâng cấp.
 
 ## Mốc đối chiếu và giới hạn bằng chứng
 
@@ -196,6 +196,76 @@ Kiểm chứng đợt này:
 - Gateway thật: 42 kiểm tra đạt với Identity/Restaurant/Ordering/Billing và SQL Server thật. Bao phủ thêm món, hủy một phần/toàn bộ, thêm lại sau hủy, snapshot VAT/phí, request lặp/đồng thời, Paid, pending, vai trò, khác chi nhánh và thu hồi phân công. Đơn được seed trong database kiểm thử riêng; không tuyên bố đã kiểm thử lại toàn bộ luồng tạo/duyệt đơn của Ordering.
 - Log và kết quả cục bộ ở `.ai/billing-refresh/` (Git ignore). Không seed hoặc sửa dữ liệu nghiệp vụ thường. Không commit/push đợt này; người dùng tự xem diff và quyết định.
 - Đã dừng/xóa nhóm container billing-refresh-check và xóa bốn database BillRefreshCheck của lượt thử. Build lại và khởi động Billing/Gateway thường; Swagger cổng 5000 đã có POST /api/bills/{id}/refresh.
+
+## Đợt checkout và đồng bộ bill chưa thanh toán — 2026-10-28
+
+### Schema thực tế: đúng hai bảng mới
+
+Không sửa/xóa cột hoặc ràng buộc của bảng cũ; không thêm bảng ngoài hai bảng dưới đây. Không có DEFAULT hoặc CHECK mới. Bảng Bill, BillLine, Order, OrderItem, TableSession, GuestAccess và Table đã tồn tại từ trước.
+
+| Database/bảng mới | Cột | Kiểu dữ liệu | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| BillingDb.BillCheckout | CheckoutId | uniqueidentifier | NOT NULL | Không |
+| BillingDb.BillCheckout | BillId | uniqueidentifier | NULL | Không |
+| BillingDb.BillCheckout | TableSessionRef | uniqueidentifier | NOT NULL | Không |
+| BillingDb.BillCheckout | SourceHash | char(64) | NULL | Không |
+| BillingDb.BillCheckout | Status | varchar(20) | NOT NULL | Không |
+| BillingDb.BillCheckout | CreatedAt | datetime2(7) | NOT NULL | Không |
+| BillingDb.BillCheckout | ReleasedAt | datetime2(7) | NULL | Không |
+| OrderingDb.CheckoutLock | CheckoutId | uniqueidentifier | NOT NULL | Không |
+| OrderingDb.CheckoutLock | BillIdRef | uniqueidentifier | NULL | Không |
+| OrderingDb.CheckoutLock | TableSessionRef | uniqueidentifier | NOT NULL | Không |
+| OrderingDb.CheckoutLock | SourceHash | char(64) | NULL | Không |
+| OrderingDb.CheckoutLock | Status | varchar(20) | NOT NULL | Không |
+| OrderingDb.CheckoutLock | CreatedAt | datetime2(7) | NOT NULL | Không |
+| OrderingDb.CheckoutLock | ReleasedAt | datetime2(7) | NULL | Không |
+
+- PK_BillCheckout(CheckoutId), PK_CheckoutLock(CheckoutId).
+- FK_BillCheckout_Bill: BillCheckout.BillId → BillingDb.Bill.BillId, FK thật nội bộ, không cascade delete. Bill 1–n BillCheckout; một checkout có thể chưa có bill, nên phía Bill của một checkout là 0..1.
+- UX_BillCheckout_ActiveSession: UNIQUE trên TableSessionRef, WHERE ReleasedAt IS NULL.
+- UX_CheckoutLock_ActiveSession: UNIQUE trên TableSessionRef, WHERE ReleasedAt IS NULL.
+- Restaurant.TableSession 1–n BillCheckout và 1–n CheckoutLock là hai quan hệ logic qua TableSessionRef. Billing.Bill 1–n Ordering.CheckoutLock là quan hệ logic qua BillIdRef (nullable).
+- CheckoutId đối chiếu cùng lượt giữa hai service là quan hệ logic tối đa 1–1; bản ghi Ordering có thể chưa được tạo khi Billing đang Preparing. Không tạo FK xuyên database, không thêm FK từ CheckoutLock đến Restaurant/Ordering.Order.
+- ReleasedAt biểu thị đã cho phép gọi thêm trở lại; không biểu thị đã thanh toán hoặc đã kết thúc phiên. Giữ NULL khi đang chặn gọi thêm, bao gồm trạng thái Ready; không tự ghi trường này khi thu tiền thành công ở đợt sau.
+- SourceHash chỉ được ghi khi đã chốt dữ liệu thật; NULL trong thời gian chờ xác nhận. BillId/BillIdRef được gắn sau khi tạo/đồng bộ được bill, không dùng ID giả.
+
+### File SQL, Database First và trạng thái áp dụng
+
+- Schema database mới: docker/sql/schema/BillingDb.sql và docker/sql/schema/OrderingDb.sql, chỉ bổ sung DDL hai bảng.
+- Database đang dùng: docker/sql/upgrades/BillingCheckout.sql và docker/sql/upgrades/OrderingCheckout.sql. Mỗi script có transaction, không xóa dữ liệu, kiểm tra shape bảng/index trước khi chấp nhận chạy lại; không tự sửa một bảng trùng tên nhưng khác cấu trúc.
+- docker/sql/init.sh gọi hai upgrade cho database Docker đã khởi tạo và cho database mới. Không dùng schema tạo mới để reset database hiện có.
+- Đã áp dụng lên BillingDb và OrderingDb của SQL Server Docker hiện tại; đã chạy lại upgrade hai lần và kiểm tra. Không áp dụng thay cho các database trên máy thành viên khác. Không chỉnh/push repository Database-SQLServer riêng trong đợt này.
+- Đã scaffold từ SQL Server bằng dotnet-ef 8.0.24, đồng phiên bản EF Core của DAL; chỉ nhập model BillCheckout/CheckoutLock, mapping DbContext liên quan và navigation Bill.BillCheckouts. Cập nhật danh sách bảng trong hai efpt.config.json. Không tạo migration hoặc ghi connection string vào model.
+- Đây là thay đổi chưa commit. File và commit bằng chứng hiện tại: DDL/upgrade trong working tree; chưa có mã commit cho đợt này.
+
+### Luồng và ranh giới service
+
+- Gateway cung cấp Request/GetCurrent/Synchronize/Cancel theo TableSessionId. Request nhận UUID ở Idempotency-Key; backend vẫn xác thực QR hoặc nhân viên, không dùng UUID làm bằng chứng quyền truy cập.
+- Billing lưu Preparing trước RPC giữ phiên. Ordering dùng cùng application lock Ordering.Checkout.Session:{sessionId} trong transaction cho tạo đơn, xác nhận đơn và thay đổi hủy món có ảnh hưởng giá. Unique filtered index bảo vệ thêm mỗi phiên chỉ có một lượt chưa mở lại.
+- Tạo đơn: lấy khóa trước kiểm tra/ghi; request có key đã thành công được trả lại kết quả cũ. Đơn commit trước checkout được đối chiếu; đơn mới sau khi giữ phiên bị chặn, kể cả thiết bị khác và nhân viên gọi API.
+- Ordering WaitingConfirmation vẫn giữ chặn gọi thêm; Waiter xác nhận các đơn đã nhận theo nghiệp vụ cũ. Không tự xác nhận, không bỏ món pending, không chuyển Ready khi còn pending. Khi không còn pending, Begin lặp lại chốt Frozen và hash dữ liệu tính tiền.
+- Cashier Synchronize tiếp tục đúng lượt, tạo hoặc refresh bill từ snapshot Ordering đã giữ, giữ VAT/phí snapshot của bill có sẵn, trừ phần hủy theo nguồn. Bind phải được Ordering xác nhận trước khi Billing trả Ready. Không dùng nguyên tổng bill tạm cũ.
+- Helper hash trong Shared.Common.Billing chỉ gồm OrderItemId, ItemId, số lượng dương, giá cơ bản, option ID/số lượng/phụ thu; chuẩn hóa thang decimal và thứ tự. Không chứa trạng thái nấu/phục vụ. Bill.SourceFingerprint trong JSON dùng hash tài chính này; món pending làm SourceStatus Stale. Bill cũ với fingerprint dạng trước cần refresh/checkout sync để xác minh theo dạng mới; không đổi tiền của bill bằng việc đọc.
+- Checkout Frozen/Ready chặn tạo món mới, xác nhận thêm tập món và hủy/khôi phục món làm thay đổi tiền. Nấu, Ready, Served và làm lại không thay đổi tập tính tiền vẫn được phép. Public Bill.Create/Refresh không được vượt qua checkout đang hoạt động; đường đồng bộ nội bộ kiểm tra đúng CheckoutId dưới khóa Billing theo phiên.
+- Hủy: chỉ Cashier đúng chi nhánh, chưa có Payment hoặc bill finalized. Lưu ReleasePending, rồi Ordering xác minh lại bằng RPC Billing.AuthorizeRelease trước khi mở khóa. Billing chỉ trả Released/orderingReopened=true sau acknowledgement.
+- Ordering lưu bản ghi Released kể cả khi Begin cùng ID chưa đến, để Begin đến trễ không làm sống lại checkout. Hủy lặp ID cũ không mở khóa một checkout mới. Billing đọc lại bản ghi sau mỗi transaction/RPC, không ghi đè trạng thái hủy từ entity cache cũ.
+- Timeout/mất phản hồi giữ Preparing, Frozen hoặc ReleasePending để tiếp tục đúng lượt; không tự hết hạn, không unlock trong catch hoặc khi service restart. GetCurrent chỉ đọc; Request/Synchronize/Cancel lặp tiếp tục công việc.
+- Quyền bill/quầy cũ giữ nguyên. Guest chỉ yêu cầu/xem checkout bằng phiên QR hợp lệ; Cashier đúng chi nhánh mới synchronize/cancel. Admin/Manager không tự được cấp quyền ghi. Restaurant/Identity/Catalog không bị sửa nghiệp vụ hoặc schema; các tích hợp đều qua RPC.
+- Đợt này chưa có thu tiền, xử lý kết quả Payment/PayOS, đóng phiên hoặc dọn bàn. Bước thu tiền sau này phải dùng Ready/hash và khóa Billing theo phiên, chặn thu khi ReleasePending. Thành công chỉ cập nhật bill/payment, giữ chặn gọi thêm; không đóng TableSession, không revoke QR. Đóng phiên, QR và CleaningStatus là luồng riêng chưa triển khai ở đây.
+- Nếu chưa có bill và nguồn không còn món hợp lệ, hoặc thiếu TaxFeePolicy, Synchronize trả lỗi và giữ checkout chưa Ready; không tạo bill/dòng/giá trị thuế giả. Cashier có thể hủy khi đủ điều kiện.
+
+### Bằng chứng kiểm thử
+
+- Bài test nghiệp vụ dùng SQLite/client giả lập được báo riêng với SQL Server và Gateway thật. Có test mất phản hồi Begin/Bind/Release, tiếp tục cùng lượt, không nhân đôi bill, giá/phí snapshot, thiếu cấu hình và quyền ghi.
+- Gateway thật dùng database CheckoutCheck tạm, Identity/Restaurant/Catalog/Ordering/Billing thật. Guest join qua API có cookie thực; tạo cart, gửi đơn và Waiter xác nhận qua API thật. Dữ liệu nền menu/phiên/đơn cũ được seed riêng, không phải dữ liệu production.
+- 82 kiểm tra Gateway chính đạt, gồm hai thiết bị, pending không Ready, đồng bộ bill cũ, chặn hủy món frozen, nấu/phục vụ tiếp tục, restart hai service giữ lượt, hủy có acknowledgement và phân quyền chi nhánh. Bốn lượt submit/checkout đồng thời: cả bốn lượt đơn thắng trước và trả 201; từng món đều được tính đúng sau xác nhận, subtotal tăng 50000 mỗi lượt. Nhánh chốt trước chặn đơn bằng 409 được kiểm tra bằng thiết bị thứ hai sau khi chốt được chấp nhận; không tuyên bố bốn race đã bao phủ cả hai thứ tự thắng.
+- 8 kiểm tra timeout qua Gateway thật đạt: cố ý giữ application lock SQL cho Begin/Release vượt deadline; Preparing/ReleasePending vẫn được lưu, orderingReopened=false, retry cùng ID tiếp tục và chỉ mở lại sau acknowledgement. Đây là thử lỗi hạ tầng cho checkout, chưa phải thử thanh toán thất bại.
+- 13 kiểm tra Gateway bổ sung đạt với trạng thái Paid được mô phỏng bằng SQL chỉ trong database fixture: checkout đang giữ không cho gọi thêm hoặc hủy mở lại; GuestAccess vẫn hợp lệ, TableSession vẫn Open/ClosedAt=NULL. Không có API thu tiền hoặc giao dịch Payment thật trong thử nghiệm này.
+- Lượt test solution cuối: 779 pass, 54 conditional skip, 0 fail; riêng Billing 200 pass/17 skip, Ordering 45 pass/0 skip. Không tính skip là đã kiểm chứng. Hai lỗi Foundation về đăng ký generic repository cho model mới đã được sửa đúng theo quy ước DI; không bỏ hoặc sửa test Foundation để che lỗi.
+- 6 BillSqlServerTests đạt trên SQL Server thật, không skip, gồm upgrade lặp giữ dữ liệu và unique filtered index chỉ cho một lượt chưa release. Những test SQL này dùng client nguồn/quyền giả lập; 103 kiểm tra Gateway nêu trên dùng service thật.
+- Toàn bộ bằng chứng cục bộ nằm trong .ai/checkout (Git ignore). Dữ liệu fixture/secret/cookie không đưa vào commit.
+- Đã dừng/xóa nhóm checkout-check và xóa đúng năm database fixture CheckoutCheck của lượt thử, không xóa database thường. Ordering/Billing/Gateway thường đã được build/restart; Swagger có các route checkout và kiểm tra anonymous qua Gateway → Billing → Ordering trả 401. Lượt kiểm tra 103 tình huống hợp lệ/lỗi ở trên chạy trên các database cô lập có dữ liệu seed, không trên dữ liệu nghiệp vụ thường.
+- Chưa chạy GitHub Actions cho working tree chưa commit/push. Không coi CI của commit nền là CI của đợt này.
 
 Request mẫu tạo chính sách ngay (tỷ lệ minh họa cho test, không phải khuyến nghị mức thuế):
 

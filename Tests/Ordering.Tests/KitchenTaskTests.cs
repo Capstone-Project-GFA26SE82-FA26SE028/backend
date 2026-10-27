@@ -14,6 +14,28 @@ namespace Ordering.Tests;
 public sealed class KitchenTaskTests
 {
     [Fact]
+    public async Task FrozenCheckoutBlocksCancellationButAllowsCookingAndServingProgress()
+    {
+        using var fixture = new Fixture();
+        var (task, _) = await fixture.SeedTaskAsync("Pending", 0);
+        fixture.Db.CheckoutLocks.Add(new CheckoutLock
+        {
+            CheckoutId = Guid.NewGuid(),
+            TableSessionRef = task.OrderItem.Order.TableSessionRef!.Value,
+            Status = "Frozen",
+            CreatedAt = DateTime.UtcNow,
+            SourceHash = new string('A', 64)
+        });
+        await fixture.Db.SaveChangesAsync();
+        var error = await Assert.ThrowsAsync<OrderingException>(() => fixture.Service.SetStatus(task.KitchenTaskId,
+            "Cancelled", null, default));
+        Assert.Equal(409, error.StatusCode);
+        await fixture.Service.SetStatus(task.KitchenTaskId, "Cooking", null, default);
+        var ready = await fixture.Service.SetStatus(task.KitchenTaskId, "Ready", null, default);
+        Assert.Equal("Ready", ready.Status);
+    }
+
+    [Fact]
     public async Task StatusTransitionsFollowCookingFlowAndLogEvents()
     {
         using var fixture = new Fixture();
@@ -323,7 +345,8 @@ public sealed class KitchenTaskTests
                 new KitchenTaskRepository(Db),
                 new OrderingTransaction(new UnitOfWork<OrderingDbContext>(Db)),
                 Access,
-                Clock);
+                Clock,
+                new CheckoutLockRepository(Db));
         }
 
         public async Task<(KitchenTask Task, Guid StationId)> SeedTaskAsync(

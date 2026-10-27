@@ -16,7 +16,8 @@ public sealed class OrderService(
     IOrderingAccess access,
     ICatalogOrderClient catalog,
     IOptions<OrderingSettings> settings,
-    TimeProvider clock) : IOrderService
+    TimeProvider clock,
+    ICheckoutLockRepository checkouts) : IOrderService
 {
     public async Task<(OrderDTO Order, bool Created)> Create(
         Guid sessionId,
@@ -76,6 +77,7 @@ public sealed class OrderService(
 
         var result = await transaction.ExecuteAsync(async () =>
         {
+            await checkouts.LockSessionAsync(sessionId, ct);
             var existing = await orders.GetByKeyAsync(scopedKey, ct);
             if (existing is not null)
             {
@@ -85,6 +87,11 @@ public sealed class OrderService(
                 }
 
                 return (Order: existing, Created: false);
+            }
+
+            if (await checkouts.GetActiveAsync(sessionId, ct) is not null)
+            {
+                throw new OrderingException(409, "Checkout has been requested for this session. Additional orders are blocked.");
             }
 
             Cart? cart = null;
@@ -227,11 +234,18 @@ public sealed class OrderService(
 
         var order = await transaction.ExecuteAsync(async () =>
         {
+            await checkouts.LockSessionAsync(sessionId, ct);
+            var checkout = await checkouts.GetActiveAsync(sessionId, ct);
             var found = await orders.GetByIdAsync(id, ct);
             CheckOrder(found, actor);
             if (found!.Status == "Confirmed")
             {
                 return found;
+            }
+
+            if (checkout?.Status == "Frozen")
+            {
+                throw new OrderingException(409, "The checkout item set has already been frozen.");
             }
 
             if (found.Status != "PendingConfirmation" || !found.Version.SequenceEqual(expected))

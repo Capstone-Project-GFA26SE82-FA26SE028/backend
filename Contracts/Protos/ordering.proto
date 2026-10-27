@@ -1,6 +1,25 @@
 syntax = "proto3";
 option csharp_namespace = "Backend.Contracts.Ordering";
 package ordering;
+service CheckoutLockGrpc {
+  rpc Verify(CheckoutLockRequest) returns (google.protobuf.Empty);
+  rpc Begin(CheckoutLockRequest) returns (CheckoutLockInfo);
+  rpc Release(CheckoutLockRequest) returns (CheckoutLockInfo);
+  rpc Bind(CheckoutLockRequest) returns (CheckoutLockInfo);
+}
+message CheckoutLockRequest {
+  string table_session_id = 1;
+  string checkout_id = 2;
+  string guest_token = 3;
+  optional string bill_id = 4;
+  optional string source_hash = 5;
+}
+message CheckoutLockInfo {
+  string checkout_id = 1;
+  string table_session_id = 2;
+  string status = 3;
+  optional string source_hash = 4;
+}
 import "google/protobuf/empty.proto";
 
 message OrderingAccess { string table_session_id = 1; string guest_token = 2; }

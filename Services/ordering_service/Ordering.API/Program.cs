@@ -21,6 +21,7 @@ app.MapGrpcService<Ordering.API.GrpcServices.KitchenTaskGrpcService>();
 app.MapGrpcService<Ordering.API.GrpcServices.CartGrpcService>();
 app.MapGrpcService<Ordering.API.GrpcServices.OrderGrpcService>();
 app.MapGrpcService<Ordering.API.GrpcServices.BillingOrderGrpcService>();
+app.MapGrpcService<Ordering.API.GrpcServices.CheckoutLockGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

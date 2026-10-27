@@ -13,9 +13,11 @@ for database in IdentityDb RestaurantDb OrderingDb InventoryDb CatalogDb Custome
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/CatalogCookingTime.sql
     fi
     if [[ "$database" == "OrderingDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/OrderingCheckout.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/OrderingCookingTime.sql
     fi
     if [[ "$database" == "BillingDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCheckout.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashRegisterRestaurant.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingBillRestaurant.sql
     fi
@@ -56,9 +58,11 @@ GO
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/CatalogCookingTime.sql
     fi
     if [[ "$database" == "OrderingDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/OrderingCheckout.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/OrderingCookingTime.sql
     fi
     if [[ "$database" == "BillingDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCheckout.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashRegisterRestaurant.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingBillRestaurant.sql
     fi

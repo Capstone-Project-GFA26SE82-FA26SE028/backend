@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Billing.BLL.Interfaces;
 using Billing.Common.DTOs;
@@ -9,6 +7,7 @@ using Billing.DAL.Interfaces;
 using Billing.DAL.Models;
 using Microsoft.Extensions.Options;
 using Shared.Common.Pagination;
+using Shared.Common.Billing;
 using Shared.Persistence.Interfaces;
 
 namespace Billing.BLL.Implements;
@@ -19,7 +18,17 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
 {
     private const decimal MaximumMoney = 9999999999999999.99m;
 
-    public async Task<BillDTO> Create(Guid tableSessionId, CancellationToken ct)
+    public Task<BillDTO> Create(Guid tableSessionId, CancellationToken ct)
+    {
+        return CreateCore(tableSessionId, null, ct);
+    }
+
+    public Task<BillDTO> CreateForCheckout(Guid tableSessionId, Guid checkoutId, CancellationToken ct)
+    {
+        return CreateCore(tableSessionId, checkoutId, ct);
+    }
+
+    private async Task<BillDTO> CreateCore(Guid tableSessionId, Guid? checkoutId, CancellationToken ct)
     {
         var actor = await access.GetCurrentScopeAsync(null, ct);
         RequireRole(actor, true);
@@ -40,6 +49,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
                 throw new BillingException(409, "Bill creation is busy for this table session. Retry the request.");
             }
 
+            await RequireCheckout(tableSessionId, checkoutId, ct);
             if (await bills.SessionHasBillAsync(tableSessionId, ct))
             {
                 throw new BillingException(409, "This session already has a bill. Review its freshness before proceeding.");
@@ -117,7 +127,17 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         return dto;
     }
 
-    public async Task<BillDTO> Refresh(Guid id, CancellationToken ct)
+    public Task<BillDTO> Refresh(Guid id, CancellationToken ct)
+    {
+        return RefreshCore(id, null, ct);
+    }
+
+    public Task<BillDTO> RefreshForCheckout(Guid id, Guid checkoutId, CancellationToken ct)
+    {
+        return RefreshCore(id, checkoutId, ct);
+    }
+
+    private async Task<BillDTO> RefreshCore(Guid id, Guid? checkoutId, CancellationToken ct)
     {
         var actor = await access.GetCurrentScopeAsync(null, ct);
         RequireRole(actor, true);
@@ -126,8 +146,22 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             throw new BillingException(400, "A valid bill ID is required.");
         }
 
+        var initial = await bills.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Bill not found.");
+        RequireBranch(actor, initial.RestaurantId);
+        var initialSessions = initial.BillLines.Select(line => line.TableSessionRef).Distinct().ToArray();
+        if (initialSessions.Length != 1)
+        {
+            throw new BillingException(409, "The bill must identify one table session.");
+        }
+
         var bill = await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
+            if (!await bills.LockSessionAsync(initialSessions[0], ct))
+            {
+                throw new BillingException(409, "Checkout is busy. Retry the request.");
+            }
+
+            await RequireCheckout(initialSessions[0], checkoutId, ct);
             var stored = await bills.GetForRefreshAsync(id, ct)
                 ?? throw new BillingException(404, "Bill not found.");
             RequireBranch(actor, stored.RestaurantId);
@@ -365,7 +399,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             return result;
         }
         ValidateSource(current, sessions[0], requireItems: false);
-        result.SourceStatus = current.RestaurantId == bill.RestaurantId
+        result.SourceStatus = current.PendingOrderCount == 0 && current.RestaurantId == bill.RestaurantId
             && result.Items.All(line => line.Item.SourceFingerprint == Fingerprint(current)) ? "Current" : "Stale";
         if (result.SourceStatus == "Stale")
         {
@@ -451,26 +485,23 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
 
     private static string Fingerprint(BillSourceDTO snapshot)
     {
-        var canonical = new
+        return CheckoutHash.Compute(snapshot.Items.Select(line => new CheckoutHashLine(line.OrderItemId,
+            line.Item.ItemId, line.Quantity, line.Item.BaseUnitPrice, line.Item.Options.Select(option =>
+                new CheckoutHashOption(option.OptionId, option.Quantity, option.ExtraPrice)).ToArray())));
+    }
+
+    private async Task RequireCheckout(Guid sessionId, Guid? checkoutId, CancellationToken ct)
+    {
+        var active = await bills.GetActiveCheckoutAsync(sessionId, ct);
+        if (active is null && !checkoutId.HasValue)
         {
-            snapshot.TableSessionId,
-            snapshot.RestaurantId,
-            snapshot.PendingOrderCount,
-            Items = snapshot.Items.OrderBy(line => line.OrderItemId).Select(line => new
-            {
-                line.OrderItemId,
-                line.OriginalTableId,
-                line.ComboGroupId,
-                line.Quantity,
-                line.Item.OrderId,
-                line.Item.ItemId,
-                line.Item.Name,
-                line.Item.Status,
-                line.Item.BaseUnitPrice,
-                Options = line.Item.Options.OrderBy(option => option.OptionId).ToArray()
-            })
-        };
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(canonical))));
+            return;
+        }
+
+        if (active is null || active.CheckoutId != checkoutId || active.Status is not ("Frozen" or "Ready"))
+        {
+            throw new BillingException(409, "Continue the active checkout to synchronize this bill.");
+        }
     }
 
     private static BillDTO Map(Bill bill)

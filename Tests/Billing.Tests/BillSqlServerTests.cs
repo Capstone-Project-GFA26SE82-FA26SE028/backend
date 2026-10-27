@@ -211,6 +211,29 @@ public sealed class BillSqlServerTests : IAsyncLifetime
             }), TimeProvider.System);
     }
 
+    [BillingSqlServerFact]
+    public async Task CheckoutUpgradePreservesRowsAndFilteredIndexAllowsOnlyOneUnreleasedAttempt()
+    {
+        var source = new BillServiceTests.BillSource();
+        await using var db = Context();
+        var bill = await Service(db, source).Create(source.Value.TableSessionId, default);
+        var first = Guid.NewGuid();
+        await Execute(_connection, $"INSERT dbo.BillCheckout (CheckoutId,BillId,TableSessionRef,Status,CreatedAt) VALUES ('{first}','{bill.BillId}','{source.Value.TableSessionId}','Preparing',SYSUTCDATETIME());");
+        var upgrade = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Sql", "BillingCheckout.sql"));
+        upgrade = Regex.Replace(upgrade, @"^\s*GO\s*$", string.Empty, RegexOptions.Multiline | RegexOptions.IgnoreCase);
+        await Execute(_connection, upgrade);
+        await Execute(_connection, upgrade);
+        var error = await Assert.ThrowsAsync<SqlException>(() => Execute(_connection,
+            $"INSERT dbo.BillCheckout (CheckoutId,TableSessionRef,Status,CreatedAt) VALUES (NEWID(),'{source.Value.TableSessionId}','Preparing',SYSUTCDATETIME());"));
+        Assert.Contains(error.Number, new[] { 2601, 2627 });
+        await Execute(_connection, $"UPDATE dbo.BillCheckout SET Status='Released',ReleasedAt=SYSUTCDATETIME() WHERE CheckoutId='{first}'; INSERT dbo.BillCheckout (CheckoutId,TableSessionRef,Status,CreatedAt) VALUES (NEWID(),'{source.Value.TableSessionId}','Preparing',SYSUTCDATETIME());");
+        Assert.Equal(2, await db.BillCheckouts.CountAsync());
+        Assert.Equal(1, await db.BillCheckouts.CountAsync(value => value.ReleasedAt == null));
+        Assert.All(await db.BillCheckouts.ToListAsync(), value => Assert.Null(value.SourceHash));
+        Assert.Single(await db.Bills.ToListAsync());
+        Assert.Equal(201.25m, (await db.Bills.SingleAsync()).SubTotal);
+    }
+
     private BillingDbContext Context()
     {
         return new BillingDbContext(new DbContextOptionsBuilder<BillingDbContext>().UseSqlServer(_connection).Options);

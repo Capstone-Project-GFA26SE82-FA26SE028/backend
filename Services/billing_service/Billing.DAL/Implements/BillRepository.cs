@@ -42,6 +42,12 @@ public sealed class BillRepository(BillingDbContext db) : GenericRepository<Bill
         return _context.BillLines.AnyAsync(line => line.TableSessionRef == sessionId, ct);
     }
 
+    public Task<BillCheckout?> GetActiveCheckoutAsync(Guid sessionId, CancellationToken ct)
+    {
+        return _context.BillCheckouts.AsNoTracking().SingleOrDefaultAsync(value => value.TableSessionRef == sessionId
+            && value.ReleasedAt == null, ct);
+    }
+
     public Task<Bill?> GetDetailsAsync(Guid id, CancellationToken ct)
     {
         return _context.Bills.AsNoTracking().Include(bill => bill.BillLines)

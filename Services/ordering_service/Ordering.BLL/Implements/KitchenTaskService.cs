@@ -10,7 +10,8 @@ public sealed class KitchenTaskService(
     IKitchenTaskRepository repository,
     IOrderingTransaction transaction,
     IKitchenStationAccess access,
-    TimeProvider clock) : IKitchenTaskService
+    TimeProvider clock,
+    ICheckoutLockRepository checkouts) : IKitchenTaskService
 {
     public async Task<KitchenTaskPageDTO> GetAll(
         int page,
@@ -86,6 +87,16 @@ public sealed class KitchenTaskService(
                 if (task.Version is not null && !task.Version.SequenceEqual(expected))
                 {
                     throw new OrderingException(409, "The kitchen task changed. Reload before updating.");
+                }
+            }
+
+            if (string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase)
+                && task.OrderItem?.Order?.TableSessionRef is Guid sessionId)
+            {
+                await checkouts.LockSessionAsync(sessionId, ct);
+                if ((await checkouts.GetActiveAsync(sessionId, ct))?.Status == "Frozen")
+                {
+                    throw new OrderingException(409, "Checkout has frozen this item. Cancel the checkout before cancelling the item.");
                 }
             }
 
@@ -366,6 +377,15 @@ public sealed class KitchenTaskService(
         {
             var task = await repository.GetByIdForUpdateAsync(id, ct)
                 ?? throw new OrderingException(404, "Kitchen task not found.");
+
+            if (task.OrderItem?.Status == "Cancelled" && task.OrderItem.Order?.TableSessionRef is Guid sessionId)
+            {
+                await checkouts.LockSessionAsync(sessionId, ct);
+                if ((await checkouts.GetActiveAsync(sessionId, ct))?.Status == "Frozen")
+                {
+                    throw new OrderingException(409, "A cancelled item cannot be restored during frozen checkout.");
+                }
+            }
 
             var fromStatus = task.Status;
             task.Status = "Cancelled";

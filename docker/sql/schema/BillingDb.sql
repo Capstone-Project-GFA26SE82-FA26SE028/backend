@@ -545,3 +545,19 @@ REFERENCES [dbo].[Refund] ([RefundId])
 GO
 ALTER TABLE [dbo].[RefundLine] CHECK CONSTRAINT [FK_RefundLine_Refund]
 GO
+
+SET QUOTED_IDENTIFIER ON;
+CREATE TABLE dbo.BillCheckout
+(
+    CheckoutId uniqueidentifier NOT NULL,
+    BillId uniqueidentifier NULL,
+    TableSessionRef uniqueidentifier NOT NULL,
+    SourceHash char(64) NULL,
+    Status varchar(20) NOT NULL,
+    CreatedAt datetime2(7) NOT NULL,
+    ReleasedAt datetime2(7) NULL,
+    CONSTRAINT FK_BillCheckout_Bill FOREIGN KEY (BillId) REFERENCES dbo.Bill(BillId),
+    CONSTRAINT PK_BillCheckout PRIMARY KEY (CheckoutId)
+);
+CREATE UNIQUE INDEX UX_BillCheckout_ActiveSession ON dbo.BillCheckout(TableSessionRef) WHERE ReleasedAt IS NULL;
+GO

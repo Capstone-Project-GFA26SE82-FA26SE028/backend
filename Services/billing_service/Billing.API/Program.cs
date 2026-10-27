@@ -20,6 +20,7 @@ var app = builder.Build();
 app.MapGrpcService<CashRegisterGrpcService>();
 app.MapGrpcService<CashShiftGrpcService>();
 app.MapGrpcService<BillGrpcService>();
+app.MapGrpcService<BillCheckoutGrpcService>();
 app.MapGrpcService<TaxFeePolicyGrpcService>();
 
 app.MapGet("/health/live", () =>

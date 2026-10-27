@@ -39,6 +39,8 @@ public partial class Bill
 
     public byte[] Version { get; set; }
 
+    public virtual ICollection<BillCheckout> BillCheckouts { get; set; } = new List<BillCheckout>();
+
     public virtual ICollection<BillAdjustment> BillAdjustments { get; set; } = new List<BillAdjustment>();
 
     public virtual ICollection<BillLine> BillLines { get; set; } = new List<BillLine>();

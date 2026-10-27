@@ -2,6 +2,27 @@ syntax = "proto3";
 
 option csharp_namespace = "Backend.Contracts.Billing";
 package billing;
+import "google/protobuf/empty.proto";
+service BillCheckoutGrpc {
+  rpc Request(BillCheckoutRequest) returns (BillCheckoutInfo);
+  rpc GetCurrent(BillCheckoutRequest) returns (BillCheckoutInfo);
+  rpc Synchronize(BillCheckoutRequest) returns (BillCheckoutInfo);
+  rpc Cancel(BillCheckoutRequest) returns (BillCheckoutInfo);
+  rpc AuthorizeRelease(BillCheckoutRequest) returns (google.protobuf.Empty);
+}
+message BillCheckoutRequest {
+  string table_session_id = 1;
+  string checkout_id = 2;
+  string guest_token = 3;
+}
+message BillCheckoutInfo {
+  string checkout_id = 1;
+  string table_session_id = 2;
+  optional string bill_id = 3;
+  string status = 4;
+  optional string source_hash = 5;
+  bool ordering_reopened = 6;
+}
 
 service TaxFeePolicyGrpc {
   rpc Create(CreateTaxFeePolicyRequest) returns (TaxFeePolicyInfo);

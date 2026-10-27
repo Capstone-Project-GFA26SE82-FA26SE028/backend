@@ -51,6 +51,12 @@ public static class BillingServiceExtensions
 
             options.Address = orderingUri;
         });
+        services.AddGrpcClient<Backend.Contracts.Ordering.CheckoutLockGrpc.CheckoutLockGrpcClient>(options =>
+        {
+            options.Address = new Uri(configuration["GrpcServices:Ordering"]!);
+        });
+        services.AddScoped<ICheckoutSourceClient, CheckoutSourceClient>();
+        services.AddScoped<IBillCheckoutService, BillCheckoutService>();
         services.AddScoped<IBillSourceClient, BillSourceClient>();
         services.Configure<BillSettings>(configuration.GetSection("Billing"));
         services.AddScoped<IBillingAccess, RestaurantBillingAccess>();

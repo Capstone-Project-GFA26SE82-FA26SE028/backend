@@ -15,6 +15,17 @@ namespace Billing.Tests;
 public sealed class BillServiceTests
 {
     [Fact]
+    public async Task CookingAndServingProgressDoesNotInvalidateFinancialSnapshot()
+    {
+        await using var fixture = await BillFixture.Create();
+        var bill = await fixture.Service.Create(fixture.Source.Value.TableSessionId, default);
+        fixture.Source.Value.Items[0].Item.Status = "Served";
+        Assert.Equal("Current", (await fixture.Service.GetById(bill.BillId, default)).SourceStatus);
+        fixture.Source.Value.PendingOrderCount = 1;
+        Assert.Equal("Stale", (await fixture.Service.GetById(bill.BillId, default)).SourceStatus);
+    }
+
+    [Fact]
     public async Task CreationUsesOrderSnapshotsStoresUnknownCogsAndRoundsVndTotal()
     {
         await using var fixture = await BillFixture.Create();
