@@ -19,6 +19,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="../../docker/sql/upgrades/BillingCashRegisterRestaurant.sql" Link="Sql/BillingCashRegisterRestaurant.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../docker/sql/upgrades/BillingBillRestaurant.sql" Link="Sql/BillingBillRestaurant.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../docker/sql/schema/BillingDb.sql" Link="Sql/BillingDb.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

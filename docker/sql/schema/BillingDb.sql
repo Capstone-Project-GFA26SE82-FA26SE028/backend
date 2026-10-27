@@ -4,6 +4,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[Bill](
 	[BillId] [uniqueidentifier] NOT NULL,
+	[RestaurantId] [uniqueidentifier] NOT NULL,
 	[BillNumber] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[CustomerRef] [uniqueidentifier] NULL,
 	[Status] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -263,7 +264,7 @@ CREATE TABLE [dbo].[BillLine](
 	[DiscountAllocated] [decimal](18, 2) NOT NULL,
 	[VatAllocated] [decimal](18, 2) NOT NULL,
 	[ServiceAllocated] [decimal](18, 2) NOT NULL,
-	[CogsSnapshot] [decimal](18, 2) NOT NULL,
+	[CogsSnapshot] [decimal](18, 2) NULL,
  CONSTRAINT [PK_BillLine] PRIMARY KEY CLUSTERED 
 (
 	[BillLineId] ASC

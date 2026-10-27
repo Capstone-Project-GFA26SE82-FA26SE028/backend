@@ -17,6 +17,7 @@ for database in IdentityDb RestaurantDb OrderingDb InventoryDb CatalogDb Custome
     fi
     if [[ "$database" == "BillingDb" ]]; then
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashRegisterRestaurant.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingBillRestaurant.sql
     fi
         echo "$database already initialized; keeping existing data."
         continue
@@ -59,5 +60,6 @@ GO
     fi
     if [[ "$database" == "BillingDb" ]]; then
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashRegisterRestaurant.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingBillRestaurant.sql
     fi
 done

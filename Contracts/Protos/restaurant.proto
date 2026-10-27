@@ -22,6 +22,12 @@ service GuestAccessGrpc {
   rpc GetMe(GuestAccessRequest) returns (GuestAccessReply);
 }
 
+service BillingSessionGrpc {
+  rpc GetById(BillingSessionRequest) returns (BillingSessionReply);
+}
+message BillingSessionRequest { string table_session_id = 1; }
+message BillingSessionReply { string table_session_id = 1; string restaurant_id = 2; }
+
 service RestaurantAccessGrpc {
   rpc GetCurrentScope(CurrentRestaurantScopeRequest) returns (CurrentRestaurantScopeReply);
 }

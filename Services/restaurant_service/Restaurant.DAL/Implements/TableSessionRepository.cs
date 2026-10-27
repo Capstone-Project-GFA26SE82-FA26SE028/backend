@@ -8,6 +8,14 @@ namespace Restaurant.DAL.Implements;
 public sealed class TableSessionRepository(RestaurantDbContext db)
     : GenericRepository<TableSession, RestaurantDbContext>(db), ITableSessionRepository
 {
+    public Task<TableSession?> GetForBillingAsync(Guid id, CancellationToken ct)
+    {
+        return _context.TableSessions.AsNoTracking()
+            .Include(session => session.SessionTables)
+                .ThenInclude(link => link.Table).ThenInclude(table => table.Area)
+            .SingleOrDefaultAsync(session => session.TableSessionId == id, ct);
+    }
+
     public Task<TableSession?> GetForOrderingAsync(Guid id, CancellationToken ct)
     {
         return _context.TableSessions.AsNoTracking()

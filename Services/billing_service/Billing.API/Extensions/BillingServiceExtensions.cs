@@ -40,9 +40,23 @@ public static class BillingServiceExtensions
         {
             options.Address = uri;
         });
+        services.AddGrpcClient<Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient>(options =>
+        {
+            var orderingAddress = configuration["GrpcServices:Ordering"];
+            if (!Uri.TryCreate(orderingAddress, UriKind.Absolute, out var orderingUri)
+                || (orderingUri.Scheme != Uri.UriSchemeHttp && orderingUri.Scheme != Uri.UriSchemeHttps))
+            {
+                throw new InvalidOperationException("Configure GrpcServices:Ordering.");
+            }
+
+            options.Address = orderingUri;
+        });
+        services.AddScoped<IBillSourceClient, BillSourceClient>();
+        services.Configure<BillSettings>(configuration.GetSection("Billing"));
         services.AddScoped<IBillingAccess, RestaurantBillingAccess>();
         services.AddScoped<ICashRegisterService, CashRegisterService>();
         services.AddScoped<ICashShiftService, CashShiftService>();
+        services.AddScoped<IBillService, BillService>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         return services;
     }

@@ -6,6 +6,13 @@ namespace Ordering.DAL.Implements;
 
 public sealed class OrderRepository(OrderingDbContext db) : IOrderRepository
 {
+    public Task<List<Order>> GetForBillingAsync(Guid sessionId, CancellationToken ct)
+    {
+        return db.Orders.AsNoTracking().Where(order => order.TableSessionRef == sessionId)
+            .Include(order => order.OrderItems).ThenInclude(item => item.OrderItemOptions)
+            .OrderBy(order => order.OrderId).ToListAsync(ct);
+    }
+
     public Task<Order?> GetByIdAsync(Guid id, CancellationToken ct)
     {
         var query = db.Database.IsSqlServer()

@@ -159,3 +159,26 @@ service KitchenTaskGrpc {
   rpc RemakeTask(KitchenTaskRemakeRequest) returns (KitchenTaskInfo);
   rpc FireCourse(FireCourseRequest) returns (FireCourseReply);
 }
+
+service BillingOrderGrpc {
+  rpc GetBySession(BillingOrderRequest) returns (BillingOrderSnapshot);
+}
+message BillingOrderRequest { string table_session_id = 1; }
+message BillingOrderSnapshot {
+  string table_session_id = 1;
+  string restaurant_id = 2;
+  int32 pending_order_count = 3;
+  repeated BillingOrderLine items = 4;
+}
+message BillingOrderLine {
+  string order_id = 1;
+  string order_item_id = 2;
+  string item_id = 3;
+  string original_table_id = 4;
+  optional string combo_group_id = 5;
+  string name = 6;
+  int32 quantity = 7;
+  string unit_price = 8;
+  string status = 9;
+  repeated QuotedOptionInfo options = 10;
+}

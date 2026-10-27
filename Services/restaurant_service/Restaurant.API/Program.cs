@@ -8,6 +8,8 @@ builder.Services.AddGrpc(options =>
     options.Interceptors.Add<Restaurant.API.Management.ManagementInterceptor>();
 });
 builder.Services.AddHttpContextAccessor();
+builder.Services.Configure<Restaurant.Common.Settings.BillingReadSettings>(builder.Configuration.GetSection("BillingRead"));
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IBillingSessionService, Restaurant.BLL.Implements.BillingSessionService>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.Configure<Restaurant.Common.Settings.ReservationSettings>(builder.Configuration.GetSection("Reservations"));
 builder.Services.Configure<Restaurant.Common.Settings.RestaurantStaffSettings>(builder.Configuration.GetSection("RestaurantStaff"));
@@ -69,6 +71,7 @@ app.MapGrpcService<Restaurant.API.GrpcServices.TableSessionGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.ReservationGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantStaffGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantAccessGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.BillingSessionGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.GuestAccessGrpcService>();
 
 app.MapGet("/health/live", () =>
