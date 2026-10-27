@@ -3,6 +3,37 @@ syntax = "proto3";
 option csharp_namespace = "Backend.Contracts.Billing";
 package billing;
 
+service TaxFeePolicyGrpc {
+  rpc Create(CreateTaxFeePolicyRequest) returns (TaxFeePolicyInfo);
+  rpc GetAll(TaxFeePolicyListRequest) returns (TaxFeePolicyPage);
+  rpc GetById(TaxFeePolicyIdRequest) returns (TaxFeePolicyInfo);
+}
+
+message CreateTaxFeePolicyRequest {
+  optional string vat_rate = 1;
+  optional string service_rate = 2;
+  optional bool service_enabled = 3;
+  optional string effective_from = 4;
+}
+
+message TaxFeePolicyIdRequest { string tax_fee_policy_id = 1; }
+message TaxFeePolicyListRequest { int32 page = 1; int32 page_size = 2; }
+message TaxFeePolicyInfo {
+  string tax_fee_policy_id = 1;
+  int32 version = 2;
+  string vat_rate = 3;
+  string service_rate = 4;
+  bool service_enabled = 5;
+  string effective_from = 6;
+}
+
+message TaxFeePolicyPage {
+  repeated TaxFeePolicyInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
 service CashRegisterGrpc {
   rpc Create(CreateCashRegisterRequest) returns (CashRegisterInfo);
   rpc GetAll(CashRegisterListRequest) returns (CashRegisterPage);

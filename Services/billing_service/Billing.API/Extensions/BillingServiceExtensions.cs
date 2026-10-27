@@ -57,6 +57,7 @@ public static class BillingServiceExtensions
         services.AddScoped<ICashRegisterService, CashRegisterService>();
         services.AddScoped<ICashShiftService, CashShiftService>();
         services.AddScoped<IBillService, BillService>();
+        services.AddScoped<ITaxFeePolicyService, TaxFeePolicyService>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         return services;
     }

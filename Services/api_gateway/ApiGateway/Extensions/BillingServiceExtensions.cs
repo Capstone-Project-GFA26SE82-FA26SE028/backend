@@ -30,6 +30,10 @@ public static class BillingServiceExtensions
         {
             options.Address = uri;
         });
+        services.AddGrpcClient<TaxFeePolicyGrpc.TaxFeePolicyGrpcClient>(options =>
+        {
+            options.Address = uri;
+        });
         return services;
     }
 }

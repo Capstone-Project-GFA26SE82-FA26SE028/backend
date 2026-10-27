@@ -1,13 +1,13 @@
 # Nhật ký thay đổi database / SQL / ERD
 
-Cập nhật: 2026-10-26. Phạm vi kiểm kê: lịch sử Git của checkout `feature/Billing`, bảy script `docker/sql/schema`, toàn bộ `docker/sql/upgrades`, model/DbContext và metadata SQL Server Docker của bảy database. Đây là bằng chứng tại một môi trường, không xác nhận database của máy thành viên khác đã nâng cấp.
+Cập nhật nhật ký: 2026-10-27. Mốc kiểm kê ban đầu: 2026-10-26. Phạm vi kiểm kê: lịch sử Git của checkout `feature/Billing`, bảy script `docker/sql/schema`, toàn bộ `docker/sql/upgrades`, model/DbContext và metadata SQL Server Docker của bảy database. Đây là bằng chứng tại một môi trường, không xác nhận database của máy thành viên khác đã nâng cấp.
 
 ## Mốc đối chiếu và giới hạn bằng chứng
 
 - `cac39b3`: model ban đầu của các service và `scripts/billing-schema.sql`. Script Billing cũ có lệnh DROP DATABASE; chỉ đọc lịch sử, tuyệt đối không chạy lại.
 - `17ffdb9`: xóa script Billing cũ khỏi repository; việc xóa file không chứng minh database đã bị xóa.
 - `10c23b0`: lần đầu nhập bảy schema Docker vào Git. Bảng đã có trong mốc này được gọi là baseline, không khẳng định bảng được sáng tạo trong commit đó.
-- Bộ SQL ngoài repository được đọc tại `C:/Users/phucg/Downloads/Database-SQLServer-main/Database-SQLServer/`. Không sửa hoặc chạy các script này. Bản Restaurant hiện tại ở thư mục này đã chứa RestaurantStaff và các trường đặt bàn, vì vậy không còn là bản Restaurant nguyên thủy. Lịch sử chỉnh sửa ngoài Git không xác định đầy đủ.
+- Bộ SQL nguồn nằm trong repo Git riêng `Capstone-Project-GFA26SE82-FA26SE028/Database-SQLServer`, không phải thư mục runtime của backend. Mốc rà soát ban đầu chỉ đọc các file; bản Restaurant ở mốc đó đã có RestaurantStaff và các trường đặt bàn nên không coi đó là bản Restaurant nguyên thủy. Ngày 2026-10-27 đã đồng bộ riêng hai RestaurantId của Billing và CogsSnapshot nullable vào repo SQL tại commit `626faff`; không có thay đổi schema mới ngoài các mục đã liệt kê. Các hash bên dưới ghi nhận file tại mốc rà soát ban đầu, trước lần đồng bộ này. Các chỉnh sửa chưa commit trước mốc lịch sử hiện có không được suy đoán.
 - `rowversion` và `timestamp` là hai tên cho cùng kiểu SQL Server, không phải một thay đổi kiểu dữ liệu cần vẽ lại ERD.
 - Không suy từ model/RPC mới ra bảng mới. Chỉ các mục có DDL dưới đây được coi là thay đổi schema đã có bằng chứng. Các nâng cấp cũ chỉ được xác nhận hiện diện qua metadata; không có lịch sử máy để khẳng định ai đã chạy vào lúc nào.
 - Dữ liệu demo/seed, cấu hình appsettings, application lock và transaction lock không phải bảng/cột/index mới.
@@ -99,7 +99,7 @@ Mỗi đợt thay đổi schema cập nhật bảng này cùng code và SQL upgr
 | OrderingDb | 12 | Đọc sys.tables, sys.columns, defaults, indexes, foreign_keys và checks ngày 2026-10-26; không sửa DB |
 | RestaurantDb | 12 | Đọc sys.tables, sys.columns, defaults, indexes, foreign_keys và checks ngày 2026-10-26; không sửa DB |
 
-## Dấu nhận diện bộ SQL ngoài Git đã đối chiếu
+## Dấu nhận diện bộ SQL nguồn tại mốc rà soát ban đầu
 
 | File | SHA-256 tại thời điểm đọc |
 | --- | --- |
@@ -129,3 +129,49 @@ Mỗi đợt thay đổi schema cập nhật bảng này cùng code và SQL upgr
 - Kiểm tra dữ liệu fixture: 3 bill / 6 dòng, cả 6 CogsSnapshot NULL; 0 Payment, CashMovement, ShiftReport. BillingDb thường vẫn 0 bill và 0 TaxFeePolicy; không thêm dữ liệu demo/chính sách thuế vào database thường.
 - Đã khởi động lại đúng Restaurant/Ordering/Billing/Gateway với image mới; Swagger cổng 5000 có POST/GET /api/bills và GET /api/bills/{id}. Database của thành viên khác vẫn cần chạy upgrade riêng qua db-init hoặc sqlcmd.
 - Các container fixture được dừng và bốn database BillCheck được xóa sau kiểm thử; giữ kết quả kiểm thử cục bộ trong .ai (được Git ignore).
+
+
+## Đợt quản lý chính sách VAT/phí dịch vụ — 2026-10-27
+
+**Các thay đổi cần cập nhật trên SQL/ERD: Không có thay đổi schema.**
+
+| Database / bảng | Thay đổi thực tế | PK/FK/UNIQUE/CHECK/index / ERD | File / bằng chứng | Trạng thái |
+| --- | --- | --- | --- | --- |
+| BillingDb.TaxFeePolicy | Không thêm, sửa hoặc xóa cột; giữ `TaxFeePolicyId uniqueidentifier NOT NULL`, `Version int NOT NULL`, `VatRate decimal(9,6) NOT NULL`, `ServiceRate decimal(9,6) NOT NULL`, `ServiceEnabled bit NOT NULL`, `EffectiveFrom datetime NOT NULL`; không thêm default | Giữ PK_TaxFeePolicy(TaxFeePolicyId). Không thêm FK, UNIQUE, CHECK hoặc index. Không có RestaurantId, không thêm dây ERD | `docker/sql/schema/BillingDb.sql` là schema đã có; entity/DbContext và toàn bộ file SQL không thay đổi trong đợt này. Commit đợt được tra bằng `git log --follow -- docs/database-change-log.md` | Chỉ mở rộng code/RPC và test; không có script nâng cấp hoặc migration mới |
+
+Phạm vi code và quyền:
+
+- Chỉ System Administrator có tài khoản/phiên hợp lệ được tạo, xem danh sách hoặc xem chi tiết qua `POST /api/tax-fee-policies`, `GET /api/tax-fee-policies`, `GET /api/tax-fee-policies/{id}`. Tái sử dụng xác thực/IsAdministrator từ RestaurantAccessGrpc và Identity. Manager/Cashier/Waiter/Kitchen/Inventory không được dùng các API cấu hình này, kể cả được phân công chi nhánh.
+- Chính sách chung toàn hệ thống, đúng mô hình TaxFeePolicy hiện có. Không tự tạo cấu hình thuế theo chi nhánh hoặc thêm RestaurantId.
+- Gateway → gRPC TaxFeePolicy → BLL TaxFeePolicyService → TaxFeePolicyRepository hiện có → BillingDbContext/UnitOfWork. Không thay đổi nghiệp vụ hoặc database của service khác.
+- Request gồm vatRate, serviceRate và serviceEnabled bắt buộc; phải nhập rõ cả giá trị 0 hoặc false. Tỷ lệ là phân số 0..1, giá trị phải lưu chính xác trong 6 chữ số thập phân. Không có VAT/phí mặc định; API không xác nhận tính phù hợp pháp lý của một mức thuế cụ thể.
+- Backend tự tạo ID và Version nguyên tăng dần trong transaction có `sp_getapplock` theo database; client không gửi ID/Version. Version là thứ tự tạo phiên bản, không phải rowversion hoặc thứ tự ưu tiên hiệu lực. Khóa ứng dụng không phải unique index; SQL thủ công ngoài API vẫn có thể tạo dữ liệu không nhất quán.
+- Bỏ trống hoặc null effectiveFrom: lấy UTC hiện tại bên trong transaction, biểu diễn tại độ chính xác SQL datetime và không đẩy mốc hiệu lực sang tương lai do làm tròn. Chuỗi rỗng hoặc chuỗi "null" không được coi là null.
+- Nhập effectiveFrom: ISO 8601 có Z/offset, trong miền datetime SQL và còn ở tương lai khi đã lấy được khóa. Không hồi tố. Thời điểm được chuẩn hóa về UTC/SQL datetime; trùng cùng mốc sau chuẩn hóa trả 409 để không làm Bill.GetEffectiveAsync gặp hai chính sách cùng ngày giờ.
+- Không có Update/Delete. Đổi chính sách bằng một phiên bản mới. Kiểm tra lại quyền Admin sau khi lấy khóa trước khi ghi dữ liệu.
+- ServiceEnabled=false giữ nguyên ServiceRate cấu hình để đọc lại; nghiệp vụ lập bill hiện có chỉ thu 0 phí khi tắt. Không xóa hoặc sửa giá trị chính sách trước đó.
+- Giữ nguyên cách Billing chọn chính sách: bản có EffectiveFrom lớn nhất nhưng không vượt thời điểm tính. Chính sách tương lai không áp dụng sớm; Version cao hơn không làm một chính sách hiệu lực sớm hơn thắng bản có EffectiveFrom muộn hơn.
+- Không cập nhật lại bất kỳ bill đã tạo nào khi thêm chính sách. Chưa triển khai thu tiền, đóng ca, PayOS hoặc nghiệp vụ tiếp theo.
+
+Kiểm chứng đợt này:
+
+- Trước khi sửa: CI đúng `65baffaef7b97d10e57cf841cd1ed8155cdf6724`, run `40513619424`, thành công. Log xác nhận build/test Billing: 126 pass, 11 conditional skip; toàn solution 700 pass, 48 conditional skip.
+- Build Docker Billing/Gateway thành công. Toàn solution: 743 pass, 51 conditional skip, 0 fail; Billing 169 pass/14 conditional skip. Các test cũ vẫn pass.
+- Ba test SQL Server riêng đã chạy thật và pass: phiên bản không trùng cho hai mốc khác nhau, 201/409 cho cùng mốc, xung đột độ chính xác datetime và hiệu lực tức thì.
+- 69 kiểm tra qua Gateway thật pass với Billing/Restaurant/Identity và SQL Server; bài kiểm tra bill đọc thêm Ordering thật. Bao phủ Admin/non-Admin/anonymous/token sai, dữ liệu thiếu/sai, UTC/offset, quá khứ/trùng mốc, phân trang, không có Update/Delete, request đồng thời và snapshot bill. Dữ liệu đơn Confirmed được seed riêng cho kiểm thử đọc, không kiểm thử lại toàn luồng đặt/duyệt đơn của Ordering.
+- Kiểm tra fixture: 6 chính sách có 6 Version khác nhau, 3 bill; 0 Payment/CashMovement/CashShift; TaxFeePolicy vẫn 6 cột đúng schema cũ. BillingDb thường vẫn 0 chính sách/0 bill; không seed VAT/phí vào dữ liệu thật.
+- Đã dừng/xóa các container kiểm thử TaxPolicyCheck và xóa bốn database tạm của lượt này, giữ nguyên các database thường. Bằng chứng test cục bộ ở .ai/billing-tax-policies (Git ignore).
+- Khởi động lại đúng Billing/Gateway với image mới; Swagger cổng 5000 có ba API chính sách. Không sửa/push repository Database-SQLServer vì đợt này không đổi SQL hoặc ERD.
+
+Request mẫu tạo chính sách ngay (tỷ lệ minh họa cho test, không phải khuyến nghị mức thuế):
+
+```json
+{
+  "vatRate": 0.08,
+  "serviceRate": 0.05,
+  "serviceEnabled": true,
+  "effectiveFrom": null
+}
+```
+
+Để lên lịch, thay effectiveFrom bằng ISO có Z/offset còn ở tương lai. ID/Version do backend trả về, không đưa vào request. Mọi response và lỗi API mới đều bằng tiếng Anh.
