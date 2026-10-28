@@ -67,6 +67,7 @@ public static class BillingServiceExtensions
                 && value.MethodCode == value.MethodCode.Trim() && value.MethodCode.All(character => character is >= '!' and <= '~'),
                 "Configure CashPayment:MethodCode.")
             .ValidateOnStart();
+        services.AddScoped<IShiftReportService, ShiftReportService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<ICashMovementService, CashMovementService>();
         services.AddScoped<IBillService, BillService>();

@@ -349,3 +349,47 @@ Bằng chứng cục bộ nằm trong .ai/billing-movements (Git ignore); không
 - GET ledger phân trang vẫn trả tổng quỹ toàn ca; Manager không xem được chi nhánh khác; thu hồi phân công chặn cả đọc và ghi. Sau restart Billing, retry cùng key vẫn trả dòng cũ. Ca đã đóng không ghi được khoản mới, retry thành công không tăng số dòng, read vẫn được theo phạm vi.
 - Đã dừng/xóa đúng nhóm cash-ledger-check và năm database fixture của lượt thử; giữ các database thường. Không tạo manual movement hoặc dữ liệu Payment demo trong BillingDb thường, không chạy upgrade hoặc đổi schema. Billing/Gateway thường đã build/restart; Swagger có ba thao tác mới và anonymous GET ledger trả 401.
 - Rà diff chỉ có Billing, billing.proto, Gateway integration, Tests/Billing.Tests, README và nhật ký này. Chưa chạy GitHub Actions, chưa commit/push. HEAD vẫn 05fa991 trên feature/Billing, giữ nguyên các commit cũ. Dừng ở đợt thu/chi ngoài bill.
+
+
+## 2026-10-28 — Đóng ca và đối soát tiền mặt
+
+### Các thay đổi cần cập nhật trên SQL/ERD
+
+**Không có thay đổi schema.** Không thêm/sửa/xóa bảng, cột, kiểu dữ liệu, NULL/NOT NULL, DEFAULT, PK, FK, UNIQUE, CHECK, index hoặc cardinality/dây nối. Không có migration, upgrade, scaffold hoặc data seed mới; không sửa repository Database-SQLServer.
+
+| Bảng có sẵn | Cột sử dụng / ràng buộc đã tồn tại | Cách dùng trong đợt này |
+| --- | --- | --- |
+| BillingDb.ShiftReport | ShiftReportId uniqueidentifier NOT NULL PK; CashShiftId uniqueidentifier NOT NULL FK nội bộ CashShift và UQ_ShiftReport_CashShiftId | Tạo đúng một báo cáo cho mỗi ca, quan hệ CashShift 1–0..1 ShiftReport đã có sẵn. Không tạo thêm bảng từ DTO/repository mới. |
+| BillingDb.ShiftReport | ExpectedCash, ActualCash, CashHandleOver đều decimal(18,2) NOT NULL; DifferenceReason varchar(1000) NULL; ClosedAt datetime NOT NULL; không DEFAULT mới | ExpectedCash chốt từ sổ quỹ. ActualCash là toàn bộ tiền kiểm đếm trước khi lấy ra nộp. CashHandleOver nhập rõ 0..ActualCash; lý do bắt buộc khi lệch bất kỳ chiều nào. |
+| BillingDb.CashShift | Status varchar(50) NOT NULL, ClosedAt datetime NULL đã có | Cập nhật Closed và cùng thời điểm UTC với báo cáo trong một transaction. Không sửa owner hoặc OpeningCash. |
+| BillingDb.Payment/CashMovement/CashHandover/Refund/Bill | Chỉ đọc các cột/quan hệ sẵn có | Đối soát tiền và chặn luồng chưa hỗ trợ/dữ liệu sai, không tự đổi trạng thái giao dịch. Không thêm FK xuyên database. |
+
+Không có cột Difference, RemainingCash hoặc ClosedBy mới: hai số tiền đầu được tính từ snapshot Report đã lưu; người đóng được suy ra từ chủ ca do chỉ chủ ca được Close, chưa hỗ trợ chuyển chủ ca. Không nhét actor/metadata vào Reason hoặc key. Không suy luận có model/repository/service mới là có bảng mới.
+
+### Quy tắc và phạm vi
+
+- Chỉ Cashier đúng chi nhánh đóng ca Active của chính mình; đọc giữ Admin toàn hệ thống và Manager/Cashier theo RestaurantStaff hiện hành qua tích hợp Restaurant/Identity cũ. Không sửa quyền hoặc nghiệp vụ các service khác.
+- Request yêu cầu ActualCash và CashHandleOver nhập rõ, không mặc định 0. ActualCash là số tiền trước khi nộp; CashHandleOver không vượt ActualCash. Difference=ActualCash−ExpectedCash; thiếu/thừa đều cần DifferenceReason. RemainingCash=ActualCash−CashHandleOver. Không ghi CashOut bổ sung lúc đóng/nộp để tránh giảm sổ lần hai.
+- Preview chứa tổng sổ, số Payment và đầy đủ blocker/ID cần kiểm tra. CanClose là khả năng đối soát/trạng thái, không cấp quyền đóng cho vai trò chỉ đọc. Close đọc lại mọi dữ liệu dưới khóa register/shift và kiểm tra quyền/owner/ca hiện hành trong UoW transaction.
+- Ca chỉ được chốt với Payment Cash/Paid/VerificationSource Cashier, số tiền/tiền đưa/thừa khớp bill Paid và đúng một Sale cùng ca/số tiền/thời điểm. Block Payment chưa Paid, phương thức/luồng provider/refund chưa hỗ trợ, mọi CashHandover chưa có workflow xác minh, Sale lẻ/sai/trùng, nhiều Payment cho cùng bill (kể cả khác ca), key sổ trùng, bút toán không xác định hoặc sai dấu/lý do, số dư âm/không lưu được vào report. Không tự đánh dấu giao dịch thất bại/hết hạn/hoàn thành.
+- Một report/shift dùng UQ đã có và khóa ca làm định danh tự nhiên cho retry. Cùng input chuẩn hóa trả report cũ (200); lần đầu 201; khác input 409. Ca đã đóng không có report hoặc Active lại có report bị xem là không nhất quán, không tự sửa hoặc tạo báo cáo thay thế.
+- CashShift Closed/ClosedAt và ShiftReport ghi cùng transaction. Payment/thu chi ghi thành công trước chốt phải vào ExpectedCash; sau chốt bị chặn. Retry giao dịch đã thành công không tạo bút toán mới. Báo cáo đọc từ snapshot, không tính lại theo ca sau.
+- Bill/checkout chưa gắn CashShift không bị suy ra thuộc ca hiện tại. Giữ nguyên bill Unpaid/checkout Ready/Frozen; không release checkout, đóng TableSession, vô hiệu QR, đổi CleaningStatus hoặc logout Identity. Không tự mở ca mới hay lấy RemainingCash làm OpeningCash ca sau.
+- Scope hiện tại là đối soát tiền mặt. Schema không lưu snapshot doanh thu/phương thức/chi tiết ledger trên report; các tổng chi tiết Preview không phải snapshot doanh thu lịch sử. Chưa tích hợp bank/PayOS, xác nhận người nhận bàn giao, sửa/mở lại báo cáo, tự gửi Manager hoặc signout thiết bị. Manager xem qua API báo cáo theo chi nhánh. Không tuyên bố hoàn tất toàn bộ UC_CAS_09 của Excel.
+
+### Kiểm thử và trạng thái bàn giao
+
+Bắt đầu từ working tree sạch, HEAD 806a383 trên feature/Billing. Chưa commit/push hoặc sửa lịch sử. Bằng chứng cục bộ trong .ai/billing-close, Git ignore; fixture/token/secret không đưa vào commit.
+
+Kết quả kiểm chứng cuối:
+
+- Build solution đạt, 0 lỗi; build Docker Billing/Gateway đạt. Có các cảnh báo nullable có sẵn ở Identity.Common/Shared.Persistence trong lượt build sạch, không sửa ngoài phạm vi.
+- Test solution cuối **840 pass, 68 conditional skip, 0 fail**; riêng Billing **261 pass, 31 SQL conditional skip** trong lượt thường. Chạy riêng ShiftReportSqlServerTests + CashMovementSqlServerTests + CashPaymentSqlServerTests trên SQL Server thật: **14 pass, 0 skip, 0 fail** (5 đóng ca mới + 9 hồi quy). Những SQL test cũ khác còn skip không được tính là đã đạt.
+- Các test SQL dùng client nguồn/quyền giả lập và database CodexBillingClose/… tạm. Bao phủ Close cùng input chỉ một report (201+200), khác input một thắng/một 409, Close đấu với manual posting/Payment không bỏ sót giao dịch đã ghi, lỗi insert report rollback cả report và trạng thái/thời điểm ca rồi retry thành công. Chưa mô phỏng mất điện đúng mốc commit; không coi giả lập lỗi DB là kiểm thử toàn bộ sự cố phần cứng.
+- **87 kiểm tra Gateway chính đạt**, với Identity/Restaurant/Catalog/Ordering/Billing thật, phiên guest join qua API và năm database ShiftCloseCheck cô lập. Menu/phiên/đơn nền là dữ liệu seed test. Trạng thái Pending/luồng BankTransfer/CashHandover/Sale sai được mô phỏng bằng SQL chỉ trong fixture rồi khôi phục để chứng minh preview nhận diện và Close chặn; không phải đã triển khai API thu chuyển khoản hoặc xử lý bàn giao.
+- Kiểm tra bổ sung trên binary mới: 4 kiểm tra dữ liệu trùng qua Gateway đạt (không tính 5 lượt login lặp là tính năng mới). Tạo legacy Payment trùng bill ở ca khác và key bút toán trùng chỉ trong fixture; preview nêu DuplicateBillPayments/DuplicateMovementKey, Close trả 409, report cũ vẫn snapshot; khôi phục đúng những dòng mô phỏng rồi preview ca sau hợp lệ. Các request login diễn ra riêng, không bỏ qua xác thực.
+- Báo cáo ca A thật: OpeningCash=1000; CashIn=200; CashOut=-100; Sale=120121; ExpectedCash=121221, ActualCash=121220 **trước khi nộp**, CashHandleOver=100000, Difference=-1, RemainingCash=21220. SQL xác minh đúng 3 CashMovement cho ca A, không ghi CashOut 100000, đúng 1 Payment, report và shift cùng ClosedAt. Ca B rỗng đóng với actual/handover=0 nhập rõ qua API thật, report 0; không dùng default giả.
+- Cùng input đóng ca đồng thời trả 201+200/cùng report, khác input sau chốt 409. Các vai trò/phạm vi/chủ ca sai bị chặn; Manager chỉ liệt kê/đọc report chi nhánh phân công, Admin xem cả hai. Shortage/surplus thiếu lý do đều 400; thiếu ActualCash/CashHandleOver hoặc tiền nộp vượt tiền đếm đều 400; client không gửi được ExpectedCash/ClosedAt giả.
+- Sau đóng ca: GetCurrent cũ 404, manual posting và Payment mới vào ca cũ 409; retry Payment đã thành công trả biên nhận cũ. Một bill Unpaid/checkout Ready khác chưa gắn ca giữ nguyên và Ordering vẫn Frozen/chưa release; TableSession/QR giữ nguyên. Billing restart giữ report ID/thời điểm cũ. Mở ca mới qua API cũ và ghi CashIn thật không đổi snapshot report cũ.
+- Đã đối soát SQL, dừng/xóa đúng nhóm shift-close-check và năm database fixture của lượt thử. Không đóng ca hoặc tạo report demo trên database thường, không chạy DDL/upgrade/seed vào database thường. Billing/Gateway thường đã build/restart, Swagger có 5 thao tác mới; anonymous list/close đều 401.
+- Rà diff chỉ gồm Billing, billing.proto, Gateway integration, Tests/Billing.Tests, README và nhật ký này. Không sửa schema/source nghiệp vụ của Restaurant, Identity, Catalog, Ordering hoặc shared infrastructure. Chưa chạy GitHub Actions cho working tree chưa commit/push. HEAD giữ nguyên 806a383, dừng tại đối soát/đóng ca tiền mặt.

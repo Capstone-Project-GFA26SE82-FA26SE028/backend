@@ -69,6 +69,11 @@ public sealed class CashMovementRepository(BillingDbContext db)
         return new PagedResult<CashMovement>(items, count, page, pageSize);
     }
 
+    public async Task<IReadOnlyList<CashMovement>> GetForShiftAsync(Guid shiftId, CancellationToken ct)
+    {
+        return await _context.CashMovements.AsNoTracking().Where(value => value.CashShiftId == shiftId).ToListAsync(ct);
+    }
+
     private IQueryable<CashMovement> Details()
     {
         return _context.CashMovements.AsNoTracking().Include(value => value.CashShift).ThenInclude(shift => shift.CashRegister)

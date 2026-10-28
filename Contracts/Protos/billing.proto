@@ -244,3 +244,66 @@ message CashLedgerInfo {
   int32 page = 9;
   int32 page_size = 10;
 }
+
+service ShiftReportGrpc {
+  rpc Preview(ShiftReportShiftRequest) returns (ShiftReconciliationInfo);
+  rpc Close(CloseCashShiftRequest) returns (CloseCashShiftReply);
+  rpc GetById(ShiftReportIdRequest) returns (ShiftReportInfo);
+  rpc GetForShift(ShiftReportShiftRequest) returns (ShiftReportInfo);
+  rpc GetAll(ShiftReportListRequest) returns (ShiftReportPage);
+}
+message ShiftReportShiftRequest { string cash_shift_id = 1; }
+message ShiftReportIdRequest { string shift_report_id = 1; }
+message CloseCashShiftRequest {
+  string cash_shift_id = 1;
+  optional string actual_cash = 2;
+  optional string cash_handle_over = 3;
+  string difference_reason = 4;
+}
+message CloseCashShiftReply { ShiftReportInfo report = 1; bool created = 2; }
+message ShiftReportListRequest {
+  optional string restaurant_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+message ShiftReportPage {
+  repeated ShiftReportInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+message ShiftReportInfo {
+  string shift_report_id = 1;
+  string cash_shift_id = 2;
+  string cash_register_id = 3;
+  string restaurant_id = 4;
+  string cashier_user_ref = 5;
+  string performer_source = 6;
+  string expected_cash = 7;
+  string actual_cash = 8;
+  string cash_handle_over = 9;
+  string difference = 10;
+  string remaining_cash = 11;
+  optional string difference_reason = 12;
+  string closed_at = 13;
+}
+message ReconciliationBlockerInfo {
+  string code = 1;
+  optional string payment_id = 2;
+  optional string cash_movement_id = 3;
+  string message = 4;
+}
+message ShiftReconciliationInfo {
+  string cash_shift_id = 1;
+  string restaurant_id = 2;
+  string status = 3;
+  string opening_cash = 4;
+  string movement_total = 5;
+  string expected_cash = 6;
+  string sale_total = 7;
+  string cash_in_total = 8;
+  string cash_out_total = 9;
+  int32 payment_count = 10;
+  bool can_close = 11;
+  repeated ReconciliationBlockerInfo blockers = 12;
+}

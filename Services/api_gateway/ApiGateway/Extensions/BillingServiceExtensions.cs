@@ -46,6 +46,10 @@ public static class BillingServiceExtensions
         {
             options.Address = uri;
         });
+        services.AddGrpcClient<ShiftReportGrpc.ShiftReportGrpcClient>(options =>
+        {
+            options.Address = uri;
+        });
         return services;
     }
 }

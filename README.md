@@ -304,3 +304,49 @@ Payment already creates its own `Sale`. The manual endpoint rejects `Sale`, `Pay
 No performer column is added. For new manual entries, `performedByRef` is derived from CashShift.CashierUserRef and `performerSource` is `ShiftOwnerDerived`, as approved. Shift owner transfer is not supported. For a linked Payment, the actor comes from Payment.ConfirmedByRef (`PaymentConfirmation`). Legacy entries without a verifiable source return null/`Unknown`. This is not an independent historical actor snapshot; changing owners directly in SQL would invalidate that inference. Actor IDs are never hidden in reason or idempotency keys.
 
 Only Billing, its Gateway/protobuf integration and tests are changed. SQL Server locking tests use isolated databases with fake source/access clients; the separate Gateway run uses real services and seeded test databases. The database change log records results and any unverified cases.
+
+
+## Close and reconcile a cash shift
+
+Only an assigned Cashier can close their own Active shift. Admin reads globally; Manager/Cashier read within assigned restaurants. No database upgrade is required: ShiftReport and its unique CashShiftId relationship already exist.
+
+```powershell
+docker compose build billing gateway
+docker compose up -d --no-deps billing gateway
+```
+
+Use the normal employee bearer token in Gateway Swagger:
+
+```text
+GET  /api/cash-shifts/{cashShiftId}/reconciliation
+POST /api/cash-shifts/{cashShiftId}/close
+GET  /api/cash-shifts/{cashShiftId}/report
+GET  /api/shift-reports/{id}
+GET  /api/shift-reports?restaurantId={optional-UUID}&page=1&pageSize=20
+```
+
+Preview returns opening cash, signed ledger total, expected cash, Sale/CashIn/CashOut totals, payment count and blocker codes/PaymentId/CashMovementId. CashOutTotal is the positive amount withdrawn for valid entries; MovementTotal keeps the stored signs. `canClose` indicates financial/lifecycle readiness, not permission for Admin/Manager to close. Preview is advisory: Close locks and checks the data again.
+
+Count **all physical cash before removing any money for handover**. For example, if expected cash is 121221 and the entire drawer contains 121220:
+
+```json
+{
+  "actualCash": 121220,
+  "cashHandleOver": 100000,
+  "differenceReason": "One VND shortage after counting all cash before removal"
+}
+```
+
+ActualCash and CashHandleOver are both explicitly required, nonnegative whole VND within decimal(18,2); CashHandleOver cannot exceed ActualCash. If no money is handed over, enter 0 explicitly. Do not enter only the cash remaining after removal as ActualCash. The example yields Difference = -1 and RemainingCash = 21220.
+
+ExpectedCash = OpeningCash + SUM(CashMovement.SignedAmount). The backend supplies ExpectedCash, Difference = ActualCash - ExpectedCash, UTC ClosedAt and ownership. Reasons are mandatory for **both** shortage and surplus, max 1000 characters without controls, representable in the existing varchar/CP1252 field. Count fields, actor, expected cash and timestamps cannot be spoofed with extra JSON fields.
+
+New close returns 201 with Location `/api/shift-reports/{id}`; repeating identical normalized inputs returns 200/the original report. No additional Idempotency-Key header is required: the shift and existing one-report-per-shift unique key identify the operation. Different closing inputs return 409; no report editing or reopening is implemented. After timeout/restart, GET the report or retry the original inputs. Never create replacement records based only on an uncertain client outcome.
+
+Closing locks the register/shift using the same locks as cash Payment and outside-bill movements. Writes committed before close are included; new writes after close are rejected. Report creation and CashShift Closed/ClosedAt commit together. CashHandleOver is stored on the report only: it does not create another CashOut or alter the expected-cash calculation. It is not a recipient-confirmed handover workflow.
+
+This increment accepts only the implemented Cash/Paid/Cashier payment flow with matching paid bill/tender/change and exactly one matching Sale. Unknown/non-Paid states, other methods, provider-based flows, refunds, Waiter CashHandover, duplicate bill payments, duplicate ledger keys, orphan/mismatched sales and unsupported/inconsistent movements block close with identifiable records. In particular, no handover status is guessed to mean completed when that workflow has no implemented contract. Resolve those records through their supported workflow; this API never silently marks them Paid, failed, expired or cancelled. Preview has the full blocker list; Close returns 409 with a short summary.
+
+Unpaid bills/checkout attempts have no CashShift binding and are not assigned to a shift by assumption. They do not prevent closing an otherwise valid cash shift, and remain unchanged/frozen as applicable. Payment success and shift close do not close the table session, invalidate QR, reopen ordering, mark cleaning or log out Identity. Existing Open shift remains the explicit way to begin a subsequent shift; RemainingCash is not silently copied into its OpeningCash.
+
+ShiftReport persists only the existing ExpectedCash, ActualCash, CashHandleOver, DifferenceReason and ClosedAt fields plus IDs. Difference and RemainingCash are recomputed from these stored values; reports are not recalculated from later ledger activity. CashierUserRef is derived from the shift owner, not a separate historical actor snapshot. Preview revenue/ledger breakdown is not a stored revenue breakdown; this is **cash reconciliation**, not full bank/PayOS settlement or a full immutable revenue Z-report. Manager can retrieve reports via the scoped list/detail APIs. Automatic delivery to Manager and device-session signout are not integrated in this increment.

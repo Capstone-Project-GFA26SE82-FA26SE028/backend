@@ -48,6 +48,21 @@ public sealed class PaymentRepository(BillingDbContext db)
         return Details().SingleOrDefaultAsync(payment => payment.PaymentId == id, ct);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, int>> GetBillPaymentCountsAsync(Guid shiftId, CancellationToken ct)
+    {
+        var billIds = _context.Payments.Where(value => value.CashShiftId == shiftId).Select(value => value.BillId);
+        return await _context.Payments.AsNoTracking().Where(value => billIds.Contains(value.BillId))
+            .GroupBy(value => value.BillId).Select(group => new { BillId = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(value => value.BillId, value => value.Count, ct);
+    }
+
+    public async Task<IReadOnlyList<Payment>> GetForReconciliationAsync(Guid shiftId, CancellationToken ct)
+    {
+        return await _context.Payments.AsNoTracking().Where(value => value.CashShiftId == shiftId)
+            .Include(value => value.Bill).Include(value => value.CashMovements)
+            .Include(value => value.CashHandover).Include(value => value.Refunds).ToListAsync(ct);
+    }
+
     private IQueryable<Payment> Details()
     {
         return _context.Payments.AsNoTracking().Include(payment => payment.Bill)
