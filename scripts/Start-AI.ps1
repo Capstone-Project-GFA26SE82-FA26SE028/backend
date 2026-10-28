@@ -94,12 +94,7 @@ try {
         Write-Host "Host .NET 9 SDK detected: $hasSdk. Docker mode uses the repository's .NET 9 SDK images."
         $environmentFile = Join-Path $repository '.env'
         if (-not (Test-Path -LiteralPath $environmentFile)) {
-            $environmentFile = Join-Path $runtime 'compose.env'
-            if (-not (Test-Path -LiteralPath $environmentFile)) {
-                $password = 'Ai9!' + [Guid]::NewGuid().ToString('N')
-                $key = [Guid]::NewGuid().ToString('N') + [Guid]::NewGuid().ToString('N')
-                [IO.File]::WriteAllText($environmentFile, "SQL_SA_PASSWORD=$password`nJWT_SECRET_KEY=$key`nGATEWAY_HTTP_PORT=5000`n")
-            }
+            throw 'Create .env from .env.example and fill in credentials before starting Docker.'
         }
         $compose = @('compose', '--parallel', '2', '--project-directory', $repository, '--project-name', $ProjectName, '--env-file', $environmentFile,
             '-f', (Join-Path $repository 'compose.yaml'), '-f', (Join-Path $repository 'compose.ai.yaml'))

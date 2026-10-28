@@ -29,7 +29,7 @@ ID cố định của T01: `20000000-0000-0000-0000-000000000011`; T02/T03 kết
 
 ## Cấu hình
 
-`.env` chứa cấu hình development để chạy Docker. Cần có file này trong thư mục Backend trước khi chạy Compose. `SQL_SA_PASSWORD` dùng chung cho SQL Server và connection string các service. `JWT_SECRET_KEY` là khóa ký token. Các giá trị mẫu chỉ dành cho môi trường phát triển.
+Secrets belong in `.env`, in the repository root, ignored by Git. Copy `.env.example` there and fill in credentials. Compose uses SQL_SA_PASSWORD and JWT_SECRET_KEY.
 
 Docker kết nối `sqlserver:1433` trong mạng nội bộ, không dùng database SQL trên máy host và không publish cổng SQL. Các connection string `*_DB_CONNECTION` của cấu hình Docker cũ không còn được sử dụng. Cấu hình chạy .NET local vẫn độc lập trong appsettings/User Secrets.
 

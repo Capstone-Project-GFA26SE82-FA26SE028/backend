@@ -7,9 +7,10 @@
 *.db-wal
 TestResults/
 
-# Shared team environment is tracked; other environment overrides stay local.
+# Local secrets must never be committed.
+.env
 .env.*
-!.env
+!.env.example
 
 # Original pasted requirements stay local; share the Markdown specification.
 /docs/requirements/sources/*.txt

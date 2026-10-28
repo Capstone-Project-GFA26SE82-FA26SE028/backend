@@ -1,3 +1,17 @@
+## Secrets and Docker startup
+
+Keep passwords and tokens in `.env`, in the repository root, ignored by Git. On a new machine, copy `.env.example` there and fill in the empty values. Tracked appsettings contain non-secret settings only.
+
+Run Docker (Compose automatically reads the ignored root `.env`):
+
+```powershell
+docker compose up -d --build
+```
+
+Docker uses one SQL password for all service connection strings, one JWT signing key, and shared Cloudinary and PayOS credentials. This env file is for Docker only. Validate with `config --quiet` to avoid printing secrets.
+
+For GitHub Actions deployment, store credentials in repository/environment Secrets and inject them as runtime environment variables. Build/test CI does not need production secrets. Previously committed credentials must be revoked or rotated; removing files does not remove Git history. Changing the env file alone does not change SQL passwords in existing volumes.
+
 # Restaurant backend and AI assistant
 
 The backend keeps its existing .NET 9 services, Gateway and SQL Server workflow. AI adds UC1 (cart-based suggestions) and UC2 (customer menu chat), using only `qwen3:4b-instruct-2507-q4_K_M`, context 2048, through Ollama. No cloud fallback, training, automatic cart writes, orders, reservations or payments.
@@ -48,7 +62,7 @@ When needed, the script starts `ollama serve` in the background and stores logs 
 
 ## Automatic setup during normal startup
 
-After configuring the existing backend `.env` and starting Docker Desktop, the ordinary command now includes AI through the automatically loaded `compose.override.yaml`:
+After configuring the ignored root `.env` and starting Docker Desktop, the ordinary command now includes AI through the automatically loaded `compose.override.yaml`:
 
 ```powershell
 docker compose up -d --build
@@ -80,7 +94,7 @@ For Local mode, copy `Services/ai_service/AI.API/appsettings.Local.json.example`
 
 Both applications explicitly load configuration in this order (last wins): shared `appsettings.json`, environment-specific settings, Development User Secrets if the project has them, **appsettings.Local.json**, environment variables, command-line values. Local files are Git-ignored and excluded from Docker context; they are never copied into images. Runtime model/token/secret files and GGUF weights must not be committed.
 
-Compose follows its existing `.env` configuration. If `.env` is absent, the script generates credentials once in ignored `.ai/compose.env` and passes that env file explicitly; preserve it while using the same database volume. Changing a configured SQL password does not change an existing SQL volume's password. No newly generated secret is stored in tracked files.
+Compose and Start-AI.ps1 explicitly read `.env`. Create it from `.env.example` and fill in credentials. Preserve it with the database volume: changing the file does not change the SQL password stored in an existing volume.
 
 ## Readiness and errors
 
@@ -366,10 +380,10 @@ dotnet run --project Services/billing_service/Billing.API
 
 Billing explicitly loads configuration in this order: standard ASP.NET configuration (appsettings/environment file, Development user secrets if any), optional ignored `appsettings.Local.json`, environment variables, command-line arguments. Later sources win. Native environment keys use `PayOs__ClientId`, `PayOs__ApiKey`, `PayOs__ChecksumKey`, etc. `PayOs:BaseUrl` defaults to the official `https://api-merchant.payos.vn`; the model of operation is merchant-configured PayOS, not a guessed bank account.
 
-Compose accepts PAYOS_ENABLED, PAYOS_CLIENT_ID, PAYOS_API_KEY, PAYOS_CHECKSUM_KEY, PAYOS_RETURN_URL, PAYOS_CANCEL_URL and PAYOS_WEBHOOK_URL. Put those in **ignored `.env.payos.local`**, or the shell environment. The shared `.env` is tracked: do not put credentials in it.
+Compose accepts PAYOS_ENABLED, PAYOS_CLIENT_ID, PAYOS_API_KEY, PAYOS_CHECKSUM_KEY, PAYOS_RETURN_URL, PAYOS_CANCEL_URL and PAYOS_WEBHOOK_URL. Put those in `.env`, or the shell environment. Keep `.env` ignored by Git; never commit credentials. Only `.env.example` is tracked.
 
 ```powershell
-docker compose --env-file .env --env-file .env.payos.local up -d --build billing gateway
+docker compose up -d --build billing gateway
 ```
 
 ReturnUrl/CancelUrl are valid customer-facing HTTPS pages. WebhookUrl is the public HTTPS URL ending `/api/payments/payos/webhook`, routed to Gateway. Configure/confirm this same URL in the merchant PayOS channel; storing it in appsettings does not register it remotely. Redirect visits do **not** settle/cancel a payment. Production requires HTTPS. `AllowInsecureTestTransport` is recognized only in the explicit `PayOsTest` environment and is for isolated test doubles; it never permits HTTP in Production/Docker/Development.

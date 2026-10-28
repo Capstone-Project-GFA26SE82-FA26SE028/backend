@@ -71,6 +71,9 @@ services:
       dockerfile: Services/restaurant_service/Restaurant.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      Cloudinary__CloudName: ${CLOUDINARY_CLOUD_NAME:-dworxzse0}
+      Cloudinary__ApiKey: ${CLOUDINARY_API_KEY:?Set Cloudinary API key in external .env}
+      Cloudinary__ApiSecret: ${CLOUDINARY_API_SECRET:?Set Cloudinary API secret in external .env}
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=RestaurantDb;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env};Encrypt=True;TrustServerCertificate=True"
       Qr__MenuBaseUrl: ${QR_MENU_BASE_URL:-http://localhost:5173/menu}
       Qr__ImageDirectory: /app/App_Data/qr-images
@@ -89,6 +92,9 @@ services:
       dockerfile: Services/catalog_service/Catalog.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      Cloudinary__CloudName: ${CLOUDINARY_CLOUD_NAME:-dworxzse0}
+      Cloudinary__ApiKey: ${CLOUDINARY_API_KEY:?Set Cloudinary API key in external .env}
+      Cloudinary__ApiSecret: ${CLOUDINARY_API_SECRET:?Set Cloudinary API secret in external .env}
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=CatalogDb;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env};Encrypt=True;TrustServerCertificate=True"
       GrpcServices__Identity: http://identity:5001
       CatalogManagement__MenuManagerRoleIds__0: ${CATALOG_MENU_MANAGER_ROLE_ID:-manager}
