@@ -62,6 +62,12 @@ public static class BillingServiceExtensions
         services.AddScoped<IBillingAccess, RestaurantBillingAccess>();
         services.AddScoped<ICashRegisterService, CashRegisterService>();
         services.AddScoped<ICashShiftService, CashShiftService>();
+        services.AddOptions<CashPaymentSettings>().Bind(configuration.GetSection("CashPayment"))
+            .Validate(value => !string.IsNullOrWhiteSpace(value.MethodCode) && value.MethodCode.Length <= 50
+                && value.MethodCode == value.MethodCode.Trim() && value.MethodCode.All(character => character is >= '!' and <= '~'),
+                "Configure CashPayment:MethodCode.")
+            .ValidateOnStart();
+        services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IBillService, BillService>();
         services.AddScoped<ITaxFeePolicyService, TaxFeePolicyService>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);

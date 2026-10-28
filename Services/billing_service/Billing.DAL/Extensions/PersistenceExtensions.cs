@@ -22,6 +22,9 @@ public static class PersistenceExtensions
         services.AddScoped<IUnitOfWork, UnitOfWork<BillingDbContext>>();
         services.AddScoped<ICashRegisterRepository, CashRegisterRepository>();
         services.AddScoped<IBillRepository, BillRepository>();
+        services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<IPaymentMethodRepository, PaymentMethodRepository>();
+        services.AddScoped<ICashMovementRepository, CashMovementRepository>();
         services.AddScoped<IBillCheckoutRepository, BillCheckoutRepository>();
         services.AddScoped<IGenericRepository<BillCheckout>, GenericRepository<BillCheckout, BillingDbContext>>();
         services.AddScoped<ITaxFeePolicyRepository, TaxFeePolicyRepository>();

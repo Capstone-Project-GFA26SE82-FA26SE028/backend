@@ -20,6 +20,7 @@ for database in IdentityDb RestaurantDb OrderingDb InventoryDb CatalogDb Custome
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCheckout.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashRegisterRestaurant.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingBillRestaurant.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashMethod.sql
     fi
         echo "$database already initialized; keeping existing data."
         continue
@@ -65,5 +66,6 @@ GO
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCheckout.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashRegisterRestaurant.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingBillRestaurant.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashMethod.sql
     fi
 done

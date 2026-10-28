@@ -55,7 +55,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
             checkouts.Add(created);
             return created;
         }, ct);
-        if (value.ReleasedAt.HasValue || value.Status is "ReleasePending" or "Ready")
+        if (value.ReleasedAt.HasValue || value.Status is "ReleasePending" or "Ready" or "Paid")
         {
             return Map(value);
         }
@@ -64,7 +64,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         return await InSession(sessionId, async () =>
         {
             var current = await Find(sessionId, id, ct);
-            if (current.ReleasedAt.HasValue || current.Status is "ReleasePending" or "Ready")
+            if (current.ReleasedAt.HasValue || current.Status is "ReleasePending" or "Ready" or "Paid")
             {
                 return Map(current);
             }
@@ -94,7 +94,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         ValidateIds(sessionId, id);
         await RequireCashier(sessionId, ct);
         var state = await Request(sessionId, id, string.Empty, ct);
-        if (state.Status == "WaitingConfirmation")
+        if (state.Status is "WaitingConfirmation" or "Paid")
         {
             return state;
         }

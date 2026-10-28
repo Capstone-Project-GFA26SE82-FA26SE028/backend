@@ -279,3 +279,43 @@ Request mẫu tạo chính sách ngay (tỷ lệ minh họa cho test, không ph�
 ```
 
 Để lên lịch, thay effectiveFrom bằng ISO có Z/offset còn ở tương lai. ID/Version do backend trả về, không đưa vào request. Mọi response và lỗi API mới đều bằng tiếng Anh.
+
+
+## 2026-10-28 — Thu tiền mặt theo checkout đã chốt
+
+### Các thay đổi cần cập nhật trên SQL/ERD
+
+**Không có thay đổi schema.** Payment, PaymentMethod, CashMovement, CashShift, Bill và BillCheckout đều đã tồn tại; không tạo bảng/model/DbContext mới, không cần scaffold. Không thay đổi cột, kiểu dữ liệu, NULL/NOT NULL, DEFAULT, PK, FK, UNIQUE, CHECK, index hoặc dây nối/cardinality trên ERD. Không thêm FK xuyên database.
+
+| Database/bảng | Thay đổi thực tế | File | Trạng thái |
+| --- | --- | --- | --- |
+| BillingDb.PaymentMethod | Chỉ thêm dữ liệu `MethodCode='Cash'`, `IsEnabled=1` nếu chưa có. Giữ nguyên bản ghi đã có kể cả bị tắt. Không DEFAULT, không thêm phương thức khác. | docker/sql/seed/BillingDb.sql; docker/sql/upgrades/BillingCashMethod.sql | Đã cập nhật file và áp dụng script vào BillingDb Docker hiện có; kiểm tra script lặp/không bật lại Cash bị tắt trên SQL Server fixture. |
+| Các bảng Billing còn lại | Ghi dữ liệu nghiệp vụ qua API, không đổi schema. Không seed Payment/CashShift/CashMovement giả vào database thường. | PaymentService và repository tương ứng | Kiểm thử dữ liệu riêng, xem bằng chứng bên dưới. |
+
+init.sh chạy data upgrade cho cả database mới và database đã tồn tại. Script upgrade dùng transaction và UPDLOCK/HOLDLOCK để chạy lặp an toàn. Bản ghi data seed không làm thay đổi hình ERD. Working tree chưa commit/push; không có commit mới để dẫn chứng, không sửa lịch sử Git.
+
+### Quy tắc và dữ liệu được ghi
+
+- POST /api/bills/{billId}/payments/cash: chỉ Cashier được phân công chi nhánh, trong ca Active của chính tài khoản. Xác thực account/session/role/assignment qua tích hợp Identity/Restaurant hiện có; không nhận danh tính từ body.
+- Ready checkout, bill Unpaid, không Payment, nguồn Ordering Current/hash khớp và Bind xác nhận Frozen là điều kiện trước khi ghi. Giá/option/hủy và VAT/phí giữ snapshot đã tính; cash không tính lại chính sách hay dùng số tiền client tự khai.
+- Payment: Paid, Amount=Bill.TotalAmount, CashReceived, ChangeAmount, CashShiftId, MethodCode, IdempotencyKey UUID chuẩn hóa N, PaidAt UTC, ConfirmedByRef và VerificationSource=Cashier. Không điền ProviderOrderCode/ProviderTransactionId giả.
+- CashMovement: đúng một Sale/Payment, SignedAmount=Payment.Amount, PostedAt=PaidAt, cùng CashShiftId, khóa Sale:{PaymentId:N}. CashReceived/ChangeAmount chỉ lưu ở Payment, không ghi lần nữa vào sổ quỹ.
+- Bill: Status=Paid/PaidAt. BillCheckout: Status=Paid, ReleasedAt vẫn NULL. Ordering.CheckoutLock giữ Frozen/chưa release, không đổi schema hoặc code Ordering. Không gọi mở khóa, đóng TableSession, thu hồi GuestAccess hoặc đổi CleaningStatus.
+- Thứ tự khóa trong transaction: khóa idempotency payment → khóa Billing theo session → khóa register/shift → bill/method; soát lại quyền và trạng thái trước ghi. Cùng key/payload trả lại biên nhận cũ; key khác trên bill Paid bị chặn. Ca và Cash có thể đã đóng/tắt khi đọc lại biên nhận thành công; quyền hiện hành vẫn bắt buộc.
+- Chưa hỗ trợ bill 0, thanh toán một phần/nhiều phương thức, PayOS, hoàn tiền, in biên nhận, đóng ca hoặc ghi thu/chi ngoài bán hàng. Không triển khai bước tiếp theo.
+
+### Bằng chứng và giới hạn kiểm thử
+
+Bằng chứng cục bộ trong .ai/billing-cash (Git ignore); không đưa cookie/token/secret hoặc dữ liệu test vào commit. Các con số được cập nhật sau khi chạy hoàn tất. Test SQL tạo database CodexBillingCash riêng và tự xóa; Gateway dùng năm database CashPaymentCheck riêng, dữ liệu nền seed chỉ để kiểm thử. Không coi dữ liệu seed là dữ liệu nghiệp vụ thực tế.
+
+Kết quả cuối của đợt:
+
+- Build solution đạt, 0 lỗi; build Docker Billing/Gateway/db-init đạt. Rà diff không có lỗi whitespace và không sửa nghiệp vụ/source/schema Identity, Restaurant, Catalog hoặc Ordering.
+- Test solution: **800 pass, 59 conditional skip, 0 fail**. Riêng Billing: **221 pass, 22 SQL conditional skip** trong lượt thông thường. Chạy riêng BillSqlServerTests + CashPaymentSqlServerTests với SQL Server thật: **11 pass, 0 skip, 0 fail**. Không tính toàn bộ skip là đã đạt; các SQL test cũ khác không nằm trong lượt 11 này.
+- SQL test mới: khác key chỉ một Payment/Sale; cùng key cùng receipt; Pay/Cancel không cùng thắng; lỗi ghi ledger rollback Payment/Sale/bill/checkout rồi retry thành công; data seed lặp không bật lại Cash bị tắt. Các bài SQL này dùng client nguồn/quyền giả lập, không gọi service ngoài thật.
+- Gateway thật được kiểm tra theo các chặng trên cùng bộ năm database CashPaymentCheck riêng, với Identity/Restaurant/Catalog/Ordering/Billing thật. Guest join/cart/order và Waiter confirm qua API thật; dữ liệu menu/phiên/đơn nền là seed test. Bao phủ gọi thêm trước chốt → pending → Waiter xác nhận → Ready → Cashier thu tiền → đọc receipt. Các vòng sửa kỳ vọng của script thử không thay đổi source nghiệp vụ.
+- Bill thật trong fixture: subtotal 154000.50, tổng 177871, khách đưa 200000, thừa 22129. Cùng key trả 200/cùng receipt; key khác hoặc payload khác 409. Hai request cùng key nhận 201+200; hai key khác nhau nhận 201+409. Kiểm tra Admin/Manager/Waiter/Kitchen không thu, thiếu phiên/guest không thu, thiếu tiền/số tiền không đủ/số lẻ dưới đơn vị đồng, thiếu hoặc tắt Cash, ca đóng, ca của người khác, phân công bị thu hồi, khác chi nhánh và Manager không đọc receipt ngoài chi nhánh.
+- Đối soát SQL sau Gateway: **3 Payment, 3 Sale, tổng net 418113, tender 600000, change 181887**; tất cả khớp bill và cùng timestamp/ca, không provider ID giả. Ba checkout Billing đều Paid/chưa release; ba lock Ordering vẫn Frozen/chưa release. Phiên bàn vẫn Open/ClosedAt NULL, GuestAccess chưa bị thu hồi, CleaningStatus không bị đổi. QR me qua API vẫn 200; order mới vẫn 409. Kitchen Cooking/Ready và Waiter Serve sau Payment thật đều 200.
+- Restart Billing/Ordering giữ Paid, retry cùng key vẫn trả receipt cũ và không mở lại gọi món. Replay vẫn thành công khi ca đã đóng và Cash đã tắt bằng SQL chỉ trong fixture. Không tuyên bố đã mô phỏng mất điện đúng thời điểm commit hoặc timeout thanh toán vật lý; lỗi dependency được kiểm tra bằng client giả, lỗi ghi DB được kiểm tra trên SQL thật.
+- Đã xóa đúng nhóm container cash-payment-check và năm database fixture của lượt thử, giữ dữ liệu backend thường. Billing/Gateway thường đã build/restart; Swagger có hai route Payment mới, GET receipt không Bearer trả 401. Cash/IsEnabled=1 đã kiểm tra trên BillingDb thường. Không tạo Payment demo trên database thường.
+- Chưa chạy GitHub Actions cho working tree chưa commit/push. Giữ HEAD 04f77fd trên feature/Billing; không tạo commit mới. Dừng ở thu tiền mặt, không tự triển khai phần kế tiếp.

@@ -187,7 +187,7 @@ This keeps SQL/model volumes. Do not append `-v` unless you intend to delete the
 
 ## Checkout before payment
 
-This increment prepares an unpaid bill; it does **not** collect money, close a table session, revoke guest access or mark a table for cleaning.
+Checkout prepares the bill before collection. Cash collection is described below. Neither operation closes the table session, revokes guest access or marks the table for cleaning.
 
 Update an existing Docker environment without deleting its databases:
 
@@ -213,4 +213,46 @@ For PowerShell testing, use `Invoke-RestMethod -WebSession $guestSession` for QR
 
 `Preparing` or `ReleasePending`, HTTP 503, or a client timeout must not be treated as permission to order again. Retrieve the checkout and retry its original operation with the same ID. There is no automatic expiry/unlock. Cooking, Ready and Served progress does not change the financial hash; creating more orders or cancelling frozen items is blocked for the whole session. Cart editing alone does not submit an order.
 
-Payment integration is a later increment: it must require a matching Ready checkout, coordinate through Billing's session lock and keep Ordering blocked after success. It must not close the table session. Unknown payment outcomes must not release checkout. Customer departure, QR invalidation and cleaning confirmation remain separate staff workflows.
+Cash payment now consumes the matching Ready checkout through Billing's session lock and keeps Ordering blocked after success. Unknown outcomes must not release checkout. Customer departure, QR invalidation and cleaning confirmation remain separate staff workflows.
+
+
+## Cash payment
+
+Requires the existing Billing/Ordering checkout upgrades above, an enabled `Cash` payment method, a Ready checkout and the collecting Cashier's own Active shift at a register in the bill's assigned restaurant. Admin/Manager cannot collect payments. Admin can read receipts globally; Manager/Cashier can read within active restaurant assignments.
+
+Update Docker without resetting data:
+
+```powershell
+docker compose build db-init billing gateway
+docker compose run --rm db-init
+docker compose up -d --no-deps billing gateway
+```
+
+For SQL Server outside Docker, run `docker/sql/upgrades/BillingCashMethod.sql` against BillingDb using the team's connection. This is **data only**: it inserts `Cash`/enabled if missing and preserves an existing disabled method. New databases also use `docker/sql/seed/BillingDb.sql`. No tables, columns, constraints or ERD relationships are added in this increment. Billing local/Docker configuration contains `CashPayment:MethodCode = Cash`.
+
+After synchronizing checkout to Ready, the Cashier sends:
+
+```http
+POST /api/bills/{billId}/payments/cash
+Authorization: Bearer <cashier-access-token>
+Idempotency-Key: <new-UUID-for-this-payment>
+Content-Type: application/json
+```
+
+```json
+{
+  "checkoutId": "<Ready-checkout-UUID>",
+  "cashShiftId": "<your-Active-shift-UUID>",
+  "cashReceived": 200000
+}
+```
+
+Use the returned IDs rather than literal placeholder strings. The backend reads the bill total; the request cannot supply total, change, cashier identity or payment status. Cash received must be whole VND and cover a positive whole-VND bill. Zero-total bills and partial/mixed payments are not supported in this increment.
+
+A new receipt returns 201 with Location `/api/payments/{paymentId}`. Read it through GET on that route. Response includes server amount, tender, change, cashier, UTC paid time and the Sale movement ID. For example, total 177871 and tender 200000 yield change 22129. Exactly one Sale movement records **177871**, not 200000; no second change movement is written.
+
+Reuse the **same payment UUID and exact payload** after timeout/retry; successful replay returns 200 with the original receipt, even if that shift has since closed or Cash has been disabled. Current employee session/branch access is still required. Changed payload with the same UUID, a second payment key on a Paid bill, insufficient cash, pending/stale checkout, or another Cashier's shift are rejected. After an unknown outcome, read/retry the existing payment; do not start a new payment or cancel checkout based only on a client timeout.
+
+Payment, Sale, Bill Paid/PaidAt and BillCheckout Paid are committed together. Checkout remains unreleased; Ordering remains frozen. Guest QR access and the open TableSession are preserved, and previously confirmed cooking/serving can continue. Neither checkout retries nor synchronization may revert Paid or reopen ordering. This is cash collection and a JSON receipt, not PayOS, printing, refunds, shift closing, outside-sales cash movements or table departure/cleaning.
+
+Verification distinguishes service tests with fake upstream clients, SQL Server locking/rollback tests, and Gateway tests using real services against isolated seeded test databases. See the database change log for the current increment's evidence and limits. Conditional skipped tests are not counted as verified SQL integration.

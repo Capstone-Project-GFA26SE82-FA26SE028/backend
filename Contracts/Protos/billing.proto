@@ -3,6 +3,37 @@ syntax = "proto3";
 option csharp_namespace = "Backend.Contracts.Billing";
 package billing;
 import "google/protobuf/empty.proto";
+service PaymentGrpc {
+  rpc PayCash(PayCashRequest) returns (CashPaymentReply);
+  rpc GetById(PaymentIdRequest) returns (PaymentInfo);
+}
+message PayCashRequest {
+  string bill_id = 1;
+  string checkout_id = 2;
+  string cash_shift_id = 3;
+  optional string cash_received = 4;
+  string idempotency_key = 5;
+}
+message PaymentIdRequest { string payment_id = 1; }
+message CashPaymentReply { PaymentInfo payment = 1; bool created = 2; }
+message PaymentInfo {
+  string payment_id = 1;
+  string bill_id = 2;
+  string bill_number = 3;
+  string restaurant_id = 4;
+  string checkout_id = 5;
+  string cash_shift_id = 6;
+  string cash_register_id = 7;
+  string method_code = 8;
+  string status = 9;
+  string currency = 10;
+  string amount = 11;
+  string cash_received = 12;
+  string change_amount = 13;
+  string confirmed_by_ref = 14;
+  string paid_at = 15;
+  string cash_movement_id = 16;
+}
 service BillCheckoutGrpc {
   rpc Request(BillCheckoutRequest) returns (BillCheckoutInfo);
   rpc GetCurrent(BillCheckoutRequest) returns (BillCheckoutInfo);

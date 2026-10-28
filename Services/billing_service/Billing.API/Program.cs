@@ -20,6 +20,7 @@ var app = builder.Build();
 app.MapGrpcService<CashRegisterGrpcService>();
 app.MapGrpcService<CashShiftGrpcService>();
 app.MapGrpcService<BillGrpcService>();
+app.MapGrpcService<PaymentGrpcService>();
 app.MapGrpcService<BillCheckoutGrpcService>();
 app.MapGrpcService<TaxFeePolicyGrpcService>();
 

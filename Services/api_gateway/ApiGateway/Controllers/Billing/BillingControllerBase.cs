@@ -8,7 +8,12 @@ namespace ApiGateway.Controllers.Billing;
 
 public abstract class BillingControllerBase(IOptions<BillingClientSettings> settings) : ControllerBase
 {
-    protected async Task<IActionResult> Execute(Func<CallOptions, Task<object>> action, CancellationToken ct, int status = 200)
+    protected Task<IActionResult> Execute(Func<CallOptions, Task<object>> action, CancellationToken ct, int status = 200)
+    {
+        return ExecuteWithStatus(async options => (await action(options), status), ct);
+    }
+
+    protected async Task<IActionResult> ExecuteWithStatus(Func<CallOptions, Task<(object Value, int Status)>> action, CancellationToken ct)
     {
         Response.Headers.CacheControl = "no-store";
         var authorization = Request.Headers.Authorization.ToString();
@@ -25,7 +30,7 @@ public abstract class BillingControllerBase(IOptions<BillingClientSettings> sett
         try
         {
             var result = await action(options);
-            return StatusCode(status, new ResponseDTO("Success.", status, true, result));
+            return StatusCode(result.Status, new ResponseDTO("Success.", result.Status, true, result.Value));
         }
         catch (RpcException error) when (!ct.IsCancellationRequested)
         {
