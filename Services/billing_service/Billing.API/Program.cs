@@ -21,6 +21,7 @@ app.MapGrpcService<CashRegisterGrpcService>();
 app.MapGrpcService<CashShiftGrpcService>();
 app.MapGrpcService<BillGrpcService>();
 app.MapGrpcService<PaymentGrpcService>();
+app.MapGrpcService<CashMovementGrpcService>();
 app.MapGrpcService<BillCheckoutGrpcService>();
 app.MapGrpcService<TaxFeePolicyGrpcService>();
 

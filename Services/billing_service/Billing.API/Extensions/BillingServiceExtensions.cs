@@ -68,6 +68,7 @@ public static class BillingServiceExtensions
                 "Configure CashPayment:MethodCode.")
             .ValidateOnStart();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<ICashMovementService, CashMovementService>();
         services.AddScoped<IBillService, BillService>();
         services.AddScoped<ITaxFeePolicyService, TaxFeePolicyService>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);

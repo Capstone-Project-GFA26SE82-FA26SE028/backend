@@ -197,3 +197,50 @@ message BillPage {
   int32 page = 3;
   int32 page_size = 4;
 }
+
+service CashMovementGrpc {
+  rpc Create(CreateCashMovementRequest) returns (CashMovementReply);
+  rpc GetAll(CashLedgerRequest) returns (CashLedgerInfo);
+  rpc GetById(CashMovementIdRequest) returns (CashMovementInfo);
+}
+message CreateCashMovementRequest {
+  string cash_shift_id = 1;
+  string idempotency_key = 2;
+  string type = 3;
+  optional string amount = 4;
+  string reason = 5;
+}
+message CashMovementIdRequest { string cash_movement_id = 1; }
+message CashLedgerRequest {
+  string cash_shift_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+message CashMovementReply {
+  CashMovementInfo movement = 1;
+  bool created = 2;
+}
+message CashMovementInfo {
+  string cash_movement_id = 1;
+  string cash_shift_id = 2;
+  string restaurant_id = 3;
+  optional string payment_id = 4;
+  string type = 5;
+  string signed_amount = 6;
+  optional string reason = 7;
+  string posted_at = 8;
+  optional string performed_by_ref = 9;
+  string performer_source = 10;
+}
+message CashLedgerInfo {
+  string cash_shift_id = 1;
+  string restaurant_id = 2;
+  string currency = 3;
+  string opening_cash = 4;
+  string movement_total = 5;
+  string expected_cash = 6;
+  repeated CashMovementInfo items = 7;
+  int32 total_count = 8;
+  int32 page = 9;
+  int32 page_size = 10;
+}

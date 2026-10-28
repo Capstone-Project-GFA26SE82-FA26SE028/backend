@@ -256,3 +256,51 @@ Reuse the **same payment UUID and exact payload** after timeout/retry; successfu
 Payment, Sale, Bill Paid/PaidAt and BillCheckout Paid are committed together. Checkout remains unreleased; Ordering remains frozen. Guest QR access and the open TableSession are preserved, and previously confirmed cooking/serving can continue. Neither checkout retries nor synchronization may revert Paid or reopen ordering. This is cash collection and a JSON receipt, not PayOS, printing, refunds, shift closing, outside-sales cash movements or table departure/cleaning.
 
 Verification distinguishes service tests with fake upstream clients, SQL Server locking/rollback tests, and Gateway tests using real services against isolated seeded test databases. See the database change log for the current increment's evidence and limits. Conditional skipped tests are not counted as verified SQL integration.
+
+
+## Outside-bill cash movements
+
+An assigned Cashier can record `CashIn` or `CashOut` only in their own single Active shift. Admin/Manager cannot post movements; Admin can read globally and Manager/Cashier can read within assigned restaurants. Closing/transferring a shift, editing/deleting entries, refunds and reconciliation are outside this increment.
+
+No database upgrade is needed: **no schema changes or data seed changes**. Rebuild/restart the two affected services:
+
+```powershell
+docker compose build billing gateway
+docker compose up -d --no-deps billing gateway
+```
+
+With a valid Cashier bearer token, use a new UUID in `Idempotency-Key` for each real transaction:
+
+```http
+POST /api/cash-shifts/{cashShiftId}/movements
+Authorization: Bearer <cashier-access-token>
+Idempotency-Key: <UUID>
+Content-Type: application/json
+```
+
+```json
+{
+  "type": "CashOut",
+  "amount": 100000,
+  "reason": "Purchase cleaning supplies"
+}
+```
+
+Amount is a positive whole-VND value; the backend stores CashIn as positive and CashOut as negative. Reason is required, trimmed, at most 1000 characters, without controls, and must be representable in the existing SQL varchar/CP1252 column. Unsupported text is rejected rather than silently corrupted; this increment does not change the database to Unicode.
+
+A new entry returns 201 and Location `/api/cash-movements/{id}`. Retry the exact payload with the same UUID to receive 200/the original entry without posting again. A changed payload with that UUID returns 409. Successful replay remains readable after closing the shift, but new postings are rejected. Current account/session, branch access and ownership still apply. After a timeout, retry the same UUID rather than guessing the result or making a new request key.
+
+Read:
+
+```text
+GET /api/cash-movements/{id}
+GET /api/cash-shifts/{cashShiftId}/movements?page=1&pageSize=20
+```
+
+The ledger returns `openingCash`, `movementTotal`, `expectedCash`, and `movements` (paged items/count). Expected cash = opening cash + sum of **all** SignedAmount entries, regardless of page. A withdrawal cannot exceed this expected amount. Checking and writing use the same register/shift locks as cash payment, so simultaneous withdrawals and Payment sales cannot bypass this check. This is a book balance, not physically counted cash.
+
+Payment already creates its own `Sale`. The manual endpoint rejects `Sale`, `PaymentId`, `SignedAmount`, performer fields and any unknown fields; do not enter a Payment receipt again as CashIn. The ledger sums CashMovement once and does not add Payment amounts again. A different UUID represents a different manual event; the system cannot determine whether two separately declared outside-bill events describe the same physical money.
+
+No performer column is added. For new manual entries, `performedByRef` is derived from CashShift.CashierUserRef and `performerSource` is `ShiftOwnerDerived`, as approved. Shift owner transfer is not supported. For a linked Payment, the actor comes from Payment.ConfirmedByRef (`PaymentConfirmation`). Legacy entries without a verifiable source return null/`Unknown`. This is not an independent historical actor snapshot; changing owners directly in SQL would invalidate that inference. Actor IDs are never hidden in reason or idempotency keys.
+
+Only Billing, its Gateway/protobuf integration and tests are changed. SQL Server locking tests use isolated databases with fake source/access clients; the separate Gateway run uses real services and seeded test databases. The database change log records results and any unverified cases.
