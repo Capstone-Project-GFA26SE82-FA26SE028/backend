@@ -65,7 +65,9 @@ public sealed class BillRepository(BillingDbContext db) : GenericRepository<Bill
             ? _context.Bills.FromSqlInterpolated($"SELECT * FROM dbo.Bill WITH (UPDLOCK, HOLDLOCK) WHERE BillId = {id}")
             : _context.Bills.Where(bill => bill.BillId == id);
         return query.Include(bill => bill.BillLines)
-            .Include(bill => bill.Payments)
+            .Include(bill => bill.Payments).ThenInclude(value => value.CashMovements)
+            .Include(bill => bill.Payments).ThenInclude(value => value.Refunds)
+            .Include(bill => bill.Payments).ThenInclude(value => value.CashHandover)
             .Include(bill => bill.BillAdjustments)
             .Include(bill => bill.VoucherRedemptions)
             .SingleOrDefaultAsync(ct);

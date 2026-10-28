@@ -4,6 +4,8 @@ using Billing.API.Extensions;
 using Billing.API.GrpcServices;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false)
+    .AddEnvironmentVariables().AddCommandLine(args);
 
 builder.Services.AddBillingServices(builder.Configuration);
 
@@ -22,6 +24,8 @@ app.MapGrpcService<CashShiftGrpcService>();
 app.MapGrpcService<BillGrpcService>();
 app.MapGrpcService<ShiftReportGrpcService>();
 app.MapGrpcService<PaymentGrpcService>();
+app.MapGrpcService<PayOsPaymentGrpcService>();
+app.MapGrpcService<PaymentWebhookGrpcService>();
 app.MapGrpcService<CashMovementGrpcService>();
 app.MapGrpcService<BillCheckoutGrpcService>();
 app.MapGrpcService<TaxFeePolicyGrpcService>();

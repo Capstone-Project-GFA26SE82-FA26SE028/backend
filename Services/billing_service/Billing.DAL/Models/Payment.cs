@@ -23,6 +23,12 @@ public partial class Payment
 
     public decimal? ChangeAmount { get; set; }
 
+    public string ProviderPaymentLinkId { get; set; }
+
+    public string ProviderCheckoutUrl { get; set; }
+
+    public string ProviderQrCode { get; set; }
+
     public string ProviderOrderCode { get; set; }
 
     public string ProviderTransactionId { get; set; }

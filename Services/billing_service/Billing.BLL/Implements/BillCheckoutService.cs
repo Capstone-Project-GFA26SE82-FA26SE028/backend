@@ -40,7 +40,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
                 throw new BillingException(409, "This session already has a checkout. Retrieve and continue the current checkout.");
             }
 
-            if (await checkouts.HasPaymentOrFinalBillAsync(sessionId, ct))
+            if (await checkouts.HasPaymentOrFinalBillAsync(sessionId, ct, PayOsPaymentRules.BlockingExpression))
             {
                 throw new BillingException(409, "This session has payment records or a finalized bill. Additional checkout cannot be requested.");
             }
@@ -159,7 +159,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         var value = await InSession(sessionId, async () =>
         {
             var current = await Find(sessionId, id, ct);
-            if (await checkouts.HasPaymentOrFinalBillAsync(sessionId, ct))
+            if (await checkouts.HasPaymentOrFinalBillAsync(sessionId, ct, PayOsPaymentRules.BlockingExpression))
             {
                 throw new BillingException(409, "Checkout cannot be cancelled after payment has started or the bill has been finalized.");
             }
@@ -194,7 +194,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         {
             var value = await Find(sessionId, id, ct);
             if (value.Status is not ("ReleasePending" or "Released")
-                || await checkouts.HasPaymentOrFinalBillAsync(sessionId, ct))
+                || await checkouts.HasPaymentOrFinalBillAsync(sessionId, ct, PayOsPaymentRules.BlockingExpression))
             {
                 throw new BillingException(409, "Billing has not authorized reopening orders for this checkout.");
             }

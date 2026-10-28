@@ -117,7 +117,7 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
 
                 var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Bill not found.");
                 if (bill.RestaurantId != register.RestaurantId || bill.Status != "Unpaid" || bill.PaidAt.HasValue
-                    || bill.Payments.Count != 0 || bill.Currency != "VND" || bill.TotalAmount <= 0
+                    || bill.Payments.Any(PayOsPaymentRules.IsBlocking) || bill.Currency != "VND" || bill.TotalAmount <= 0
                     || bill.TotalAmount > MaximumMoney || decimal.Truncate(bill.TotalAmount) != bill.TotalAmount)
                 {
                     throw new BillingException(409, "Only an unpaid, positive whole-VND bill without payment records can be paid in cash.");

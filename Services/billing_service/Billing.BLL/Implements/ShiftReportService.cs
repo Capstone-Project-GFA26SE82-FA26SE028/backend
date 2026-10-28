@@ -190,7 +190,7 @@ public sealed class ShiftReportService(IShiftReportRepository reports, ICashShif
         var unclosed = await shifts.GetUnclosedAsync(shift.CashRegisterId, ct);
         var paymentRows = await payments.GetForReconciliationAsync(shift.CashShiftId, ct);
         var movementRows = await movements.GetForShiftAsync(shift.CashShiftId, ct);
-        var billPaymentCounts = await payments.GetBillPaymentCountsAsync(shift.CashShiftId, ct);
+        var billPaymentCounts = await payments.GetBillPaymentCountsAsync(shift.CashShiftId, ct, PayOsPaymentRules.BlockingExpression);
         return ShiftReconciliationCalculator.Calculate(shift, paymentRows, movementRows, billPaymentCounts, cashSettings.Value.MethodCode,
             unclosed.Count == 1 && unclosed[0].CashShiftId == shift.CashShiftId);
     }

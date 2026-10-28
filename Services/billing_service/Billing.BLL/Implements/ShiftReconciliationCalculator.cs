@@ -19,6 +19,7 @@ internal static class ShiftReconciliationCalculator
             SaleTotal = movements.Where(value => value.Type == PaymentStatuses.SaleMovement).Sum(value => value.SignedAmount),
             CashInTotal = movements.Where(value => value.Type == CashMovementTypes.CashIn).Sum(value => value.SignedAmount),
             CashOutTotal = -movements.Where(value => value.Type == CashMovementTypes.CashOut).Sum(value => value.SignedAmount),
+            BankTransferTotal = payments.Where(PayOsPaymentRules.IsVerifiedPaid).Sum(value => value.Amount),
             PaymentCount = payments.Count
         };
         result.ExpectedCash = checked(result.OpeningCash + result.MovementTotal);
@@ -39,9 +40,24 @@ internal static class ShiftReconciliationCalculator
 
         foreach (var payment in payments)
         {
+            if (PayOsPaymentRules.IsVerifiedZero(payment))
+            {
+                continue;
+            }
+
             if (!billPaymentCounts.TryGetValue(payment.BillId, out var paymentCount) || paymentCount != 1)
             {
                 Add(result, "DuplicateBillPayments", "This bill has multiple payment records, outside the supported single-payment workflow.", payment.PaymentId);
+            }
+
+            if (PayOsPaymentRules.IsPayOs(payment))
+            {
+                if (!PayOsPaymentRules.IsVerifiedPaid(payment) || payment.Bill.RestaurantId != shift.CashRegister.RestaurantId)
+                {
+                    Add(result, "UnresolvedPayOsPayment", "PayOS payment is not a verified full settlement or a confirmed zero-money terminal attempt.", payment.PaymentId);
+                }
+
+                continue;
             }
 
             if (payment.Status != PaymentStatuses.Paid)

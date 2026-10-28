@@ -37,6 +37,7 @@ public sealed class ShiftReportController(ShiftReportGrpc.ShiftReportGrpcClient 
                 SaleTotal = Money(value.SaleTotal),
                 CashInTotal = Money(value.CashInTotal),
                 CashOutTotal = Money(value.CashOutTotal),
+                BankTransferTotal = Money(value.BankTransferTotal),
                 PaymentCount = value.PaymentCount,
                 CanClose = value.CanClose,
                 Blockers = value.Blockers.Select(item => new ReconciliationBlockerDTO

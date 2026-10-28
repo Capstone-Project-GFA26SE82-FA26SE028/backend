@@ -1,3 +1,4 @@
+using Billing.API.Workers;
 using Backend.Contracts.Restaurant;
 using Billing.API.Clients;
 using Billing.API.GrpcServices;
@@ -17,6 +18,17 @@ public static class BillingServiceExtensions
             options.Interceptors.Add<BillingInterceptor>();
         });
         services.AddHttpContextAccessor();
+        services.Configure<PayOsSettings>(configuration.GetSection("PayOs"));
+        services.AddHttpClient<IPayOsClient, PayOsClient>(http =>
+        {
+            http.MaxResponseContentBufferSize = 262144;
+        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+        {
+            AllowAutoRedirect = false
+        }).RedactLoggedHeaders(_ => true);
+        services.AddScoped<IPayOsPaymentService, PayOsPaymentService>();
+        services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();
+        services.AddHostedService<PayOsReconciliationWorker>();
         services.AddOptions<CashRegisterAccessSettings>()
             .Bind(configuration.GetSection("CashRegisterAccess"))
             .Validate(value => value.ManagerRoleIds.Length > 0 && value.CashierRoleIds.Length > 0

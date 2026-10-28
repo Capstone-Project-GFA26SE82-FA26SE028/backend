@@ -345,8 +345,74 @@ New close returns 201 with Location `/api/shift-reports/{id}`; repeating identic
 
 Closing locks the register/shift using the same locks as cash Payment and outside-bill movements. Writes committed before close are included; new writes after close are rejected. Report creation and CashShift Closed/ClosedAt commit together. CashHandleOver is stored on the report only: it does not create another CashOut or alter the expected-cash calculation. It is not a recipient-confirmed handover workflow.
 
-This increment accepts only the implemented Cash/Paid/Cashier payment flow with matching paid bill/tender/change and exactly one matching Sale. Unknown/non-Paid states, other methods, provider-based flows, refunds, Waiter CashHandover, duplicate bill payments, duplicate ledger keys, orphan/mismatched sales and unsupported/inconsistent movements block close with identifiable records. In particular, no handover status is guessed to mean completed when that workflow has no implemented contract. Resolve those records through their supported workflow; this API never silently marks them Paid, failed, expired or cancelled. Preview has the full blocker list; Close returns 409 with a short summary.
+Closing accepts the implemented Cash/Paid/Cashier flow with exactly one matching Sale, and the verified PayOS flow described below. Unknown/non-Paid states, unsupported methods/provider flows, refunds, Waiter CashHandover, duplicate outstanding/settled bill payments, duplicate ledger keys, orphan/mismatched sales and inconsistent movements block close with identifiable records. A provider-confirmed zero-money terminal PayOS attempt does not count as an outstanding/settled payment. In particular, no handover status is guessed to mean completed when that workflow has no implemented contract. Resolve those records through their supported workflow; this API never silently marks them Paid, failed, expired or cancelled. Preview has the full blocker list; Close returns 409 with a short summary.
 
 Unpaid bills/checkout attempts have no CashShift binding and are not assigned to a shift by assumption. They do not prevent closing an otherwise valid cash shift, and remain unchanged/frozen as applicable. Payment success and shift close do not close the table session, invalidate QR, reopen ordering, mark cleaning or log out Identity. Existing Open shift remains the explicit way to begin a subsequent shift; RemainingCash is not silently copied into its OpeningCash.
 
 ShiftReport persists only the existing ExpectedCash, ActualCash, CashHandleOver, DifferenceReason and ClosedAt fields plus IDs. Difference and RemainingCash are recomputed from these stored values; reports are not recalculated from later ledger activity. CashierUserRef is derived from the shift owner, not a separate historical actor snapshot. Preview revenue/ledger breakdown is not a stored revenue breakdown; this is **cash reconciliation**, not full bank/PayOS settlement or a full immutable revenue Z-report. Manager can retrieve reports via the scoped list/detail APIs. Automatic delivery to Manager and device-session signout are not integrated in this increment.
+
+
+## Billing: automatic PayOS bank transfer (increment 6)
+
+Prerequisites: the existing authenticated Cashier, assigned restaurant, own Active shift, held Ready checkout and current Unpaid whole-VND bill. Apply `docker/sql/upgrades/BillingPayOs.sql` to an existing BillingDb before running the new binary. Fresh creation uses `docker/sql/schema/BillingDb.sql`; Compose initialization applies the upgrade automatically. The upgrade adds only three nullable Payment metadata columns and inserts BankTransfer when absent; it preserves a disabled BankTransfer row. Never run the creation script over an existing database.
+
+PayOS is disabled by default. No merchant credentials are committed. For native development:
+
+```powershell
+Copy-Item Services/billing_service/Billing.API/appsettings.Local.example.json Services/billing_service/Billing.API/appsettings.Local.json
+# Edit the ignored Local file with the real merchant credentials, HTTPS URLs and Enabled=true.
+dotnet run --project Services/billing_service/Billing.API
+```
+
+Billing explicitly loads configuration in this order: standard ASP.NET configuration (appsettings/environment file, Development user secrets if any), optional ignored `appsettings.Local.json`, environment variables, command-line arguments. Later sources win. Native environment keys use `PayOs__ClientId`, `PayOs__ApiKey`, `PayOs__ChecksumKey`, etc. `PayOs:BaseUrl` defaults to the official `https://api-merchant.payos.vn`; the model of operation is merchant-configured PayOS, not a guessed bank account.
+
+Compose accepts PAYOS_ENABLED, PAYOS_CLIENT_ID, PAYOS_API_KEY, PAYOS_CHECKSUM_KEY, PAYOS_RETURN_URL, PAYOS_CANCEL_URL and PAYOS_WEBHOOK_URL. Put those in **ignored `.env.payos.local`**, or the shell environment. The shared `.env` is tracked: do not put credentials in it.
+
+```powershell
+docker compose --env-file .env --env-file .env.payos.local up -d --build billing gateway
+```
+
+ReturnUrl/CancelUrl are valid customer-facing HTTPS pages. WebhookUrl is the public HTTPS URL ending `/api/payments/payos/webhook`, routed to Gateway. Configure/confirm this same URL in the merchant PayOS channel; storing it in appsettings does not register it remotely. Redirect visits do **not** settle/cancel a payment. Production requires HTTPS. `AllowInsecureTestTransport` is recognized only in the explicit `PayOsTest` environment and is for isolated test doubles; it never permits HTTP in Production/Docker/Development.
+
+Public configuration: LinkLifetimeMinutes=15, RequestTimeoutSeconds=10, ReconcileIntervalSeconds=30, ReconcileBatchSize=20. Gateway's separate PayOsGateway:TimeoutSeconds defaults to 45, leaving existing cash/Billing request deadlines unchanged. Worker batches are bounded and rotate through unresolved/zero-terminal attempts. Turning Enabled off prevents new attempts; retained valid credentials still allow recovery of existing attempts. Removing credentials prevents reconciliation and leaves those attempts blocked for safety; do not rotate/remove them before resolving outstanding payments.
+
+### Swagger sequence
+
+Use employee Bearer authorization, not the QR cookie, for these payment APIs. The existing guest checkout and Cashier synchronization must already have produced a Ready checkout. Use actual IDs returned by those APIs.
+
+```http
+POST /api/bills/{billId}/payments/payos
+Authorization: Bearer {cashier-access-token}
+Idempotency-Key: {new-uuid-for-this-attempt}
+Content-Type: application/json
+
+{
+  "checkoutId": "{ready-checkout-uuid}",
+  "cashShiftId": "{own-active-shift-uuid}"
+}
+```
+
+201 creates the durable attempt; 200 is a replay of the same key and same payload. Response contains expected Amount from the bill, ProviderOrderCode, provider LinkId/CheckoutUrl/QrCode when obtained, UTC ExpiresAt/PaidAt, Status and RequiresReview. No client-supplied amount, actor or paid flag is accepted. An accepted request can remain Unknown with no link if the provider outcome is uncertain: use the same key/payment ID; do not assume that HTTP 201 means money was received.
+
+```http
+GET  /api/payments/{paymentId}/payos
+POST /api/payments/{paymentId}/payos/reconcile
+POST /api/payments/{paymentId}/payos/cancel
+POST /api/payments/payos/webhook
+```
+
+GET is a cached read: Admin can read system-wide; Manager/Cashier only assigned branches. Reconcile and Cancel require the owning Cashier in the assigned branch. Reconcile reads the provider; Cancel first persists cancellation intent, then asks PayOS and verifies the result. Neither endpoint accepts a body. Bank-specific reads are separate from the existing cash receipt endpoint.
+
+Webhook is intentionally independent of employee Bearer authorization and requires a valid PayOS HMAC signature. Send exactly the provider JSON envelope; do not call it with a fabricated Paid body. The backend verifies the signature and financial fields, records the existing PaymentWebhook audit with hash/dedupe key (not raw payload), then verifies the provider's signed payment query. Duplicate deliveries do not settle twice. A successful webhook acknowledgement can mean durable receipt awaiting provider reconciliation; inspect payment status.
+
+Normal path: Creating -> Pending -> Paid. Network errors can produce Unknown; requested/local-expiry cancellation can remain CancelRequested. Only provider-confirmed terminal **zero money with explicit totals/empty transactions** produces verified Cancelled/Expired/Failed. Local expiry alone never releases checkout or permits another payment. ProviderAmountPaid/ProviderAmountRemaining are returned only from a fresh successful query, otherwise null; expected Amount is not a claim about received money.
+
+After a verified zero attempt, Cashier may create a new PayOS attempt with a new key or use Cash; checkout remains held until an explicit authorized checkout cancellation is confirmed by Ordering. IsVerifiedZero describes this one attempt, not blanket authorization to start another payment. Every creation rechecks bill/checkout/shift/all other attempts. The internal IdempotencyKey also binds the original checkout ID; reusing a UUID for a different checkout/bill/shift is rejected. Timeout/restart retries reuse the stored order code; never generate a different order code just because a response was lost.
+
+Paid is recorded only after exactly one verified full transfer matching the frozen Ready bill and an Active owning shift. Payment, Bill Paid/PaidAt and checkout Paid commit atomically, without Sale/CashMovement. PaidAt is backend UTC verification time; it is not an invented bank-local transaction timestamp. Missing/malformed/unsigned provider totals are uncertain, not zero. Partial/extra money, multiple references, mismatched IDs, late money after another settlement/released checkout/closed shift and conflicting signed deliveries require ReviewRequired; there is no automatic refund, second settlement or review override endpoint in this increment.
+
+Lost initial create responses may be recovered by order code. PayOS query can recover LinkId/payment status but does not promise CheckoutUrl/QR. Those stay null if unavailable; no fake link/QR is reconstructed. A still-missing provider order after local expiry remains unresolved rather than guessed failed. Merchant/provider review is required when a definitive result cannot be recovered.
+
+Payment success keeps checkout held and Ordering frozen. It does not close TableSession, invalidate QR, advance kitchen status or mark a table cleaned. Shift reconciliation accepts verified Paid bank transfers and definite zero attempts, excludes transfers from expected cash and exposes BankTransferTotal in the live preview; unresolved/review attempts block closing. ShiftReport's existing stored cash fields are unchanged: BankTransferTotal is not a new immutable revenue-report column.
+
+This increment excludes manual transfer confirmation, Waiter collection/handover, refunds, departure/cleaning and any payment-flow schema beyond the three approved nullable columns. [Official PayOS testing guidance](https://payos.vn/docs/moi-truong-test/) states that a separate sandbox is not available. Local mock/HTTP-provider tests do not prove a real bank transfer. Live acceptance still requires real channel credentials, registered public HTTPS webhook and an authorized real test payment; do not claim this based on redirect success or simulated callbacks.

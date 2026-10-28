@@ -173,7 +173,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             }
 
             RequireBranch(verified, stored.RestaurantId);
-            if (stored.Status != "Unpaid" || stored.PaidAt.HasValue || stored.Payments.Count != 0)
+            if (stored.Status != "Unpaid" || stored.PaidAt.HasValue || stored.Payments.Any(PayOsPaymentRules.IsBlocking))
             {
                 throw new BillingException(409, "Only an unpaid bill without payment records can be refreshed.");
             }

@@ -23,6 +23,7 @@ public sealed class ShiftReportGrpcService(IShiftReportService service) : ShiftR
             SaleTotal = Money(value.SaleTotal),
             CashInTotal = Money(value.CashInTotal),
             CashOutTotal = Money(value.CashOutTotal),
+            BankTransferTotal = Money(value.BankTransferTotal),
             PaymentCount = value.PaymentCount,
             CanClose = value.CanClose
         };

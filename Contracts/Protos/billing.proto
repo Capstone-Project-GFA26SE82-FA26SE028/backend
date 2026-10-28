@@ -306,4 +306,44 @@ message ShiftReconciliationInfo {
   int32 payment_count = 10;
   bool can_close = 11;
   repeated ReconciliationBlockerInfo blockers = 12;
+  string bank_transfer_total = 13;
+}
+
+service PayOsPaymentGrpc {
+  rpc Create(CreatePayOsPaymentRequest) returns (PayOsPaymentReply);
+  rpc GetById(PaymentIdRequest) returns (PayOsPaymentInfo);
+  rpc Reconcile(PaymentIdRequest) returns (PayOsPaymentInfo);
+  rpc Cancel(PaymentIdRequest) returns (PayOsPaymentInfo);
+}
+service PaymentWebhookGrpc {
+  rpc Process(PaymentWebhookRequest) returns (PaymentWebhookReply);
+}
+message CreatePayOsPaymentRequest {
+  string bill_id = 1;
+  string checkout_id = 2;
+  string cash_shift_id = 3;
+  string idempotency_key = 4;
+}
+message PayOsPaymentReply { PayOsPaymentInfo payment = 1; bool created = 2; }
+message PaymentWebhookRequest { string payload = 1; }
+message PaymentWebhookReply { bool received = 1; }
+message PayOsPaymentInfo {
+  string payment_id = 1;
+  string bill_id = 2;
+  string cash_shift_id = 3;
+  string restaurant_id = 4;
+  string status = 5;
+  string amount = 6;
+  optional string provider_order_code = 7;
+  optional string provider_payment_link_id = 8;
+  optional string checkout_url = 9;
+  optional string qr_code = 10;
+  optional string provider_transaction_id = 11;
+  optional string expires_at = 12;
+  optional string paid_at = 13;
+  optional int64 provider_amount_paid = 14;
+  optional int64 provider_amount_remaining = 15;
+  bool is_verified_zero = 16;
+  bool requires_review = 17;
+  bool link_details_available = 18;
 }

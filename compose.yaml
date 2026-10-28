@@ -151,6 +151,13 @@ services:
       dockerfile: Services/billing_service/Billing.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      PayOs__Enabled: ${PAYOS_ENABLED:-false}
+      PayOs__ClientId: ${PAYOS_CLIENT_ID:-}
+      PayOs__ApiKey: ${PAYOS_API_KEY:-}
+      PayOs__ChecksumKey: ${PAYOS_CHECKSUM_KEY:-}
+      PayOs__ReturnUrl: ${PAYOS_RETURN_URL:-}
+      PayOs__CancelUrl: ${PAYOS_CANCEL_URL:-}
+      PayOs__WebhookUrl: ${PAYOS_WEBHOOK_URL:-}
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=BillingDb;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env};Encrypt=True;TrustServerCertificate=True"
     depends_on:
       db-init:

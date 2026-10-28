@@ -298,6 +298,13 @@ public partial class BillingDbContext : DbContext
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.PaidAt).HasColumnType("datetime");
+            entity.Property(e => e.ProviderPaymentLinkId)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.ProviderCheckoutUrl)
+                .HasMaxLength(2048)
+                .IsUnicode(false);
+            entity.Property(e => e.ProviderQrCode).IsUnicode(false);
             entity.Property(e => e.ProviderOrderCode)
                 .HasMaxLength(100)
                 .IsUnicode(false);

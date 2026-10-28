@@ -86,6 +86,7 @@ public sealed class ShiftReportGatewayTests
                 MovementTotal = "0",
                 ExpectedCash = "1000",
                 SaleTotal = "0",
+                BankTransferTotal = "0",
                 CashInTotal = "0",
                 CashOutTotal = "0",
                 CanClose = false,

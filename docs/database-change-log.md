@@ -393,3 +393,52 @@ Kết quả kiểm chứng cuối:
 - Sau đóng ca: GetCurrent cũ 404, manual posting và Payment mới vào ca cũ 409; retry Payment đã thành công trả biên nhận cũ. Một bill Unpaid/checkout Ready khác chưa gắn ca giữ nguyên và Ordering vẫn Frozen/chưa release; TableSession/QR giữ nguyên. Billing restart giữ report ID/thời điểm cũ. Mở ca mới qua API cũ và ghi CashIn thật không đổi snapshot report cũ.
 - Đã đối soát SQL, dừng/xóa đúng nhóm shift-close-check và năm database fixture của lượt thử. Không đóng ca hoặc tạo report demo trên database thường, không chạy DDL/upgrade/seed vào database thường. Billing/Gateway thường đã build/restart, Swagger có 5 thao tác mới; anonymous list/close đều 401.
 - Rà diff chỉ gồm Billing, billing.proto, Gateway integration, Tests/Billing.Tests, README và nhật ký này. Không sửa schema/source nghiệp vụ của Restaurant, Identity, Catalog, Ordering hoặc shared infrastructure. Chưa chạy GitHub Actions cho working tree chưa commit/push. HEAD giữ nguyên 806a383, dừng tại đối soát/đóng ca tiền mặt.
+
+
+
+## Đợt 6 — PayOS/chuyển khoản tự động (2026-10-28, chưa commit)
+
+### Các thay đổi cần cập nhật trên SQL/ERD
+
+| Database/bảng | Thay đổi | Kiểu đầy đủ | NULL/default | Khóa/index/quan hệ | Bằng chứng và trạng thái |
+| --- | --- | --- | --- | --- | --- |
+| BillingDb.dbo.Payment (bảng có sẵn) | Thêm ProviderPaymentLinkId | varchar(100) | NULL; không DEFAULT | Không thêm/sửa PK/FK/UNIQUE/CHECK/index | docker/sql/schema/BillingDb.sql; docker/sql/upgrades/BillingPayOs.sql. Đã áp dụng Docker BillingDb tại backend-sqlserver-1 và scaffold bằng dotnet-ef 8.0.24; chưa có commit mới. |
+| BillingDb.dbo.Payment (bảng có sẵn) | Thêm ProviderCheckoutUrl | varchar(2048) | NULL; không DEFAULT | Không đổi quan hệ | Cùng hai file trên; dòng cũ giữ NULL. |
+| BillingDb.dbo.Payment (bảng có sẵn) | Thêm ProviderQrCode | varchar(max) | NULL; không DEFAULT | Không đổi quan hệ | Cùng hai file trên; dòng cũ giữ NULL. |
+| BillingDb.dbo.PaymentMethod (bảng có sẵn) | Seed BankTransfer nếu thiếu | MethodCode varchar(50), IsEnabled bit có sẵn | Insert BankTransfer/1 chỉ khi chưa có; không tự bật lại dòng bị tắt | Giữ PK MethodCode, quan hệ PaymentMethod 1–n Payment đã có | docker/sql/seed/BillingDb.sql; upgrade BillingPayOs.sql; đã áp dụng Docker BillingDb và kiểm thử lặp trên DB cô lập. Đây là thay đổi dữ liệu, không thêm schema. |
+
+Không thêm bảng. PaymentWebhook, BillCheckout, CashMovement, CashShift, ShiftReport đã tồn tại trước đợt này. Dây ERD giữ nguyên: Bill 1–n Payment; CashShift 1–n Payment; PaymentMethod 1–n Payment; Payment 1–n PaymentWebhook (PaymentId nullable). Chỉ thêm ba thuộc tính vào entity Payment trên hình ERD. Không có FK xuyên database hoặc schema thay đổi ở Restaurant/Ordering/Identity/Catalog.
+
+Database First: cập nhật creation/upgrade, áp dụng upgrade bảo toàn dữ liệu, scaffold chọn Payment vào thư mục tạm (không sinh connection string), nhập đúng ba property/mapping vào Payment.cs/BillingDbContext.cs; giữ navigation/relationship hiện có. Script tạo mới khác script nâng cấp; không xóa/tạo lại database nhóm. init.sh gọi upgrade với cả database mới/cũ. Chưa sửa repository SQL độc lập trong Downloads; file SQL trong backend là bản đã cập nhật đợt này.
+
+### Nghiệp vụ và code/RPC không đổi schema
+
+- Tạo link chỉ Cashier đúng chi nhánh/ca Active của chính mình; seed BankTransfer không cấp quyền. GET theo phạm vi đọc Billing; Reconcile/Cancel chỉ chủ ca. Không xác nhận chuyển khoản thủ công/refund/thu hộ.
+- Persist Creating và ProviderOrderCode trước HTTP; retry giữ mã/key. IdempotencyKey nội bộ ràng buộc UUID request với CheckoutId gốc; không thêm cột, không cho dùng lại UUID sang checkout/bill/shift khác. Khóa work riêng theo payment để worker/webhook/reconcile không chạy cùng payment; transaction khóa phiên/register/shift/bill trước ghi trạng thái. Không giữ khóa register/bill trong lúc chờ HTTP.
+- Provider create/query/cancel và webhook HMAC theo hợp đồng chính thức. Query bắt buộc có amountPaid/amountRemaining/transactions rõ ràng. Không coi default 0, timeout, local expiry hoặc trang return/cancel là xác nhận không nhận tiền.
+- 15 phút từ appsettings. Local expiry kích hoạt đối chiếu/hủy tại provider. Chỉ trạng thái terminal với totals=0/remaining=full/list trống và không có bằng chứng đã nhận tiền mới được thử phương thức/lượt mới. Unknown/CancelRequested/Review giữ chặn. Checkout chỉ mở lại qua thao tác Cashier hiện có sau khi Ordering xác nhận; thanh toán không tự release.
+- Paid cần một transfer đủ, ref/link/order/số tiền/Ready hash đúng, ca còn Active. Cập nhật Payment/Bill/checkout cùng transaction; không Sale, không double-paid, không đóng phiên/QR/dọn bàn. PaidAt là UTC backend xác minh; không bịa timezone của timestamp ngân hàng.
+- PaymentWebhook lưu hash/dedupe/signature/audit vào bảng có sẵn; không lưu raw payload/secret. Webhook có bằng chứng nhận tiền được persist trước truy vấn; provider timeout không làm mất claim. Request lặp không apply lần hai; conflict tiền/ID/ref hoặc late/thiếu/thừa chuyển ReviewRequired. Review không tự gỡ.
+- Chốt ca chấp nhận bank Paid đã xác minh và terminal-zero đúng điều kiện; các payment này không tạo Sale. Preview BankTransferTotal thêm trong DTO/proto, không thêm cột báo cáo hay tự nhận đã có snapshot doanh thu bất biến. Cash receipt/thu chi ngoài bill giữ luồng cũ; chỉ bỏ qua verified-zero khi quyết định có payment đang giữ/đã thu.
+- appsettings chung không secret, Enabled=false. appsettings.Local.json ignored được nạp thực sự; environment/CLI ưu tiên sau Local. Compose nhận biến PAYOS_...; shared .env có tracked nên credential phải nằm ở .env.payos.local ignored hoặc shell. Đã thêm Local.example chỉ chứa giá trị trống.
+- Link/QR có thể NULL nếu mất create response và provider query không trả lại; không tái dựng giả. Không có review override/refund trong phạm vi. Giao dịch không thể xác minh tiếp tục bị chặn và cần đối soát merchant.
+
+### Kiểm chứng và giới hạn
+
+Kết quả cuối trên source đợt này:
+
+- Build/publish Docker Billing và Gateway đạt. Build db-init và kiểm tra bash -n đạt (không chạy toàn bộ initializer lên các database khác). Normal Gateway sau cập nhật trả Swagger 200, API bank không có phiên nhân viên trả 401. PayOS mặc định tắt/thiếu credential không ngăn khởi động nghiệp vụ cũ.
+- Test solution: **886 pass, 73 conditional skip, 0 fail**, đủ 9 test assemblies. Các lượt skip không được tính đạt: 36 Billing SQL tests, 36 Restaurant SQL tests và 1 AI model test trong lượt thường. Build sạch có nullable warnings đã tồn tại ở Shared.Persistence/Identity.Common; không sửa ngoài scope.
+- Chạy toàn bộ Billing.Tests bằng .NET 9 trên SQL Server Docker thật: **343 pass, 0 skip, 0 fail**. Trong đó 5 PayOsSqlServerTests mới kiểm chứng cùng key/different keys đồng thời, webhook lặp đấu reconcile, rollback khi ghi Paid lỗi rồi phục hồi bằng service/context mới, upgrade lặp giữ payment cũ và phương thức bị tắt. Nguồn quyền/đơn và provider trong nhóm SQL tests được giả lập; không gọi đây là toàn luồng service thật.
+- Gateway chính **46 request kiểm tra đạt**, bổ sung **19 request kiểm tra đạt** cho restart/worker/đóng ca; số này gồm cả đăng nhập/thiết lập fixture, không phải 65 nghiệp vụ khác nhau. Gateway/Identity/Restaurant/Ordering/Billing thật trên DB PayOsCheck riêng, nguồn menu/đơn nền seed, provider **HTTP test double có HMAC**, không phải PayOS thật. Binary cuối đã được đối chiếu image ID và chạy với bộ test này.
+- Bao phủ Cashier/chủ ca/chi nhánh/vai trò sai; same-key replay/different-key 409; Pending/Unknown chặn Cash; chữ ký webhook sai không được nhận; webhook/replay xác minh Paid; zero được provider xác nhận mới đổi Cash; tiền đến muộn sau Cash thành Review và chặn close; không double-paid, không duplicate Sale.
+- Kiểm tra restart: persist Unknown trước HTTP, khởi động lại rồi replay giữ PaymentId/order code; worker startup tự đối chiếu và Paid không cần giả danh Cashier hoặc webhook; GET/reconcile sau ca đóng không đổi PaidAt. Bản cuối còn kiểm tra tạo -> cancel zero -> lượt mới -> worker Paid.
+- Ca B chuyển khoản 120121 đóng với OpeningCash/ExpectedCash/ActualCash=1000, CashHandleOver=0; bank không tạo CashMovement. Phiên QR guest vẫn được phép đọc checkout Paid sau thu tiền/đóng ca; checkout không Released, không mở lại Ordering. Phiên/đơn/kitchen và CleaningStatus không được thay đổi bởi thanh toán.
+- SQL normal BillingDb xác minh đúng varchar(100)/varchar(2048)/varchar(max), NULL, default_object_id=0, BankTransfer đã seed. Trong fixture có đúng một Sale cho Payment Cash; bank không ghi thêm tiền mặt. Không sửa database nghiệp vụ khác ngoài các fixture test được tạo riêng.
+- git diff --check đạt, không có file xóa hoặc đổi nghiệp vụ ngoài Billing; có proto Billing, Gateway, Compose/bootstrap SQL và tài liệu được phép. Danh mục đủ 60 file thực tế nằm ở .ai/billing-payos/changed-files.md (local/ignored); log không đưa credential/token vào Git.
+
+**Chưa nghiệm thu PayOS thật:** còn thiếu merchant credentials và public HTTPS webhook đã đăng ký, chưa thực hiện chuyển tiền thật. Các ca partial/excess/invalid-ID/signature/network dùng fake client/HTTP provider và test chữ ký mẫu chính thức. Mất điện đúng lúc remote commit, sự cố ngân hàng thật và public webhook ngoài internet chưa được kiểm chứng; không đánh đồng restart/context mới với mọi sự cố hạ tầng. ReviewRequired được phát hiện/khóa nhưng không có chức năng xử lý/refund trong đợt này. Hướng dẫn cấu hình riêng, API Swagger và giới hạn được ghi ở README. Tham chiếu chính thức: https://payos.vn/docs/api/ ; https://payos.vn/docs/tich-hop-webhook/kiem-tra-du-lieu-voi-signature/ ; https://payos.vn/docs/sdks/back-end/net/ ; https://payos.vn/docs/moi-truong-test/ .
+
+Đã dừng stack payos-check và xóa đúng 25 database PayOsCheck trong các manifest fixture của đợt thử, không xóa database nhóm. Bằng chứng/log cục bộ giữ trong .ai/billing-payos (ignored).
+
+HEAD gốc 643a0de, nhánh feature/Billing; các thay đổi vẫn chưa commit/stage/push. Nhật ký này thay thế trạng thái chuẩn bị trước khi người dùng chốt ba cột và quy tắc retry/closing.

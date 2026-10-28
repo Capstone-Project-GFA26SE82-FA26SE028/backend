@@ -43,6 +43,7 @@ public sealed class ShiftReconciliationDTO
     public decimal SaleTotal { get; set; }
     public decimal CashInTotal { get; set; }
     public decimal CashOutTotal { get; set; }
+    public decimal BankTransferTotal { get; set; }
     public int PaymentCount { get; set; }
     public bool CanClose { get; set; }
     public List<ReconciliationBlockerDTO> Blockers { get; set; } = [];
