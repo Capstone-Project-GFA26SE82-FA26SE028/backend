@@ -1,0 +1,349 @@
+syntax = "proto3";
+
+option csharp_namespace = "Backend.Contracts.Billing";
+package billing;
+import "google/protobuf/empty.proto";
+service PaymentGrpc {
+  rpc PayCash(PayCashRequest) returns (CashPaymentReply);
+  rpc GetById(PaymentIdRequest) returns (PaymentInfo);
+}
+message PayCashRequest {
+  string bill_id = 1;
+  string checkout_id = 2;
+  string cash_shift_id = 3;
+  optional string cash_received = 4;
+  string idempotency_key = 5;
+}
+message PaymentIdRequest { string payment_id = 1; }
+message CashPaymentReply { PaymentInfo payment = 1; bool created = 2; }
+message PaymentInfo {
+  string payment_id = 1;
+  string bill_id = 2;
+  string bill_number = 3;
+  string restaurant_id = 4;
+  string checkout_id = 5;
+  string cash_shift_id = 6;
+  string cash_register_id = 7;
+  string method_code = 8;
+  string status = 9;
+  string currency = 10;
+  string amount = 11;
+  string cash_received = 12;
+  string change_amount = 13;
+  string confirmed_by_ref = 14;
+  string paid_at = 15;
+  string cash_movement_id = 16;
+}
+service BillCheckoutGrpc {
+  rpc Request(BillCheckoutRequest) returns (BillCheckoutInfo);
+  rpc GetCurrent(BillCheckoutRequest) returns (BillCheckoutInfo);
+  rpc Synchronize(BillCheckoutRequest) returns (BillCheckoutInfo);
+  rpc Cancel(BillCheckoutRequest) returns (BillCheckoutInfo);
+  rpc AuthorizeRelease(BillCheckoutRequest) returns (google.protobuf.Empty);
+}
+message BillCheckoutRequest {
+  string table_session_id = 1;
+  string checkout_id = 2;
+  string guest_token = 3;
+}
+message BillCheckoutInfo {
+  string checkout_id = 1;
+  string table_session_id = 2;
+  optional string bill_id = 3;
+  string status = 4;
+  optional string source_hash = 5;
+  bool ordering_reopened = 6;
+}
+
+service TaxFeePolicyGrpc {
+  rpc Create(CreateTaxFeePolicyRequest) returns (TaxFeePolicyInfo);
+  rpc GetAll(TaxFeePolicyListRequest) returns (TaxFeePolicyPage);
+  rpc GetById(TaxFeePolicyIdRequest) returns (TaxFeePolicyInfo);
+}
+
+message CreateTaxFeePolicyRequest {
+  optional string vat_rate = 1;
+  optional string service_rate = 2;
+  optional bool service_enabled = 3;
+  optional string effective_from = 4;
+}
+
+message TaxFeePolicyIdRequest { string tax_fee_policy_id = 1; }
+message TaxFeePolicyListRequest { int32 page = 1; int32 page_size = 2; }
+message TaxFeePolicyInfo {
+  string tax_fee_policy_id = 1;
+  int32 version = 2;
+  string vat_rate = 3;
+  string service_rate = 4;
+  bool service_enabled = 5;
+  string effective_from = 6;
+}
+
+message TaxFeePolicyPage {
+  repeated TaxFeePolicyInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+service CashRegisterGrpc {
+  rpc Create(CreateCashRegisterRequest) returns (CashRegisterInfo);
+  rpc GetAll(CashRegisterListRequest) returns (CashRegisterPage);
+  rpc GetById(CashRegisterIdRequest) returns (CashRegisterInfo);
+}
+
+service CashShiftGrpc {
+  rpc Open(OpenCashShiftRequest) returns (CashShiftInfo);
+  rpc GetCurrent(CashShiftRegisterRequest) returns (CashShiftInfo);
+}
+
+message CashShiftRegisterRequest {
+  string cash_register_id = 1;
+}
+
+message OpenCashShiftRequest {
+  string cash_register_id = 1;
+  optional string opening_cash = 2;
+}
+
+message CashShiftInfo {
+  string cash_shift_id = 1;
+  string cash_register_id = 2;
+  string restaurant_id = 3;
+  string cashier_user_ref = 4;
+  string opening_cash = 5;
+  string opened_at = 6;
+  string status = 7;
+}
+
+message CreateCashRegisterRequest {
+  string restaurant_id = 1;
+  string code = 2;
+}
+
+message CashRegisterListRequest {
+  optional string restaurant_id = 1;
+  optional string search = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message CashRegisterIdRequest {
+  string cash_register_id = 1;
+}
+
+message CashRegisterInfo {
+  string cash_register_id = 1;
+  string restaurant_id = 2;
+  string code = 3;
+}
+
+message CashRegisterPage {
+  repeated CashRegisterInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+service BillGrpc {
+  rpc Create(CreateBillRequest) returns (BillInfo);
+  rpc Refresh(BillIdRequest) returns (BillInfo);
+  rpc GetAll(BillListRequest) returns (BillPage);
+  rpc GetById(BillIdRequest) returns (BillInfo);
+}
+message CreateBillRequest { string table_session_id = 1; }
+message BillIdRequest { string bill_id = 1; }
+message BillListRequest {
+  optional string restaurant_id = 1;
+  optional string search = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+message BillInfo {
+  string bill_id = 1;
+  string restaurant_id = 2;
+  string bill_number = 3;
+  string status = 4;
+  string currency = 5;
+  string sub_total = 6;
+  string discount_amount = 7;
+  string vat_rate_snapshot = 8;
+  string service_rate_snapshot = 9;
+  string vat_amount = 10;
+  string service_amount = 11;
+  string total_amount = 12;
+  string rounding_adjustment = 13;
+  string version = 14;
+  bool has_complete_cogs = 15;
+  string source_status = 16;
+  repeated string warnings = 17;
+  repeated BillLineInfo items = 18;
+}
+message BillLineInfo {
+  string bill_line_id = 1;
+  string order_item_ref = 2;
+  string table_session_ref = 3;
+  string original_table_ref = 4;
+  optional string combo_group_ref = 5;
+  string item_snapshot_json = 6;
+  string quantity = 7;
+  string unit_price_snapshot = 8;
+  optional string cogs_snapshot = 9;
+  string line_total = 10;
+}
+message BillPage {
+  repeated BillInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+service CashMovementGrpc {
+  rpc Create(CreateCashMovementRequest) returns (CashMovementReply);
+  rpc GetAll(CashLedgerRequest) returns (CashLedgerInfo);
+  rpc GetById(CashMovementIdRequest) returns (CashMovementInfo);
+}
+message CreateCashMovementRequest {
+  string cash_shift_id = 1;
+  string idempotency_key = 2;
+  string type = 3;
+  optional string amount = 4;
+  string reason = 5;
+}
+message CashMovementIdRequest { string cash_movement_id = 1; }
+message CashLedgerRequest {
+  string cash_shift_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+message CashMovementReply {
+  CashMovementInfo movement = 1;
+  bool created = 2;
+}
+message CashMovementInfo {
+  string cash_movement_id = 1;
+  string cash_shift_id = 2;
+  string restaurant_id = 3;
+  optional string payment_id = 4;
+  string type = 5;
+  string signed_amount = 6;
+  optional string reason = 7;
+  string posted_at = 8;
+  optional string performed_by_ref = 9;
+  string performer_source = 10;
+}
+message CashLedgerInfo {
+  string cash_shift_id = 1;
+  string restaurant_id = 2;
+  string currency = 3;
+  string opening_cash = 4;
+  string movement_total = 5;
+  string expected_cash = 6;
+  repeated CashMovementInfo items = 7;
+  int32 total_count = 8;
+  int32 page = 9;
+  int32 page_size = 10;
+}
+
+service ShiftReportGrpc {
+  rpc Preview(ShiftReportShiftRequest) returns (ShiftReconciliationInfo);
+  rpc Close(CloseCashShiftRequest) returns (CloseCashShiftReply);
+  rpc GetById(ShiftReportIdRequest) returns (ShiftReportInfo);
+  rpc GetForShift(ShiftReportShiftRequest) returns (ShiftReportInfo);
+  rpc GetAll(ShiftReportListRequest) returns (ShiftReportPage);
+}
+message ShiftReportShiftRequest { string cash_shift_id = 1; }
+message ShiftReportIdRequest { string shift_report_id = 1; }
+message CloseCashShiftRequest {
+  string cash_shift_id = 1;
+  optional string actual_cash = 2;
+  optional string cash_handle_over = 3;
+  string difference_reason = 4;
+}
+message CloseCashShiftReply { ShiftReportInfo report = 1; bool created = 2; }
+message ShiftReportListRequest {
+  optional string restaurant_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+message ShiftReportPage {
+  repeated ShiftReportInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+message ShiftReportInfo {
+  string shift_report_id = 1;
+  string cash_shift_id = 2;
+  string cash_register_id = 3;
+  string restaurant_id = 4;
+  string cashier_user_ref = 5;
+  string performer_source = 6;
+  string expected_cash = 7;
+  string actual_cash = 8;
+  string cash_handle_over = 9;
+  string difference = 10;
+  string remaining_cash = 11;
+  optional string difference_reason = 12;
+  string closed_at = 13;
+}
+message ReconciliationBlockerInfo {
+  string code = 1;
+  optional string payment_id = 2;
+  optional string cash_movement_id = 3;
+  string message = 4;
+}
+message ShiftReconciliationInfo {
+  string cash_shift_id = 1;
+  string restaurant_id = 2;
+  string status = 3;
+  string opening_cash = 4;
+  string movement_total = 5;
+  string expected_cash = 6;
+  string sale_total = 7;
+  string cash_in_total = 8;
+  string cash_out_total = 9;
+  int32 payment_count = 10;
+  bool can_close = 11;
+  repeated ReconciliationBlockerInfo blockers = 12;
+  string bank_transfer_total = 13;
+}
+
+service PayOsPaymentGrpc {
+  rpc Create(CreatePayOsPaymentRequest) returns (PayOsPaymentReply);
+  rpc GetById(PaymentIdRequest) returns (PayOsPaymentInfo);
+  rpc Reconcile(PaymentIdRequest) returns (PayOsPaymentInfo);
+  rpc Cancel(PaymentIdRequest) returns (PayOsPaymentInfo);
+}
+service PaymentWebhookGrpc {
+  rpc Process(PaymentWebhookRequest) returns (PaymentWebhookReply);
+}
+message CreatePayOsPaymentRequest {
+  string bill_id = 1;
+  string checkout_id = 2;
+  string cash_shift_id = 3;
+  string idempotency_key = 4;
+}
+message PayOsPaymentReply { PayOsPaymentInfo payment = 1; bool created = 2; }
+message PaymentWebhookRequest { string payload = 1; }
+message PaymentWebhookReply { bool received = 1; }
+message PayOsPaymentInfo {
+  string payment_id = 1;
+  string bill_id = 2;
+  string cash_shift_id = 3;
+  string restaurant_id = 4;
+  string status = 5;
+  string amount = 6;
+  optional string provider_order_code = 7;
+  optional string provider_payment_link_id = 8;
+  optional string checkout_url = 9;
+  optional string qr_code = 10;
+  optional string provider_transaction_id = 11;
+  optional string expires_at = 12;
+  optional string paid_at = 13;
+  optional int64 provider_amount_paid = 14;
+  optional int64 provider_amount_remaining = 15;
+  bool is_verified_zero = 16;
+  bool requires_review = 17;
+  bool link_details_available = 18;
+}

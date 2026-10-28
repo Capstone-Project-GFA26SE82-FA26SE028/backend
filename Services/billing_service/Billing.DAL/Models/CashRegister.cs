@@ -9,6 +9,8 @@ public partial class CashRegister
 {
     public Guid CashRegisterId { get; set; }
 
+    public Guid RestaurantId { get; set; }
+
     public string Code { get; set; }
 
     public virtual ICollection<CashShift> CashShifts { get; set; } = new List<CashShift>();

@@ -1,4 +1,6 @@
 using Ordering.DAL.Models;
+using Ordering.DAL.Interfaces;
+using Ordering.DAL.Implements;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Shared.Persistence.Interfaces;
@@ -36,6 +38,8 @@ public static class PersistenceExtensions
         services.AddScoped<IGenericRepository<global::Ordering.DAL.Models.OrderItemOption>, GenericRepository<global::Ordering.DAL.Models.OrderItemOption, OrderingDbContext>>();
         services.AddScoped<IGenericRepository<global::Ordering.DAL.Models.ServiceRecord>, GenericRepository<global::Ordering.DAL.Models.ServiceRecord, OrderingDbContext>>();
 
+        services.AddScoped<ICheckoutLockRepository, CheckoutLockRepository>();
+        services.AddScoped<IGenericRepository<CheckoutLock>, GenericRepository<CheckoutLock, OrderingDbContext>>();
         return services;
     }
 }

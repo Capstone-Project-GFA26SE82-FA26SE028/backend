@@ -21,6 +21,27 @@ service GuestAccessGrpc {
   rpc Join(GuestJoinRequest) returns (GuestAccessReply);
   rpc GetMe(GuestAccessRequest) returns (GuestAccessReply);
 }
+
+service BillingSessionGrpc {
+  rpc GetById(BillingSessionRequest) returns (BillingSessionReply);
+}
+message BillingSessionRequest { string table_session_id = 1; }
+message BillingSessionReply { string table_session_id = 1; string restaurant_id = 2; }
+
+service RestaurantAccessGrpc {
+  rpc GetCurrentScope(CurrentRestaurantScopeRequest) returns (CurrentRestaurantScopeReply);
+}
+
+message CurrentRestaurantScopeRequest {
+  optional string restaurant_id = 1;
+}
+
+message CurrentRestaurantScopeReply {
+  string user_id = 1;
+  string role_id = 2;
+  bool is_administrator = 3;
+  repeated string restaurant_ids = 4;
+}
 option csharp_namespace = "Backend.Contracts.Restaurant";
 package restaurant;
 import "google/protobuf/empty.proto";

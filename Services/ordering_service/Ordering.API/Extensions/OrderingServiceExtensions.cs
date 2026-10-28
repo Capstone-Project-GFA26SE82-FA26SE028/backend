@@ -29,6 +29,9 @@ public static class OrderingServiceExtensions
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddOptions<OrderingSettings>().Bind(configuration.GetSection("Ordering"))
             .Validate(settings => settings.DependencyTimeoutSeconds is > 0 and <= 60, "Dependency timeout must be 1-60 seconds.")
+            .Validate(settings => settings.CheckoutCashierRoleIds.Length > 0
+                && settings.CheckoutCashierRoleIds.All(role => !string.IsNullOrWhiteSpace(role)),
+                "Configure Ordering:CheckoutCashierRoleIds.")
             .ValidateOnStart();
         services.AddGrpcClient<TableSessionGrpc.TableSessionGrpcClient>(options =>
         {
@@ -51,6 +54,23 @@ public static class OrderingServiceExtensions
         services.AddScoped<ICatalogOrderClient, CatalogOrderClient>();
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<IOrderService, OrderService>();
+        services.AddGrpcClient<BillingSessionGrpc.BillingSessionGrpcClient>(options =>
+        {
+            options.Address = Address(configuration, "Restaurant");
+        });
+        services.AddScoped<IBillingSessionClient, BillingSessionClient>();
+        services.AddScoped<IBillingOrderService, BillingOrderService>();
+        services.AddGrpcClient<RestaurantAccessGrpc.RestaurantAccessGrpcClient>(options =>
+        {
+            options.Address = Address(configuration, "Restaurant");
+        });
+        services.AddGrpcClient<Backend.Contracts.Billing.BillCheckoutGrpc.BillCheckoutGrpcClient>(options =>
+        {
+            options.Address = Address(configuration, "Billing");
+        });
+        services.AddScoped<ICheckoutAccess, CheckoutAccess>();
+        services.AddScoped<ICheckoutReleaseAuthorization, CheckoutReleaseAuthorization>();
+        services.AddScoped<ICheckoutLockService, CheckoutLockService>();
         return services;
     }
 

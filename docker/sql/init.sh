@@ -12,11 +12,16 @@ for database in IdentityDb RestaurantDb OrderingDb InventoryDb CatalogDb Custome
     if [[ "$database" == "CatalogDb" ]]; then
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/CatalogCookingTime.sql
     fi
-    if [[ "$database" == "RestaurantDb" ]]; then
-        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/RestaurantCloudinary.sql
-    fi
     if [[ "$database" == "OrderingDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/OrderingCheckout.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/OrderingCookingTime.sql
+    fi
+    if [[ "$database" == "BillingDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCheckout.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashRegisterRestaurant.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingBillRestaurant.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashMethod.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingPayOs.sql
     fi
         echo "$database already initialized; keeping existing data."
         continue
@@ -54,10 +59,15 @@ GO
     if [[ "$database" == "CatalogDb" ]]; then
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/CatalogCookingTime.sql
     fi
-    if [[ "$database" == "RestaurantDb" ]]; then
-        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/RestaurantCloudinary.sql
-    fi
     if [[ "$database" == "OrderingDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/OrderingCheckout.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/OrderingCookingTime.sql
+    fi
+    if [[ "$database" == "BillingDb" ]]; then
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCheckout.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashRegisterRestaurant.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingBillRestaurant.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashMethod.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingPayOs.sql
     fi
 done

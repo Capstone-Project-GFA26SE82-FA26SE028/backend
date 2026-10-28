@@ -170,8 +170,6 @@ public sealed class KitchenTaskRepository(OrderingDbContext db) : IKitchenTaskRe
         return db.KitchenTasks
             .Include(t => t.Events)
             .Include(t => t.OrderItem)
-                .ThenInclude(i => i.OrderItemOptions)
-            .Include(t => t.OrderItem)
                 .ThenInclude(i => i.Order)
                     .ThenInclude(o => o.OrderItems)
             .Where(t => idList.Contains(t.KitchenTaskId))

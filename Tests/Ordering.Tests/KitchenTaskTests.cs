@@ -14,6 +14,28 @@ namespace Ordering.Tests;
 public sealed class KitchenTaskTests
 {
     [Fact]
+    public async Task FrozenCheckoutBlocksCancellationButAllowsCookingAndServingProgress()
+    {
+        using var fixture = new Fixture();
+        var (task, _) = await fixture.SeedTaskAsync("Pending", 0);
+        fixture.Db.CheckoutLocks.Add(new CheckoutLock
+        {
+            CheckoutId = Guid.NewGuid(),
+            TableSessionRef = task.OrderItem.Order.TableSessionRef!.Value,
+            Status = "Frozen",
+            CreatedAt = DateTime.UtcNow,
+            SourceHash = new string('A', 64)
+        });
+        await fixture.Db.SaveChangesAsync();
+        var error = await Assert.ThrowsAsync<OrderingException>(() => fixture.Service.SetStatus(task.KitchenTaskId,
+            "Cancelled", null, default));
+        Assert.Equal(409, error.StatusCode);
+        await fixture.Service.SetStatus(task.KitchenTaskId, "Cooking", null, default);
+        var ready = await fixture.Service.SetStatus(task.KitchenTaskId, "Ready", null, default);
+        Assert.Equal("Ready", ready.Status);
+    }
+
+    [Fact]
     public async Task StatusTransitionsFollowCookingFlowAndLogEvents()
     {
         using var fixture = new Fixture();
@@ -172,7 +194,7 @@ public sealed class KitchenTaskTests
         using var fixture = new Fixture();
         var (readyTask, _) = await fixture.SeedTaskAsync("Ready", 50);
 
-        var remake = await fixture.Service.RemakeTask(readyTask.KitchenTaskId, "Món bị nguội, khách yêu cầu làm lại", default);
+        var remake = await fixture.Service.RemakeTask(readyTask.KitchenTaskId, "M├│n bß╗ï nguß╗Öi, kh├ích y├¬u cß║ºu l├ám lß║íi", default);
         Assert.Equal("Pending", remake.Status);
         Assert.Equal(999, remake.Priority);
 
@@ -194,8 +216,8 @@ public sealed class KitchenTaskTests
         var (_, station) = await fixture.SeedTaskAsync("Pending", 0);
         var sessionId = Guid.NewGuid();
 
-        var (dessertTask1, _) = await fixture.SeedTaskCustomAsync("Hold", 20, station, null, "Chè Thái Sầu Riêng", sessionId, 1);
-        var (dessertTask2, _) = await fixture.SeedTaskCustomAsync("Hold", 20, station, null, "Kem Trái Dừa", sessionId, 2);
+        var (dessertTask1, _) = await fixture.SeedTaskCustomAsync("Hold", 20, station, null, "Ch├¿ Th├íi Sß║ºu Ri├¬ng", sessionId, 1);
+        var (dessertTask2, _) = await fixture.SeedTaskCustomAsync("Hold", 20, station, null, "Kem Tr├íi Dß╗½a", sessionId, 2);
 
         var result = await fixture.Service.FireCourse(sessionId, null, "Dessert", default);
         Assert.Equal(2, result.ActivatedCount);
@@ -288,13 +310,13 @@ public sealed class KitchenTaskTests
         using var fixture = new Fixture();
         var (task, _) = await fixture.SeedTaskAsync("Pending", 1);
         fixture.CookingClient.ShouldThrowInsufficientStock = true;
-        fixture.CookingClient.ErrorMessage = "Nguyên liệu 'Thịt bò' không đủ tồn kho khả dụng để chế biến món.";
+        fixture.CookingClient.ErrorMessage = "Nguy├¬n liß╗çu 'Thß╗ït b├▓' kh├┤ng ─æß╗º tß╗ôn kho khß║ú dß╗Ñng ─æß╗â chß║┐ biß║┐n m├│n.";
 
         var ex = await Assert.ThrowsAsync<OrderingException>(() =>
             fixture.Service.SetStatus(task.KitchenTaskId, "Cooking", null, default));
 
         Assert.Equal(409, ex.StatusCode);
-        Assert.Contains("không đủ tồn kho", ex.Message);
+        Assert.Contains("kh├┤ng ─æß╗º tß╗ôn kho", ex.Message);
 
         var taskInDb = await fixture.Db.KitchenTasks.FirstAsync(t => t.KitchenTaskId == task.KitchenTaskId);
         Assert.Equal("Pending", taskInDb.Status);
@@ -424,7 +446,8 @@ public sealed class KitchenTaskTests
                 new OrderingTransaction(new UnitOfWork<OrderingDbContext>(Db)),
                 Access,
                 CookingClient,
-                Clock);
+                Clock,
+                new CheckoutLockRepository(Db));
         }
 
         public async Task<(KitchenTask Task, Guid StationId)> SeedTaskAsync(

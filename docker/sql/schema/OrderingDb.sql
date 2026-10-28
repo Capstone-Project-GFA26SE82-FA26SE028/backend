@@ -275,3 +275,18 @@ REFERENCES [dbo].[KitchenTask] ([KitchenTaskId])
 GO
 ALTER TABLE [dbo].[Event] CHECK CONSTRAINT [FK_Event_KitchenTask]
 GO
+
+SET QUOTED_IDENTIFIER ON;
+CREATE TABLE dbo.CheckoutLock
+(
+    CheckoutId uniqueidentifier NOT NULL,
+    BillIdRef uniqueidentifier NULL,
+    TableSessionRef uniqueidentifier NOT NULL,
+    SourceHash char(64) NULL,
+    Status varchar(20) NOT NULL,
+    CreatedAt datetime2(7) NOT NULL,
+    ReleasedAt datetime2(7) NULL,
+    CONSTRAINT PK_CheckoutLock PRIMARY KEY (CheckoutId)
+);
+CREATE UNIQUE INDEX UX_CheckoutLock_ActiveSession ON dbo.CheckoutLock(TableSessionRef) WHERE ReleasedAt IS NULL;
+GO

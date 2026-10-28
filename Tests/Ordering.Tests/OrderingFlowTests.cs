@@ -322,7 +322,7 @@ public sealed class OrderingFlowTests
         Assert.Equal(50, takeawayTask.Priority);
     }
 
-    private sealed class Fixture : IOrderingAccess, ICatalogOrderClient, IDisposable
+    internal sealed class Fixture : IOrderingAccess, ICatalogOrderClient, IDisposable
     {
         private readonly SqliteConnection connection = new("Data Source=:memory:");
         public TestDb Db { get; }
@@ -361,7 +361,7 @@ public sealed class OrderingFlowTests
             var transaction = new OrderingTransaction(new UnitOfWork<OrderingDbContext>(Db));
             Carts = new CartService(carts, transaction, this, this, TimeProvider.System);
             Orders = new OrderService(new OrderRepository(Db), carts, new KitchenTaskRepository(Db),
-                transaction, this, this, Options.Create(new OrderingSettings()), TimeProvider.System);
+                transaction, this, this, Options.Create(new OrderingSettings()), TimeProvider.System, new CheckoutLockRepository(Db));
         }
 
         public List<SelectionDTO> Lines()
@@ -432,7 +432,7 @@ public sealed class OrderingFlowTests
         }
     }
 
-    private sealed class TestDb(DbContextOptions<OrderingDbContext> options) : OrderingDbContext(options)
+    internal sealed class TestDb(DbContextOptions<OrderingDbContext> options) : OrderingDbContext(options)
     {
         private long version;
 

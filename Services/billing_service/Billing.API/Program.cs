@@ -1,9 +1,13 @@
 using Billing.DAL.Extensions;
 using Billing.DAL.Models;
+using Billing.API.Extensions;
+using Billing.API.GrpcServices;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: false)
+    .AddEnvironmentVariables().AddCommandLine(args);
 
-builder.Services.AddGrpc();
+builder.Services.AddBillingServices(builder.Configuration);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
@@ -14,6 +18,17 @@ if (string.IsNullOrWhiteSpace(connectionString))
 builder.Services.AddBillingPersistence(connectionString);
 
 var app = builder.Build();
+
+app.MapGrpcService<CashRegisterGrpcService>();
+app.MapGrpcService<CashShiftGrpcService>();
+app.MapGrpcService<BillGrpcService>();
+app.MapGrpcService<ShiftReportGrpcService>();
+app.MapGrpcService<PaymentGrpcService>();
+app.MapGrpcService<PayOsPaymentGrpcService>();
+app.MapGrpcService<PaymentWebhookGrpcService>();
+app.MapGrpcService<CashMovementGrpcService>();
+app.MapGrpcService<BillCheckoutGrpcService>();
+app.MapGrpcService<TaxFeePolicyGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

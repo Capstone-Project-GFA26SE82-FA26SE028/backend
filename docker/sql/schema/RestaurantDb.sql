@@ -201,7 +201,6 @@ SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[Qr](
 	[QrId] [uniqueidentifier] NOT NULL,
-	[ImageUrl] [varchar](2048) NULL,
 	[TableId] [uniqueidentifier] NOT NULL,
 	[TokenHash] [varchar](255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[CreatedAt] [datetime] NOT NULL,

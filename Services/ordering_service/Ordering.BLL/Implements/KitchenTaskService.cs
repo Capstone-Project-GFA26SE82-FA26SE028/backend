@@ -11,7 +11,8 @@ public sealed class KitchenTaskService(
     IOrderingTransaction transaction,
     IKitchenStationAccess access,
     ICookingInventoryClient cookingClient,
-    TimeProvider clock) : IKitchenTaskService
+    TimeProvider clock,
+    ICheckoutLockRepository checkouts) : IKitchenTaskService
 {
     public async Task<KitchenTaskPageDTO> GetAll(
         int page,
@@ -87,6 +88,16 @@ public sealed class KitchenTaskService(
                 if (task.Version is not null && !task.Version.SequenceEqual(expected))
                 {
                     throw new OrderingException(409, "The kitchen task changed. Reload before updating.");
+                }
+            }
+
+            if (string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase)
+                && task.OrderItem?.Order?.TableSessionRef is Guid sessionId)
+            {
+                await checkouts.LockSessionAsync(sessionId, ct);
+                if ((await checkouts.GetActiveAsync(sessionId, ct))?.Status == "Frozen")
+                {
+                    throw new OrderingException(409, "Checkout has frozen this item. Cancel the checkout before cancelling the item.");
                 }
             }
 
@@ -380,6 +391,15 @@ public sealed class KitchenTaskService(
             var task = await repository.GetByIdForUpdateAsync(id, ct)
                 ?? throw new OrderingException(404, "Kitchen task not found.");
 
+            if (task.OrderItem?.Status == "Cancelled" && task.OrderItem.Order?.TableSessionRef is Guid sessionId)
+            {
+                await checkouts.LockSessionAsync(sessionId, ct);
+                if ((await checkouts.GetActiveAsync(sessionId, ct))?.Status == "Frozen")
+                {
+                    throw new OrderingException(409, "A cancelled item cannot be restored during frozen checkout.");
+                }
+            }
+
             var fromStatus = task.Status;
             task.Status = "Cancelled";
             var now = clock.GetUtcNow().UtcDateTime;
@@ -394,7 +414,7 @@ public sealed class KitchenTaskService(
                 OccurredAt = now
             });
 
-            var remakeReason = string.IsNullOrWhiteSpace(reason) ? "Làm lại do sự cố bếp" : reason.Trim();
+            var remakeReason = string.IsNullOrWhiteSpace(reason) ? "L├ám lß║íi do sß╗▒ cß╗æ bß║┐p" : reason.Trim();
             var newTask = new KitchenTask
             {
                 KitchenTaskId = Guid.NewGuid(),
@@ -422,8 +442,8 @@ public sealed class KitchenTaskService(
             {
                 task.OrderItem.Status = "Pending";
                 task.OrderItem.Note = string.IsNullOrEmpty(task.OrderItem.Note)
-                    ? $"[LÀM LẠI] {remakeReason}"
-                    : $"{task.OrderItem.Note} [LÀM LẠI] {remakeReason}";
+                    ? $"[L├ÇM Lß║áI] {remakeReason}"
+                    : $"{task.OrderItem.Note} [L├ÇM Lß║áI] {remakeReason}";
             }
 
             repository.Create(newTask);
@@ -471,8 +491,8 @@ public sealed class KitchenTaskService(
             {
                 ActivatedCount = count,
                 Message = count > 0
-                    ? $"Đã kích hoạt {count} món '{course ?? "Tráng miệng"}' cho bếp chế biến."
-                    : "Không có món nào đang ở trạng thái giữ (Hold) cần kích hoạt."
+                    ? $"─É├ú k├¡ch hoß║ít {count} m├│n '{course ?? "Tr├íng miß╗çng"}' cho bß║┐p chß║┐ biß║┐n."
+                    : "Kh├┤ng c├│ m├│n n├áo ─æang ß╗ƒ trß║íng th├íi giß╗» (Hold) cß║ºn k├¡ch hoß║ít."
             };
         }, ct);
     }

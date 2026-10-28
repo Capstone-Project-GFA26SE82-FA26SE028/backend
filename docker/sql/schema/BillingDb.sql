@@ -4,6 +4,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[Bill](
 	[BillId] [uniqueidentifier] NOT NULL,
+	[RestaurantId] [uniqueidentifier] NOT NULL,
 	[BillNumber] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[CustomerRef] [uniqueidentifier] NULL,
 	[Status] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -31,6 +32,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[CashRegister](
 	[CashRegisterId] [uniqueidentifier] NOT NULL,
+	[RestaurantId] [uniqueidentifier] NOT NULL,
 	[Code] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
  CONSTRAINT [PK_CashRegister] PRIMARY KEY CLUSTERED 
 (
@@ -262,7 +264,7 @@ CREATE TABLE [dbo].[BillLine](
 	[DiscountAllocated] [decimal](18, 2) NOT NULL,
 	[VatAllocated] [decimal](18, 2) NOT NULL,
 	[ServiceAllocated] [decimal](18, 2) NOT NULL,
-	[CogsSnapshot] [decimal](18, 2) NOT NULL,
+	[CogsSnapshot] [decimal](18, 2) NULL,
  CONSTRAINT [PK_BillLine] PRIMARY KEY CLUSTERED 
 (
 	[BillLineId] ASC
@@ -327,6 +329,9 @@ CREATE TABLE [dbo].[Payment](
 	[Amount] [decimal](18, 2) NOT NULL,
 	[CashReceived] [decimal](18, 2) NULL,
 	[ChangeAmount] [decimal](18, 2) NULL,
+	[ProviderPaymentLinkId] [varchar](100) NULL,
+	[ProviderCheckoutUrl] [varchar](2048) NULL,
+	[ProviderQrCode] [varchar](max) NULL,
 	[ProviderOrderCode] [varchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[ProviderTransactionId] [varchar](255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[IdempotencyKey] [varchar](128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -542,4 +547,20 @@ ALTER TABLE [dbo].[RefundLine]  WITH CHECK ADD  CONSTRAINT [FK_RefundLine_Refund
 REFERENCES [dbo].[Refund] ([RefundId])
 GO
 ALTER TABLE [dbo].[RefundLine] CHECK CONSTRAINT [FK_RefundLine_Refund]
+GO
+
+SET QUOTED_IDENTIFIER ON;
+CREATE TABLE dbo.BillCheckout
+(
+    CheckoutId uniqueidentifier NOT NULL,
+    BillId uniqueidentifier NULL,
+    TableSessionRef uniqueidentifier NOT NULL,
+    SourceHash char(64) NULL,
+    Status varchar(20) NOT NULL,
+    CreatedAt datetime2(7) NOT NULL,
+    ReleasedAt datetime2(7) NULL,
+    CONSTRAINT FK_BillCheckout_Bill FOREIGN KEY (BillId) REFERENCES dbo.Bill(BillId),
+    CONSTRAINT PK_BillCheckout PRIMARY KEY (CheckoutId)
+);
+CREATE UNIQUE INDEX UX_BillCheckout_ActiveSession ON dbo.BillCheckout(TableSessionRef) WHERE ReleasedAt IS NULL;
 GO
