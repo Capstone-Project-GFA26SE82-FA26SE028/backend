@@ -24,9 +24,9 @@ public sealed class CashShiftService(ICashRegisterRepository registers, ICashShi
         }
 
         if (request?.OpeningCash is not decimal openingCash || openingCash < 0
-            || openingCash > 9999999999999999.99m || decimal.Round(openingCash, 2) != openingCash)
+            || openingCash > 9999999999999999.99m || decimal.Truncate(openingCash) != openingCash)
         {
-            throw new BillingException(400, "Provide a non-negative opening cash amount within decimal(18,2) precision.");
+            throw new BillingException(400, "Provide a non-negative whole-VND opening cash amount within decimal(18,2) limits. Fractional amounts are not rounded.");
         }
 
         var result = await unitOfWork.ExecuteInTransactionAsync(async () =>

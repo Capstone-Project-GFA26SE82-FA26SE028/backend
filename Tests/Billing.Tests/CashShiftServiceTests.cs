@@ -17,8 +17,9 @@ public sealed class CashShiftServiceTests
 {
     [Theory]
     [InlineData("0")]
-    [InlineData("250000.50")]
-    [InlineData("9999999999999999.99")]
+    [InlineData("250000")]
+    [InlineData("250000.00")]
+    [InlineData("9999999999999999")]
     public async Task CashierOpensOwnBranchWithExplicitCashAndServerIdentity(string amount)
     {
         await using var fixture = await ShiftFixture.Create();
@@ -58,6 +59,7 @@ public sealed class CashShiftServiceTests
     [InlineData(null)]
     [InlineData("-0.01")]
     [InlineData("0.001")]
+    [InlineData("250000.50")]
     [InlineData("10000000000000000")]
     public async Task InvalidOrMissingOpeningCashDoesNotCreateAShift(string? amount)
     {

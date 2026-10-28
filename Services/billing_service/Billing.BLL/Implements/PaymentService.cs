@@ -150,6 +150,12 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
                 }
 
                 await ordering.BindAsync(sessions[0], checkout.CheckoutId, billId, hash, ct);
+                var expectedCash = shift.OpeningCash + await movements.GetTotalAsync(shift.CashShiftId, ct);
+                if (expectedCash < 0 || expectedCash > MaximumMoney || expectedCash + bill.TotalAmount > MaximumMoney)
+                {
+                    throw new BillingException(409, "Expected cash after this sale exceeds the supported cash balance range. No payment or sale was recorded.");
+                }
+
                 var paidAt = DateTime.SpecifyKind(new SqlDateTime(clock.GetUtcNow().UtcDateTime).Value, DateTimeKind.Utc);
                 var payment = new Payment
                 {

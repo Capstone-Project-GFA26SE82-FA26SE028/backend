@@ -87,6 +87,12 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
 
             var total = await movements.GetTotalAsync(shiftId, ct);
             var expected = checked(shift.OpeningCash + total);
+            var afterPosting = expected + (request.Type == CashMovementTypes.CashIn ? amount : -amount);
+            if (expected > 9999999999999999.99m || afterPosting > 9999999999999999.99m)
+            {
+                throw new BillingException(409, "Expected cash exceeds decimal(18,2) limits. No cash movement was recorded; review the shift balance.");
+            }
+
             if (request.Type == CashMovementTypes.CashOut && amount > expected)
             {
                 throw new BillingException(409, "Cash out exceeds the expected cash available in this shift.");

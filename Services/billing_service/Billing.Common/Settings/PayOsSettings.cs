@@ -14,5 +14,6 @@ public sealed class PayOsSettings
     public int RequestTimeoutSeconds { get; set; } = 10;
     public int ReconcileIntervalSeconds { get; set; } = 30;
     public int ReconcileBatchSize { get; set; } = 20;
+    public int PaidReconcileHours { get; set; } = 24;
     public bool AllowInsecureTestTransport { get; set; }
 }

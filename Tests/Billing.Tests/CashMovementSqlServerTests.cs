@@ -177,6 +177,131 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
             key, CashMovementServiceTests.Body("CashOut", 100), default)).Created);
     }
 
+    [BillingSqlServerFact]
+    public async Task ConcurrentCashInCannotExceedReportRange()
+    {
+        await VerifyConcurrentBalanceLimit(false);
+    }
+
+    [BillingSqlServerFact]
+    public async Task ConcurrentCashInAndSaleCannotExceedReportRange()
+    {
+        await VerifyConcurrentBalanceLimit(true);
+    }
+
+    private async Task VerifyConcurrentBalanceLimit(bool includeSale)
+    {
+        var source = new BillServiceTests.BillSource();
+        var actor = CashActor(source);
+        var prepared = await PrepareCash(source, actor);
+        const decimal opening = 9999999999999767m;
+        await using (var setup = Context())
+        {
+            var shift = await setup.CashShifts.SingleAsync();
+            shift.OpeningCash = opening;
+            await setup.SaveChangesAsync();
+        }
+
+        await using var one = Context();
+        await using var two = Context();
+        async Task<int> Post(BillingDbContext db, bool sale)
+        {
+            try
+            {
+                if (sale)
+                {
+                    await CashPaymentServiceTests.Fixture.MakeService(db, actor, Service(db, source, actor),
+                        new CashPaymentServiceTests.CheckoutSource()).PayCash(prepared.BillId,
+                        Guid.NewGuid().ToString(), prepared.Body, default);
+                }
+                else
+                {
+                    await CashMovementServiceTests.Make(db, actor).Create(prepared.Body.CashShiftId,
+                        Guid.NewGuid().ToString(), CashMovementServiceTests.Body("CashIn", 232), default);
+                }
+
+                return 201;
+            }
+            catch (BillingException error)
+            {
+                return error.StatusCode;
+            }
+        }
+
+        var results = await Task.WhenAll(Post(one, false), Post(two, includeSale));
+        Assert.Equal(new[] { 201, 409 }, results.Order().ToArray());
+        await using var check = Context();
+        var movement = Assert.Single(await check.CashMovements.ToListAsync());
+        Assert.Equal(opening, (await check.CashShifts.SingleAsync()).OpeningCash);
+        Assert.Equal(232m, movement.SignedAmount);
+        Assert.Equal(9999999999999999m, opening + movement.SignedAmount);
+        var paid = movement.Type == "Sale";
+        Assert.Equal(paid ? 1 : 0, await check.Payments.CountAsync());
+        Assert.Equal(paid ? "Paid" : "Unpaid", (await check.Bills.SingleAsync()).Status);
+        Assert.Equal(paid ? "Paid" : "Ready", (await check.BillCheckouts.SingleAsync()).Status);
+    }
+
+    [BillingSqlServerFact]
+    public async Task SaleOverLimitLeavesBillCheckoutAndLedgerUnchanged()
+    {
+        var source = new BillServiceTests.BillSource();
+        var actor = CashActor(source);
+        var prepared = await PrepareCash(source, actor);
+        await using (var setup = Context())
+        {
+            var shift = await setup.CashShifts.SingleAsync();
+            shift.OpeningCash = 9999999999999768m;
+            await setup.SaveChangesAsync();
+        }
+
+        await using var paying = Context();
+        var service = CashPaymentServiceTests.Fixture.MakeService(paying, actor, Service(paying, source, actor),
+            new CashPaymentServiceTests.CheckoutSource());
+        var error = await Assert.ThrowsAsync<BillingException>(() => service.PayCash(prepared.BillId,
+            Guid.NewGuid().ToString(), prepared.Body, default));
+        Assert.Equal(409, error.StatusCode);
+        await using var check = Context();
+        Assert.Empty(await check.Payments.ToListAsync());
+        Assert.Empty(await check.CashMovements.ToListAsync());
+        Assert.Equal("Unpaid", (await check.Bills.SingleAsync()).Status);
+        Assert.Equal("Ready", (await check.BillCheckouts.SingleAsync()).Status);
+        Assert.Equal(9999999999999768m, (await check.CashShifts.SingleAsync()).OpeningCash);
+    }
+
+    [BillingSqlServerFact]
+    public async Task ExistingOverLimitBalanceIsRejectedWithoutRewritingHistory()
+    {
+        var source = new BillServiceTests.BillSource();
+        var actor = CashActor(source);
+        var prepared = await PrepareCash(source, actor);
+        await using (var setup = Context())
+        {
+            var shift = await setup.CashShifts.SingleAsync();
+            shift.OpeningCash = 9999999999999999m;
+            setup.CashMovements.Add(new CashMovement
+            {
+                CashMovementId = Guid.NewGuid(),
+                CashShiftId = shift.CashShiftId,
+                Type = "CashIn",
+                SignedAmount = 1,
+                Reason = "Legacy over-limit fixture",
+                PostedAt = DateTime.UtcNow,
+                IdempotencyKey = Guid.NewGuid().ToString()
+            });
+            await setup.SaveChangesAsync();
+        }
+
+        await using var posting = Context();
+        var error = await Assert.ThrowsAsync<BillingException>(() => CashMovementServiceTests.Make(posting, actor)
+            .Create(prepared.Body.CashShiftId, Guid.NewGuid().ToString(),
+                CashMovementServiceTests.Body("CashIn", 1), default));
+        Assert.Equal(409, error.StatusCode);
+        await using var check = Context();
+        Assert.Equal(9999999999999999m, (await check.CashShifts.SingleAsync()).OpeningCash);
+        Assert.Equal(1m, (await check.CashMovements.SingleAsync()).SignedAmount);
+        Assert.Empty(await check.Payments.ToListAsync());
+    }
+
     private static ShiftIdentity CashActor(BillServiceTests.BillSource source)
     {
         return new ShiftIdentity

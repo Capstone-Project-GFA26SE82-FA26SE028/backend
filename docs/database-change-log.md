@@ -442,3 +442,42 @@ Kết quả cuối trên source đợt này:
 Đã dừng stack payos-check và xóa đúng 25 database PayOsCheck trong các manifest fixture của đợt thử, không xóa database nhóm. Bằng chứng/log cục bộ giữ trong .ai/billing-payos (ignored).
 
 HEAD gốc 643a0de, nhánh feature/Billing; các thay đổi vẫn chưa commit/stage/push. Nhật ký này thay thế trạng thái chuẩn bị trước khi người dùng chốt ba cột và quy tắc retry/closing.
+
+## 2026-10-28 — Billing: bảo vệ số dư quỹ và đối chiếu PayOS trước đóng ca
+
+**Không có thay đổi schema.** Không thêm/sửa/xóa bảng, cột, kiểu dữ liệu, NULL/DEFAULT, PK, FK, UNIQUE, CHECK hoặc index. Không có script upgrade mới và không đổi quan hệ/dây nối ERD. Giữ nguyên decimal(18,2) của CashShift.OpeningCash, CashMovement.SignedAmount và các số tiền ShiftReport/Payment.
+
+- Mở ca chỉ nhận số nguyên đồng VND: 250000 và 250000.00 hợp lệ; 250000.50 bị từ chối, không làm tròn.
+- CashIn và Sale tiền mặt kiểm tra số dư sau giao dịch trong transaction đã khóa register/shift. Vượt 9999999999999999.99 thì từ chối trước khi ghi; Payment/Bill/Checkout không được chuyển Paid khi Sale bị từ chối. Giữ cơ chế request lặp và khóa chung với đóng ca/CashOut.
+- Worker tiếp tục đối chiếu PayOS Paid của ca chưa đóng, hoặc PaidAt trong khoảng PayOs:PaidReconcileHours (mặc định 24 giờ). Webhook vẫn được kiểm tra ngoài khoảng polling này. Không ghi thêm Sale hoặc thanh toán lần hai khi có tiền đến thêm.
+- Lần đóng ca đầu phải có kết quả provider hiện hành cho các PayOS của ca, rồi kiểm tra lại tập/trạng thái payment dưới khóa ca. Kết quả không rõ hoặc tập payment thay đổi thì chặn. Lặp lại báo cáo đã đóng không gọi provider lại. Preview không bảo đảm thao tác Close sẽ thành công.
+- Dữ liệu cũ không tự sửa: truy vấn chỉ đọc BillingDb trên backend-sqlserver-1 không tìm thấy ca có OpeningCash lẻ hoặc ExpectedCash vượt giới hạn tại lần kiểm tra này; chưa khảo sát SQL Server bên ngoài Docker.
+- Các thay đổi chỉ ở Billing, test Billing, README và nhật ký này. Không sửa nghiệp vụ, schema hoặc dữ liệu thường của service khác; dữ liệu mô phỏng chỉ được tạo trong database fixture riêng.
+
+Kiểm chứng:
+- Build Billing và các image phụ thuộc dùng cho fixture đạt. Test solution: 895 pass, 76 conditional skip, 0 fail; không tính skip là đạt. Full Billing trên SQL Server thật: 355 pass, 0 skip, 0 fail. Sau đó bổ sung test dữ liệu cũ vượt quỹ và chạy lại nhóm CashMovementSqlServerTests: 8 pass, gồm hai CashIn đồng thời, CashIn đấu với Sale, từ chối Sale không có Paid/bút toán dở dang và không tự sửa dữ liệu cũ.
+- Gateway fixture dùng Identity/Restaurant/Ordering/Billing và SQL Server thật, provider PayOS HTTP double có chữ ký. Bộ PayOS hồi quy 46 checks đạt; lượt tiếp theo xác minh mở ca số nguyên/.00, từ chối .50, CashIn sát/vượt giới hạn. Script PowerShell đầu tiên đọc JSON số tiền lớn qua floating point nên assert sai; kiểm tra lại JSON bằng GetDecimal và SQL xác nhận số tiền chính xác. Lượt tiếp tục 30 checks đạt (gồm login/setup), bao phủ CashIn đồng thời, provider mất kết nối chặn đóng ca, retry đóng ca thành công, retry báo cáo đã đóng không gọi bank, Sale overflow giữ Unpaid/Ready và không có Sale, retry sau CashOut hợp lệ chỉ tạo một Payment/Sale, restart worker phát hiện tiền đến thêm ở ca đã đóng khi không có webhook.
+- Kiểm tra SQL fixture xác nhận REVIEW-LIMIT và REVIEW-CONCURRENT chỉ một movement, số dư 9999999999999999.00; REVIEW-SALE đúng một Sale, không tạo Payment khi bị từ chối; REVIEW-BANK Payment ReviewRequired nhưng Bill/Checkout Paid và ca Closed, không có CashMovement ngân hàng.
+- Chưa kiểm chứng ngân hàng/PayOS thật hoặc SQL Server ngoài Docker. Thời điểm ngân hàng ghi nhận tiền sau lần đối chiếu cuối không thể khóa bằng transaction SQL; webhook/worker tiếp tục theo dõi theo quy tắc trên, không sửa báo cáo tiền mặt đã đóng.
+- Đã dừng nhóm payos-check và xóa đúng 5 database fixture có hậu tố 20261028234420; không thay đổi database thường. Không commit/push. Container backend thường không được restart trong đợt này; cần khởi động lại Billing để nạp binary mới khi sử dụng.
+
+Danh sách file của đợt sửa:
+- `Services/billing_service/Billing.BLL/Implements/CashShiftService.cs`: validation tiền đầu ca.
+- `Services/billing_service/Billing.BLL/Implements/CashMovementService.cs`: kiểm tra số dư sau CashIn.
+- `Services/billing_service/Billing.BLL/Implements/PaymentService.cs`: kiểm tra quỹ trước khi ghi Sale/Payment.
+- `Services/billing_service/Billing.BLL/Implements/ShiftReportService.cs`: đối chiếu PayOS trước đóng ca và kiểm tra lại dưới khóa.
+- `Services/billing_service/Billing.DAL/Interfaces/IPaymentRepository.cs` và `Services/billing_service/Billing.DAL/Implements/PaymentRepository.cs`: truy vấn Paid trong ca mở/khoảng theo dõi.
+- `Services/billing_service/Billing.API/Workers/PayOsReconciliationWorker.cs`: sử dụng TimeProvider và khoảng theo dõi.
+- `Services/billing_service/Billing.API/Clients/PayOsClient.cs`: kiểm tra cấu hình khoảng theo dõi.
+- `Services/billing_service/Billing.Common/Settings/PayOsSettings.cs`: PaidReconcileHours.
+- `Services/billing_service/Billing.API/appsettings.json`, `Services/billing_service/Billing.API/appsettings.Docker.json`, `Services/billing_service/Billing.API/appsettings.Local.example.json`: giá trị chung 24 giờ; không thêm secret.
+- `Tests/Billing.Tests/CashShiftServiceTests.cs`: số nguyên/.00/.50.
+- `Tests/Billing.Tests/ShiftReportServiceTests.cs`: cập nhật dependency và fixture tracking sau đối chiếu.
+- `Tests/Billing.Tests/BillingBalanceSafetyTests.cs` (mới): boundary và rollback trạng thái.
+- `Tests/Billing.Tests/PayOsClosingSafetyTests.cs` (mới): polling Paid, lỗi provider, đóng ca, tiền đến thêm.
+- `Tests/Billing.Tests/CashMovementSqlServerTests.cs`: đồng thời, giới hạn chính xác SQL và bảo toàn dữ liệu cũ.
+- `README.md` và `docs/database-change-log.md`: quy tắc vận hành, phạm vi SQL/ERD và kết quả kiểm thử.
+
+### Đồng bộ repo SQL riêng trong Downloads — 2026-10-28
+
+Đã đồng bộ `C:/Users/phucg/Downloads/Database-SQLServer-main/Database-SQLServer/BillingDb.sql`: thêm đúng ba cột PayOS nullable/không default và seed Cash/BankTransfer nếu thiếu, giữ bản ghi đã có kể cả bị tắt. Đây là đưa các thay đổi Billing đã được phép vào bản SQL riêng, không phát sinh schema mới. Chỉ file BillingDb.sql thay đổi trong repo SQL; OrderingDb.sql giữ nguyên. Đã kiểm thử bản sao script trên database SQL Server Docker cô lập CodexBillingSqlSync_* và kiểm tra đúng varchar(100)/varchar(2048)/varchar(max), NULL, default=0 cùng hai seed; đã xóa database thử. Không chạy script reset vào BillingDb đang dùng. File Downloads là script tạo mới có DROP/CREATE; nâng cấp database có dữ liệu dùng docker/sql/upgrades/BillingPayOs.sql trong backend. Repo SQL và backend đều chưa commit/push ở lần đồng bộ này.

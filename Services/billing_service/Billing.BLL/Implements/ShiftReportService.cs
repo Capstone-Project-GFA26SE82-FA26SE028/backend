@@ -18,7 +18,7 @@ namespace Billing.BLL.Implements;
 public sealed class ShiftReportService(IShiftReportRepository reports, ICashShiftRepository shifts,
     ICashRegisterRepository registers, IPaymentRepository payments, ICashMovementRepository movements,
     IUnitOfWork unitOfWork, IBillingAccess access, IOptions<CashRegisterAccessSettings> roles,
-    IOptions<CashPaymentSettings> cashSettings, TimeProvider clock) : IShiftReportService
+    IOptions<CashPaymentSettings> cashSettings, TimeProvider clock, IPayOsPaymentService payOs) : IShiftReportService
 {
     public async Task<(ShiftReportDTO Report, bool Created)> Close(Guid shiftId, CloseCashShiftDTO request, CancellationToken ct)
     {
@@ -32,6 +32,14 @@ public sealed class ShiftReportService(IShiftReportRepository reports, ICashShif
 
         var reason = NormalizeReason(request.DifferenceReason);
         var initial = await FindShift(shiftId, actor, ct);
+        if (initial.CashierUserRef != actor.UserId)
+        {
+            throw new BillingException(403, "Cashiers can close only their own cash shift.");
+        }
+
+        var verifiedPayments = initial.Status == CashShiftStatuses.Active
+            ? await VerifyBankPayments(shiftId, ct) : new Dictionary<Guid, PayOsPaymentDTO>();
+        payments.ResetProviderTracking();
         return await Controlled(async () => await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             var shift = await LockAndAuthorize(initial, actor, true, ct);
@@ -50,6 +58,19 @@ public sealed class ShiftReportService(IShiftReportRepository reports, ICashShif
                 }
 
                 return (Map(previous), false);
+            }
+
+            var currentPayments = await payments.GetForReconciliationAsync(shiftId, ct);
+            foreach (var payment in currentPayments.Where(PayOsPaymentRules.IsPayOs))
+            {
+                if (!verifiedPayments.TryGetValue(payment.PaymentId, out var verified)
+                    || payment.Status != verified.Status || payment.Amount != verified.Amount
+                    || payment.ProviderTransactionId != verified.ProviderTransactionId
+                    || payment.ProviderPaymentLinkId != verified.ProviderPaymentLinkId
+                    || payment.PaidAt != verified.PaidAt?.UtcDateTime)
+                {
+                    throw new BillingException(409, "PayOS payments changed during closing. Reconcile and retry closing the same shift.");
+                }
             }
 
             var preview = await Calculate(shift, ct);
@@ -193,6 +214,28 @@ public sealed class ShiftReportService(IShiftReportRepository reports, ICashShif
         var billPaymentCounts = await payments.GetBillPaymentCountsAsync(shift.CashShiftId, ct, PayOsPaymentRules.BlockingExpression);
         return ShiftReconciliationCalculator.Calculate(shift, paymentRows, movementRows, billPaymentCounts, cashSettings.Value.MethodCode,
             unclosed.Count == 1 && unclosed[0].CashShiftId == shift.CashShiftId);
+    }
+
+    private async Task<Dictionary<Guid, PayOsPaymentDTO>> VerifyBankPayments(Guid shiftId, CancellationToken ct)
+    {
+        var verified = new Dictionary<Guid, PayOsPaymentDTO>();
+        var rows = await payments.GetForReconciliationAsync(shiftId, ct);
+        foreach (var payment in rows.Where(PayOsPaymentRules.IsPayOs))
+        {
+            var result = await payOs.Synchronize(payment.PaymentId, ct);
+            var settled = result.Status == PaymentStatuses.Paid && result.ProviderAmountPaid == result.Amount
+                && result.ProviderAmountRemaining == 0;
+            var zero = result.IsVerifiedZero && result.ProviderAmountPaid == 0
+                && result.ProviderAmountRemaining == result.Amount;
+            if (!settled && !zero)
+            {
+                throw new BillingException(409, $"PayOS payment {payment.PaymentId} has no current verified final result. The shift was not closed.");
+            }
+
+            verified.Add(payment.PaymentId, result);
+        }
+
+        return verified;
     }
 
     private void RequireRole(BillingAccessScope actor, bool write)

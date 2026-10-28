@@ -141,11 +141,12 @@ public sealed class PaymentRepository(BillingDbContext db)
         return await Details().Where(value => value.ProviderOrderCode == code).Take(2).ToListAsync(ct);
     }
 
-    public async Task<(IReadOnlyList<Guid> Ids, int Total)> GetProviderBatchAsync(int skip, int take, CancellationToken ct)
+    public async Task<(IReadOnlyList<Guid> Ids, int Total)> GetProviderBatchAsync(int skip, int take, DateTime paidSince, CancellationToken ct)
     {
         var query = _context.Payments.AsNoTracking().Where(value => value.MethodCode == PayOsStates.Method
             && value.IdempotencyKey.StartsWith(PayOsStates.KeyPrefix) && value.ProviderOrderCode != null
-            && value.Status != PaymentStatuses.Paid && value.Status != PayOsStates.ReviewRequired);
+            && value.Status != PayOsStates.ReviewRequired
+            && (value.Status != PaymentStatuses.Paid || value.CashShift.ClosedAt == null || value.PaidAt >= paidSince));
         var count = await query.CountAsync(ct);
         var ids = await query.OrderBy(value => value.PaymentId).Skip(skip).Take(take).Select(value => value.PaymentId).ToListAsync(ct);
         return (ids, count);

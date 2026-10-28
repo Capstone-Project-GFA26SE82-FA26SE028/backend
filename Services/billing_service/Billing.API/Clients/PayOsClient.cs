@@ -21,7 +21,7 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
             return !string.IsNullOrWhiteSpace(s.ClientId) && !string.IsNullOrWhiteSpace(s.ApiKey)
                 && !string.IsNullOrWhiteSpace(s.ChecksumKey) && ValidUrl(s.BaseUrl)
                 && s.RequestTimeoutSeconds is > 0 and <= 120 && s.ReconcileIntervalSeconds > 0
-                && s.ReconcileBatchSize is > 0 and <= 100;
+                && s.ReconcileBatchSize is > 0 and <= 100 && s.PaidReconcileHours is > 0 and <= 8760;
         }
     }
 

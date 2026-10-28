@@ -271,6 +271,7 @@ public sealed class ShiftReportServiceTests
         await f.Db.SaveChangesAsync();
         await Status(409, () => service.Close(f.ShiftId, Body(1000, 0), default));
         Assert.Empty(await f.Db.ShiftReports.ToListAsync());
+        shift = await f.Db.CashShifts.SingleAsync();
         shift.Status = "Active";
         shift.ClosedAt = null;
         f.Db.ShiftReports.Add(new ShiftReport
@@ -289,7 +290,7 @@ public sealed class ShiftReportServiceTests
         Assert.Equal("Active", (await f.Db.CashShifts.SingleAsync()).Status);
     }
 
-    internal static ShiftReportService Make(BillingDbContext db, ShiftIdentity actor)
+    internal static ShiftReportService Make(BillingDbContext db, ShiftIdentity actor, Billing.BLL.Interfaces.IPayOsPaymentService? payOs = null)
     {
         return new ShiftReportService(new ShiftReportRepository(db), new CashShiftRepository(db),
             new CashRegisterRepository(db), new PaymentRepository(db), new CashMovementRepository(db),
@@ -300,7 +301,7 @@ public sealed class ShiftReportServiceTests
             }), Options.Create(new CashPaymentSettings
             {
                 MethodCode = "Cash"
-            }), TimeProvider.System);
+            }), TimeProvider.System, payOs!);
     }
 
     internal static CloseCashShiftDTO Body(decimal? actual, decimal? handover, string? reason = null)

@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 namespace Billing.API.Workers;
 
 public sealed class PayOsReconciliationWorker(IServiceScopeFactory scopes, IOptions<PayOsSettings> settings,
-    ILogger<PayOsReconciliationWorker> logger) : BackgroundService
+    ILogger<PayOsReconciliationWorker> logger, TimeProvider clock) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -19,7 +19,8 @@ public sealed class PayOsReconciliationWorker(IServiceScopeFactory scopes, IOpti
                 if (scope.ServiceProvider.GetRequiredService<IPayOsClient>().IsConfigured)
                 {
                     var repository = scope.ServiceProvider.GetRequiredService<IPaymentRepository>();
-                    var batch = await repository.GetProviderBatchAsync(offset, settings.Value.ReconcileBatchSize, stoppingToken);
+                    var paidSince = clock.GetUtcNow().UtcDateTime.AddHours(-settings.Value.PaidReconcileHours);
+                    var batch = await repository.GetProviderBatchAsync(offset, settings.Value.ReconcileBatchSize, paidSince, stoppingToken);
                     foreach (var id in batch.Ids)
                     {
                         try

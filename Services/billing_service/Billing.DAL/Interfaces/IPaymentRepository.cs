@@ -15,7 +15,7 @@ public interface IPaymentRepository : IGenericRepository<Payment>
     Task<IReadOnlyList<Payment>> GetByProviderCodeAsync(string code, CancellationToken ct);
     Task<bool> LockBankReferenceAsync(string reference, CancellationToken ct);
     Task<bool> BankReferenceUsedAsync(string reference, Guid exceptId, CancellationToken ct);
-    Task<(IReadOnlyList<Guid> Ids, int Total)> GetProviderBatchAsync(int skip, int take, CancellationToken ct);
+    Task<(IReadOnlyList<Guid> Ids, int Total)> GetProviderBatchAsync(int skip, int take, DateTime paidSince, CancellationToken ct);
     Task<bool> LockIdempotencyKeyAsync(string key, CancellationToken ct);
     Task<IReadOnlyList<Payment>> GetByPayOsRequestKeyAsync(string key, CancellationToken ct);
     Task<Payment?> GetByKeyAsync(string key, CancellationToken ct);
