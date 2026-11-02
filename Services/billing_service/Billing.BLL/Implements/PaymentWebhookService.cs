@@ -18,7 +18,7 @@ public sealed class PaymentWebhookService(IPaymentRepository payments, IPaymentW
     {
         if (string.IsNullOrWhiteSpace(payload) || System.Text.Encoding.UTF8.GetByteCount(payload) > 65536)
         {
-            throw new BillingException(400, "A webhook payload up to 64 KiB is required.");
+            throw new BillingException(400, "Yêu cầu dữ liệu webhook có kích thước tối đa 64 KiB.");
         }
 
         var data = provider.VerifyWebhook(payload);
@@ -29,18 +29,18 @@ public sealed class PaymentWebhookService(IPaymentRepository payments, IPaymentW
         {
             if (target is not null && !await payments.LockProviderWorkAsync(target.PaymentId, ct))
             {
-                throw new BillingException(503, "Webhook reconciliation is busy; retry delivery.");
+                throw new BillingException(503, "Đối soát webhook đang bận; vui lòng gửi lại.");
             }
 
             if (!await webhooks.LockKeyAsync(data.DedupeKey, ct))
             {
-                throw new BillingException(503, "Webhook deduplication is busy; retry delivery.");
+                throw new BillingException(503, "Xử lý chống trùng lặp webhook đang bận; vui lòng gửi lại.");
             }
 
             var prior = await webhooks.FindAsync(data.DedupeKey, ct);
             if (prior.Count > 1)
             {
-                throw new BillingException(409, "Webhook records are inconsistent and require review.");
+                throw new BillingException(409, "Các bản ghi webhook không nhất quán và cần được kiểm tra.");
             }
 
             var conflict = prior.Count == 1 && (prior[0].PayloadHash != data.PayloadHash || prior[0].PaymentId != target?.PaymentId);
@@ -52,11 +52,11 @@ public sealed class PaymentWebhookService(IPaymentRepository payments, IPaymentW
             Payment? payment = null;
             if (target is not null)
             {
-                var bill = await bills.GetDetailsAsync(target.BillId, ct) ?? throw new BillingException(409, "Webhook bill was not found.");
+                var bill = await bills.GetDetailsAsync(target.BillId, ct) ?? throw new BillingException(409, "Không tìm thấy hóa đơn tương ứng với webhook.");
                 var sessions = bill.BillLines.Select(value => value.TableSessionRef).Distinct().ToArray();
                 if (sessions.Length != 1 || !await bills.LockSessionAsync(sessions[0], ct))
                 {
-                    throw new BillingException(503, "Webhook checkout is busy or unverifiable.");
+                    throw new BillingException(503, "Lần chốt hóa đơn tương ứng với webhook đang bận hoặc không thể xác minh.");
                 }
 
                 await registers.LockByIdAsync(target.CashShift.CashRegisterId, ct);
@@ -65,7 +65,7 @@ public sealed class PaymentWebhookService(IPaymentRepository payments, IPaymentW
                 payment = await payments.GetForProviderUpdateAsync(target.PaymentId, ct);
                 if (payment is null)
                 {
-                    throw new BillingException(409, "Webhook payment was not found.");
+                    throw new BillingException(409, "Không tìm thấy khoản thanh toán tương ứng với webhook.");
                 }
             }
 

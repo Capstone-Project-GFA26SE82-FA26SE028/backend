@@ -19,7 +19,7 @@ public sealed class RestaurantStaffService(IManagementAccess access, IStaffIdent
         var employee = await identity.GetUserAsync(userId, ct);
         if (!settings.Value.AssignableRoleIds.Contains(employee.RoleId, StringComparer.Ordinal))
         {
-            throw new ManagementException(403, "Only configured employee roles can receive a restaurant assignment.");
+            throw new ManagementException(403, "Chỉ các vai trò nhân viên hợp lệ mới có thể được phân công vào nhà hàng.");
         }
 
         return await transaction.ExecuteAsync(async () =>
@@ -28,7 +28,7 @@ public sealed class RestaurantStaffService(IManagementAccess access, IStaffIdent
             var assignment = await staff.LockAsync(restaurantId, userId, ct);
             if (assignment?.IsActive == true)
             {
-                throw new ManagementException(409, "The restaurant assignment is already active.");
+                throw new ManagementException(409, "Phân công nhân viên vào nhà hàng đã đang hoạt động.");
             }
 
             if (assignment is null)
@@ -65,10 +65,10 @@ public sealed class RestaurantStaffService(IManagementAccess access, IStaffIdent
         {
             await RequireRestaurant(restaurantId, ct);
             var assignment = await staff.LockAsync(restaurantId, userId, ct)
-                ?? throw new ManagementException(404, "Restaurant assignment not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy phân công nhà hàng của nhân viên.");
             if (!assignment.IsActive)
             {
-                throw new ManagementException(409, "The restaurant assignment is already inactive.");
+                throw new ManagementException(409, "Phân công nhân viên vào nhà hàng đã ngừng hoạt động.");
             }
 
             assignment.IsActive = false;
@@ -80,12 +80,12 @@ public sealed class RestaurantStaffService(IManagementAccess access, IStaffIdent
     {
         if (restaurantId == Guid.Empty)
         {
-            throw new ManagementException(400, "A valid restaurant ID is required.");
+            throw new ManagementException(400, "Cần có mã nhà hàng hợp lệ.");
         }
 
         if (await restaurants.GetByIdAsync(restaurantId, ct) is null)
         {
-            throw new ManagementException(404, "Restaurant not found.");
+            throw new ManagementException(404, "Không tìm thấy nhà hàng.");
         }
     }
 
@@ -93,7 +93,7 @@ public sealed class RestaurantStaffService(IManagementAccess access, IStaffIdent
     {
         if (restaurantId == Guid.Empty || userId == Guid.Empty)
         {
-            throw new ManagementException(400, "Valid restaurant and employee IDs are required.");
+            throw new ManagementException(400, "Cần có mã nhà hàng và mã nhân viên hợp lệ.");
         }
     }
 

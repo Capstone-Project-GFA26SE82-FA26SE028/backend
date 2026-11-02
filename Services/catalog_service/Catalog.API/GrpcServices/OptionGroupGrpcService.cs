@@ -64,7 +64,7 @@ public sealed class OptionGroupGrpcService(IOptionGroupService service) : Option
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid resource ID."));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "ID tài nguyên không hợp lệ."));
         }
 
         return id;

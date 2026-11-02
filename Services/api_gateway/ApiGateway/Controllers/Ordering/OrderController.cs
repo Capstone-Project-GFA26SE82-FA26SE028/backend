@@ -22,7 +22,7 @@ public sealed class OrderController(OrderGrpc.OrderGrpcClient client, IOptions<O
         {
             if (!ValidLines(body.Items))
             {
-                return BadRequest(new ResponseDTO("Invalid order lines.", 400));
+                return BadRequest(new ResponseDTO("Các món trong đơn hàng không hợp lệ.", 400));
             }
 
             var request = new CreateOrderRequest

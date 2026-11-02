@@ -40,7 +40,7 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
             || loginDTO.Email.Trim().Length > 255 || string.IsNullOrEmpty(loginDTO.Password)
             || Encoding.UTF8.GetByteCount(loginDTO.Password) > 72)
         {
-            return new ResponseDTO("Invalid email or password.", 400);
+            return new ResponseDTO("Email hoặc mật khẩu không hợp lệ.", 400);
         }
 
         var user = await unitOfWork.UserRepo.FindByEmailAsync(loginDTO.Email.Trim());
@@ -48,14 +48,14 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
         {
             unitOfWork.RecordAudit(user?.UserId, "LOGIN_FAILED", "User", user?.UserId.ToString());
             await unitOfWork.SaveAsync();
-            return new ResponseDTO("Incorrect email or password.", 401);
+            return new ResponseDTO("Email hoặc mật khẩu không chính xác.", 401);
         }
 
         if (!user.IsActive)
         {
             unitOfWork.RecordAudit(user.UserId, "LOGIN_BLOCKED", "User", user.UserId.ToString());
             await unitOfWork.SaveAsync();
-            return new ResponseDTO("The account is inactive.", 403);
+            return new ResponseDTO("Tài khoản đã bị vô hiệu hóa hoặc chưa kích hoạt.", 403);
         }
 
         var now = UtcNow();
@@ -75,10 +75,10 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
         var result = CreateResponse(user, session, refreshToken, now);
         if (!await sessions.CreateExclusiveAsync(session, user.PasswordHash, user.RoleId))
         {
-            return new ResponseDTO("Account information has changed. Please sign in again.", 401);
+            return new ResponseDTO("Thông tin tài khoản đã thay đổi. Vui lòng đăng nhập lại.", 401);
         }
 
-        return new ResponseDTO("Signed in successfully.", 200, true, result);
+        return new ResponseDTO("Đăng nhập thành công.", 200, true, result);
     }
 
     public async Task<ResponseDTO> Refresh(RefreshDTO request)
@@ -86,7 +86,7 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
         if (request is null || string.IsNullOrWhiteSpace(request.RefreshToken)
             || request.RefreshToken.Length > 512)
         {
-            return new ResponseDTO("Invalid refresh token.", 400);
+            return new ResponseDTO("Mã làm mới (refresh token) không hợp lệ.", 400);
         }
 
         var hash = Hash(request.RefreshToken);
@@ -94,7 +94,7 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
         var now = UtcNow();
         if (session is null || session.RevokedAt != null || session.ExpiresAt <= now || !session.User.IsActive)
         {
-            return new ResponseDTO("The session has expired or is invalid. Please sign in again.", 401);
+            return new ResponseDTO("Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.", 401);
         }
 
         var refreshToken = NewRefreshToken();
@@ -102,16 +102,16 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
         // Compare-and-swap prevents concurrent requests from reusing the same token.
         if (!await sessions.RotateAsync(session.UserSessionId, hash, Hash(refreshToken), now))
         {
-            return new ResponseDTO("The refresh token has already been used or the session has been revoked.", 401);
+            return new ResponseDTO("Mã làm mới đã được sử dụng hoặc phiên đăng nhập đã bị thu hồi.", 401);
         }
 
-        return new ResponseDTO("Token refreshed successfully.", 200, true, result);
+        return new ResponseDTO("Làm mới token thành công.", 200, true, result);
     }
 
     public async Task<ResponseDTO> Logout(Guid sessionId, Guid userId)
     {
         await sessions.RevokeAsync(sessionId, userId, UtcNow());
-        return new ResponseDTO("Signed out successfully.", 200, true);
+        return new ResponseDTO("Đăng xuất thành công.", 200, true);
     }
 
     public async Task<ResponseDTO> ChangePassword(Guid userId, ChangePasswordDTO request, CancellationToken ct)
@@ -123,20 +123,20 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
             || request.NewPassword != request.ConfirmPassword
             || request.CurrentPassword == request.NewPassword)
         {
-            return new ResponseDTO("The new password must contain at least 8 characters and at most 72 UTF-8 bytes, differ from the current password, and match the confirmation.", 400);
+            return new ResponseDTO("Mật khẩu mới phải từ 8 đến 72 ký tự, khác mật khẩu hiện tại và khớp với xác nhận mật khẩu.", 400);
         }
 
         var user = await unitOfWork.UserRepo.FindUserAsync(userId, ct);
         if (user is null || !user.IsActive)
         {
-            return new ResponseDTO("Invalid account.", 401);
+            return new ResponseDTO("Tài khoản không hợp lệ.", 401);
         }
 
         if (!VerifyPassword(request.CurrentPassword, user.PasswordHash))
         {
             unitOfWork.RecordAudit(userId, "CHANGE_PASSWORD_FAILED", "User", userId.ToString());
             await unitOfWork.SaveAsync(ct);
-            return new ResponseDTO("The current password is incorrect.", 400);
+            return new ResponseDTO("Mật khẩu hiện tại không chính xác.", 400);
         }
 
         var hash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
@@ -144,10 +144,10 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
             () => unitOfWork.UserRepo.ChangePasswordAsync(userId, user.PasswordHash, hash, ct), ct);
         if (!changed)
         {
-            return new ResponseDTO("The account has changed. Please sign in again.", 409);
+            return new ResponseDTO("Thông tin tài khoản đã thay đổi. Vui lòng đăng nhập lại.", 409);
         }
 
-        return new ResponseDTO("Password changed successfully. Please sign in again.", 200, true);
+        return new ResponseDTO("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.", 200, true);
     }
 
     private static string DetectDeviceType(string? userAgent)

@@ -23,7 +23,7 @@ public sealed class CheckoutAccess(IOrderingAccess guests, IBillingSessionClient
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
-            throw new OrderingException(401, "A valid employee session or QR guest session is required.");
+            throw new OrderingException(401, "Yêu cầu phiên làm việc của nhân viên hoặc phiên quét QR hợp lệ.");
         }
 
         var actor = await staff.GetCurrentScopeAsync(new CurrentRestaurantScopeRequest
@@ -35,13 +35,13 @@ public sealed class CheckoutAccess(IOrderingAccess guests, IBillingSessionClient
         }, deadline: DateTime.UtcNow.AddSeconds(settings.Value.DependencyTimeoutSeconds), cancellationToken: ct);
         if (!Guid.TryParse(actor.UserId, out var userId) || userId == Guid.Empty || string.IsNullOrWhiteSpace(actor.RoleId))
         {
-            throw new OrderingException(503, "The restaurant service returned an invalid employee scope.");
+            throw new OrderingException(503, "Dịch vụ nhà hàng trả về phạm vi nhân viên không hợp lệ.");
         }
 
         if (write && (actor.IsAdministrator || !settings.Value.CheckoutCashierRoleIds.Contains(actor.RoleId, StringComparer.Ordinal)
             || !actor.RestaurantIds.Contains(branch.ToString())))
         {
-            throw new OrderingException(403, "Only an assigned Cashier can manage checkout.");
+            throw new OrderingException(403, "Chỉ thu ngân được phân công mới có thể quản lý thanh toán.");
         }
     }
 }

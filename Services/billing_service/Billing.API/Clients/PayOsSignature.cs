@@ -19,7 +19,7 @@ public static class PayOsSignature
     {
         if (data.ValueKind != JsonValueKind.Object)
         {
-            throw new JsonException("PayOS signed data must be an object.");
+            throw new JsonException("Dữ liệu ký PayOS phải là một đối tượng.");
         }
 
         return Sign(Query(data), checksumKey);
@@ -49,7 +49,7 @@ public static class PayOsSignature
         }
         else if (!values.TryAdd(prefix, Scalar(value)))
         {
-            throw new JsonException("Ambiguous signed property path.");
+            throw new JsonException("Đường dẫn thuộc tính trong dữ liệu ký không rõ ràng.");
         }
     }
 
@@ -80,7 +80,7 @@ public static class PayOsSignature
     {
         if (string.IsNullOrWhiteSpace(key))
         {
-            throw new ArgumentException("A PayOS checksum key is required.", nameof(key));
+            throw new ArgumentException("Yêu cầu khóa kiểm tra toàn vẹn PayOS.", nameof(key));
         }
 
         return Convert.ToHexString(HMACSHA256.HashData(Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
@@ -94,11 +94,11 @@ public static class PayOsSignature
             JsonValueKind.String => value.GetString() is "null" or "undefined" ? string.Empty : value.GetString()!,
             JsonValueKind.Number => value.TryGetDecimal(out var number)
                 ? number.ToString("G29", CultureInfo.InvariantCulture)
-                : throw new JsonException("Unsupported numeric value in PayOS signed data."),
+                : throw new JsonException("Dữ liệu ký PayOS chứa giá trị số không được hỗ trợ."),
             JsonValueKind.True => "true",
             JsonValueKind.False => "false",
             JsonValueKind.Array => CanonicalArray(value),
-            _ => throw new JsonException("Unsupported value in PayOS signed data.")
+            _ => throw new JsonException("Dữ liệu ký PayOS chứa giá trị không được hỗ trợ.")
         };
     }
 
@@ -154,7 +154,7 @@ public static class PayOsSignature
             {
                 if (!names.Add(property.Name))
                 {
-                    throw new JsonException("Duplicate property in PayOS signed data.");
+                    throw new JsonException("Dữ liệu ký PayOS chứa thuộc tính trùng lặp.");
                 }
 
                 RequireUniqueProperties(property.Value);

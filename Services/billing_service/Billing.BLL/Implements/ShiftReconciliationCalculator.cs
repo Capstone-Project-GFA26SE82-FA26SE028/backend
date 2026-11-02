@@ -25,17 +25,17 @@ internal static class ShiftReconciliationCalculator
         result.ExpectedCash = checked(result.OpeningCash + result.MovementTotal);
         if (shift.Status != CashShiftStatuses.Active || shift.ClosedAt.HasValue)
         {
-            Add(result, "ShiftNotActive", "The shift is not active.");
+            Add(result, "ShiftNotActive", "Ca thu ngân không hoạt động.");
         }
         else if (!singleActiveShift)
         {
-            Add(result, "InconsistentActiveShift", "The register does not have exactly this one active shift.");
+            Add(result, "InconsistentActiveShift", "Quầy thu ngân không có duy nhất ca đang hoạt động này.");
         }
 
         if (shift.OpeningCash < 0 || result.ExpectedCash < 0 || result.ExpectedCash > 9999999999999999.99m
             || decimal.Round(result.ExpectedCash, 2) != result.ExpectedCash)
         {
-            Add(result, "InvalidExpectedCash", "Expected cash is negative or outside the report amount range.");
+            Add(result, "InvalidExpectedCash", "Số tiền mặt dự kiến âm hoặc nằm ngoài phạm vi số tiền của báo cáo.");
         }
 
         foreach (var payment in payments)
@@ -47,14 +47,14 @@ internal static class ShiftReconciliationCalculator
 
             if (!billPaymentCounts.TryGetValue(payment.BillId, out var paymentCount) || paymentCount != 1)
             {
-                Add(result, "DuplicateBillPayments", "This bill has multiple payment records, outside the supported single-payment workflow.", payment.PaymentId);
+                Add(result, "DuplicateBillPayments", "Hóa đơn này có nhiều bản ghi thanh toán, nằm ngoài quy trình thanh toán một lần được hỗ trợ.", payment.PaymentId);
             }
 
             if (PayOsPaymentRules.IsPayOs(payment))
             {
                 if (!PayOsPaymentRules.IsVerifiedPaid(payment) || payment.Bill.RestaurantId != shift.CashRegister.RestaurantId)
                 {
-                    Add(result, "UnresolvedPayOsPayment", "PayOS payment is not a verified full settlement or a confirmed zero-money terminal attempt.", payment.PaymentId);
+                    Add(result, "UnresolvedPayOsPayment", "Khoản thanh toán PayOS chưa được xác minh là đã thanh toán đủ hoặc đã kết thúc mà không phát sinh tiền.", payment.PaymentId);
                 }
 
                 continue;
@@ -62,18 +62,18 @@ internal static class ShiftReconciliationCalculator
 
             if (payment.Status != PaymentStatuses.Paid)
             {
-                Add(result, "UnresolvedPayment", "Payment is not Paid; resolve its outcome before closing.", payment.PaymentId);
+                Add(result, "UnresolvedPayment", "Khoản thanh toán chưa ở trạng thái đã thanh toán; vui lòng xử lý kết quả trước khi đóng ca.", payment.PaymentId);
             }
 
             if (payment.MethodCode != cashMethod || payment.VerificationSource != PaymentStatuses.CashierVerification
                 || payment.ProviderOrderCode is not null || payment.ProviderTransactionId is not null || payment.Refunds.Count != 0)
             {
-                Add(result, "UnsupportedPaymentFlow", "This payment is outside the supported Cashier cash-only workflow.", payment.PaymentId);
+                Add(result, "UnsupportedPaymentFlow", "Khoản thanh toán này nằm ngoài quy trình thu ngân thanh toán bằng tiền mặt được hỗ trợ.", payment.PaymentId);
             }
 
             if (payment.CashHandover is not null)
             {
-                Add(result, "UnsupportedCashHandover", "Waiter cash handover must be reviewed in its own supported workflow before closing.", payment.PaymentId);
+                Add(result, "UnsupportedCashHandover", "Phải kiểm tra bàn giao tiền mặt của nhân viên phục vụ theo quy trình riêng được hỗ trợ trước khi đóng ca.", payment.PaymentId);
             }
 
             if (payment.Amount <= 0 || decimal.Truncate(payment.Amount) != payment.Amount
@@ -85,7 +85,7 @@ internal static class ShiftReconciliationCalculator
                 || payment.Bill.TotalAmount != payment.Amount || payment.Bill.Currency != "VND"
                 || payment.Bill.RestaurantId != shift.CashRegister.RestaurantId)
             {
-                Add(result, "InconsistentCashPayment", "The payment, tender/change, cashier or paid bill does not reconcile.", payment.PaymentId);
+                Add(result, "InconsistentCashPayment", "Khoản thanh toán, tiền khách đưa hoặc tiền thừa, thu ngân hoặc hóa đơn đã thanh toán không khớp khi đối soát.", payment.PaymentId);
             }
 
             var linked = payment.CashMovements.ToArray();
@@ -93,7 +93,7 @@ internal static class ShiftReconciliationCalculator
                 || linked[0].Type != PaymentStatuses.SaleMovement || linked[0].SignedAmount != payment.Amount
                 || linked[0].PostedAt != payment.PaidAt)
             {
-                Add(result, "InconsistentSale", "Payment must have exactly one matching Sale in this shift.", payment.PaymentId);
+                Add(result, "InconsistentSale", "Khoản thanh toán phải có đúng một bút toán bán hàng tương ứng trong ca này.", payment.PaymentId);
             }
         }
 
@@ -101,7 +101,7 @@ internal static class ShiftReconciliationCalculator
         {
             foreach (var movement in group)
             {
-                Add(result, "DuplicateMovementKey", "Multiple ledger entries share one request key; review them before closing.", movement.PaymentId, movement.CashMovementId);
+                Add(result, "DuplicateMovementKey", "Nhiều bút toán dùng chung một khóa yêu cầu; vui lòng kiểm tra trước khi đóng ca.", movement.PaymentId, movement.CashMovementId);
             }
         }
 
@@ -112,7 +112,7 @@ internal static class ShiftReconciliationCalculator
             {
                 if (!movement.PaymentId.HasValue || !paymentIds.Contains(movement.PaymentId.Value) || movement.SignedAmount <= 0)
                 {
-                    Add(result, "UnmatchedSale", "Sale is not linked to a payment belonging to this shift.", movement.PaymentId, movement.CashMovementId);
+                    Add(result, "UnmatchedSale", "Bút toán bán hàng không liên kết với khoản thanh toán thuộc ca này.", movement.PaymentId, movement.CashMovementId);
                 }
             }
             else if (movement.Type is CashMovementTypes.CashIn or CashMovementTypes.CashOut)
@@ -120,12 +120,12 @@ internal static class ShiftReconciliationCalculator
                 if (movement.PaymentId.HasValue || string.IsNullOrWhiteSpace(movement.Reason)
                     || (movement.Type == CashMovementTypes.CashIn ? movement.SignedAmount <= 0 : movement.SignedAmount >= 0))
                 {
-                    Add(result, "InconsistentManualMovement", "Outside-bill movement has an invalid sign, reason or payment link.", movement.PaymentId, movement.CashMovementId);
+                    Add(result, "InconsistentManualMovement", "Giao dịch ngoài hóa đơn có dấu số tiền, lý do hoặc liên kết thanh toán không hợp lệ.", movement.PaymentId, movement.CashMovementId);
                 }
             }
             else
             {
-                Add(result, "UnsupportedMovement", "Review the unsupported ledger entry before closing.", movement.PaymentId, movement.CashMovementId);
+                Add(result, "UnsupportedMovement", "Vui lòng kiểm tra bút toán không được hỗ trợ trước khi đóng ca.", movement.PaymentId, movement.CashMovementId);
             }
         }
 

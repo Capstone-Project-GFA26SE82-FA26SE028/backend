@@ -22,7 +22,7 @@ public abstract class InventoryControllerBase : ControllerBase
         Response.Headers.CacheControl = "no-store";
         try
         {
-            return StatusCode(status, new ResponseDTO("Success.", status, true, await action()));
+            return StatusCode(status, new ResponseDTO("Thành công.", status, true, await action()));
         }
         catch (RpcException exception) when (!ct.IsCancellationRequested)
         {
@@ -37,7 +37,7 @@ public abstract class InventoryControllerBase : ControllerBase
                 Grpc.Core.StatusCode.DeadlineExceeded => 504,
                 _ => 502
             };
-            return StatusCode(code, new ResponseDTO(code >= 500 ? "Inventory or a required service is unavailable." : exception.Status.Detail, code));
+            return StatusCode(code, new ResponseDTO(code >= 500 ? "Hệ thống hiện đang bận hoặc tạm thời không khả dụng, vui lòng thử lại sau." : exception.Status.Detail, code));
         }
     }
 }

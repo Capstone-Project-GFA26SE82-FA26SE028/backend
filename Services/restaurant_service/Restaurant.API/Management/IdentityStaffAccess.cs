@@ -43,7 +43,7 @@ public sealed class IdentityStaffAccess(UserGrpc.UserGrpcClient users, IManageme
         var authorization = accessor.HttpContext?.Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
-            throw new ManagementException(401, "A valid employee session is required.");
+            throw new ManagementException(401, "Yêu cầu phiên làm việc của nhân viên hợp lệ.");
         }
 
         var headers = new Metadata
@@ -58,12 +58,12 @@ public sealed class IdentityStaffAccess(UserGrpc.UserGrpcClient users, IManageme
         if (!reply.IsSuccess || reply.Result is null)
         {
             var status = reply.StatusCode is 400 or 401 or 403 or 404 ? reply.StatusCode : 503;
-            throw new ManagementException(status, "Identity could not verify the employee account.");
+            throw new ManagementException(status, "Hệ thống xác thực không thể xác minh tài khoản nhân viên.");
         }
 
         if (!reply.Result.IsActive || !Guid.TryParse(reply.Result.UserId, out var userId) || userId == Guid.Empty)
         {
-            throw new ManagementException(403, "An active employee account is required.");
+            throw new ManagementException(403, "Yêu cầu tài khoản nhân viên đang hoạt động.");
         }
 
         return new StaffActorDto

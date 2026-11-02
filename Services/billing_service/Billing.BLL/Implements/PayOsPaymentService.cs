@@ -29,35 +29,35 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
         if (billId == Guid.Empty || request is null || request.CashShiftId == Guid.Empty || request.CheckoutId == Guid.Empty
             || !Guid.TryParse(key, out var requestId) || requestId == Guid.Empty)
         {
-            throw new BillingException(400, "Provide bill, checkout, shift IDs and a UUID Idempotency-Key.");
+            throw new BillingException(400, "Vui lòng cung cấp mã hóa đơn, checkout, ca làm việc và Idempotency-Key UUID.");
         }
 
         key = PayOsStates.KeyPrefix + requestId.ToString("N");
-        var initial = await bills.GetDetailsAsync(billId, ct) ?? throw new BillingException(404, "Bill not found.");
+        var initial = await bills.GetDetailsAsync(billId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
         RequireBranch(actor, initial.RestaurantId);
         var sessionId = Session(initial);
         var prepared = await Controlled(async () => await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             if (!await payments.LockIdempotencyKeyAsync(key, ct) || !await bills.LockSessionAsync(sessionId, ct))
             {
-                throw new BillingException(409, "Payment preparation is busy. Retry the same key.");
+                throw new BillingException(409, "Chuẩn bị thanh toán đang bận. Vui lòng thử lại cùng key.");
             }
 
-            var info = await shifts.GetDetailsAsync(request.CashShiftId, ct) ?? throw new BillingException(404, "Cash shift not found.");
-            var register = await registers.LockByIdAsync(info.CashRegisterId, ct) ?? throw new BillingException(404, "Cash register not found.");
-            var shift = await shifts.LockByIdAsync(request.CashShiftId, ct) ?? throw new BillingException(404, "Cash shift not found.");
+            var info = await shifts.GetDetailsAsync(request.CashShiftId, ct) ?? throw new BillingException(404, "Không tìm thấy ca thu ngân.");
+            var register = await registers.LockByIdAsync(info.CashRegisterId, ct) ?? throw new BillingException(404, "Không tìm thấy quầy thu ngân.");
+            var shift = await shifts.LockByIdAsync(request.CashShiftId, ct) ?? throw new BillingException(404, "Không tìm thấy ca thu ngân.");
             var verified = await access.GetCurrentScopeAsync(initial.RestaurantId, ct);
             RequireRole(verified, true);
             RequireBranch(verified, initial.RestaurantId);
             if (verified.UserId != actor.UserId || shift.CashierUserRef != verified.UserId || register.RestaurantId != initial.RestaurantId)
             {
-                throw new BillingException(403, "Use your own shift in the bill's assigned restaurant.");
+                throw new BillingException(403, "Vui lòng dùng ca làm việc của chính bạn tại nhà hàng của hóa đơn.");
             }
 
             var matches = await payments.GetByPayOsRequestKeyAsync(key, ct);
             if (matches.Count > 1)
             {
-                throw new BillingException(409, "Payment request records are inconsistent and require review.");
+                throw new BillingException(409, "Bản ghi yêu cầu thanh toán không nhất quán và cần được kiểm tra lại.");
             }
 
             var previous = matches.SingleOrDefault();
@@ -68,7 +68,7 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
                     || previous.BillId != billId || previous.CashShiftId != request.CashShiftId || !PayOsPaymentRules.IsPayOs(previous)
                     || checkout?.BillId != billId || checkout.TableSessionRef != sessionId)
                 {
-                    throw new BillingException(409, "Idempotency-Key was used for a different payment request.");
+                    throw new BillingException(409, "Idempotency-Key đã được sử dụng cho một yêu cầu thanh toán khác.");
                 }
 
                 return (previous.PaymentId, false);
@@ -76,7 +76,7 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
 
             if (!settings.Value.Enabled)
             {
-                throw new BillingException(409, "PayOS creation is disabled. Configure and enable PayOs on the server.");
+                throw new BillingException(409, "Cổng PayOS đang bị tắt. Vui lòng cấu hình và bật PayOS trên máy chủ.");
             }
 
             provider.EnsureCanCreate();
@@ -87,27 +87,27 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
                 || checkout.BillId != billId || checkout.TableSessionRef != sessionId || checkout.ReleasedAt.HasValue
                 || active?.CheckoutId != checkout.CheckoutId)
             {
-                throw new BillingException(409, "A Ready checkout and your single active cash shift are required.");
+                throw new BillingException(409, "Yêu cầu trạng thái checkout Ready và ca làm việc duy nhất đang mở của bạn.");
             }
 
-            var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Bill not found.");
+            var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
             if (bill.Status != "Unpaid" || bill.PaidAt.HasValue || bill.Payments.Any(PayOsPaymentRules.IsBlocking)
                 || bill.Currency != "VND" || bill.TotalAmount <= 0 || bill.TotalAmount > 9999999999999999.99m
                 || decimal.Truncate(bill.TotalAmount) != bill.TotalAmount)
             {
-                throw new BillingException(409, "The bill must be unpaid with a positive whole-VND total and no unresolved or settled payment.");
+                throw new BillingException(409, "Hóa đơn phải chưa thanh toán, tổng tiền nguyên dương VND và chưa có giao dịch đang xử lý.");
             }
 
             var method = await methods.LockByCodeAsync(PayOsStates.Method, ct);
             if (method is null || !method.IsEnabled)
             {
-                throw new BillingException(409, "BankTransfer is missing or disabled.");
+                throw new BillingException(409, "Phương thức chuyển khoản (BankTransfer) chưa được cấu hình hoặc đã bị tắt.");
             }
 
             var current = await billService.GetById(billId, ct);
             if (current.SourceStatus != "Current" || Hash(bill) != checkout.SourceHash)
             {
-                throw new BillingException(409, "The bill and frozen Ordering snapshot do not match. No PayOS request was created.");
+                throw new BillingException(409, "Hóa đơn không khớp với bản chụp đã khóa của gọi món. Không thể tạo yêu cầu PayOS.");
             }
 
             await ordering.BindAsync(sessionId, checkout.CheckoutId, billId, checkout.SourceHash, ct);
@@ -122,7 +122,7 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
             }
             catch (ArgumentOutOfRangeException)
             {
-                throw new BillingException(409, "Configure a supported PayOS link validity period.");
+                throw new BillingException(409, "Cần cấu hình thời hạn hiệu lực liên kết PayOS hợp lệ.");
             }
 
             var payment = new Payment
@@ -140,7 +140,7 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
             await payments.AddAsync(payment);
             return (payment.PaymentId, true);
         }, ct));
-        var stored = await payments.GetDetailsAsync(prepared.Item1, ct) ?? throw new BillingException(404, "Payment not found.");
+        var stored = await payments.GetDetailsAsync(prepared.Item1, ct) ?? throw new BillingException(404, "Không tìm thấy khoản thanh toán.");
         if (!prepared.Item2 && (stored.Status is PaymentStatuses.Paid or PayOsStates.ReviewRequired || PayOsPaymentRules.IsVerifiedZero(stored)))
         {
             return (Map(stored), false);
@@ -170,17 +170,17 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
         {
             if (!await payments.LockProviderWorkAsync(id, ct))
             {
-                throw new BillingException(409, "PayOS is being reconciled. Retry cancellation for the same payment.");
+                throw new BillingException(409, "PayOS đang được đối soát. Vui lòng thử lại việc hủy cho cùng giao dịch.");
             }
 
-            var initial = await payments.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Payment not found.");
-            var bill = await bills.GetDetailsAsync(initial.BillId, ct) ?? throw new BillingException(404, "Bill not found.");
+            var initial = await payments.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy khoản thanh toán.");
+            var bill = await bills.GetDetailsAsync(initial.BillId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
             await LockExisting(initial, Session(bill), ct);
             await Authorized(id, true, ct);
-            var payment = await payments.GetForProviderUpdateAsync(id, ct) ?? throw new BillingException(404, "Payment not found.");
+            var payment = await payments.GetForProviderUpdateAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy khoản thanh toán.");
             if (payment.Status == PaymentStatuses.Paid || payment.PaidAt.HasValue || payment.Status == PayOsStates.ReviewRequired)
             {
-                throw new BillingException(409, "A settled or review-required payment cannot be cancelled through this workflow.");
+                throw new BillingException(409, "Giao dịch đã thanh toán hoặc cần kiểm tra không thể hủy qua quy trình này.");
             }
 
             if (!PayOsPaymentRules.IsVerifiedZero(payment))
@@ -199,19 +199,19 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
         RequireRole(actor, write);
         if (id == Guid.Empty)
         {
-            throw new BillingException(400, "A valid payment ID is required.");
+            throw new BillingException(400, "Yêu cầu ID thanh toán hợp lệ.");
         }
 
-        var payment = await payments.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Payment not found.");
+        var payment = await payments.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy khoản thanh toán.");
         RequireBranch(actor, payment.Bill.RestaurantId);
         if (!PayOsPaymentRules.IsPayOs(payment))
         {
-            throw new BillingException(404, "PayOS payment not found.");
+            throw new BillingException(404, "Không tìm thấy giao dịch PayOS.");
         }
 
         if (write && actor.UserId != payment.CashShift.CashierUserRef)
         {
-            throw new BillingException(403, "Only the owning Cashier may manage this PayOS payment.");
+            throw new BillingException(403, "Chỉ thu ngân sở hữu mới có thể quản lý giao dịch PayOS này.");
         }
 
         return payment;
@@ -221,14 +221,14 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
     {
         if (actor.UserId == Guid.Empty)
         {
-            throw new BillingException(401, "A valid employee session is required.");
+            throw new BillingException(401, "Yêu cầu phiên đăng nhập nhân viên hợp lệ.");
         }
 
         var cashier = roles.Value.CashierRoleIds.Contains(actor.RoleId, StringComparer.Ordinal);
         var manager = roles.Value.ManagerRoleIds.Contains(actor.RoleId, StringComparer.Ordinal);
         if (write ? actor.IsAdministrator || !cashier : !actor.IsAdministrator && !cashier && !manager)
         {
-            throw new BillingException(403, write ? "Only a Cashier can manage PayOS payment requests." : "Billing read permission is required.");
+            throw new BillingException(403, write ? "Chỉ thu ngân mới có quyền quản lý yêu cầu thanh toán PayOS." : "Yêu cầu quyền xem thông tin thanh toán.");
         }
     }
 
@@ -236,7 +236,7 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
     {
         if (!actor.IsAdministrator && !actor.RestaurantIds.Contains(restaurantId))
         {
-            throw new BillingException(403, "An active restaurant assignment is required.");
+            throw new BillingException(403, "Yêu cầu phân công nhà hàng đang hoạt động.");
         }
     }
 
@@ -244,7 +244,7 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
     {
         if (!await bills.LockSessionAsync(sessionId, ct))
         {
-            throw new BillingException(409, "Checkout is busy. Retry the same payment.");
+            throw new BillingException(409, "Checkout đang bận. Vui lòng thử lại cùng thanh toán.");
         }
 
         await registers.LockByIdAsync(value.CashShift.CashRegisterId, ct);
@@ -257,7 +257,7 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
         var ids = value.BillLines.Select(line => line.TableSessionRef).Distinct().ToArray();
         if (ids.Length != 1 || ids[0] == Guid.Empty)
         {
-            throw new BillingException(409, "Payment requires a verifiable single-session bill.");
+            throw new BillingException(409, "Thanh toán yêu cầu hóa đơn của một phiên bàn có thể xác minh.");
         }
 
         return ids[0];
@@ -276,7 +276,7 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
         }
         catch (JsonException)
         {
-            throw new BillingException(409, "Stored bill snapshot cannot be verified.");
+            throw new BillingException(409, "Bản chụp hóa đơn đã lưu không thể xác minh.");
         }
     }
 
@@ -316,15 +316,15 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new BillingException(409, "Payment changed. Retry the same request, not a new payment.");
+            throw new BillingException(409, "Thanh toán đã thay đổi. Vui lòng thử lại cùng yêu cầu thay vì tạo mới.");
         }
         catch (DbUpdateException error) when (error.InnerException is SqlException sql && sql.Number is 1205 or 2601 or 2627)
         {
-            throw new BillingException(409, "Payment is busy. Retry the same request.");
+            throw new BillingException(409, "Thanh toán đang bận. Vui lòng thử lại cùng yêu cầu.");
         }
         catch (SqlException error) when (error.Number is 1205 or 1222)
         {
-            throw new BillingException(409, "Payment is busy. Retry the same request.");
+            throw new BillingException(409, "Thanh toán đang bận. Vui lòng thử lại cùng yêu cầu.");
         }
     }
 }

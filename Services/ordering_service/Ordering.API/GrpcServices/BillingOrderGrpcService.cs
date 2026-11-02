@@ -11,7 +11,7 @@ public sealed class BillingOrderGrpcService(IBillingOrderService service) : Bill
     {
         if (!Guid.TryParse(request.TableSessionId, out var id) || id == Guid.Empty)
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "A valid table session ID is required."));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã phiên bàn không hợp lệ hoặc bị trống."));
         }
 
         var source = await service.GetBySession(id, context.CancellationToken);

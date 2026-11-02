@@ -19,16 +19,16 @@ public sealed class GuestAccessService(ITableSessionRepository sessions, IGuestA
         if ((input.Length != 3 && (input.Length != 10 || input[0] != '0'))
             || input.Any(c => c < '0' || c > '9'))
         {
-            throw new ManagementException(400, "Enter a 3-digit code or a 10-digit phone number starting with 0.");
+            throw new ManagementException(400, "Nhập mã gồm 3 chữ số hoặc số điện thoại gồm 10 chữ số bắt đầu bằng 0.");
         }
 
         return transaction.ExecuteAsync(async () =>
         {
             var session = await sessions.LockAsync(sessionId, ct)
-                ?? throw new ManagementException(404, "Table session not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy phiên bàn.");
             if (session.ClosedAt != null || session.Status != "Open")
             {
-                throw new ManagementException(409, "The table session is closed or no longer accepts guests.");
+                throw new ManagementException(409, "Phiên bàn đã đóng hoặc không còn nhận khách.");
             }
 
             var code = input[^3..];
@@ -43,14 +43,14 @@ public sealed class GuestAccessService(ITableSessionRepository sessions, IGuestA
             {
                 if (input.Length != 3)
                 {
-                    throw new ManagementException(400, "The session already has a code. Enter exactly 3 digits to join.");
+                    throw new ManagementException(400, "Phiên bàn đã có mã. Nhập đúng 3 chữ số để tham gia.");
                 }
 
                 var parts = session.JoinCodeHash.Split(':');
                 if (!CryptographicOperations.FixedTimeEquals(
                     HashCode(code, Convert.FromBase64String(parts[0])), Convert.FromBase64String(parts[1])))
                 {
-                    throw new ManagementException(403, "Incorrect table join code.");
+                    throw new ManagementException(403, "Mã tham gia bàn không chính xác.");
                 }
             }
 
@@ -79,7 +79,7 @@ public sealed class GuestAccessService(ITableSessionRepository sessions, IGuestA
     {
         if (token.Length != 64 || !token.All(Uri.IsHexDigit))
         {
-            throw new ManagementException(401, "Enter the code to join the table.");
+            throw new ManagementException(401, "Nhập mã để tham gia bàn.");
         }
 
         var access = await guests.FindByTokenHashAsync(HashToken(token), ct);
@@ -87,7 +87,7 @@ public sealed class GuestAccessService(ITableSessionRepository sessions, IGuestA
             || access.ExpiredAt <= DateTime.UtcNow || access.TableSession.ClosedAt != null
             || access.TableSession.Status != "Open")
         {
-            throw new ManagementException(401, "Access to the table session is no longer valid.");
+            throw new ManagementException(401, "Quyền truy cập phiên bàn không còn hợp lệ.");
         }
 
         return new GuestAccessDto

@@ -25,7 +25,7 @@ public sealed class OrderValidationController(
             if (body.Items is null || body.Items.Any(item => item is null
                 || item.Options is null || item.Options.Any(option => option is null)))
             {
-                return BadRequest(new ResponseDTO("Items and options cannot be null.", 400));
+                return BadRequest(new ResponseDTO("Danh sách món và tùy chọn không được để trống.", 400));
             }
 
             var request = new ValidateOrderItemsRequest

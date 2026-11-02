@@ -22,7 +22,7 @@ public sealed class PaymentWebhookController(PaymentWebhookGrpc.PaymentWebhookGr
         var payload = body.GetRawText();
         if (Encoding.UTF8.GetByteCount(payload) > 65536)
         {
-            return BadRequest(new ResponseDTO("A webhook payload up to 64 KiB is required.", 400));
+            return BadRequest(new ResponseDTO("Dữ liệu webhook tối đa 64 KiB.", 400));
         }
 
         try
@@ -31,7 +31,7 @@ public sealed class PaymentWebhookController(PaymentWebhookGrpc.PaymentWebhookGr
             {
                 Payload = payload
             }, deadline: DateTime.UtcNow.AddSeconds(settings.Value.TimeoutSeconds), cancellationToken: ct);
-            return Ok(new ResponseDTO("Webhook received.", 200, true, new
+            return Ok(new ResponseDTO("Đã nhận webhook thành công.", 200, true, new
             {
                 received = result.Received
             }));
@@ -48,8 +48,8 @@ public sealed class PaymentWebhookController(PaymentWebhookGrpc.PaymentWebhookGr
                 _ => 502
             };
             return StatusCode(status, new ResponseDTO(status >= 500
-                ? "Webhook processing is unavailable; retry delivery."
-                : "Webhook could not be verified or accepted.", status));
+                ? "Hệ thống xử lý webhook hiện không khả dụng, vui lòng thử lại sau."
+                : "Webhook không thể xác minh hoặc không được chấp nhận.", status));
         }
     }
 }

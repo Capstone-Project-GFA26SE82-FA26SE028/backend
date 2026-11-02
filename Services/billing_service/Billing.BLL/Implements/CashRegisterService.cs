@@ -19,13 +19,13 @@ public sealed class CashRegisterService(ICashRegisterRepository registers, IUnit
         RequireRole(actor, allowCashier: false);
         if (request is null || request.RestaurantId == Guid.Empty)
         {
-            throw new BillingException(400, "A valid restaurant ID is required.");
+            throw new BillingException(400, "Yêu cầu ID nhà hàng hợp lệ.");
         }
 
         var code = request.Code?.Trim() ?? string.Empty;
         if (code.Length is < 1 or > 50 || code.Any(character => character < ' ' || character > '~'))
         {
-            throw new BillingException(400, "The register code must contain 1 to 50 printable ASCII characters.");
+            throw new BillingException(400, "Mã quầy thu ngân phải gồm từ 1 đến 50 ký tự ASCII có thể hiển thị.");
         }
 
         RequireBranch(actor, request.RestaurantId);
@@ -37,12 +37,12 @@ public sealed class CashRegisterService(ICashRegisterRepository registers, IUnit
         {
             if (!await registers.LockRestaurantAsync(request.RestaurantId, cancellationToken))
             {
-                throw new BillingException(409, "Cash register creation is busy for this restaurant. Retry the request.");
+                throw new BillingException(409, "Thao tác tạo quầy thu ngân tại nhà hàng này đang bận. Vui lòng thử lại.");
             }
 
             if (await registers.CodeExistsAsync(request.RestaurantId, code, cancellationToken))
             {
-                throw new BillingException(409, "The register code already exists in this restaurant.");
+                throw new BillingException(409, "Mã quầy thu ngân đã tồn tại trong nhà hàng này.");
             }
 
             var register = new CashRegister
@@ -67,7 +67,7 @@ public sealed class CashRegisterService(ICashRegisterRepository registers, IUnit
         }.IsValid() || query.RestaurantId == Guid.Empty || query.Search?.Length > 50
             || query.Search?.Any(char.IsControl) == true)
         {
-            throw new BillingException(400, "Provide valid pagination, a valid optional restaurant ID, and a search of at most 50 characters.");
+            throw new BillingException(400, "Vui lòng cung cấp thông tin phân trang hợp lệ, ID nhà hàng hợp lệ nếu có và từ khóa tìm kiếm tối đa 50 ký tự.");
         }
 
         if (query.RestaurantId.HasValue)
@@ -85,11 +85,11 @@ public sealed class CashRegisterService(ICashRegisterRepository registers, IUnit
         RequireRole(actor, allowCashier: true);
         if (id == Guid.Empty)
         {
-            throw new BillingException(400, "A valid cash register ID is required.");
+            throw new BillingException(400, "Yêu cầu ID quầy thu ngân hợp lệ.");
         }
 
         var register = await registers.GetByIdAsync(id, cancellationToken)
-            ?? throw new BillingException(404, "Cash register not found.");
+            ?? throw new BillingException(404, "Không tìm thấy quầy thu ngân.");
         RequireBranch(actor, register.RestaurantId);
         return Map(register);
     }
@@ -98,7 +98,7 @@ public sealed class CashRegisterService(ICashRegisterRepository registers, IUnit
     {
         if (actor.UserId == Guid.Empty)
         {
-            throw new BillingException(401, "A valid employee session is required.");
+            throw new BillingException(401, "Yêu cầu phiên đăng nhập nhân viên hợp lệ.");
         }
 
         if (actor.IsAdministrator)
@@ -110,12 +110,12 @@ public sealed class CashRegisterService(ICashRegisterRepository registers, IUnit
         var cashier = allowCashier && settings.Value.CashierRoleIds.Contains(actor.RoleId, StringComparer.Ordinal);
         if (!manager && !cashier)
         {
-            throw new BillingException(403, "Your role cannot perform this cash register operation.");
+            throw new BillingException(403, "Vai trò của bạn không có quyền thực hiện thao tác này tại quầy thu ngân.");
         }
 
         if (actor.RestaurantIds.Count == 0)
         {
-            throw new BillingException(403, "An active restaurant assignment is required.");
+            throw new BillingException(403, "Yêu cầu phân công nhà hàng đang hoạt động.");
         }
     }
 
@@ -123,7 +123,7 @@ public sealed class CashRegisterService(ICashRegisterRepository registers, IUnit
     {
         if (!actor.IsAdministrator && !actor.RestaurantIds.Contains(restaurantId))
         {
-            throw new BillingException(403, "You are not assigned to this restaurant.");
+            throw new BillingException(403, "Bạn chưa được phân công tại nhà hàng này.");
         }
     }
 

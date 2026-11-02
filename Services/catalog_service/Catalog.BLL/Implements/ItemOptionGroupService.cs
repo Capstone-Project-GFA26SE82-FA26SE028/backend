@@ -23,11 +23,11 @@ public sealed class ItemOptionGroupService(
 
         if (await items.GetByIdAsync(itemId, cancellationToken) is null)
         {
-            return new ResponseDTO("Item not found.", 404);
+            return new ResponseDTO("Không tìm thấy món ăn.", 404);
         }
 
         var entities = await links.GetAllAsync(itemId, cancellationToken);
-        return new ResponseDTO("Item option groups retrieved successfully.", 200, true, entities.Select(Map).ToArray());
+        return new ResponseDTO("Lấy danh sách nhóm tùy chọn của món ăn thành công.", 200, true, entities.Select(Map).ToArray());
     }
 
     public async Task<ResponseDTO> GetById(Guid itemId, Guid groupId, CancellationToken cancellationToken)
@@ -39,7 +39,7 @@ public sealed class ItemOptionGroupService(
         }
 
         var entity = await links.GetByIdAsync(itemId, groupId, cancellationToken);
-        return entity is null ? NotFound() : new ResponseDTO("Item option group retrieved successfully.", 200, true, Map(entity));
+        return entity is null ? NotFound() : new ResponseDTO("Lấy thông tin nhóm tùy chọn của món ăn thành công.", 200, true, Map(entity));
     }
 
     public async Task<ResponseDTO> Create(Guid itemId, CreateItemOptionGroupDTO request, CancellationToken cancellationToken)
@@ -59,18 +59,18 @@ public sealed class ItemOptionGroupService(
         {
             if (await items.GetByIdAsync(itemId, cancellationToken) is null)
             {
-                return new ResponseDTO("Item not found.", 404);
+                return new ResponseDTO("Không tìm thấy món ăn.", 404);
             }
 
             var group = await groups.GetByIdAsync(request.OptionGroupId, cancellationToken);
             if (group is null)
             {
-                return new ResponseDTO("Option group not found.", 404);
+                return new ResponseDTO("Không tìm thấy nhóm tùy chọn.", 404);
             }
 
             if (await links.GetByIdAsync(itemId, request.OptionGroupId, cancellationToken) is not null)
             {
-                return new ResponseDTO("The option group is already assigned to this item.", 409);
+                return new ResponseDTO("Nhóm tùy chọn đã được gán cho món ăn này.", 409);
             }
 
             var entity = new ItemOptionGroup
@@ -82,7 +82,7 @@ public sealed class ItemOptionGroupService(
                 MaxSelection = request.MaxSelection!.Value
             };
             links.Create(entity);
-            return new ResponseDTO("Item option group created successfully.", 201, true, Map(entity));
+            return new ResponseDTO("Gán nhóm tùy chọn cho món ăn thành công.", 201, true, Map(entity));
         }, cancellationToken);
     }
 
@@ -110,7 +110,7 @@ public sealed class ItemOptionGroupService(
 
             entity.MinSelection = request.MinSelection!.Value;
             entity.MaxSelection = request.MaxSelection!.Value;
-            return new ResponseDTO("Item option group updated successfully.", 200, true, Map(entity));
+            return new ResponseDTO("Cập nhật nhóm tùy chọn của món ăn thành công.", 200, true, Map(entity));
         }, cancellationToken);
     }
 
@@ -131,7 +131,7 @@ public sealed class ItemOptionGroupService(
             }
 
             links.Delete(entity);
-            return new ResponseDTO("Item option group deleted successfully.", 200, true);
+            return new ResponseDTO("Hủy gán nhóm tùy chọn khỏi món ăn thành công.", 200, true);
         }, cancellationToken);
     }
 
@@ -142,17 +142,17 @@ public sealed class ItemOptionGroupService(
 
     private static ResponseDTO InvalidLimits()
     {
-        return new ResponseDTO("MinSelection and MaxSelection are required; 0 <= MinSelection <= MaxSelection and MaxSelection >= 1.", 400);
+        return new ResponseDTO("MinSelection và MaxSelection là bắt buộc; 0 <= MinSelection <= MaxSelection và MaxSelection >= 1.", 400);
     }
 
     private static ResponseDTO InvalidId()
     {
-        return new ResponseDTO("Valid item and option group IDs are required.", 400);
+        return new ResponseDTO("Yêu cầu mã món ăn và mã nhóm tùy chọn hợp lệ.", 400);
     }
 
     private static ResponseDTO NotFound()
     {
-        return new ResponseDTO("The option group is not assigned to this item.", 404);
+        return new ResponseDTO("Nhóm tùy chọn chưa được gán cho món ăn này.", 404);
     }
 
     private static ItemOptionGroupDTO Map(ItemOptionGroup entity)

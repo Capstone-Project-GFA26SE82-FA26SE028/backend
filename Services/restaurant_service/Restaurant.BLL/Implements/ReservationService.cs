@@ -24,18 +24,18 @@ public sealed class ReservationService(
     {
         if (id == Guid.Empty)
         {
-            throw new ManagementException(400, "A valid reservation ID is required.");
+            throw new ManagementException(400, "Mã đặt bàn không hợp lệ hoặc bị trống.");
         }
 
         ReservationRules.Configuration(settings.Value);
         var result = await transaction.ExecuteAsync(async () =>
         {
             var reservation = await reservations.LockAsync(id, ct)
-                ?? throw new ManagementException(404, "Reservation not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy thông tin đặt bàn.");
             var actorId = await access.RequireMutationAsync(reservation.RestaurantId, ct);
             if (reservation.Status != ReservationStatuses.Pending)
             {
-                throw new ManagementException(409, "Only a Pending reservation can be rejected.");
+                throw new ManagementException(409, "Chỉ có thể từ chối đặt bàn đang ở trạng thái Chờ xử lý (Pending).");
             }
 
             if (clock.GetUtcNow().UtcDateTime > reservation.StartAt.AddMinutes(-settings.Value.MinimumAdvanceMinutes))
@@ -48,7 +48,7 @@ public sealed class ReservationService(
             reservation.ApprovedByRef = actorId;
             return Map(reservation);
         }, ct);
-        return result ?? throw new ManagementException(409, "The reservation approval deadline has passed. The request is Expired.");
+        return result ?? throw new ManagementException(409, "Đã quá hạn duyệt đặt bàn. Yêu cầu đã hết hạn (Expired).");
     }
 
     public async Task<ReservationDto> Create(CreateReservationDto request, CancellationToken ct)
@@ -58,7 +58,7 @@ public sealed class ReservationService(
             || request.ContactName.Any(char.IsControl) || string.IsNullOrWhiteSpace(request.Phone)
             || request.Phone.Trim().Length > 20 || !ValidPhone(request.Phone) || request.PartySize <= 0)
         {
-            throw new ManagementException(400, "Provide a restaurant, an area, a contact name of at most 255 characters, a phone of at most 20 characters, and a positive party size.");
+            throw new ManagementException(400, "Vui lòng cung cấp nhà hàng, khu vực, tên người liên hệ tối đa 255 ký tự, số điện thoại tối đa 20 ký tự và số lượng khách hợp lệ.");
         }
 
         var now = reservations.NormalizeTimestamp(clock.GetUtcNow().UtcDateTime);
@@ -66,17 +66,17 @@ public sealed class ReservationService(
         return await transaction.ExecuteAsync(async () =>
         {
             var restaurant = await restaurants.GetByIdAsync(request.RestaurantId, ct)
-                ?? throw new ManagementException(404, "Restaurant not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy nhà hàng.");
             var area = await areas.GetByIdAsync(request.RequestedAreaId, ct)
-                ?? throw new ManagementException(404, "Area not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
             if (area.RestaurantId != request.RestaurantId || !area.IsActive)
             {
-                throw new ManagementException(409, "The requested area is inactive or does not belong to the selected restaurant.");
+                throw new ManagementException(409, "Khu vực yêu cầu đang ngừng hoạt động hoặc không thuộc nhà hàng đã chọn.");
             }
 
             if (!WithinOpeningHours(restaurant, window))
             {
-                throw new ManagementException(409, "The requested stay is outside the restaurant opening hours.");
+                throw new ManagementException(409, "Khoảng thời gian yêu cầu nằm ngoài giờ mở cửa của nhà hàng.");
             }
 
             var reservation = new Reservation
@@ -103,19 +103,19 @@ public sealed class ReservationService(
             || request.TableIds.Any(tableId => tableId == Guid.Empty)
             || request.TableIds.Distinct().Count() != request.TableIds.Length)
         {
-            throw new ManagementException(400, "Provide a valid reservation ID and distinct table IDs.");
+            throw new ManagementException(400, "Vui lòng cung cấp mã đặt bàn hợp lệ và danh sách mã bàn không trùng lặp.");
         }
 
         ReservationRules.Configuration(settings.Value);
         var result = await transaction.ExecuteAsync(async () =>
         {
             var reservation = await reservations.LockAsync(id, ct)
-                ?? throw new ManagementException(404, "Reservation not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy thông tin đặt bàn.");
             var actorId = await access.RequireMutationAsync(reservation.RestaurantId, ct);
             if (reservation.Status != ReservationStatuses.Pending || reservation.TableSession is not null
                 || reservation.Tables.Count != 0)
             {
-                throw new ManagementException(409, "Only an unprocessed Pending reservation can be confirmed.");
+                throw new ManagementException(409, "Chỉ có thể xác nhận đặt bàn đang ở trạng thái Chờ xử lý (Pending).");
             }
 
             var now = clock.GetUtcNow().UtcDateTime;
@@ -127,7 +127,7 @@ public sealed class ReservationService(
 
             if (reservation.EndAt <= reservation.StartAt)
             {
-                throw new ManagementException(409, "The reservation has an invalid planned interval.");
+                throw new ManagementException(409, "Thời gian đặt bàn dự kiến không hợp lệ.");
             }
 
             var window = StoredWindow(reservation);
@@ -151,21 +151,21 @@ public sealed class ReservationService(
             reservation.HoldUntil = window.HoldUntil;
             return Map(reservation);
         }, ct);
-        return result ?? throw new ManagementException(409, "The reservation approval deadline has passed. The request is Expired.");
+        return result ?? throw new ManagementException(409, "Đã quá hạn duyệt đặt bàn. Yêu cầu đã hết hạn (Expired).");
     }
 
     public async Task<ReservationDto> CheckIn(Guid id, CancellationToken ct)
     {
         if (id == Guid.Empty)
         {
-            throw new ManagementException(400, "A valid reservation ID is required.");
+            throw new ManagementException(400, "Mã đặt bàn không hợp lệ hoặc bị trống.");
         }
 
         ReservationRules.Configuration(settings.Value);
         var result = await transaction.ExecuteAsync(async () =>
         {
             var reservation = await reservations.LockAsync(id, ct)
-                ?? throw new ManagementException(404, "Reservation not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy thông tin đặt bàn.");
             await access.RequireMutationAsync(reservation.RestaurantId, ct);
             RequireConfirmed(reservation);
             var window = StoredWindow(reservation);
@@ -178,23 +178,23 @@ public sealed class ReservationService(
 
             if (now < window.HoldStartsAt)
             {
-                throw new ManagementException(409, "Check-in opens 30 minutes before the reservation start time.");
+                throw new ManagementException(409, "Chỉ có thể nhận bàn trước giờ bắt đầu tối đa 30 phút.");
             }
 
             if (reservation.Tables.Count == 0)
             {
-                throw new ManagementException(409, "The reservation has no assigned tables.");
+                throw new ManagementException(409, "Đặt bàn chưa được chỉ định bàn nào.");
             }
 
             long capacity = 0;
             foreach (var tableId in reservation.Tables.Select(table => table.TableId).Order())
             {
                 var table = await tables.LockForReservationAsync(tableId, ct)
-                    ?? throw new ManagementException(409, "An assigned table no longer exists.");
+                    ?? throw new ManagementException(409, "Bàn được chỉ định không còn tồn tại.");
                 if (!table.IsActive || !table.Area.IsActive || table.Capacity <= 0
                     || table.AreaId != reservation.RequestedAreaId || table.Area.RestaurantId != reservation.RestaurantId)
                 {
-                    throw new ManagementException(409, "Assigned tables no longer match the reservation area, restaurant, or active status.");
+                    throw new ManagementException(409, "Bàn được chỉ định không còn phù hợp với khu vực, nhà hàng hoặc trạng thái hoạt động.");
                 }
 
                 capacity += table.Capacity;
@@ -202,7 +202,7 @@ public sealed class ReservationService(
 
             if (capacity < reservation.PartySize)
             {
-                throw new ManagementException(409, "Assigned tables cannot accommodate the reservation party size.");
+                throw new ManagementException(409, "Các bàn được chỉ định không đủ sức chứa cho số lượng khách.");
             }
 
             if (clock.GetUtcNow().UtcDateTime >= window.HoldUntil)
@@ -214,21 +214,21 @@ public sealed class ReservationService(
             reservation.Status = ReservationStatuses.CheckedIn;
             return Map(reservation);
         }, ct);
-        return result ?? throw new ManagementException(409, "The arrival deadline has passed. The reservation is NoShow.");
+        return result ?? throw new ManagementException(409, "Đã quá giờ nhận bàn. Đặt bàn được đánh dấu là Vắng mặt (NoShow).");
     }
 
     public async Task<ReservationDto> Cancel(Guid id, CancellationToken ct)
     {
         if (id == Guid.Empty)
         {
-            throw new ManagementException(400, "A valid reservation ID is required.");
+            throw new ManagementException(400, "Mã đặt bàn không hợp lệ hoặc bị trống.");
         }
 
         ReservationRules.Configuration(settings.Value);
         return await transaction.ExecuteAsync(async () =>
         {
             var reservation = await reservations.LockAsync(id, ct)
-                ?? throw new ManagementException(404, "Reservation not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy thông tin đặt bàn.");
             var actorId = await access.RequireMutationAsync(reservation.RestaurantId, ct);
             RequireConfirmed(reservation);
             RequireChangeDeadline(reservation);
@@ -246,7 +246,7 @@ public sealed class ReservationService(
         return await transaction.ExecuteAsync(async () =>
         {
             var reservation = await reservations.LockAsync(id, ct)
-                ?? throw new ManagementException(404, "Reservation not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy thông tin đặt bàn.");
             await access.RequireMutationAsync(reservation.RestaurantId, ct);
             RequireConfirmed(reservation);
             RequireChangeDeadline(reservation);
@@ -278,33 +278,33 @@ public sealed class ReservationService(
         RequireScope(scope, query.AssignedRestaurantId);
         if (query.RestaurantId.HasValue && await restaurants.GetByIdAsync(query.RestaurantId.Value, ct) is null)
         {
-            throw new ManagementException(404, "Restaurant not found.");
+            throw new ManagementException(404, "Không tìm thấy nhà hàng.");
         }
 
         if (query.RequestedAreaId.HasValue)
         {
             var requestedArea = await areas.GetByIdAsync(query.RequestedAreaId.Value, ct)
-                ?? throw new ManagementException(404, "Area not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
             RequireScope(scope, requestedArea.RestaurantId);
             if (query.RestaurantId.HasValue && requestedArea.RestaurantId != query.RestaurantId.Value)
             {
-                throw new ManagementException(400, "The requested area does not belong to the selected restaurant.");
+                throw new ManagementException(400, "Khu vực yêu cầu không thuộc nhà hàng đã chọn.");
             }
         }
 
         if (query.AssignedRestaurantId.HasValue && await restaurants.GetByIdAsync(query.AssignedRestaurantId.Value, ct) is null)
         {
-            throw new ManagementException(404, "Restaurant not found.");
+            throw new ManagementException(404, "Không tìm thấy nhà hàng.");
         }
 
         if (query.AssignedAreaId.HasValue)
         {
             var area = await areas.GetByIdAsync(query.AssignedAreaId.Value, ct)
-                ?? throw new ManagementException(404, "Area not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
             RequireScope(scope, area.RestaurantId);
             if (query.AssignedRestaurantId.HasValue && area.RestaurantId != query.AssignedRestaurantId.Value)
             {
-                throw new ManagementException(400, "The assigned area does not belong to the selected restaurant.");
+                throw new ManagementException(400, "Khu vực chỉ định không thuộc nhà hàng đã chọn.");
             }
         }
 
@@ -323,11 +323,11 @@ public sealed class ReservationService(
         var scope = await access.GetReadScopeAsync(ct);
         if (id == Guid.Empty)
         {
-            throw new ManagementException(400, "A valid reservation ID is required.");
+            throw new ManagementException(400, "Mã đặt bàn không hợp lệ hoặc bị trống.");
         }
 
         var reservation = await reservations.GetByIdAsync(id, ct)
-            ?? throw new ManagementException(404, "Reservation not found.");
+            ?? throw new ManagementException(404, "Không tìm thấy thông tin đặt bàn.");
         RequireScope(scope, reservation.RestaurantId);
         return Map(reservation);
     }
@@ -337,29 +337,29 @@ public sealed class ReservationService(
         await access.RequireReadAsync(query?.RestaurantId ?? Guid.Empty, ct);
         if (query is null || query.RestaurantId == Guid.Empty || query.AreaId == Guid.Empty || query.PartySize <= 0)
         {
-            throw new ManagementException(400, "A restaurant, an area, and a positive party size are required.");
+            throw new ManagementException(400, "Yêu cầu thông tin nhà hàng, khu vực và số lượng khách lớn hơn 0.");
         }
 
         var now = reservations.NormalizeTimestamp(clock.GetUtcNow().UtcDateTime);
         var window = ReservationRules.Window(query.RestaurantId, query.StartAt, now, settings.Value, reservations);
         var restaurant = await restaurants.GetByIdAsync(query.RestaurantId, ct)
-            ?? throw new ManagementException(404, "Restaurant not found.");
+            ?? throw new ManagementException(404, "Không tìm thấy nhà hàng.");
         var area = await areas.GetByIdAsync(query.AreaId, ct)
-            ?? throw new ManagementException(404, "Area not found.");
+            ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
         if (area.RestaurantId != query.RestaurantId)
         {
-            throw new ManagementException(400, "The area does not belong to the selected restaurant.");
+            throw new ManagementException(400, "Khu vực không thuộc nhà hàng đã chọn.");
         }
 
         var globalReasons = new List<string>();
         if (!area.IsActive)
         {
-            globalReasons.Add("The area is inactive.");
+            globalReasons.Add("Khu vực đã ngừng hoạt động.");
         }
 
         if (!WithinOpeningHours(restaurant, window))
         {
-            globalReasons.Add("The requested stay is outside the restaurant opening hours.");
+            globalReasons.Add("Khoảng thời gian yêu cầu nằm ngoài giờ mở cửa của nhà hàng.");
         }
 
         var candidates = await tables.GetForReservationAreaAsync(query.AreaId, ct);
@@ -372,12 +372,12 @@ public sealed class ReservationService(
             var reasons = new List<string>(globalReasons);
             if (!table.IsActive || table.Capacity <= 0)
             {
-                reasons.Add("The table is inactive or has an invalid capacity.");
+                reasons.Add("Bàn đã ngừng hoạt động hoặc có sức chứa không hợp lệ.");
             }
 
             if (window.HoldStartsAt <= now && occupied.Any(link => link.TableId == table.TableId))
             {
-                reasons.Add("The table has an unreleased session assignment; its release time cannot be guaranteed.");
+                reasons.Add("Bàn đang được gán cho một phiên chưa giải phóng; không thể đảm bảo thời điểm bàn trống.");
             }
 
             foreach (var reservation in scheduled.Where(reservation => reservation.Tables.Any(assigned => assigned.TableId == table.TableId)))
@@ -385,7 +385,7 @@ public sealed class ReservationService(
                 if (reservation.EndAt <= reservation.StartAt
                     || (reservation.HoldUntil.HasValue && reservation.HoldUntil.Value < reservation.StartAt))
                 {
-                    reasons.Add("A confirmed reservation has an invalid interval and requires staff review.");
+                    reasons.Add("Một yêu cầu đặt bàn đã xác nhận có khoảng thời gian không hợp lệ và cần nhân viên kiểm tra.");
                     continue;
                 }
 
@@ -396,7 +396,7 @@ public sealed class ReservationService(
                 }
                 catch (ArgumentOutOfRangeException)
                 {
-                    reasons.Add("A confirmed reservation has an invalid hold interval.");
+                    reasons.Add("Một yêu cầu đặt bàn đã xác nhận có khoảng thời gian giữ bàn không hợp lệ.");
                     continue;
                 }
 
@@ -405,7 +405,7 @@ public sealed class ReservationService(
                     : reservation.EndAt;
                 if (start < window.BlockedUntil && window.HoldStartsAt < end)
                 {
-                    reasons.Add("The table has a conflicting confirmed reservation, including its hold interval.");
+                    reasons.Add("Bàn bị trùng với một yêu cầu đặt bàn đã xác nhận, bao gồm cả khoảng thời gian giữ bàn.");
                 }
             }
 
@@ -443,19 +443,19 @@ public sealed class ReservationService(
         ReservationWindowDto window, CancellationToken ct)
     {
         var restaurant = await restaurants.GetByIdAsync(reservation.RestaurantId, ct)
-            ?? throw new ManagementException(404, "Restaurant not found.");
+            ?? throw new ManagementException(404, "Không tìm thấy nhà hàng.");
         var area = await areas.GetByIdAsync(reservation.RequestedAreaId, ct)
-            ?? throw new ManagementException(404, "Area not found.");
+            ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
         if (!area.IsActive || area.RestaurantId != reservation.RestaurantId || !WithinOpeningHours(restaurant, window))
         {
-            throw new ManagementException(409, "The requested area or restaurant opening hours no longer support this reservation.");
+            throw new ManagementException(409, "Khu vực yêu cầu hoặc giờ mở cửa không còn hỗ trợ đặt bàn này.");
         }
 
         var locked = new Dictionary<Guid, Table>();
         foreach (var tableId in reservation.Tables.Select(table => table.TableId).Concat(tableIds).Distinct().Order())
         {
             var table = await tables.LockForReservationAsync(tableId, ct)
-                ?? throw new ManagementException(404, "Table not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy bàn.");
             locked.Add(tableId, table);
         }
 
@@ -463,12 +463,12 @@ public sealed class ReservationService(
         if (selected.Any(table => !table.IsActive || table.Capacity <= 0 || table.AreaId != area.AreaId
             || table.Area.RestaurantId != restaurant.RestaurantId))
         {
-            throw new ManagementException(409, "Selected tables must be active and belong to the requested area and restaurant.");
+            throw new ManagementException(409, "Các bàn đã chọn phải đang hoạt động và thuộc khu vực, nhà hàng đã chọn.");
         }
 
         if (selected.Sum(table => (long)table.Capacity) < reservation.PartySize)
         {
-            throw new ManagementException(409, "Selected tables cannot accommodate the party size.");
+            throw new ManagementException(409, "Các bàn đã chọn không đủ sức chứa cho số lượng khách.");
         }
 
         var scheduled = await reservations.GetScheduledForTablesAsync(tableIds, reservation.ReservationId, ct);
@@ -481,7 +481,7 @@ public sealed class ReservationService(
                 || (existing.StartAt.AddMinutes(-settings.Value.HoldBeforeMinutes) < window.BlockedUntil
                     && window.HoldStartsAt < existingEnd))
             {
-                throw new ManagementException(409, "Selected tables have a conflicting confirmed reservation, including its hold interval.");
+                throw new ManagementException(409, "Các bàn đã chọn bị trùng lịch với một đặt bàn đã xác nhận khác (bao gồm khoảng thời gian giữ bàn).");
             }
         }
 
@@ -491,7 +491,7 @@ public sealed class ReservationService(
             var occupied = await sessionTables.GetUnreleasedForTablesAsync(tableIds, ct);
             if (occupied.Any() || selected.Any(table => table.CleaningStatus != "Clean"))
             {
-                throw new ManagementException(409, "Selected tables must be vacant and ready when the hold period begins.");
+                throw new ManagementException(409, "Các bàn đã chọn phải trống và sẵn sàng khi bắt đầu thời gian giữ bàn.");
             }
         }
 
@@ -501,10 +501,10 @@ public sealed class ReservationService(
     private ReservationWindowDto StoredWindow(Reservation reservation)
     {
         var holdUntil = reservation.HoldUntil
-            ?? throw new ManagementException(409, "The reservation hold deadline is missing.");
+            ?? throw new ManagementException(409, "Thiếu thời hạn giữ bàn.");
         if (reservation.EndAt <= reservation.StartAt || holdUntil < reservation.StartAt)
         {
-            throw new ManagementException(409, "The reservation has an invalid planned or hold interval.");
+            throw new ManagementException(409, "Thời gian đặt bàn hoặc thời gian giữ bàn không hợp lệ.");
         }
 
         return new ReservationWindowDto
@@ -522,7 +522,7 @@ public sealed class ReservationService(
         if (id == Guid.Empty || tableIds is null || tableIds.Count == 0 || tableIds.Any(value => value == Guid.Empty)
             || tableIds.Distinct().Count() != tableIds.Count)
         {
-            throw new ManagementException(400, "Provide a valid reservation ID and distinct table IDs.");
+            throw new ManagementException(400, "Vui lòng cung cấp mã đặt bàn hợp lệ và danh sách mã bàn không trùng lặp.");
         }
     }
 
@@ -530,7 +530,7 @@ public sealed class ReservationService(
     {
         if (reservation.Status != ReservationStatuses.Confirmed)
         {
-            throw new ManagementException(409, "Only a Confirmed reservation can be modified by this operation.");
+            throw new ManagementException(409, "Chỉ có thể chỉnh sửa đặt bàn khi đang ở trạng thái Đã xác nhận (Confirmed).");
         }
     }
 
@@ -538,7 +538,7 @@ public sealed class ReservationService(
     {
         if (clock.GetUtcNow().UtcDateTime > reservation.StartAt.AddMinutes(-settings.Value.MinimumAdvanceMinutes))
         {
-            throw new ManagementException(409, "The reservation can only be changed at least 30 minutes before its current start time.");
+            throw new ManagementException(409, "Chỉ có thể thay đổi đặt bàn trước giờ bắt đầu ít nhất 30 phút.");
         }
     }
 
@@ -551,7 +551,7 @@ public sealed class ReservationService(
             || (query.UnassignedOnly && (query.AssignedRestaurantId.HasValue || query.AssignedAreaId.HasValue))
             || (query.Status is not null && !ReservationStatuses.IsKnown(query.Status)))
         {
-            throw new ManagementException(400, "Invalid reservation pagination, location filter, or status.");
+            throw new ManagementException(400, "Phân trang, bộ lọc địa điểm hoặc trạng thái đặt bàn không hợp lệ.");
         }
 
         DateTime? from = null;
@@ -560,7 +560,7 @@ public sealed class ReservationService(
         {
             if (!ReservationRules.TryUtc(query.From, out var parsed))
             {
-                throw new ManagementException(400, "From must be a timestamp with an explicit UTC offset.");
+                throw new ManagementException(400, "From phải là mốc thời gian có độ lệch múi giờ UTC hợp lệ.");
             }
 
             from = reservations.NormalizeTimestamp(parsed);
@@ -570,7 +570,7 @@ public sealed class ReservationService(
         {
             if (!ReservationRules.TryUtc(query.To, out var parsed))
             {
-                throw new ManagementException(400, "To must be a timestamp with an explicit UTC offset.");
+                throw new ManagementException(400, "To phải là mốc thời gian có độ lệch múi giờ UTC hợp lệ.");
             }
 
             to = reservations.NormalizeTimestamp(parsed);
@@ -578,7 +578,7 @@ public sealed class ReservationService(
 
         if (from.HasValue && to.HasValue && from >= to)
         {
-            throw new ManagementException(400, "To must be after From.");
+            throw new ManagementException(400, "Thời gian To phải sau thời gian From.");
         }
 
         return new ReservationSearch
@@ -600,7 +600,7 @@ public sealed class ReservationService(
     {
         if (scope is not null && restaurantId.HasValue && !scope.Contains(restaurantId.Value))
         {
-            throw new ManagementException(403, "You are not assigned to this restaurant.");
+            throw new ManagementException(403, "Bạn không được phân công vào nhà hàng này.");
         }
     }
 
@@ -620,7 +620,7 @@ public sealed class ReservationService(
         }
         catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException or ArgumentException)
         {
-            throw new ManagementException(503, "The restaurant business time zone is not configured correctly.");
+            throw new ManagementException(503, "Múi giờ kinh doanh của nhà hàng chưa được cấu hình chính xác.");
         }
 
         var start = TimeZoneInfo.ConvertTimeFromUtc(window.StartAt, zone);

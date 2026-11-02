@@ -9,17 +9,17 @@ public static class BillingServiceExtensions
     {
         services.AddOptions<BillingClientSettings>()
             .Bind(configuration.GetSection("BillingClient"))
-            .Validate(value => value.TimeoutSeconds is > 0 and <= 120, "Billing client timeout must be 1-120 seconds.")
+            .Validate(value => value.TimeoutSeconds is > 0 and <= 120, "Thời gian chờ dịch vụ thanh toán phải từ 1 đến 120 giây.")
             .ValidateOnStart();
         services.AddOptions<PayOsGatewaySettings>()
             .Bind(configuration.GetSection("PayOsGateway"))
-            .Validate(value => value.TimeoutSeconds is > 0 and <= 120, "PayOS gateway timeout must be 1-120 seconds.")
+            .Validate(value => value.TimeoutSeconds is > 0 and <= 120, "Thời gian chờ cổng PayOS phải từ 1 đến 120 giây.")
             .ValidateOnStart();
         var address = configuration["GrpcServices:Billing"];
         if (!Uri.TryCreate(address, UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
-            throw new InvalidOperationException("Configure GrpcServices:Billing.");
+            throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Billing.");
         }
 
         services.AddGrpcClient<CashRegisterGrpc.CashRegisterGrpcClient>(options =>

@@ -28,7 +28,7 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
             || request.ServiceRate is not decimal serviceRate || !ValidRate(serviceRate)
             || request.ServiceEnabled is not bool serviceEnabled)
         {
-            throw new BillingException(400, "Provide VAT and service rates between 0 and 1 with at most six decimal places, and an explicit serviceEnabled value.");
+            throw new BillingException(400, "Cung cấp tỷ lệ VAT và phí dịch vụ từ 0 đến 1 có tối đa 6 chữ số thập phân, cùng giá trị serviceEnabled.");
         }
 
         DateTime? requestedUtc = null;
@@ -38,7 +38,7 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
                 DateTimeStyles.AssumeUniversal, out var timestamp)
                 || timestamp.UtcDateTime < SqlDateTime.MinValue.Value || timestamp.UtcDateTime > SqlDateTime.MaxValue.Value)
             {
-                throw new BillingException(400, "Use an ISO 8601 effectiveFrom with an explicit UTC offset within the SQL datetime range, or omit it for immediate effect.");
+                throw new BillingException(400, "Dùng effectiveFrom định dạng ISO 8601 có múi giờ UTC trong phạm vi datetime SQL, hoặc bỏ trống để có hiệu lực ngay.");
             }
 
             requestedUtc = timestamp.UtcDateTime;
@@ -48,13 +48,13 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
         {
             if (!await policies.LockCreateAsync(ct))
             {
-                throw new BillingException(409, "Tax policy creation is busy. Retry the request.");
+                throw new BillingException(409, "Tạo chính sách thuế đang bận. Vui lòng thử lại yêu cầu.");
             }
 
             var currentActor = await RequireAdministrator(ct);
             if (currentActor != actor)
             {
-                throw new BillingException(401, "The employee session changed. Sign in again.");
+                throw new BillingException(401, "Phiên đăng nhập nhân viên đã thay đổi. Vui lòng đăng nhập lại.");
             }
 
             var now = clock.GetUtcNow().UtcDateTime;
@@ -63,7 +63,7 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
             {
                 if (requestedUtc.Value <= now || effective <= now)
                 {
-                    throw new BillingException(400, "An explicit effectiveFrom must be in the future at SQL datetime precision. Omit it for immediate effect.");
+                    throw new BillingException(400, "effectiveFrom phải ở tương lai theo độ chính xác SQL datetime, hoặc bỏ trống để có hiệu lực ngay.");
                 }
             }
             else if (effective > now)
@@ -73,13 +73,13 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
 
             if (await policies.EffectiveFromExistsAsync(effective, ct))
             {
-                throw new BillingException(409, "A tax policy already exists at this effective time, including SQL datetime rounding.");
+                throw new BillingException(409, "Đã tồn tại chính sách thuế tại thời điểm hiệu lực này.");
             }
 
             var highestVersion = await policies.GetHighestVersionAsync(ct);
             if (highestVersion.HasValue && (highestVersion.Value < 1 || highestVersion.Value == int.MaxValue))
             {
-                throw new BillingException(409, "Existing tax policy versions must be reviewed before creating another version.");
+                throw new BillingException(409, "Các phiên bản chính sách thuế hiện tại cần được xem xét trước khi tạo phiên bản mới.");
             }
 
             var policy = new TaxFeePolicy
@@ -105,7 +105,7 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
             PageSize = query.PageSize
         }.IsValid())
         {
-            throw new BillingException(400, "Provide valid pagination with a page size between 1 and 100.");
+            throw new BillingException(400, "Cung cấp phân trang hợp lệ với kích thước trang từ 1 đến 100.");
         }
 
         var result = await policies.GetPageAsync(query, ct);
@@ -117,10 +117,10 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
         await RequireAdministrator(ct);
         if (id == Guid.Empty)
         {
-            throw new BillingException(400, "A valid tax policy ID is required.");
+            throw new BillingException(400, "Mã chính sách thuế không hợp lệ hoặc bị trống.");
         }
 
-        var policy = await policies.GetByIdAsync(id, ct) ?? throw new BillingException(404, "Tax policy not found.");
+        var policy = await policies.GetByIdAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy chính sách thuế.");
         return Map(policy);
     }
 
@@ -129,12 +129,12 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
         var actor = await access.GetCurrentScopeAsync(null, ct);
         if (actor.UserId == Guid.Empty)
         {
-            throw new BillingException(401, "A valid employee session is required.");
+            throw new BillingException(401, "Yêu cầu phiên đăng nhập nhân viên hợp lệ.");
         }
 
         if (!actor.IsAdministrator)
         {
-            throw new BillingException(403, "Only a System Administrator can manage tax and service fee policies.");
+            throw new BillingException(403, "Chỉ Quản trị viên hệ thống mới có thể quản lý chính sách thuế và phí dịch vụ.");
         }
 
         return actor.UserId;

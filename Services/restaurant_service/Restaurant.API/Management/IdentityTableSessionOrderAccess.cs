@@ -13,7 +13,7 @@ public sealed class IdentityTableSessionOrderAccess(
         var authorization = accessor.HttpContext?.Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
-            throw new ManagementException(401, "Authentication is required.");
+            throw new ManagementException(401, "Yêu cầu xác thực tài khoản.");
         }
 
         var reply = await client.GetMeAsync(new GetMeRequest(), new Metadata
@@ -23,19 +23,19 @@ public sealed class IdentityTableSessionOrderAccess(
         if (!reply.IsSuccess)
         {
             throw new ManagementException(reply.StatusCode is 401 or 404 ? 401 : reply.StatusCode == 403 ? 403 : 503,
-                "Unable to verify ordering access.");
+                "Không thể xác minh quyền đặt món.");
         }
 
         var user = reply.Result;
         if (user is null || !user.IsActive || !Guid.TryParse(user.UserId, out var id) || id == Guid.Empty)
         {
-            throw new ManagementException(401, "The account is invalid or inactive.");
+            throw new ManagementException(401, "Tài khoản không hợp lệ hoặc đang bị khóa.");
         }
 
         var roles = configuration.GetSection("Ordering:StaffRoleIds").Get<string[]>() ?? ["waiter"];
         if (!roles.Contains(user.RoleId, StringComparer.Ordinal))
         {
-            throw new ManagementException(403, "Ordering staff permission is required.");
+            throw new ManagementException(403, "Yêu cầu quyền nhân viên phục vụ/gọi món.");
         }
 
         return id;

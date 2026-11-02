@@ -25,14 +25,14 @@ public sealed class CheckoutLockService(ICheckoutLockRepository locks, IOrderRep
             var value = await locks.GetByIdAsync(id, ct);
             if (value is not null && value.TableSessionRef != sessionId)
             {
-                throw new OrderingException(409, "This checkout ID belongs to another session.");
+                throw new OrderingException(409, "Mã thanh toán này thuộc về phiên phục vụ khác.");
             }
 
             if (value is null)
             {
                 if (await locks.GetActiveAsync(sessionId, ct) is not null)
                 {
-                    throw new OrderingException(409, "This session already has an active checkout. Continue that checkout.");
+                    throw new OrderingException(409, "Phiên này đã có yêu cầu thanh toán đang hoạt động. Vui lòng tiếp tục thanh toán đó.");
                 }
 
                 value = new CheckoutLock
@@ -71,7 +71,7 @@ public sealed class CheckoutLockService(ICheckoutLockRepository locks, IOrderRep
             var value = await locks.GetByIdAsync(id, ct);
             if (value is not null && value.TableSessionRef != sessionId)
             {
-                throw new OrderingException(409, "The checkout does not belong to this session.");
+                throw new OrderingException(409, "Yêu cầu thanh toán không thuộc về phiên phục vụ này.");
             }
 
             if (value is null)
@@ -103,7 +103,7 @@ public sealed class CheckoutLockService(ICheckoutLockRepository locks, IOrderRep
                 || value.ReleasedAt.HasValue || value.SourceHash != hash
                 || (value.BillIdRef.HasValue && value.BillIdRef != billId))
             {
-                throw new OrderingException(409, "The checkout is not frozen with this bill snapshot.");
+                throw new OrderingException(409, "Yêu cầu thanh toán chưa được khóa với bản chụp hóa đơn này.");
             }
 
             value.BillIdRef = billId;
@@ -117,7 +117,7 @@ public sealed class CheckoutLockService(ICheckoutLockRepository locks, IOrderRep
             .SelectMany(order => order.OrderItems).ToArray();
         if (items.Any(item => item.CancelledQuantity < 0 || item.CancelledQuantity > item.Quantity))
         {
-            throw new OrderingException(409, "An order item has invalid cancelled quantities.");
+            throw new OrderingException(409, "Món ăn có số lượng hủy không hợp lệ.");
         }
 
         return CheckoutHash.Compute(items.Where(item => item.Status != "Cancelled").Select(item =>

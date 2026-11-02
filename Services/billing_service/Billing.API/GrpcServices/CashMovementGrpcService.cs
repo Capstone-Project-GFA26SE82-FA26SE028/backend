@@ -14,7 +14,7 @@ public sealed class CashMovementGrpcService(ICashMovementService service) : Cash
         if (!request.HasAmount || !decimal.TryParse(request.Amount,
             NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var amount))
         {
-            throw new BillingException(400, "Provide an invariant decimal cash amount.");
+            throw new BillingException(400, "Vui lòng nhập số tiền mặt dưới dạng số thập phân dùng dấu chấm phân cách.");
         }
 
         var result = await service.Create(Id(request.CashShiftId), request.IdempotencyKey, new CreateCashMovementDTO
@@ -58,7 +58,7 @@ public sealed class CashMovementGrpcService(ICashMovementService service) : Cash
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new BillingException(400, "A valid ID is required.");
+            throw new BillingException(400, "Yêu cầu ID hợp lệ.");
         }
 
         return id;

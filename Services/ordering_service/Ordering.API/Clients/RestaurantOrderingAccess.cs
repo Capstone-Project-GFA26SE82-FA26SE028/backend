@@ -16,7 +16,7 @@ public sealed class RestaurantOrderingAccess(TableSessionGrpc.TableSessionGrpcCl
     {
         if (sessionId == Guid.Empty || tableId == Guid.Empty)
         {
-            throw new OrderingException(400, "Invalid session or table ID.");
+            throw new OrderingException(400, "Mã phiên hoặc mã bàn không hợp lệ.");
         }
 
         var request = new OrderSessionRequest
@@ -40,7 +40,7 @@ public sealed class RestaurantOrderingAccess(TableSessionGrpc.TableSessionGrpcCl
             deadline: DateTime.UtcNow.AddSeconds(settings.Value.DependencyTimeoutSeconds), cancellationToken: ct);
         if (!Guid.TryParse(reply.TableSessionId, out var verified) || verified != sessionId)
         {
-            throw new OrderingException(503, "Invalid session verification response.");
+            throw new OrderingException(503, "Phản hồi xác minh phiên không hợp lệ.");
         }
 
         var guest = !string.IsNullOrEmpty(guestToken);
@@ -53,7 +53,7 @@ public sealed class RestaurantOrderingAccess(TableSessionGrpc.TableSessionGrpcCl
                 || !DateTimeOffset.TryParse(reply.ExpiresAt, CultureInfo.InvariantCulture, DateTimeStyles.None, out var expires)
                 || expires <= clock.GetUtcNow())
             {
-                throw new OrderingException(401, "Guest access is invalid or expired.");
+                throw new OrderingException(401, "Quyền truy cập của khách không hợp lệ hoặc đã hết hạn.");
             }
 
             guestId = id;
@@ -63,7 +63,7 @@ public sealed class RestaurantOrderingAccess(TableSessionGrpc.TableSessionGrpcCl
         {
             if (!Guid.TryParse(reply.UserId, out var id) || id == Guid.Empty)
             {
-                throw new OrderingException(401, "Staff access is invalid.");
+                throw new OrderingException(401, "Quyền truy cập của nhân viên không hợp lệ.");
             }
 
             userId = id;
@@ -74,7 +74,7 @@ public sealed class RestaurantOrderingAccess(TableSessionGrpc.TableSessionGrpcCl
         {
             if (!Guid.TryParse(reply.TableId, out var id) || id == Guid.Empty || (tableId.HasValue && id != tableId))
             {
-                throw new OrderingException(503, "Invalid table verification response.");
+                throw new OrderingException(503, "Phản hồi xác minh bàn không hợp lệ.");
             }
 
             resolvedTable = id;

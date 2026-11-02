@@ -15,7 +15,7 @@ public sealed class BillingSessionClient(BillingSessionGrpc.BillingSessionGrpcCl
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
-            throw new OrderingException(401, "A valid employee session is required.");
+            throw new OrderingException(401, "Yêu cầu phiên làm việc của nhân viên hợp lệ.");
         }
 
         var reply = await client.GetByIdAsync(new BillingSessionRequest
@@ -28,7 +28,7 @@ public sealed class BillingSessionClient(BillingSessionGrpc.BillingSessionGrpcCl
         if (!Guid.TryParse(reply.TableSessionId, out var returnedId) || returnedId != sessionId
             || !Guid.TryParse(reply.RestaurantId, out var branch) || branch == Guid.Empty)
         {
-            throw new OrderingException(503, "The restaurant service returned an invalid billing session.");
+            throw new OrderingException(503, "Dịch vụ nhà hàng trả về phiên thanh toán không hợp lệ.");
         }
 
         return branch;

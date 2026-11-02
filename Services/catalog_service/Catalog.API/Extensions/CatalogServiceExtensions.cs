@@ -28,7 +28,7 @@ public static class CatalogServiceExtensions
         services.AddGrpcClient<Backend.Contracts.Inventory.IngredientUnitGrpc.IngredientUnitGrpcClient>(options =>
         {
             options.Address = new Uri(configuration["GrpcServices:Inventory"]
-                ?? throw new InvalidOperationException("Configure GrpcServices:Inventory."));
+                ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Inventory."));
         });
         services.AddScoped<IInventoryRecipeLookup, InventoryRecipeLookup>();
         services.AddGrpcClient<Backend.Contracts.Ordering.KitchenStationGrpc.KitchenStationGrpcClient>(options =>
@@ -44,7 +44,7 @@ public static class CatalogServiceExtensions
                 && settings.InitialAvailability.Length <= 50
                 && settings.InitialAvailability == settings.InitialAvailability.Trim()
                 && !settings.InitialAvailability.Any(char.IsControl),
-                "ItemManagement:InitialAvailability must be at most 50 characters without surrounding whitespace or control characters.")
+                "ItemManagement:InitialAvailability phải có tối đa 50 ký tự, không có khoảng trắng ở đầu hoặc cuối và không chứa ký tự điều khiển.")
             .ValidateOnStart();
         services.AddOptions<CatalogManagementSettings>()
             .Bind(configuration.GetSection("CatalogManagement"))
@@ -58,16 +58,16 @@ public static class CatalogServiceExtensions
             })
             .Validate(settings => settings.MenuManagerRoleIds is not null
                 && settings.MenuManagerRoleIds.All(IsValidValue),
-                "MenuManagerRoleIds must contain actual, non-empty RoleIds.")
+                "MenuManagerRoleIds phải chứa các RoleId có thực và khác rỗng.")
             .Validate(settings => settings.KitchenRoleIds.All(IsValidValue),
-                "KitchenRoleIds must contain actual, non-empty RoleIds.")
+                "KitchenRoleIds phải chứa các RoleId có thực và khác rỗng.")
             .Validate(settings => settings.MenuReaderRoleIds.All(IsValidValue),
-                "MenuReaderRoleIds must contain actual, non-empty RoleIds.")
+                "MenuReaderRoleIds phải chứa các RoleId có thực và khác rỗng.")
             .Validate(settings => settings.NonSellingItemAvailabilities is not null
                 && settings.NonSellingItemAvailabilities.All(IsValidValue),
-                "NonSellingItemAvailabilities must contain actual status values.")
+                "NonSellingItemAvailabilities phải chứa các giá trị trạng thái có thực.")
             .Validate(settings => settings.IdentityTimeoutSeconds > 0,
-                "IdentityTimeoutSeconds must be positive.")
+                "IdentityTimeoutSeconds phải lớn hơn 0.")
             .ValidateOnStart();
 
         var address = configuration["GrpcServices:Identity"];
@@ -75,7 +75,7 @@ public static class CatalogServiceExtensions
             || (identityUri.Scheme != Uri.UriSchemeHttp
                 && identityUri.Scheme != Uri.UriSchemeHttps))
         {
-            throw new InvalidOperationException("Configure GrpcServices:Identity.");
+            throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Identity.");
         }
 
         services.AddGrpcClient<UserGrpc.UserGrpcClient>(options =>
@@ -88,7 +88,7 @@ public static class CatalogServiceExtensions
             if (!Uri.TryCreate(address, UriKind.Absolute, out var restaurantUri)
                 || (restaurantUri.Scheme != Uri.UriSchemeHttp && restaurantUri.Scheme != Uri.UriSchemeHttps))
             {
-                throw new InvalidOperationException("Configure GrpcServices:Restaurant.");
+                throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Restaurant.");
             }
 
             options.Address = restaurantUri;

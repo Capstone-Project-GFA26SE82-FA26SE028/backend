@@ -17,7 +17,7 @@ public sealed class CustomerLoyaltyService(
     {
         if (id == Guid.Empty)
         {
-            throw new CustomerException(400, "Invalid customer ID.");
+            throw new CustomerException(400, "Mã khách hàng không hợp lệ.");
         }
 
         var customer = await customers.GetByIdAsync(id, ct);
@@ -34,7 +34,7 @@ public sealed class CustomerLoyaltyService(
         var normalized = NormalizePhoneNumber(phone);
         if (string.IsNullOrWhiteSpace(normalized))
         {
-            throw new CustomerException(400, "Phone number is required.");
+            throw new CustomerException(400, "Số điện thoại là bắt buộc.");
         }
 
         var customer = await customers.GetByPhoneAsync(normalized, ct);
@@ -50,13 +50,13 @@ public sealed class CustomerLoyaltyService(
     {
         if (request is null)
         {
-            throw new CustomerException(400, "Customer data is required.");
+            throw new CustomerException(400, "Thông tin khách hàng là bắt buộc.");
         }
 
         var normalized = NormalizePhoneNumber(request.PhoneNumber);
         if (string.IsNullOrWhiteSpace(normalized))
         {
-            throw new CustomerException(400, "A valid phone number is required.");
+            throw new CustomerException(400, "Số điện thoại không hợp lệ.");
         }
 
         var existing = await customers.GetByPhoneAsync(normalized, ct);
@@ -72,7 +72,7 @@ public sealed class CustomerLoyaltyService(
         var defaultTier = await loyalty.GetDefaultTierAsync(ct);
         if (defaultTier is null)
         {
-            throw new CustomerException(500, "No loyalty tier is configured.");
+            throw new CustomerException(500, "Chưa có hạng thành viên nào được cấu hình.");
         }
 
         return await transaction.ExecuteAsync(async () =>
@@ -105,7 +105,7 @@ public sealed class CustomerLoyaltyService(
     {
         if (page < 1 || pageSize < 1 || pageSize > 100)
         {
-            throw new CustomerException(400, "Invalid pagination.");
+            throw new CustomerException(400, "Phân trang không hợp lệ.");
         }
 
         var (items, total) = await customers.GetPageAsync(page, pageSize, keyword, ct);
@@ -136,7 +136,7 @@ public sealed class CustomerLoyaltyService(
     {
         if (request is null || request.CustomerId == Guid.Empty || request.BillId == Guid.Empty)
         {
-            throw new CustomerException(400, "CustomerId and BillId are required.");
+            throw new CustomerException(400, "Mã khách hàng và mã hóa đơn là bắt buộc.");
         }
 
         if (request.FinalAmount <= 0)
@@ -158,7 +158,7 @@ public sealed class CustomerLoyaltyService(
             var customer = await customers.GetByIdAsync(request.CustomerId, ct);
             if (customer is null)
             {
-                throw new CustomerException(404, "Customer not found.");
+                throw new CustomerException(404, "Không tìm thấy khách hàng.");
             }
 
             var now = clock.GetUtcNow().UtcDateTime;
@@ -207,18 +207,18 @@ public sealed class CustomerLoyaltyService(
     {
         if (request is null || request.CustomerId == Guid.Empty || request.BillId == Guid.Empty)
         {
-            throw new CustomerException(400, "CustomerId and BillId are required.");
+            throw new CustomerException(400, "Mã khách hàng và mã hóa đơn là bắt buộc.");
         }
 
         if (request.Points <= 0)
         {
-            throw new CustomerException(400, "Points to reserve must be greater than 0.");
+            throw new CustomerException(400, "Số điểm tích lũy cần giữ phải lớn hơn 0.");
         }
 
         var available = await loyalty.GetAvailablePointsAsync(request.CustomerId, ct);
         if (available < request.Points)
         {
-            throw new CustomerException(400, $"Insufficient loyalty points. Available: {available}, requested: {request.Points}.");
+            throw new CustomerException(400, $"Không đủ điểm tích lũy. Điểm hiện có: {available}, điểm yêu cầu: {request.Points}.");
         }
 
         var policy = await loyalty.GetCurrentPolicyAsync(ct);
@@ -261,7 +261,7 @@ public sealed class CustomerLoyaltyService(
     {
         if (billId == Guid.Empty)
         {
-            throw new CustomerException(400, "Invalid bill ID.");
+            throw new CustomerException(400, "Mã hóa đơn không hợp lệ.");
         }
 
         await transaction.ExecuteAsync(async () =>
@@ -297,7 +297,7 @@ public sealed class CustomerLoyaltyService(
     {
         if (billId == Guid.Empty)
         {
-            throw new CustomerException(400, "Invalid bill ID.");
+            throw new CustomerException(400, "Mã hóa đơn không hợp lệ.");
         }
 
         await transaction.ExecuteAsync(async () =>

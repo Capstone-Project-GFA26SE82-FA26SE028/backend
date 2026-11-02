@@ -15,26 +15,26 @@ public sealed class BillingSessionService(ICurrentRestaurantScopeService access,
         var actor = await access.GetCurrentScope(null, ct);
         if (!actor.IsAdministrator && !settings.Value.ReaderRoleIds.Contains(actor.RoleId, StringComparer.Ordinal))
         {
-            throw new ManagementException(403, "Billing read permission is required.");
+            throw new ManagementException(403, "Yêu cầu quyền xem thông tin thanh toán.");
         }
 
         if (id == Guid.Empty)
         {
-            throw new ManagementException(400, "A valid table session ID is required.");
+            throw new ManagementException(400, "Yêu cầu ID phiên bàn hợp lệ.");
         }
 
         var session = await sessions.GetForBillingAsync(id, ct)
-            ?? throw new ManagementException(404, "Table session not found.");
+            ?? throw new ManagementException(404, "Không tìm thấy phiên bàn.");
         var branches = session.SessionTables.Select(link => link.Table.Area.RestaurantId).Distinct().ToArray();
         if (branches.Length != 1)
         {
-            throw new ManagementException(409, "The session does not identify exactly one restaurant.");
+            throw new ManagementException(409, "Phiên bàn không xác định duy nhất một nhà hàng.");
         }
 
         await access.GetCurrentScope(branches[0], ct);
         if (session.ClosedAt.HasValue || session.Status != "Open")
         {
-            throw new ManagementException(409, "The table session is not open.");
+            throw new ManagementException(409, "Phiên bàn chưa được mở hoặc đã đóng.");
         }
 
         return new BillingSessionDto

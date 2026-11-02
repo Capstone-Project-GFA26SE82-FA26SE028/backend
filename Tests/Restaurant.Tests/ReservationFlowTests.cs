@@ -467,7 +467,7 @@ public sealed partial class GatewayFlowTests
         scope.ServiceProvider.GetRequiredService<IOptions<ReservationSettings>>().Value.DefaultDurationMinutes = 0;
         var response = await Availability(restaurant.RestaurantId, area.AreaId);
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.Contains("Configure valid reservation", await response.Content.ReadAsStringAsync());
+        Assert.Contains("Cấu hình thời lượng đặt bàn", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

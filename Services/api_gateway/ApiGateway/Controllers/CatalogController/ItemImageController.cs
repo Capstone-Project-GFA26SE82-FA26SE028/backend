@@ -29,7 +29,7 @@ public sealed class ItemImageController(ItemImageGrpc.ItemImageGrpcClient client
                 {
                     StatusCode = 400,
                     IsSuccess = false,
-                    Message = "Choose a JPEG, PNG or WebP image no larger than 2 MiB."
+                    Message = "Vui lòng chọn ảnh định dạng JPEG, PNG hoặc WebP có dung lượng tối đa 2 MiB."
                 });
             }
 
@@ -43,7 +43,7 @@ public sealed class ItemImageController(ItemImageGrpc.ItemImageGrpcClient client
             {
                 StatusCode = 200,
                 IsSuccess = true,
-                Message = "Image uploaded.",
+                Message = "Tải ảnh lên thành công.",
                 Result = new { ImageUrl = reply.ImageUrl }
             });
         }, cancellationToken);

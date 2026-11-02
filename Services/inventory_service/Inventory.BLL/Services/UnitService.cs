@@ -22,13 +22,13 @@ public sealed class UnitService(UnitRepository repository, InventoryTransaction 
         if (code.Length is < 1 or > 50 || code.Any(x => !char.IsAsciiLetterOrDigit(x) && x != '_')
             || name.Length is < 1 or > 100 || name.Any(char.IsControl))
         {
-            throw new InventoryException(400, "Unit requires an ASCII code and a name of at most 100 characters.");
+            throw new InventoryException(400, "Đơn vị yêu cầu mã ký tự ASCII và tên không quá 100 ký tự.");
         }
         return await transaction.ExecuteAsync(async () =>
         {
             if (await repository.GetByCodeAsync(code, ct) is not null)
             {
-                throw new InventoryException(409, "Unit code already exists.");
+                throw new InventoryException(409, "Mã đơn vị tính đã tồn tại.");
             }
             var unit = new Unit
             {

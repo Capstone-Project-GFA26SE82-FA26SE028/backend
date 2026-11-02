@@ -4,15 +4,15 @@ namespace ApiGateway.DTOs.Ordering;
 
 public sealed class KitchenStationWriteDTO
 {
-    [Required]
+    [Required(ErrorMessage = "Trường {0} là bắt buộc.")]
     public string KitchenStationCode { get; set; } = string.Empty;
-    [Required]
+    [Required(ErrorMessage = "Trường {0} là bắt buộc.")]
     public string KitchenStationName { get; set; } = string.Empty;
 }
 
 public sealed class KitchenStationStatusDTO
 {
-    [Required]
+    [Required(ErrorMessage = "Trường {0} là bắt buộc.")]
     public bool? IsActive { get; set; }
 }
 

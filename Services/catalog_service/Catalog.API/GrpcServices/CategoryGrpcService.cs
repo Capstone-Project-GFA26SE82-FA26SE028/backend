@@ -114,7 +114,7 @@ public sealed class CategoryGrpcService(
         {
             throw new RpcException(new Status(
                 StatusCode.InvalidArgument,
-                "Invalid category ID."));
+                "ID danh mục không hợp lệ."));
         }
 
         return id;

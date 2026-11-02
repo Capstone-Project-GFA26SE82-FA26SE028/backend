@@ -17,7 +17,7 @@ public sealed class CashMovementRepository(BillingDbContext db)
     {
         if (_context.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("An active transaction is required to lock a cash posting.");
+            throw new InvalidOperationException("Cần có giao dịch đang hoạt động để khóa bút toán tiền mặt.");
         }
 
         if (!_context.Database.IsSqlServer())

@@ -13,14 +13,14 @@ public sealed class CloudinaryImageStorage(HttpClient client, CloudinarySettings
     {
         if (image.Length == 0 || image.Length > MaxImageBytes)
         {
-            throw new ImageStorageException(400, "The image must contain between 1 byte and 2 MiB.");
+            throw new ImageStorageException(400, "Kích thước ảnh phải từ 1 byte đến tối đa 2 MiB.");
         }
 
         if (string.IsNullOrWhiteSpace(settings.CloudName)
             || string.IsNullOrWhiteSpace(settings.ApiKey)
             || string.IsNullOrWhiteSpace(settings.ApiSecret))
         {
-            throw new ImageStorageException(503, "Configure Cloudinary:CloudName, ApiKey and ApiSecret.");
+            throw new ImageStorageException(503, "Vui lòng cấu hình Cloudinary:CloudName, ApiKey và ApiSecret.");
         }
 
         using var form = new MultipartFormDataContent();
@@ -40,8 +40,8 @@ public sealed class CloudinaryImageStorage(HttpClient client, CloudinarySettings
             {
                 throw new ImageStorageException(response.StatusCode == HttpStatusCode.BadRequest ? 400 : 503,
                     response.StatusCode == HttpStatusCode.BadRequest
-                        ? "Cloudinary rejected the image. Use a valid JPEG, PNG or WebP image."
-                        : "Unable to upload the image to Cloudinary.");
+                        ? "Cloudinary từ chối hình ảnh. Vui lòng sử dụng ảnh JPEG, PNG hoặc WebP hợp lệ."
+                        : "Không thể tải hình ảnh lên Cloudinary.");
             }
 
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
@@ -49,7 +49,7 @@ public sealed class CloudinaryImageStorage(HttpClient client, CloudinarySettings
                 || value.ValueKind != JsonValueKind.String
                 || !IsDeliveryUrl(value.GetString()))
             {
-                throw new ImageStorageException(503, "Cloudinary returned an invalid image URL.");
+                throw new ImageStorageException(503, "Cloudinary trả về đường dẫn ảnh không hợp lệ.");
             }
 
             return value.GetString()!;
@@ -57,7 +57,7 @@ public sealed class CloudinaryImageStorage(HttpClient client, CloudinarySettings
         catch (Exception ex) when (ex is HttpRequestException or JsonException
             || ex is OperationCanceledException && !ct.IsCancellationRequested)
         {
-            throw new ImageStorageException(503, "Cloudinary is unavailable. Try again later.");
+            throw new ImageStorageException(503, "Dịch vụ Cloudinary hiện không khả dụng. Vui lòng thử lại sau.");
         }
     }
 
@@ -65,7 +65,7 @@ public sealed class CloudinaryImageStorage(HttpClient client, CloudinarySettings
     {
         if (!IsDeliveryUrl(url))
         {
-            throw new ImageStorageException(404, "No Cloudinary image is available. Regenerate the QR code.");
+            throw new ImageStorageException(404, "Chưa có ảnh trên Cloudinary. Vui lòng tạo lại mã QR.");
         }
 
         try
@@ -73,12 +73,12 @@ public sealed class CloudinaryImageStorage(HttpClient client, CloudinarySettings
             using var response = await client.GetAsync(url, ct);
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
-                throw new ImageStorageException(404, "The image was not found on Cloudinary.");
+                throw new ImageStorageException(404, "Không tìm thấy hình ảnh trên Cloudinary.");
             }
 
             if (!response.IsSuccessStatusCode)
             {
-                throw new ImageStorageException(503, "Unable to read the Cloudinary image.");
+                throw new ImageStorageException(503, "Không thể đọc ảnh từ Cloudinary.");
             }
 
             return await response.Content.ReadAsByteArrayAsync(ct);
@@ -86,7 +86,7 @@ public sealed class CloudinaryImageStorage(HttpClient client, CloudinarySettings
         catch (Exception ex) when (ex is HttpRequestException
             || ex is OperationCanceledException && !ct.IsCancellationRequested)
         {
-            throw new ImageStorageException(503, "Cloudinary is unavailable. Try again later.");
+            throw new ImageStorageException(503, "Dịch vụ Cloudinary hiện không khả dụng. Vui lòng thử lại sau.");
         }
     }
 

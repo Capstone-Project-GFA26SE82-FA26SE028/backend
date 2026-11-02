@@ -15,7 +15,7 @@ public sealed class CashShiftGrpcService(ICashShiftService service) : CashShiftG
         if (!request.HasOpeningCash || !decimal.TryParse(request.OpeningCash,
             NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var amount))
         {
-            throw new BillingException(400, "Provide an opening cash amount as an invariant decimal number.");
+            throw new BillingException(400, "Vui lòng nhập số tiền mặt đầu ca dưới dạng số thập phân dùng dấu chấm phân cách.");
         }
 
         return Map(await service.Open(registerId, new OpenCashShiftDTO
@@ -33,7 +33,7 @@ public sealed class CashShiftGrpcService(ICashShiftService service) : CashShiftG
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new BillingException(400, "A valid cash register ID is required.");
+            throw new BillingException(400, "Yêu cầu ID quầy thu ngân hợp lệ.");
         }
 
         return id;

@@ -17,7 +17,7 @@ public sealed class OrderingTransaction(IUnitOfWork unitOfWork) : IOrderingTrans
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new OrderingException(409, "The data changed. Reload and retry.");
+            throw new OrderingException(409, "Dữ liệu đã thay đổi. Vui lòng tải lại và thử lại.");
         }
         catch (DbUpdateException exception) when (exception.InnerException is SqlException sql)
         {
@@ -32,6 +32,6 @@ public sealed class OrderingTransaction(IUnitOfWork unitOfWork) : IOrderingTrans
     private static OrderingException Failure(SqlException exception)
     {
         return new OrderingException(exception.Number is 1205 or 2601 or 2627 or 547 ? 409 : 503,
-            "Ordering data is busy or unavailable. Retry with the same idempotency key.");
+            "Dữ liệu đặt món đang bận hoặc không khả dụng. Vui lòng thử lại với cùng khóa chống trùng lặp.");
     }
 }

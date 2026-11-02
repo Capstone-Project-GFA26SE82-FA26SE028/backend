@@ -27,7 +27,7 @@ public sealed class RestaurantService(IRestaurantRepository repository, IManagem
     {
         await access.RequireAdmin(ct);
         return Map(await repository.GetByIdAsync(id, ct)
-            ?? throw new ManagementException(404, "Restaurant not found."));
+            ?? throw new ManagementException(404, "Không tìm thấy nhà hàng."));
     }
 
     public Task<RestaurantDto> Create(RestaurantWriteDto body, CancellationToken ct)
@@ -43,32 +43,32 @@ public sealed class RestaurantService(IRestaurantRepository repository, IManagem
     private async Task<RestaurantDto> Save(Guid? id, RestaurantWriteDto body, CancellationToken ct)
     {
         await access.RequireAdmin(ct);
-        var name = ManagementValidation.Required(body.RestaurantName, 255, "Restaurant name");
-        var address = ManagementValidation.Required(body.Address, 500, "Address");
+        var name = ManagementValidation.Required(body.RestaurantName, 255, "Tên nhà hàng");
+        var address = ManagementValidation.Required(body.Address, 500, "Địa chỉ");
         var hotline = ManagementValidation.Required(body.Hotline, 20, "Hotline");
-        var taxCode = ManagementValidation.Optional(body.TaxCode, 50, "Tax code");
-        var logo = ManagementValidation.Optional(body.LogoUrl, 2048, "Logo URL");
+        var taxCode = ManagementValidation.Optional(body.TaxCode, 50, "Mã số thuế");
+        var logo = ManagementValidation.Optional(body.LogoUrl, 2048, "Đường dẫn Logo");
         if (logo is not null && (!Uri.TryCreate(logo, UriKind.Absolute, out var uri)
             || (uri.Scheme != "https" && uri.Scheme != "http")))
         {
-            throw new ManagementException(400, "The logo must be a valid HTTP/HTTPS URL.");
+            throw new ManagementException(400, "Logo phải là đường dẫn URL HTTP/HTTPS hợp lệ.");
         }
 
-        var zone = ManagementValidation.Required(body.TimeZone, 100, "Time zone");
+        var zone = ManagementValidation.Required(body.TimeZone, 100, "Múi giờ");
         try
         {
             TimeZoneInfo.FindSystemTimeZoneById(zone);
         }
         catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
         {
-            throw new ManagementException(400, "Invalid time zone.");
+            throw new ManagementException(400, "Múi giờ không hợp lệ.");
         }
 
         if (body.OpeningHours is null || body.OpeningHours.Count > 7
             || body.OpeningHours.Any(x => x is null || x.DayOfWeek < 0 || x.DayOfWeek > 6)
             || body.OpeningHours.Select(x => x.DayOfWeek).Distinct().Count() != body.OpeningHours.Count)
         {
-            throw new ManagementException(400, "Operating hours must use days 0-6 without duplicate days.");
+            throw new ManagementException(400, "Giờ hoạt động phải từ thứ 2 đến chủ nhật (0-6) và không được trùng ngày.");
         }
 
         var hours = body.OpeningHours.Select(x => new OpeningHour
@@ -80,13 +80,13 @@ public sealed class RestaurantService(IRestaurantRepository repository, IManagem
         }).ToList();
         if (hours.Any(x => x.OpenAt >= x.CloseAt))
         {
-            throw new ManagementException(400, "Opening time must precede closing time on the same day.");
+            throw new ManagementException(400, "Giờ mở cửa phải trước giờ đóng cửa trong cùng một ngày.");
         }
 
         var entity = await transaction.ExecuteAsync(async () =>
         {
             var item = id.HasValue
-                ? await repository.GetByIdAsync(id.Value, ct) ?? throw new ManagementException(404, "Restaurant not found.")
+                ? await repository.GetByIdAsync(id.Value, ct) ?? throw new ManagementException(404, "Không tìm thấy nhà hàng.")
                 : new Entity
                 {
                     RestaurantId = Guid.NewGuid()

@@ -11,10 +11,10 @@ public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBas
 {
     public override async Task<ItemReply> SetKitchenStation(SetItemKitchenStationRequest request, ServerCallContext context)
     {
-        return ToReply(await service.SetKitchenStation(ParseId(request.ItemId, "item"),
+        return ToReply(await service.SetKitchenStation(ParseId(request.ItemId, "món ăn"),
             new SetItemKitchenStationDTO
             {
-                KitchenStationId = request.HasKitchenStationId ? ParseId(request.KitchenStationId, "station") : null,
+                KitchenStationId = request.HasKitchenStationId ? ParseId(request.KitchenStationId, "trạm bếp") : null,
                 Version = request.Version
             }, context.CancellationToken));
     }
@@ -23,7 +23,7 @@ public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBas
     {
         var response = await service.Create(new CreateItemDTO
         {
-            CategoryId = ParseId(request.CategoryId, "category"),
+            CategoryId = ParseId(request.CategoryId, "danh mục"),
             ItemName = request.ItemName,
             Description = request.HasDescription ? request.Description : null,
             ImageUrl = request.HasImageUrl ? request.ImageUrl : null,
@@ -36,7 +36,7 @@ public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBas
     {
         var response = await service.GetAll(new ItemQueryDTO
         {
-            CategoryId = request.HasCategoryId ? ParseId(request.CategoryId, "category") : null,
+            CategoryId = request.HasCategoryId ? ParseId(request.CategoryId, "danh mục") : null,
             Search = request.HasSearch ? request.Search : null,
             Availability = request.HasAvailability ? request.Availability : null,
             Page = request.Page,
@@ -62,14 +62,14 @@ public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBas
 
     public override async Task<ItemReply> GetById(ItemIdRequest request, ServerCallContext context)
     {
-        return ToReply(await service.GetById(ParseId(request.ItemId, "item"), context.CancellationToken));
+        return ToReply(await service.GetById(ParseId(request.ItemId, "món ăn"), context.CancellationToken));
     }
 
     public override async Task<ItemReply> Update(UpdateItemRequest request, ServerCallContext context)
     {
-        var response = await service.Update(ParseId(request.ItemId, "item"), new UpdateItemDTO
+        var response = await service.Update(ParseId(request.ItemId, "món ăn"), new UpdateItemDTO
         {
-            CategoryId = ParseId(request.CategoryId, "category"),
+            CategoryId = ParseId(request.CategoryId, "danh mục"),
             ItemName = request.ItemName,
             Description = request.HasDescription ? request.Description : null,
             ImageUrl = request.HasImageUrl ? request.ImageUrl : null,
@@ -81,7 +81,7 @@ public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBas
 
     public override async Task<ItemReply> SetStatus(SetItemStatusRequest request, ServerCallContext context)
     {
-        var response = await service.SetStatus(ParseId(request.ItemId, "item"), new SetItemStatusDTO
+        var response = await service.SetStatus(ParseId(request.ItemId, "món ăn"), new SetItemStatusDTO
         {
             Availability = request.Availability,
             Version = request.Version
@@ -93,7 +93,7 @@ public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBas
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, $"Invalid {resource} ID."));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, $"ID {resource} không hợp lệ."));
         }
 
         return id;

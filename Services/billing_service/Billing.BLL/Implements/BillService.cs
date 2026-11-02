@@ -34,25 +34,25 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         RequireRole(actor, true);
         if (tableSessionId == Guid.Empty)
         {
-            throw new BillingException(400, "A valid table session ID is required.");
+            throw new BillingException(400, "Mã phiên bàn không hợp lệ hoặc bị trống.");
         }
 
         if (settings.Value.Currency != "VND" || settings.Value.OrderPriceBasis != "Exclusive")
         {
-            throw new BillingException(409, "Configure VND and explicitly confirm that order prices exclude VAT and service fees before creating bills.");
+            throw new BillingException(409, "Cần cấu hình đơn vị tiền VND và xác nhận giá món chưa bao gồm VAT và phí dịch vụ trước khi tạo hóa đơn.");
         }
 
         var bill = await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             if (!await bills.LockSessionAsync(tableSessionId, ct))
             {
-                throw new BillingException(409, "Bill creation is busy for this table session. Retry the request.");
+                throw new BillingException(409, "Hệ thống tạo hóa đơn đang bận cho phiên bàn này. Vui lòng thử lại.");
             }
 
             await RequireCheckout(tableSessionId, checkoutId, ct);
             if (await bills.SessionHasBillAsync(tableSessionId, ct))
             {
-                throw new BillingException(409, "This session already has a bill. Review its freshness before proceeding.");
+                throw new BillingException(409, "Phiên này đã có hóa đơn. Vui lòng kiểm tra tính cập nhật trước khi tiếp tục.");
             }
 
             var snapshot = await source.GetBySessionAsync(tableSessionId, ct);
@@ -61,20 +61,20 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             RequireRole(verified, true);
             if (actor.UserId != verified.UserId)
             {
-                throw new BillingException(401, "The employee session changed. Sign in again.");
+                throw new BillingException(401, "Phiên làm việc của nhân viên đã thay đổi. Vui lòng đăng nhập lại.");
             }
 
             RequireBranch(verified, snapshot.RestaurantId);
             if (snapshot.PendingOrderCount != 0)
             {
-                throw new BillingException(409, "The session contains orders awaiting waiter confirmation. Resolve them before creating a bill.");
+                throw new BillingException(409, "Phiên bàn còn các món đang chờ nhân viên phục vụ xác nhận. Vui lòng xử lý trước khi tạo hóa đơn.");
             }
 
             var effective = await policies.GetEffectiveAsync(clock.GetUtcNow().UtcDateTime, ct);
             if (effective.Count != 1 || effective[0].VatRate is < 0 or > 1
                 || effective[0].ServiceRate is < 0 or > 1)
             {
-                throw new BillingException(409, "A single valid effective tax and service fee policy is required. Rates must be decimal fractions between 0 and 1.");
+                throw new BillingException(409, "Cần có một chính sách thuế và phí dịch vụ hợp lệ đang áp dụng (tỷ lệ từ 0 đến 1).");
             }
 
             var policy = effective[0];
@@ -116,7 +116,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             ValidateSource(latest, tableSessionId);
             if (Fingerprint(latest) != fingerprint)
             {
-                throw new BillingException(409, "Order data changed while creating the bill. Review the orders and retry.");
+                throw new BillingException(409, "Dữ liệu đơn hàng đã thay đổi trong khi tạo hóa đơn. Vui lòng kiểm tra lại đơn hàng và thử lại.");
             }
 
             await bills.AddAsync(result);
@@ -143,39 +143,39 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         RequireRole(actor, true);
         if (id == Guid.Empty)
         {
-            throw new BillingException(400, "A valid bill ID is required.");
+            throw new BillingException(400, "Mã hóa đơn không hợp lệ hoặc bị trống.");
         }
 
-        var initial = await bills.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Bill not found.");
+        var initial = await bills.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
         RequireBranch(actor, initial.RestaurantId);
         var initialSessions = initial.BillLines.Select(line => line.TableSessionRef).Distinct().ToArray();
         if (initialSessions.Length != 1)
         {
-            throw new BillingException(409, "The bill must identify one table session.");
+            throw new BillingException(409, "Hóa đơn phải xác định đúng một phiên bàn.");
         }
 
         var bill = await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             if (!await bills.LockSessionAsync(initialSessions[0], ct))
             {
-                throw new BillingException(409, "Checkout is busy. Retry the request.");
+                throw new BillingException(409, "Thanh toán đang bận. Vui lòng thử lại yêu cầu.");
             }
 
             await RequireCheckout(initialSessions[0], checkoutId, ct);
             var stored = await bills.GetForRefreshAsync(id, ct)
-                ?? throw new BillingException(404, "Bill not found.");
+                ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
             RequireBranch(actor, stored.RestaurantId);
             var verified = await access.GetCurrentScopeAsync(stored.RestaurantId, ct);
             RequireRole(verified, true);
             if (actor.UserId != verified.UserId)
             {
-                throw new BillingException(401, "The employee session changed. Sign in again.");
+                throw new BillingException(401, "Phiên làm việc của nhân viên đã thay đổi. Vui lòng đăng nhập lại.");
             }
 
             RequireBranch(verified, stored.RestaurantId);
             if (stored.Status != "Unpaid" || stored.PaidAt.HasValue || stored.Payments.Any(PayOsPaymentRules.IsBlocking))
             {
-                throw new BillingException(409, "Only an unpaid bill without payment records can be refreshed.");
+                throw new BillingException(409, "Chỉ có thể làm mới hóa đơn chưa thanh toán và chưa có giao dịch thanh toán.");
             }
 
             if (stored.Currency != "VND" || settings.Value.OrderPriceBasis != "Exclusive"
@@ -183,14 +183,14 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
                 || stored.VoucherRedemptions.Count != 0 || stored.BillLines.Any(line => line.DiscountAllocated != 0)
                 || stored.VatRateSnapshot is < 0 or > 1 || stored.ServiceRateSnapshot is < 0 or > 1)
             {
-                throw new BillingException(409, "This bill cannot be refreshed using the supported exclusive-price, undiscounted VND calculation.");
+                throw new BillingException(409, "Hóa đơn này không thể làm mới theo quy tắc tính giá VND chưa bao gồm thuế phí hiện hành.");
             }
 
             var sessions = stored.BillLines.Select(line => line.TableSessionRef).Distinct().ToArray();
             if (sessions.Length != 1 || sessions[0] == Guid.Empty
                 || stored.BillLines.Select(line => line.OrderItemRef).Distinct().Count() != stored.BillLines.Count)
             {
-                throw new BillingException(409, "The bill must contain a verifiable single-session snapshot without duplicate order items.");
+                throw new BillingException(409, "Hóa đơn phải chứa bản chụp hợp lệ của một phiên bàn và không có món trùng lặp.");
             }
 
             var sessionId = sessions[0];
@@ -198,12 +198,12 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             ValidateSource(snapshot, sessionId, requireItems: false);
             if (snapshot.RestaurantId != stored.RestaurantId)
             {
-                throw new BillingException(409, "The order source does not belong to this bill's restaurant.");
+                throw new BillingException(409, "Nguồn đơn hàng không thuộc về nhà hàng của hóa đơn này.");
             }
 
             if (snapshot.PendingOrderCount != 0)
             {
-                throw new BillingException(409, "Resolve orders awaiting waiter confirmation before refreshing the bill.");
+                throw new BillingException(409, "Vui lòng xử lý các đơn hàng đang chờ nhân viên xác nhận trước khi làm mới hóa đơn.");
             }
 
             var fingerprint = Fingerprint(snapshot);
@@ -212,7 +212,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             ValidateSource(latest, sessionId, requireItems: false);
             if (Fingerprint(latest) != fingerprint)
             {
-                throw new BillingException(409, "Order data changed while refreshing the bill. Review the orders and retry.");
+                throw new BillingException(409, "Dữ liệu đơn hàng đã thay đổi trong khi làm mới hóa đơn. Vui lòng kiểm tra lại đơn hàng và thử lại.");
             }
 
             foreach (var updated in draft.BillLines)
@@ -258,12 +258,12 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             }
             catch (JsonException)
             {
-                throw new BillingException(409, "The stored item snapshot cannot be verified for refresh.");
+                throw new BillingException(409, "Bản chụp món ăn đã lưu không thể xác minh để làm mới.");
             }
 
             if (item.ItemId == Guid.Empty || item.OrderId == Guid.Empty || string.IsNullOrEmpty(item.SourceFingerprint))
             {
-                throw new BillingException(409, "The stored item snapshot cannot be verified for refresh.");
+                throw new BillingException(409, "Bản chụp món ăn đã lưu không thể xác minh để làm mới.");
             }
 
             var quantity = 0;
@@ -274,7 +274,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             {
                 if (item.OrderId != line.Item.OrderId || item.ItemId != line.Item.ItemId)
                 {
-                    throw new BillingException(409, "An order item changed identity. Review the source before refreshing.");
+                    throw new BillingException(409, "Món ăn trong đơn đã bị thay đổi định danh. Vui lòng kiểm tra lại nguồn trước khi làm mới.");
                 }
 
                 item = line.Item;
@@ -355,7 +355,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             PageSize = query.PageSize
         }.IsValid() || query.RestaurantId == Guid.Empty || query.Search?.Length > 50 || query.Search?.Any(char.IsControl) == true)
         {
-            throw new BillingException(400, "Provide valid pagination, an optional restaurant ID and a search of at most 50 characters.");
+            throw new BillingException(400, "Vui lòng cung cấp phân trang hợp lệ, mã nhà hàng (nếu có) và từ khóa tìm kiếm tối đa 50 ký tự.");
         }
 
         if (query.RestaurantId.HasValue)
@@ -373,17 +373,17 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         RequireRole(actor, false);
         if (id == Guid.Empty)
         {
-            throw new BillingException(400, "A valid bill ID is required.");
+            throw new BillingException(400, "Mã hóa đơn không hợp lệ hoặc bị trống.");
         }
 
-        var bill = await bills.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Bill not found.");
+        var bill = await bills.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
         RequireBranch(actor, bill.RestaurantId);
         var result = Map(bill);
         var sessions = bill.BillLines.Select(line => line.TableSessionRef).Distinct().ToArray();
         if (sessions.Length != 1 || result.Items.Any(line => string.IsNullOrEmpty(line.Item.SourceFingerprint)))
         {
             result.SourceStatus = "Unverifiable";
-            result.Warnings.Add("The stored bill does not contain a verifiable single-session source snapshot.");
+            result.Warnings.Add("Hóa đơn đã lưu không chứa bản chụp nguồn phiên bàn hợp lệ.");
             return result;
         }
 
@@ -395,7 +395,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         catch (BillingException error) when (error.StatusCode is 503 or 504 or 404 or 409)
         {
             result.SourceStatus = "Unavailable";
-            result.Warnings.Add("Order freshness could not be verified. Do not collect payment using this snapshot.");
+            result.Warnings.Add("Không thể xác minh tính cập nhật của đơn hàng. Không được thu tiền bằng bản chụp này.");
             return result;
         }
         ValidateSource(current, sessions[0], requireItems: false);
@@ -403,7 +403,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             && result.Items.All(line => line.Item.SourceFingerprint == Fingerprint(current)) ? "Current" : "Stale";
         if (result.SourceStatus == "Stale")
         {
-            result.Warnings.Add("Order data changed after this bill was created. Do not collect payment using this snapshot.");
+            result.Warnings.Add("Dữ liệu đơn hàng đã thay đổi sau khi tạo hóa đơn. Không được thu tiền bằng bản chụp này.");
         }
 
         return result;
@@ -413,19 +413,19 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
     {
         if (actor.UserId == Guid.Empty)
         {
-            throw new BillingException(401, "A valid employee session is required.");
+            throw new BillingException(401, "Yêu cầu phiên làm việc của nhân viên hợp lệ.");
         }
 
         var cashier = roles.Value.CashierRoleIds.Contains(actor.RoleId, StringComparer.Ordinal);
         var manager = roles.Value.ManagerRoleIds.Contains(actor.RoleId, StringComparer.Ordinal);
         if (create ? actor.IsAdministrator || !cashier : !actor.IsAdministrator && !cashier && !manager)
         {
-            throw new BillingException(403, create ? "Only a Cashier can create or refresh bills." : "Billing read permission is required.");
+            throw new BillingException(403, create ? "Chỉ thu ngân mới có quyền tạo hoặc làm mới hóa đơn." : "Yêu cầu quyền xem thông tin hóa đơn.");
         }
 
         if (!actor.IsAdministrator && actor.RestaurantIds.Count == 0)
         {
-            throw new BillingException(403, "An active restaurant assignment is required.");
+            throw new BillingException(403, "Yêu cầu được phân công vào nhà hàng đang hoạt động.");
         }
     }
 
@@ -433,7 +433,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
     {
         if (!actor.IsAdministrator && !actor.RestaurantIds.Contains(branch))
         {
-            throw new BillingException(403, "An active assignment to this restaurant is required.");
+            throw new BillingException(403, "Yêu cầu được phân công vào nhà hàng này.");
         }
     }
 
@@ -448,12 +448,12 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
                 || line.Item.Options.Any(option => option.OptionId == Guid.Empty || option.Quantity <= 0
                     || option.ExtraPrice < 0 || option.ExtraPrice > MaximumMoney || decimal.Round(option.ExtraPrice, 2) != option.ExtraPrice)))
         {
-            throw new BillingException(503, "Ordering returned inconsistent billing data.");
+            throw new BillingException(503, "Dịch vụ gọi món trả về dữ liệu thanh toán không nhất quán.");
         }
 
         if (requireItems && snapshot.Items.Count == 0)
         {
-            throw new BillingException(409, "There are no confirmed non-cancelled items to bill.");
+            throw new BillingException(409, "Không có món nào đã xác nhận và chưa bị hủy để tính hóa đơn.");
         }
     }
 
@@ -461,7 +461,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
     {
         if (value < 0 || value > MaximumMoney)
         {
-            throw new BillingException(409, "The bill amount exceeds decimal(18,2) storage limits.");
+            throw new BillingException(409, "Số tiền hóa đơn vượt quá giới hạn lưu trữ decimal(18,2).");
         }
 
         return value;
@@ -500,7 +500,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
 
         if (active is null || active.CheckoutId != checkoutId || active.Status is not ("Frozen" or "Ready"))
         {
-            throw new BillingException(409, "Continue the active checkout to synchronize this bill.");
+            throw new BillingException(409, "Vui lòng tiếp tục thanh toán đang hoạt động để đồng bộ hóa đơn này.");
         }
     }
 
@@ -539,17 +539,17 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         };
         if (!result.HasCompleteCogs)
         {
-            result.Warnings.Add("Ingredient cost data is unavailable. Complete COGS and profit cannot be calculated.");
+            result.Warnings.Add("Dữ liệu giá vốn nguyên liệu không khả dụng. Không thể tính toán giá vốn và lợi nhuận đầy đủ.");
         }
 
         if (result.Items.Any(line => line.Quantity > 0 && line.Item.Status != "Served"))
         {
-            result.Warnings.Add("Some items were not served when this bill was created.");
+            result.Warnings.Add("Một số món chưa được phục vụ khi tạo hóa đơn này.");
         }
 
         if (result.Items.Count > 0 && result.Items.All(line => line.Quantity == 0))
         {
-            result.Warnings.Add("All previously billed items are cancelled. Zero-quantity lines retain the bill's session history.");
+            result.Warnings.Add("Tất cả các món đã tính trước đó đều đã bị hủy. Các dòng số lượng bằng 0 được giữ lại để lưu lịch sử phiên.");
         }
 
         return result;

@@ -39,7 +39,7 @@ public sealed class BillServiceTests
         Assert.Null(Assert.Single(bill.Items).CogsSnapshot);
         Assert.Equal("Unpaid", bill.Status);
         Assert.Equal("MatchedAtCreation", bill.SourceStatus);
-        Assert.Contains(bill.Warnings, warning => warning.Contains("not served"));
+        Assert.Contains(bill.Warnings, warning => warning.Contains("chưa được phục vụ"));
         Assert.Equal((double)bill.ServiceAmount, await fixture.Db.BillLines.SumAsync(line => (double)line.ServiceAllocated), 2);
         Assert.Empty(await fixture.Db.Payments.ToListAsync());
     }
@@ -195,7 +195,7 @@ public sealed class BillServiceTests
         var read = await fixture.Service.GetById(bill.BillId, default);
         Assert.Equal("Unavailable", read.SourceStatus);
         Assert.Equal(bill.TotalAmount, read.TotalAmount);
-        Assert.Contains(read.Warnings, warning => warning.Contains("freshness"));
+        Assert.Contains(read.Warnings, warning => warning.Contains("tính cập nhật"));
     }
 
     private static TaxFeePolicy Policy(DateTime effective)

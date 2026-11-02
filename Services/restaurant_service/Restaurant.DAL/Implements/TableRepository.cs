@@ -13,7 +13,7 @@ public sealed class TableRepository(RestaurantDbContext db) : GenericRepository<
     {
         if (_context.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("Reservation table locking requires a transaction.");
+            throw new InvalidOperationException("Cần có giao dịch để khóa bàn được đặt.");
         }
 
         var source = _context.Database.IsSqlServer()
@@ -59,7 +59,7 @@ public sealed class TableRepository(RestaurantDbContext db) : GenericRepository<
     {
         if (_context.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("Opening a table session requires a transaction.");
+            throw new InvalidOperationException("Cần có giao dịch để mở phiên bàn.");
         }
 
         TableEntity? table;

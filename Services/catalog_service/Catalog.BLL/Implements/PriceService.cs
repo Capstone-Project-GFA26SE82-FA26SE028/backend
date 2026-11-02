@@ -25,7 +25,7 @@ public sealed class PriceService(
         await access.RequireMenuManagerAsync(cancellationToken);
         if (query is null || !query.IsValid())
         {
-            return new ResponseDTO("Invalid pagination, item ID, or channel filter.", 400);
+            return new ResponseDTO("Phân trang, mã món ăn hoặc kênh bán không hợp lệ.", 400);
         }
 
         if (query.ItemId.HasValue && await items.GetByIdAsync(query.ItemId.Value, cancellationToken) is null)
@@ -34,7 +34,7 @@ public sealed class PriceService(
         }
 
         var page = await prices.GetPageAsync(query, cancellationToken);
-        return new ResponseDTO("Prices retrieved successfully.", 200, true,
+        return new ResponseDTO("Lấy danh sách giá thành công.", 200, true,
             new PagedResult<PriceDTO>(page.Items.Select(Map).ToArray(), page.TotalCount, page.Page, page.PageSize));
     }
 
@@ -47,7 +47,7 @@ public sealed class PriceService(
         }
 
         var price = await prices.GetByIdAsync(id, cancellationToken);
-        return price is null ? NotFound() : new ResponseDTO("Price retrieved successfully.", 200, true, Map(price));
+        return price is null ? NotFound() : new ResponseDTO("Lấy thông tin giá thành công.", 200, true, Map(price));
     }
 
     public async Task<ResponseDTO> Create(CreatePriceDTO request, CancellationToken cancellationToken)
@@ -55,7 +55,7 @@ public sealed class PriceService(
         await access.RequireMenuManagerAsync(cancellationToken);
         if (request is null || request.ItemId == Guid.Empty)
         {
-            return new ResponseDTO("A valid item ID is required.", 400);
+            return new ResponseDTO("Yêu cầu mã món ăn hợp lệ.", 400);
         }
 
         if (!TryConfiguration(out var timeZone))
@@ -85,7 +85,7 @@ public sealed class PriceService(
             }
 
             prices.Create(candidate);
-            return (new ResponseDTO("Price created successfully.", 201, true), candidate);
+            return (new ResponseDTO("Tạo giá thành công.", 201, true), candidate);
         }, cancellationToken);
     }
 
@@ -99,7 +99,7 @@ public sealed class PriceService(
 
         if (request is null)
         {
-            return new ResponseDTO("A price request is required.", 400);
+            return new ResponseDTO("Yêu cầu thông tin giá.", 400);
         }
 
         if (!TryConfiguration(out var timeZone))
@@ -119,12 +119,12 @@ public sealed class PriceService(
             var now = Now();
             if (current.EffectiveFrom <= now)
             {
-                return (new ResponseDTO("Only prices that have not started can be updated. Replace an effective price instead.", 409), null);
+                return (new ResponseDTO("Chỉ có thể cập nhật giá chưa bắt đầu hiệu lực. Hãy thay thế nếu giá đang có hiệu lực.", 409), null);
             }
 
             if (candidate.EffectiveFrom <= now)
             {
-                return (new ResponseDTO("An updated future price must still start in the future.", 400), null);
+                return (new ResponseDTO("Giá cập nhật trong tương lai vẫn phải bắt đầu ở thời điểm tương lai.", 400), null);
             }
 
             candidate.ItemId = current.ItemId;
@@ -139,7 +139,7 @@ public sealed class PriceService(
             current.EffectiveTo = candidate.EffectiveTo;
             current.DailyStart = candidate.DailyStart;
             current.DailyEnd = candidate.DailyEnd;
-            return (new ResponseDTO("Price updated successfully.", 200, true), current);
+            return (new ResponseDTO("Cập nhật giá thành công.", 200, true), current);
         }, cancellationToken);
     }
 
@@ -156,11 +156,11 @@ public sealed class PriceService(
             if (current.EffectiveFrom <= Now())
             {
                 return Task.FromResult<(ResponseDTO, Price?)>((
-                    new ResponseDTO("Only prices that have not started can be deleted.", 409), null));
+                    new ResponseDTO("Chỉ có thể xóa giá chưa bắt đầu hiệu lực.", 409), null));
             }
 
             prices.Delete(current);
-            return Task.FromResult<(ResponseDTO, Price?)>((new ResponseDTO("Price deleted successfully.", 200, true), null));
+            return Task.FromResult<(ResponseDTO, Price?)>((new ResponseDTO("Xóa giá thành công.", 200, true), null));
         }, cancellationToken);
     }
 
@@ -174,7 +174,7 @@ public sealed class PriceService(
 
         if (request is null)
         {
-            return new ResponseDTO("A price request is required.", 400);
+            return new ResponseDTO("Yêu cầu thông tin giá.", 400);
         }
 
         if (!TryConfiguration(out var timeZone))
@@ -204,12 +204,12 @@ public sealed class PriceService(
             if (current.EffectiveFrom >= transitionAt
                 || (current.EffectiveTo.HasValue && transitionAt >= current.EffectiveTo.Value))
             {
-                return (new ResponseDTO("Only an effective price with a non-empty elapsed interval can be replaced.", 409), null);
+                return (new ResponseDTO("Chỉ có thể thay thế giá đang có hiệu lực.", 409), null);
             }
 
             if (end.HasValue && end.Value <= transitionAt)
             {
-                return (new ResponseDTO("The new end time must be after the server transition time.", 400), null);
+                return (new ResponseDTO("Thời gian kết thúc mới phải sau thời điểm chuyển đổi của hệ thống.", 400), null);
             }
 
             if ((current.Channel != settings.Value.AllChannelsCode
@@ -217,7 +217,7 @@ public sealed class PriceService(
                 || current.DailyStart.HasValue != current.DailyEnd.HasValue
                 || (current.DailyStart.HasValue && current.DailyEnd <= current.DailyStart))
             {
-                return (new ResponseDTO("The existing price has an unsupported channel or daily window. Resolve its configuration before replacement.", 409), null);
+                return (new ResponseDTO("Giá hiện tại có kênh bán hoặc khung giờ không được hỗ trợ. Hãy kiểm tra lại cấu hình.", 409), null);
             }
 
             var replacement = new Price
@@ -238,7 +238,7 @@ public sealed class PriceService(
 
             current.EffectiveTo = transitionAt;
             prices.Create(replacement);
-            return (new ResponseDTO("Price replaced successfully.", 201, true), replacement);
+            return (new ResponseDTO("Thay thế giá thành công.", 201, true), replacement);
         }, cancellationToken);
     }
 
@@ -248,7 +248,7 @@ public sealed class PriceService(
         await access.RequireMenuManagerAsync(cancellationToken);
         if (itemId == Guid.Empty)
         {
-            return new ResponseDTO("Invalid item ID.", 400);
+            return new ResponseDTO("ID món ăn không hợp lệ.", 400);
         }
 
         if (!TryConfiguration(out var timeZone))
@@ -258,7 +258,7 @@ public sealed class PriceService(
 
         if (!settings.Value.Channels.Contains(channel, StringComparer.Ordinal))
         {
-            return new ResponseDTO("A configured sales channel is required.", 400);
+            return new ResponseDTO("Yêu cầu kênh bán hàng hợp lệ đã cấu hình.", 400);
         }
 
         var instant = Now();
@@ -282,18 +282,18 @@ public sealed class PriceService(
                 && PriceRules.AppliesAt(price, instant, timeZone)).ToArray();
         if (candidates.Length == 0)
         {
-            return new ResponseDTO("No applicable price was found for this item, channel, and time.", 404);
+            return new ResponseDTO("Không tìm thấy giá áp dụng cho món ăn, kênh bán và thời điểm này.", 404);
         }
 
         var priority = candidates.Max(price => Priority(price, channel!));
         var selected = candidates.Where(price => Priority(price, channel!) == priority).ToArray();
         if (selected.Length != 1)
         {
-            return new ResponseDTO("Multiple prices have the same applicable priority. Resolve the conflicting schedules.", 409);
+            return new ResponseDTO("Nhiều mức giá có cùng mức độ ưu tiên. Hãy xử lý lịch giá xung đột.", 409);
         }
 
         var result = selected[0];
-        return new ResponseDTO("Applicable price retrieved successfully.", 200, true, new AppliedPriceDTO
+        return new ResponseDTO("Lấy giá áp dụng thành công.", 200, true, new AppliedPriceDTO
         {
             ItemId = itemId,
             PriceId = result.PriceId,
@@ -343,13 +343,13 @@ public sealed class PriceService(
         }
         catch (PricePersistenceException exception)
         {
-            logger.LogWarning(exception, "Price persistence failed: {Failure}", exception.Failure);
+            logger.LogWarning(exception, "Lưu giá thất bại: {Failure}", exception.Failure);
             return exception.Failure switch
             {
                 PricePersistenceFailure.Conflict => Stale(),
-                PricePersistenceFailure.RelatedDataChanged => new ResponseDTO("Related data has changed. Reload and try again.", 409),
-                PricePersistenceFailure.Busy => new ResponseDTO("A concurrent operation was detected. Try again.", 409),
-                _ => new ResponseDTO("The price data store is unavailable.", 503)
+                PricePersistenceFailure.RelatedDataChanged => new ResponseDTO("Dữ liệu liên quan đã thay đổi. Vui lòng tải lại và thử lại.", 409),
+                PricePersistenceFailure.Busy => new ResponseDTO("Phát hiện thao tác đồng thời. Vui lòng thử lại.", 409),
+                _ => new ResponseDTO("Kho dữ liệu giá hiện không khả dụng.", 503)
             };
         }
     }
@@ -362,7 +362,7 @@ public sealed class PriceService(
         if (channel != settings.Value.AllChannelsCode
             && !settings.Value.Channels.Contains(channel, StringComparer.Ordinal))
         {
-            return new ResponseDTO("The channel is not configured for pricing.", 400);
+            return new ResponseDTO("Kênh bán hàng chưa được cấu hình định giá.", 400);
         }
 
         if (!PriceRules.TryAmount(amount, out var value))
@@ -387,13 +387,13 @@ public sealed class PriceService(
             end = prices.NormalizeTimestamp(parsedEnd);
             if (end.Value <= start)
             {
-                return new ResponseDTO("EffectiveTo must be after EffectiveFrom at database timestamp precision.", 400);
+                return new ResponseDTO("EffectiveTo phải sau EffectiveFrom theo độ chính xác thời gian.", 400);
             }
         }
 
         if (!PriceRules.TryWindow(dailyStart, dailyEnd, out var windowStart, out var windowEnd))
         {
-            return new ResponseDTO("Provide both daily times as HH:mm or HH:mm:ss, with the end after the start. Overnight windows are not supported.", 400);
+            return new ResponseDTO("Cung cấp cả hai khung giờ theo HH:mm hoặc HH:mm:ss, giờ kết thúc sau giờ bắt đầu. Không hỗ trợ khung giờ qua đêm.", 400);
         }
 
         price.Channel = channel!;
@@ -454,42 +454,42 @@ public sealed class PriceService(
 
     private ResponseDTO ConfigurationMissing()
     {
-        logger.LogError("Configure Pricing:AllChannelsCode, Channels, and BusinessTimeZone before managing prices.");
-        return new ResponseDTO("Pricing is unavailable until its channels and business time zone are configured.", 503);
+        logger.LogError("Vui lòng cấu hình Pricing:AllChannelsCode, Channels và BusinessTimeZone trước khi quản lý giá.");
+        return new ResponseDTO("Chức năng định giá chưa khả dụng cho đến khi cấu hình các kênh và múi giờ kinh doanh.", 503);
     }
 
     private static ResponseDTO InvalidAmount()
     {
-        return new ResponseDTO("Amount must be non-negative, have at most two decimal places, and fit decimal(18,2).", 400);
+        return new ResponseDTO("Giá tiền phải không âm, tối đa 2 chữ số thập phân và theo định dạng decimal(18,2).", 400);
     }
 
     private static ResponseDTO InvalidTimestamp()
     {
-        return new ResponseDTO("Use an ISO 8601 timestamp with an explicit UTC offset within the SQL datetime range.", 400);
+        return new ResponseDTO("Vui lòng dùng mốc thời gian ISO 8601 có múi giờ UTC hợp lệ trong phạm vi datetime SQL.", 400);
     }
 
     private static ResponseDTO InvalidId()
     {
-        return new ResponseDTO("Invalid price ID.", 400);
+        return new ResponseDTO("Mã giá không hợp lệ.", 400);
     }
 
     private static ResponseDTO NotFound()
     {
-        return new ResponseDTO("Price not found.", 404);
+        return new ResponseDTO("Không tìm thấy mức giá.", 404);
     }
 
     private static ResponseDTO ItemNotFound()
     {
-        return new ResponseDTO("Item not found.", 404);
+        return new ResponseDTO("Không tìm thấy món ăn.", 404);
     }
 
     private static ResponseDTO Stale()
     {
-        return new ResponseDTO("The price has changed. Reload and try again.", 409);
+        return new ResponseDTO("Mức giá đã thay đổi. Vui lòng tải lại và thử lại.", 409);
     }
 
     private static ResponseDTO Overlap()
     {
-        return new ResponseDTO("Another price overlaps this scope and effective time.", 409);
+        return new ResponseDTO("Một mức giá khác bị trùng lặp phạm vi và thời gian hiệu lực.", 409);
     }
 }

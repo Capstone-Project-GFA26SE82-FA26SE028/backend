@@ -14,10 +14,10 @@ public sealed partial class PayOsPaymentService
         payments.ResetProviderTracking();
         return await Controlled(async () => await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            var initial = await payments.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Payment not found.");
+            var initial = await payments.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy khoản thanh toán.");
             if (!PayOsPaymentRules.IsPayOs(initial))
             {
-                throw new BillingException(409, "This payment is not owned by the PayOS integration.");
+                throw new BillingException(409, "Khoản thanh toán này không thuộc tích hợp PayOS.");
             }
 
             if (!await payments.LockProviderWorkAsync(id, ct))
@@ -69,7 +69,7 @@ public sealed partial class PayOsPaymentService
                 try
                 {
                     bank = await provider.CancelAsync(order, initial.ExpiredAt <= clock.GetUtcNow().UtcDateTime
-                        ? "Payment request validity period elapsed" : "Cashier requested cancellation", ct);
+                        ? "Yêu cầu thanh toán đã hết hạn" : "Thu ngân yêu cầu hủy", ct);
                 }
                 catch (PayOsClientException)
                 {
@@ -77,10 +77,10 @@ public sealed partial class PayOsPaymentService
                 }
             }
 
-            var storedBill = await bills.GetDetailsAsync(initial.BillId, ct) ?? throw new BillingException(404, "Bill not found.");
+            var storedBill = await bills.GetDetailsAsync(initial.BillId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
             var sessionId = Session(storedBill);
             await LockExisting(initial, sessionId, ct);
-            var payment = await payments.GetForProviderUpdateAsync(id, ct) ?? throw new BillingException(404, "Payment not found.");
+            var payment = await payments.GetForProviderUpdateAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy khoản thanh toán.");
             if (created is not null)
             {
                 if (created.OrderCode != order || created.Amount != payment.Amount
@@ -222,7 +222,7 @@ public sealed partial class PayOsPaymentService
 
         if (!await payments.LockBankReferenceAsync(reference!, ct))
         {
-            throw new BillingException(409, "Bank reference is being reconciled. Retry the same payment.");
+            throw new BillingException(409, "Mã tham chiếu ngân hàng đang được đối soát. Vui lòng thử lại với cùng khoản thanh toán.");
         }
 
         if (await payments.BankReferenceUsedAsync(reference!, payment.PaymentId, ct))
@@ -238,7 +238,7 @@ public sealed partial class PayOsPaymentService
         payment.ConfirmedByRef = null;
         payment.Bill.Status = PaymentStatuses.Paid;
         payment.Bill.PaidAt = payment.PaidAt;
-        var writable = await checkouts.GetByIdAsync(checkout.CheckoutId, ct) ?? throw new BillingException(409, "Checkout disappeared.");
+        var writable = await checkouts.GetByIdAsync(checkout.CheckoutId, ct) ?? throw new BillingException(409, "Không còn tìm thấy lần chốt hóa đơn.");
         writable.Status = PaymentStatuses.Paid;
     }
 }

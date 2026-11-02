@@ -17,7 +17,7 @@ public sealed class StockIssueController(StockIssueGrpc.StockIssueGrpcClient cli
     {
         if (body.Items is null || body.Items.Any(x => x is null))
         {
-            return Task.FromResult<IActionResult>(BadRequest(new ResponseDTO("Issue lines are required.", 400)));
+            return Task.FromResult<IActionResult>(BadRequest(new ResponseDTO("Các dòng phiếu xuất là bắt buộc.", 400)));
         }
         var request = new StockIssueWriteRequest
         {

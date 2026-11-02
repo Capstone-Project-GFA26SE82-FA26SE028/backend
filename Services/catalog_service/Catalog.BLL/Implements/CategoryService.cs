@@ -30,7 +30,7 @@ public sealed class CategoryService(
         if (query is null || !query.IsValid())
         {
             return new ResponseDTO(
-                "Invalid pagination or search query.",
+                "Phân trang hoặc truy vấn tìm kiếm không hợp lệ.",
                 400);
         }
 
@@ -39,7 +39,7 @@ public sealed class CategoryService(
             cancellationToken);
 
         return new ResponseDTO(
-            "Categories retrieved successfully.",
+            "Lấy danh sách danh mục thành công.",
             200,
             true,
             result);
@@ -66,7 +66,7 @@ public sealed class CategoryService(
         }
 
         return new ResponseDTO(
-            "Category retrieved successfully.",
+            "Lấy thông tin danh mục thành công.",
             200,
             true,
             Map(category));
@@ -89,7 +89,7 @@ public sealed class CategoryService(
         if (code.Length is < 1 or > 50)
         {
             return new ResponseDTO(
-                "The category name must produce a slug between 1 and 50 characters. Choose a different name.",
+                "Tên danh mục phải tạo ra slug từ 1 đến 50 ký tự. Vui lòng chọn tên khác.",
                 400);
         }
 
@@ -106,7 +106,7 @@ public sealed class CategoryService(
             if (await categories.CodeExistsAsync(code, cancellationToken))
             {
                 return new ResponseDTO(
-                    "The generated category code already exists. Choose a different name.",
+                    "Mã danh mục được tạo tự động đã tồn tại. Vui lòng chọn tên khác.",
                     409);
             }
 
@@ -121,7 +121,7 @@ public sealed class CategoryService(
             categories.Create(category);
 
             return new ResponseDTO(
-                "Category created successfully.",
+                "Tạo danh mục thành công.",
                 201,
                 true,
                 Map(category));
@@ -169,7 +169,7 @@ public sealed class CategoryService(
             category.CategoryName = name;
 
             return new ResponseDTO(
-                "Category updated successfully.",
+                "Cập nhật danh mục thành công.",
                 200,
                 true,
                 Map(category));
@@ -191,7 +191,7 @@ public sealed class CategoryService(
         if (request?.IsActive is not bool isActive)
         {
             return new ResponseDTO(
-                "The isActive field is required.",
+                "Trường isActive là bắt buộc.",
                 400);
         }
 
@@ -209,7 +209,7 @@ public sealed class CategoryService(
             if (category.IsActive == isActive)
             {
                 return new ResponseDTO(
-                    "The category already has the requested status.",
+                    "Danh mục đã ở trạng thái yêu cầu.",
                     200,
                     true,
                     Map(category));
@@ -221,14 +221,14 @@ public sealed class CategoryService(
                 cancellationToken))
             {
                 return new ResponseDTO(
-                    "Cannot deactivate a category that contains items still offered for sale.",
+                    "Không thể ngừng kích hoạt danh mục đang chứa các món ăn vẫn mở bán.",
                     409);
             }
 
             category.IsActive = isActive;
 
             return new ResponseDTO(
-                "Category status updated successfully.",
+                "Cập nhật trạng thái danh mục thành công.",
                 200,
                 true,
                 Map(category));
@@ -262,14 +262,14 @@ public sealed class CategoryService(
                 cancellationToken))
             {
                 return new ResponseDTO(
-                    "Cannot delete a category that contains items.",
+                    "Không thể xóa danh mục đang chứa món ăn.",
                     409);
             }
 
             categories.Delete(category);
 
             return new ResponseDTO(
-                "Category deleted successfully.",
+                "Xóa danh mục thành công.",
                 200,
                 true);
         }, cancellationToken);
@@ -291,7 +291,7 @@ public sealed class CategoryService(
                 && sqlException.Number is 2601 or 2627)
         {
             return new ResponseDTO(
-                "The category code or name already exists.",
+                "Mã hoặc tên danh mục đã tồn tại.",
                 409);
         }
         catch (DbUpdateException exception)
@@ -299,20 +299,20 @@ public sealed class CategoryService(
                 && sqlException.Number == 547)
         {
             return new ResponseDTO(
-                "Related data has changed. Reload and try again.",
+                "Dữ liệu liên quan đã thay đổi. Vui lòng tải lại và thử lại.",
                 409);
         }
         catch (DbUpdateConcurrencyException)
         {
             return new ResponseDTO(
-                "The data has changed. Reload and try again.",
+                "Dữ liệu đã thay đổi. Vui lòng tải lại và thử lại.",
                 409);
         }
         catch (SqlException exception)
             when (exception.Number == 1205)
         {
             return new ResponseDTO(
-                "A concurrent operation was detected. Try again.",
+                "Phát hiện thao tác đồng thời. Vui lòng thử lại.",
                 409);
         }
         catch (DbUpdateException exception)
@@ -320,7 +320,7 @@ public sealed class CategoryService(
                 && sqlException.Number == 1205)
         {
             return new ResponseDTO(
-                "A concurrent operation was detected. Try again.",
+                "Phát hiện thao tác đồng thời. Vui lòng thử lại.",
                 409);
         }
     }
@@ -379,24 +379,24 @@ public sealed class CategoryService(
 
     private static ResponseDTO InvalidId()
     {
-        return new ResponseDTO("Invalid category ID.", 400);
+        return new ResponseDTO("Mã danh mục không hợp lệ.", 400);
     }
 
     private static ResponseDTO InvalidName()
     {
         return new ResponseDTO(
-            "The category name is required, must not exceed 255 characters, and must not contain control characters.",
+            "Tên danh mục là bắt buộc, không được vượt quá 255 ký tự và không chứa ký tự điều khiển.",
             400);
     }
 
     private static ResponseDTO NotFound()
     {
-        return new ResponseDTO("Category not found.", 404);
+        return new ResponseDTO("Không tìm thấy danh mục.", 404);
     }
 
     private static ResponseDTO DuplicateName()
     {
-        return new ResponseDTO("The category name already exists.", 409);
+        return new ResponseDTO("Tên danh mục đã tồn tại.", 409);
     }
 
     private static CategoryDTO Map(Category category)

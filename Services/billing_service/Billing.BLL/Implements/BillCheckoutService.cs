@@ -37,12 +37,12 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
 
             if (await checkouts.GetActiveAsync(sessionId, ct) is not null)
             {
-                throw new BillingException(409, "This session already has a checkout. Retrieve and continue the current checkout.");
+                throw new BillingException(409, "Phiên này đã có yêu cầu thanh toán. Vui lòng lấy lại và tiếp tục thanh toán hiện tại.");
             }
 
             if (await checkouts.HasPaymentOrFinalBillAsync(sessionId, ct, PayOsPaymentRules.BlockingExpression))
             {
-                throw new BillingException(409, "This session has payment records or a finalized bill. Additional checkout cannot be requested.");
+                throw new BillingException(409, "Phiên này đã có giao dịch thanh toán hoặc hóa đơn đã hoàn tất. Không thể yêu cầu thanh toán thêm.");
             }
 
             var created = new BillCheckout
@@ -71,7 +71,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
 
             if (remote.Status == "Released")
             {
-                throw new BillingException(409, "Ordering has released this checkout. Reconcile the cancellation before proceeding.");
+                throw new BillingException(409, "Hệ thống gọi món đã hủy yêu cầu thanh toán này. Vui lòng đối soát trước khi tiếp tục.");
             }
 
             current.Status = remote.Status;
@@ -85,7 +85,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         ValidateSessionId(sessionId);
         await ordering.VerifyAsync(sessionId, guestToken, ct);
         var value = await checkouts.GetActiveAsync(sessionId, ct)
-            ?? throw new BillingException(404, "No active checkout exists for this session.");
+            ?? throw new BillingException(404, "Không có yêu cầu thanh toán nào đang hoạt động cho phiên này.");
         return Map(value);
     }
 
@@ -101,7 +101,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
 
         if (state.Status is not ("Frozen" or "Ready") || state.SourceHash is null)
         {
-            throw new BillingException(409, "Checkout is not frozen and cannot be prepared for payment.");
+            throw new BillingException(409, "Yêu cầu thanh toán chưa được khóa nên chưa thể chuẩn bị thanh toán.");
         }
 
         var billId = await checkouts.GetBillIdAsync(sessionId, ct);
@@ -133,7 +133,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
                 new CheckoutHashOption(option.OptionId, option.Quantity, option.ExtraPrice)).ToArray())));
         if (hash != state.SourceHash)
         {
-            throw new BillingException(409, "The bill does not match the frozen Ordering item set. Payment is not ready.");
+            throw new BillingException(409, "Hóa đơn không khớp với danh sách món đã khóa gọi món. Chưa thể thanh toán.");
         }
 
         await ordering.BindAsync(sessionId, id, bill.BillId, hash, ct);
@@ -142,7 +142,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
             var current = await Find(sessionId, id, ct);
             if (current.Status is not ("Frozen" or "Ready") || current.ReleasedAt.HasValue)
             {
-                throw new BillingException(409, "Checkout changed while synchronizing the bill.");
+                throw new BillingException(409, "Yêu cầu thanh toán đã thay đổi trong khi đồng bộ hóa đơn.");
             }
 
             current.BillId = bill.BillId;
@@ -161,7 +161,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
             var current = await Find(sessionId, id, ct);
             if (await checkouts.HasPaymentOrFinalBillAsync(sessionId, ct, PayOsPaymentRules.BlockingExpression))
             {
-                throw new BillingException(409, "Checkout cannot be cancelled after payment has started or the bill has been finalized.");
+                throw new BillingException(409, "Không thể hủy yêu cầu thanh toán sau khi đã bắt đầu thanh toán hoặc hóa đơn đã hoàn tất.");
             }
 
             if (!current.ReleasedAt.HasValue)
@@ -196,7 +196,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
             if (value.Status is not ("ReleasePending" or "Released")
                 || await checkouts.HasPaymentOrFinalBillAsync(sessionId, ct, PayOsPaymentRules.BlockingExpression))
             {
-                throw new BillingException(409, "Billing has not authorized reopening orders for this checkout.");
+                throw new BillingException(409, "Hệ thống thanh toán chưa cấp quyền mở lại gọi món cho yêu cầu thanh toán này.");
             }
 
             return true;
@@ -211,7 +211,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
             || !roles.Value.CashierRoleIds.Contains(actor.RoleId, StringComparer.Ordinal)
             || !actor.RestaurantIds.Contains(snapshot.RestaurantId))
         {
-            throw new BillingException(403, "Only a Cashier assigned to this restaurant can manage checkout.");
+            throw new BillingException(403, "Chỉ thu ngân được phân công vào nhà hàng này mới có thể quản lý thanh toán.");
         }
     }
 
@@ -223,7 +223,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
             {
                 if (!await bills.LockSessionAsync(sessionId, ct))
                 {
-                    throw new BillingException(409, "Checkout is busy. Retry using the same checkout ID.");
+                    throw new BillingException(409, "Hệ thống thanh toán đang bận. Vui lòng thử lại cùng mã checkout ID.");
                 }
 
                 return await action();
@@ -231,17 +231,17 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         }
         catch (DbUpdateException error) when (error.InnerException is SqlException sql && sql.Number is 2601 or 2627 or 1205)
         {
-            throw new BillingException(409, "Checkout data changed concurrently. Reload and retry the same checkout ID.");
+            throw new BillingException(409, "Dữ liệu thanh toán đã bị thay đổi đồng thời. Vui lòng tải lại và thử lại cùng checkout ID.");
         }
         catch (SqlException error) when (error.Number is 1205 or 1222)
         {
-            throw new BillingException(409, "Checkout is busy. Retry the same checkout ID.");
+            throw new BillingException(409, "Thao tác chốt hóa đơn đang bận. Vui lòng thử lại với cùng ID chốt hóa đơn.");
         }
     }
 
     private async Task<BillCheckout> Find(Guid sessionId, Guid id, CancellationToken ct)
     {
-        var value = await checkouts.GetByIdAsync(id, ct) ?? throw new BillingException(404, "Checkout not found.");
+        var value = await checkouts.GetByIdAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy yêu cầu thanh toán.");
         CheckSession(value, sessionId);
         return value;
     }
@@ -250,7 +250,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
     {
         if (value.TableSessionRef != sessionId)
         {
-            throw new BillingException(409, "This checkout belongs to another table session.");
+            throw new BillingException(409, "Yêu cầu thanh toán này thuộc về phiên bàn khác.");
         }
     }
 
@@ -272,7 +272,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         ValidateSessionId(sessionId);
         if (id == Guid.Empty)
         {
-            throw new BillingException(400, "A valid checkout ID is required.");
+            throw new BillingException(400, "Mã checkout ID không hợp lệ hoặc bị trống.");
         }
     }
 
@@ -280,7 +280,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
     {
         if (sessionId == Guid.Empty)
         {
-            throw new BillingException(400, "A valid table session ID is required.");
+            throw new BillingException(400, "Mã phiên bàn không hợp lệ hoặc bị trống.");
         }
     }
 }

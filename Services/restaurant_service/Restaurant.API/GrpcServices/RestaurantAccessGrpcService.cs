@@ -15,7 +15,7 @@ public sealed class RestaurantAccessGrpcService(ICurrentRestaurantScopeService s
         {
             if (!Guid.TryParse(request.RestaurantId, out var parsed) || parsed == Guid.Empty)
             {
-                throw new RpcException(new Status(StatusCode.InvalidArgument, "A valid restaurant ID is required."));
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã nhà hàng không hợp lệ hoặc bị trống."));
             }
 
             restaurantId = parsed;

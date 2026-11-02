@@ -4,19 +4,19 @@ namespace ApiGateway.DTOs.Identity;
 
 public class UpdateRoleDTO
 {
-    [Required]
-    [StringLength(50)]
+    [Required(ErrorMessage = "Trường {0} là bắt buộc.")]
+    [StringLength(50, ErrorMessage = "Trường {0} phải có độ dài từ {2} đến {1} ký tự.")]
     public string RoleName { get; set; } = "";
 
-    [StringLength(2048)]
+    [StringLength(2048, ErrorMessage = "Trường {0} phải có độ dài từ {2} đến {1} ký tự.")]
     public string? Description { get; set; }
 }
 
 public sealed class CreateRoleDTO : UpdateRoleDTO
 {
-    [Required]
-    [StringLength(50)]
-    [RegularExpression(@"[a-zA-Z0-9_-]+")]
+    [Required(ErrorMessage = "Trường {0} là bắt buộc.")]
+    [StringLength(50, ErrorMessage = "Trường {0} phải có độ dài từ {2} đến {1} ký tự.")]
+    [RegularExpression(@"[a-zA-Z0-9_-]+", ErrorMessage = "Trường {0} không đúng định dạng.")]
     public string RoleId { get; set; } = "";
 }
 

@@ -12,7 +12,7 @@ internal static class InventoryMapping
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new InventoryException(400, "Invalid ID.");
+            throw new InventoryException(400, "Mã ID không hợp lệ.");
         }
         return id;
     }
@@ -22,7 +22,7 @@ internal static class InventoryMapping
         if (!decimal.TryParse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
             CultureInfo.InvariantCulture, out var number))
         {
-            throw new InventoryException(400, "Invalid decimal quantity.");
+            throw new InventoryException(400, "Số lượng thập phân không hợp lệ.");
         }
         return number;
     }
@@ -31,7 +31,7 @@ internal static class InventoryMapping
     {
         if (!DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
         {
-            throw new InventoryException(400, "Expiry date must be yyyy-MM-dd.");
+            throw new InventoryException(400, "Hạn sử dụng phải theo định dạng yyyy-MM-dd.");
         }
         return date;
     }

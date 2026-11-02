@@ -16,7 +16,7 @@ public sealed class InventoryTransaction(IUnitOfWork unitOfWork)
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new InventoryException(409, "Stock changed. Reload and retry with the same operation ID.");
+            throw new InventoryException(409, "Tồn kho đã thay đổi. Vui lòng tải lại và thử lại cùng mã thao tác.");
         }
         catch (DbUpdateException exception) when (exception.InnerException is SqlException sql)
         {
@@ -31,6 +31,6 @@ public sealed class InventoryTransaction(IUnitOfWork unitOfWork)
     private static InventoryException Failure(SqlException exception)
     {
         return new InventoryException(exception.Number is 1205 or 2601 or 2627 or 547 ? 409 : 503,
-            "Inventory is busy or unavailable. Retry with the same operation ID.");
+            "Kho đang bận hoặc không khả dụng. Vui lòng thử lại cùng mã thao tác.");
     }
 }

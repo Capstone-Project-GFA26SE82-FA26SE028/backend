@@ -17,7 +17,7 @@ public sealed class GoodsReceiptController(GoodsReceiptGrpc.GoodsReceiptGrpcClie
     {
         if (body.Items is null || body.Items.Any(x => x is null || x.ExpiryDate is null))
         {
-            return Task.FromResult<IActionResult>(BadRequest(new ResponseDTO("Receipt lines and expiry dates are required.", 400)));
+            return Task.FromResult<IActionResult>(BadRequest(new ResponseDTO("Các dòng phiếu nhập và hạn sử dụng là bắt buộc.", 400)));
         }
         var request = new ReceiptWriteRequest
         {

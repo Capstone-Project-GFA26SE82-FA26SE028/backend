@@ -129,7 +129,7 @@ public sealed class ReservationGrpcService(IReservationService service) : Reserv
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "A valid resource ID is required."));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã tài nguyên không hợp lệ hoặc bị trống."));
         }
 
         return id;

@@ -17,7 +17,7 @@ public sealed class IngredientService(IngredientRepository repository, Inventory
         {
             if (await units.GetByCodeAsync(unit, ct) is null)
             {
-                throw new InventoryException(400, "Create the base unit before creating the ingredient.");
+                throw new InventoryException(400, "Vui lòng tạo đơn vị tính cơ sở trước khi tạo nguyên liệu.");
             }
             var id = Guid.NewGuid();
             var ingredient = new Ingredient
@@ -44,7 +44,7 @@ public sealed class IngredientService(IngredientRepository repository, Inventory
             var ingredient = await Find(id, ct);
             if (!string.Equals(ingredient.BaseUnit, unit, StringComparison.OrdinalIgnoreCase))
             {
-                throw new InventoryException(409, "Base unit is immutable because recipes may reference this ingredient. Create a new ingredient instead.");
+                throw new InventoryException(409, "Đơn vị tính cơ sở không thể thay đổi vì các công thức có thể đang tham chiếu. Hãy tạo nguyên liệu mới.");
             }
             ingredient.IngredientName = name;
             ingredient.LowStockThreshold = request.LowStockThreshold;
@@ -75,7 +75,7 @@ public sealed class IngredientService(IngredientRepository repository, Inventory
         InventoryValidation.Page(page, pageSize);
         if (search?.Length > 255)
         {
-            throw new InventoryException(400, "Search is too long.");
+            throw new InventoryException(400, "Từ khóa tìm kiếm quá dài.");
         }
         return await repository.GetAllAsync(page, pageSize, search?.Trim(), active, lowStock, ct);
     }
@@ -83,7 +83,7 @@ public sealed class IngredientService(IngredientRepository repository, Inventory
     private async Task<Ingredient> Find(Guid id, CancellationToken ct)
     {
         InventoryValidation.Id(id);
-        return await repository.GetByIdAsync(id, ct) ?? throw new InventoryException(404, "Ingredient not found.");
+        return await repository.GetByIdAsync(id, ct) ?? throw new InventoryException(404, "Không tìm thấy nguyên liệu.");
     }
 
     private static (string Name, string Unit) Validate(IngredientWriteDTO request)
@@ -94,7 +94,7 @@ public sealed class IngredientService(IngredientRepository repository, Inventory
             || unit.Length is < 1 or > 50 || unit.Any(char.IsControl)
             || !InventoryValidation.Quantity(request.LowStockThreshold))
         {
-            throw new InventoryException(400, "Name, base unit and a non-negative threshold with at most six decimal places are required.");
+            throw new InventoryException(400, "Tên, đơn vị tính cơ sở và ngưỡng tồn kho không âm tối đa 6 chữ số thập phân là bắt buộc.");
         }
         return (name, unit);
     }

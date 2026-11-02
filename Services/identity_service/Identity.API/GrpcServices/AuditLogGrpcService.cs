@@ -79,6 +79,6 @@ public sealed class AuditLogGrpcService(IAuditLogService service) : AuditLogGrpc
     private static Guid ParseId(string value)
     {
         return Guid.TryParse(value, out var id) && id != Guid.Empty
-        ? id : throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid user ID."));
+        ? id : throw new RpcException(new Status(StatusCode.InvalidArgument, "ID người dùng không hợp lệ."));
     }
 }

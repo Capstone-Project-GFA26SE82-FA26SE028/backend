@@ -21,7 +21,7 @@ public sealed class ReservationAccess(IStaffIdentity identity, IOptions<Reservat
         var restaurantIds = await staff.GetRestaurantIdsAsync(actor.UserId, ct);
         if (restaurantIds.Count == 0)
         {
-            throw new ManagementException(403, "An active restaurant assignment is required.");
+            throw new ManagementException(403, "Yêu cầu phân công nhà hàng đang hoạt động.");
         }
 
         return restaurantIds;
@@ -32,7 +32,7 @@ public sealed class ReservationAccess(IStaffIdentity identity, IOptions<Reservat
         var scope = await GetReadScopeAsync(ct);
         if (scope is not null && !scope.Contains(restaurantId))
         {
-            throw new ManagementException(403, "You are not assigned to this restaurant.");
+            throw new ManagementException(403, "Bạn chưa được phân công tại nhà hàng này.");
         }
     }
 
@@ -41,13 +41,13 @@ public sealed class ReservationAccess(IStaffIdentity identity, IOptions<Reservat
         var actor = await identity.GetCurrentAsync(ct);
         if (actor.IsAdministrator)
         {
-            throw new ManagementException(403, "Administrator access does not grant permission to modify reservations.");
+            throw new ManagementException(403, "Quyền quản trị viên không bao gồm quyền chỉnh sửa yêu cầu đặt bàn.");
         }
 
         RequireStaffRole(actor.RoleId);
         if (!await staff.IsActiveAsync(restaurantId, actor.UserId, ct))
         {
-            throw new ManagementException(403, "An active assignment to this restaurant is required.");
+            throw new ManagementException(403, "Yêu cầu phân công đang hoạt động tại nhà hàng này.");
         }
 
         return actor.UserId;
@@ -57,7 +57,7 @@ public sealed class ReservationAccess(IStaffIdentity identity, IOptions<Reservat
     {
         if (!settings.Value.StaffRoleIds.Contains(roleId, StringComparer.Ordinal))
         {
-            throw new ManagementException(403, "Only configured Waiter/Cashier roles can perform this reservation operation.");
+            throw new ManagementException(403, "Chỉ vai trò phục vụ hoặc thu ngân đã được cấu hình mới có thể thực hiện thao tác đặt bàn này.");
         }
     }
 }

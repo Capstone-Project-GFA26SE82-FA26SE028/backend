@@ -13,7 +13,7 @@ public sealed class IdentityInventoryAccess(UserGrpc.UserGrpcClient client, IHtt
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
-            throw new InventoryException(401, "Authentication is required.");
+            throw new InventoryException(401, "Yêu cầu xác thực tài khoản.");
         }
         var headers = new Metadata
         {
@@ -24,12 +24,12 @@ public sealed class IdentityInventoryAccess(UserGrpc.UserGrpcClient client, IHtt
         if (!reply.IsSuccess)
         {
             throw new InventoryException(reply.StatusCode is 401 or 404 ? 401
-                : reply.StatusCode == 403 ? 403 : 503, "Unable to verify the account.");
+                : reply.StatusCode == 403 ? 403 : 503, "Không thể xác minh tài khoản.");
         }
         if (reply.Result is null || !reply.Result.IsActive
             || !Guid.TryParse(reply.Result.UserId, out var id) || id == Guid.Empty)
         {
-            throw new InventoryException(401, "Invalid or inactive account.");
+            throw new InventoryException(401, "Tài khoản không hợp lệ hoặc đang bị khóa.");
         }
         var section = operation switch
         {
@@ -38,7 +38,7 @@ public sealed class IdentityInventoryAccess(UserGrpc.UserGrpcClient client, IHtt
             "Issue" => "IssuerRoleIds",
             "Read" => "ReaderRoleIds",
             "Cooking" => "CookingRoleIds",
-            _ => throw new InventoryException(403, "Unknown inventory permission.")
+            _ => throw new InventoryException(403, "Quyền kho không xác định.")
         };
         var configured = configuration.GetSection($"InventoryAccess:{section}").Get<string[]>();
         var allowed = configured is not null && configured.Length > 0
@@ -48,7 +48,7 @@ public sealed class IdentityInventoryAccess(UserGrpc.UserGrpcClient client, IHtt
                 : [];
         if (!allowed.Contains(reply.Result.RoleId, StringComparer.Ordinal))
         {
-            throw new InventoryException(403, "You do not have permission for this inventory operation.");
+            throw new InventoryException(403, "Bạn không có quyền thực hiện thao tác kho này.");
         }
         return id;
     }

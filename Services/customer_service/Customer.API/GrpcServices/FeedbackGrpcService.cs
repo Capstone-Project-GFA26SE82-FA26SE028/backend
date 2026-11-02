@@ -15,7 +15,7 @@ public sealed class FeedbackGrpcService(IFeedbackService service) : Backend.Cont
         {
             if (!Guid.TryParse(request.OrderRef, out var orderRef))
             {
-                throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid order reference."));
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã tham chiếu đơn hàng không hợp lệ."));
             }
 
             var token = await service.CreateFeedbackAccess(orderRef, context.CancellationToken);
@@ -36,7 +36,7 @@ public sealed class FeedbackGrpcService(IFeedbackService service) : Backend.Cont
         {
             if (!Guid.TryParse(request.OrderRef, out var orderRef))
             {
-                throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid order reference."));
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã tham chiếu đơn hàng không hợp lệ."));
             }
 
             Guid? customerId = null;
@@ -86,13 +86,13 @@ public sealed class FeedbackGrpcService(IFeedbackService service) : Backend.Cont
         {
             if (!Guid.TryParse(request.OrderRef, out var orderRef))
             {
-                throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid order reference."));
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã tham chiếu đơn hàng không hợp lệ."));
             }
 
             var feedback = await service.GetByOrder(orderRef, context.CancellationToken);
             if (feedback is null)
             {
-                throw new RpcException(new Status(StatusCode.NotFound, "Feedback not found for this order."));
+                throw new RpcException(new Status(StatusCode.NotFound, "Không tìm thấy đánh giá cho đơn hàng này."));
             }
 
             return CustomerMapping.Map(feedback);

@@ -21,7 +21,7 @@ public sealed class BillCheckoutController(BillCheckoutGrpc.BillCheckoutGrpcClie
         {
             if (!Guid.TryParse(key, out var id) || id == Guid.Empty)
             {
-                return BadRequest(new ResponseDTO("Idempotency-Key must be a non-empty UUID. Reuse it when retrying this checkout.", 400));
+                return BadRequest(new ResponseDTO("Idempotency-Key phải là UUID hợp lệ không được rỗng. Dùng lại khóa này khi thử lại thanh toán.", 400));
             }
 
             return Result(Map(await client.RequestAsync(Write(sessionId, id), Options(ct))));

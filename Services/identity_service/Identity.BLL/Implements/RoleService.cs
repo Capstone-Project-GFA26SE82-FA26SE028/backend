@@ -23,12 +23,12 @@ public sealed class RoleService(IRoleRepository repository, IUnitOfWork unitOfWo
     {
         if (!await IsAdmin(actorId, ct))
         {
-            return new ResponseDTO("You do not have permission to manage roles.", 403);
+            return new ResponseDTO("Bạn không có quyền quản lý vai trò.", 403);
         }
 
         if (search?.Length > 50)
         {
-            return new ResponseDTO("Role search must not exceed 50 characters.", 400);
+            return new ResponseDTO("Từ khóa tìm kiếm vai trò không được vượt quá 50 ký tự.", 400);
         }
 
         var roles = await repository.GetAllAsync(ct);
@@ -37,25 +37,25 @@ public sealed class RoleService(IRoleRepository repository, IUnitOfWork unitOfWo
             roles = roles.Where(role => role.RoleId.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase)
                 || role.RoleName.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
         }
-        return new ResponseDTO("Success.", 200, true, roles.Select(Map).ToList());
+        return new ResponseDTO("Thành công.", 200, true, roles.Select(Map).ToList());
     }
 
     public async Task<ResponseDTO> GetById(Guid actorId, string id, CancellationToken ct)
     {
         if (!await IsAdmin(actorId, ct))
         {
-            return new ResponseDTO("You do not have permission to manage roles.", 403);
+            return new ResponseDTO("Bạn không có quyền quản lý vai trò.", 403);
         }
 
         if (!ValidId(id))
         {
-            return new ResponseDTO("Invalid RoleId.", 400);
+            return new ResponseDTO("Mã vai trò không hợp lệ.", 400);
         }
 
         var role = await repository.GetByIdAsync(id.Trim(), ct);
         return role is null
-            ? new ResponseDTO("Role not found.", 404)
-            : new ResponseDTO("Success.", 200, true, Map(role));
+            ? new ResponseDTO("Không tìm thấy vai trò.", 404)
+            : new ResponseDTO("Thành công.", 200, true, Map(role));
     }
 
     public Task<ResponseDTO> Create(Guid actorId, RoleDTO request, CancellationToken ct)
@@ -77,10 +77,10 @@ public sealed class RoleService(IRoleRepository repository, IUnitOfWork unitOfWo
     {
         if (!await IsAdmin(actorId, ct))
         {
-            return new ResponseDTO("You do not have permission to manage roles.", 403);
+            return new ResponseDTO("Bạn không có quyền quản lý vai trò.", 403);
         }
 
-        return new ResponseDTO("System roles are fixed. Roles can only be viewed and assigned to accounts.", 409);
+        return new ResponseDTO("Các vai trò hệ thống là cố định. Vai trò chỉ có thể xem và gán cho tài khoản.", 409);
     }
     private static bool ValidId(string? id)
     {

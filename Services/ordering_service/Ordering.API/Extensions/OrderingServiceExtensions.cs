@@ -28,10 +28,10 @@ public static class OrderingServiceExtensions
         services.AddScoped<IKitchenTaskService, KitchenTaskService>();
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddOptions<OrderingSettings>().Bind(configuration.GetSection("Ordering"))
-            .Validate(settings => settings.DependencyTimeoutSeconds is > 0 and <= 60, "Dependency timeout must be 1-60 seconds.")
+            .Validate(settings => settings.DependencyTimeoutSeconds is > 0 and <= 60, "Thời gian chờ dịch vụ phụ thuộc phải từ 1 đến 60 giây.")
             .Validate(settings => settings.CheckoutCashierRoleIds.Length > 0
                 && settings.CheckoutCashierRoleIds.All(role => !string.IsNullOrWhiteSpace(role)),
-                "Configure Ordering:CheckoutCashierRoleIds.")
+                "Vui lòng cấu hình Ordering:CheckoutCashierRoleIds.")
             .ValidateOnStart();
         services.AddGrpcClient<TableSessionGrpc.TableSessionGrpcClient>(options =>
         {
@@ -79,7 +79,7 @@ public static class OrderingServiceExtensions
         if (!Uri.TryCreate(configuration[$"GrpcServices:{service}"], UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
-            throw new InvalidOperationException($"Configure GrpcServices:{service}.");
+            throw new InvalidOperationException($"Vui lòng cấu hình GrpcServices:{service}.");
         }
 
         return uri;

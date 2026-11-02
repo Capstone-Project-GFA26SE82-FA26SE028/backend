@@ -28,7 +28,7 @@ public sealed class TableSessionGrpcService(ITableSessionService service) : Tabl
         if (!Guid.TryParse(request.TableSessionId, out var id) || id == Guid.Empty
             || (request.HasTableId && (!Guid.TryParse(request.TableId, out var parsed) || parsed == Guid.Empty)))
         {
-            throw new Restaurant.Common.Exceptions.ManagementException(400, "Invalid session or table ID.");
+            throw new Restaurant.Common.Exceptions.ManagementException(400, "Mã phiên hoặc mã bàn không hợp lệ.");
         }
 
         var result = await service.GetForOrdering(id, request.HasTableId ? Guid.Parse(request.TableId) : null,

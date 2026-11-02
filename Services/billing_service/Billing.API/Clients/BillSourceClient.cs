@@ -17,7 +17,7 @@ public sealed class BillSourceClient(BillingOrderGrpc.BillingOrderGrpcClient cli
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
-            throw new BillingException(401, "A valid employee session is required.");
+            throw new BillingException(401, "Yêu cầu phiên làm việc của nhân viên hợp lệ.");
         }
 
         BillingOrderSnapshot reply;
@@ -33,12 +33,12 @@ public sealed class BillSourceClient(BillingOrderGrpc.BillingOrderGrpcClient cli
         }
         catch (RpcException error) when (error.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded or StatusCode.Internal)
         {
-            throw new BillingException(503, "Order freshness could not be verified because Ordering or its dependency is unavailable.");
+            throw new BillingException(503, "Hệ thống hiện đang bận hoặc tạm thời không khả dụng, vui lòng thử lại sau.");
         }
         catch (RpcException error) when (error.StatusCode is StatusCode.AlreadyExists or StatusCode.FailedPrecondition or StatusCode.NotFound)
         {
             throw new BillingException(error.StatusCode == StatusCode.NotFound ? 404 : 409,
-                "The source session or order data is no longer available for billing verification.");
+                "Dữ liệu phiên bàn hoặc đơn hàng nguồn không còn khả dụng để xác minh thanh toán.");
         }
 
         try
@@ -73,14 +73,14 @@ public sealed class BillSourceClient(BillingOrderGrpc.BillingOrderGrpcClient cli
             };
             if (result.TableSessionId != sessionId || result.RestaurantId == Guid.Empty || result.PendingOrderCount < 0)
             {
-                throw new BillingException(503, "Ordering returned an invalid billing snapshot.");
+                throw new BillingException(503, "Dịch vụ gọi món trả về bản chụp thanh toán không hợp lệ.");
             }
 
             return result;
         }
         catch (Exception exception) when (exception is FormatException or OverflowException)
         {
-            throw new BillingException(503, "Ordering returned malformed billing data.");
+            throw new BillingException(503, "Dịch vụ gọi món trả về dữ liệu thanh toán sai định dạng.");
         }
     }
 }

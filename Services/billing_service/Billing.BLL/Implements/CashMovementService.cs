@@ -29,40 +29,40 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
             || request.Amount is not decimal amount || amount <= 0 || amount > 9999999999999999.99m
             || decimal.Truncate(amount) != amount)
         {
-            throw new BillingException(400, "Provide a valid shift, UUID Idempotency-Key, CashIn or CashOut and a positive whole-VND amount.");
+            throw new BillingException(400, "Vui lòng cung cấp ca làm việc, Idempotency-Key UUID, loại CashIn/CashOut và số tiền nguyên dương VND.");
         }
 
         var reason = ValidateReason(request.Reason);
-        var initial = await shifts.GetDetailsAsync(shiftId, ct) ?? throw new BillingException(404, "Cash shift not found.");
+        var initial = await shifts.GetDetailsAsync(shiftId, ct) ?? throw new BillingException(404, "Không tìm thấy ca thu ngân.");
         RequireBranch(actor, initial.CashRegister.RestaurantId);
         key = CashMovementTypes.ManualKeyPrefix + requestId.ToString("N");
         return await Controlled(async () => await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             if (!await movements.LockIdempotencyKeyAsync(key, ct))
             {
-                throw new BillingException(409, "Cash posting is busy. Retry with the same Idempotency-Key.");
+                throw new BillingException(409, "Ghi sổ tiền mặt đang bận. Vui lòng thử lại cùng Idempotency-Key.");
             }
 
             var register = await registers.LockByIdAsync(initial.CashRegisterId, ct)
-                ?? throw new BillingException(404, "Cash register not found.");
-            var shift = await shifts.LockByIdAsync(shiftId, ct) ?? throw new BillingException(404, "Cash shift not found.");
+                ?? throw new BillingException(404, "Không tìm thấy quầy thu ngân.");
+            var shift = await shifts.LockByIdAsync(shiftId, ct) ?? throw new BillingException(404, "Không tìm thấy ca thu ngân.");
             var verified = await access.GetCurrentScopeAsync(register.RestaurantId, ct);
             RequireRole(verified, true);
             RequireBranch(verified, register.RestaurantId);
             if (verified.UserId != actor.UserId)
             {
-                throw new BillingException(401, "The employee session changed. Sign in again.");
+                throw new BillingException(401, "Phiên đăng nhập nhân viên đã thay đổi. Vui lòng đăng nhập lại.");
             }
 
             if (shift.CashRegisterId != register.CashRegisterId || shift.CashierUserRef != verified.UserId)
             {
-                throw new BillingException(403, "Cashiers can post cash movements only in their own shift.");
+                throw new BillingException(403, "Thu ngân chỉ có thể ghi nhận tiền vào/ra trong ca làm việc của chính mình.");
             }
 
             var existing = await movements.GetByKeyAsync(key, ct);
             if (existing.Count > 1)
             {
-                throw new BillingException(409, "This request key has inconsistent ledger records. Review the ledger before retrying.");
+                throw new BillingException(409, "Khóa yêu cầu này có các bản ghi sổ cái không nhất quán. Hãy kiểm tra sổ cái trước khi thử lại.");
             }
 
             if (existing.Count == 1)
@@ -72,7 +72,7 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
                 if (value.CashShiftId != shiftId || value.PaymentId.HasValue || value.Type != request.Type
                     || value.SignedAmount != signed || value.Reason != reason)
                 {
-                    throw new BillingException(409, "Idempotency-Key was already used for a different cash movement.");
+                    throw new BillingException(409, "Idempotency-Key đã được sử dụng cho một biến động tiền mặt khác.");
                 }
 
                 return (Map(value), false);
@@ -82,7 +82,7 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
             if (shift.Status != CashShiftStatuses.Active || shift.ClosedAt.HasValue
                 || unclosed.Count != 1 || unclosed[0].CashShiftId != shiftId)
             {
-                throw new BillingException(409, "Cash movements require the single active shift for this register.");
+                throw new BillingException(409, "Biến động tiền mặt yêu cầu ca duy nhất đang hoạt động trên máy thu ngân này.");
             }
 
             var total = await movements.GetTotalAsync(shiftId, ct);
@@ -90,12 +90,12 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
             var afterPosting = expected + (request.Type == CashMovementTypes.CashIn ? amount : -amount);
             if (expected > 9999999999999999.99m || afterPosting > 9999999999999999.99m)
             {
-                throw new BillingException(409, "Expected cash exceeds decimal(18,2) limits. No cash movement was recorded; review the shift balance.");
+                throw new BillingException(409, "Số tiền mặt dự kiến vượt quá giới hạn decimal(18,2). Chưa ghi nhận biến động; vui lòng kiểm tra số dư ca.");
             }
 
             if (request.Type == CashMovementTypes.CashOut && amount > expected)
             {
-                throw new BillingException(409, "Cash out exceeds the expected cash available in this shift.");
+                throw new BillingException(409, "Số tiền rút ra vượt quá số tiền mặt khả dụng hiện có trong ca.");
             }
 
             var valueToAdd = new CashMovement
@@ -120,22 +120,22 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
         RequireRole(actor, false);
         if (shiftId == Guid.Empty || page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue)
         {
-            throw new BillingException(400, "Provide a valid shift and pagination (page >= 1, pageSize 1-100).");
+            throw new BillingException(400, "Vui lòng cung cấp ca làm việc và phân trang hợp lệ (page >= 1, pageSize 1-100).");
         }
 
-        var initial = await shifts.GetDetailsAsync(shiftId, ct) ?? throw new BillingException(404, "Cash shift not found.");
+        var initial = await shifts.GetDetailsAsync(shiftId, ct) ?? throw new BillingException(404, "Không tìm thấy ca thu ngân.");
         RequireBranch(actor, initial.CashRegister.RestaurantId);
         return await Controlled(async () => await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             var register = await registers.LockByIdAsync(initial.CashRegisterId, ct)
-                ?? throw new BillingException(404, "Cash register not found.");
-            var shift = await shifts.LockByIdAsync(shiftId, ct) ?? throw new BillingException(404, "Cash shift not found.");
+                ?? throw new BillingException(404, "Không tìm thấy quầy thu ngân.");
+            var shift = await shifts.LockByIdAsync(shiftId, ct) ?? throw new BillingException(404, "Không tìm thấy ca thu ngân.");
             var verified = await access.GetCurrentScopeAsync(register.RestaurantId, ct);
             RequireRole(verified, false);
             RequireBranch(verified, register.RestaurantId);
             if (verified.UserId != actor.UserId)
             {
-                throw new BillingException(401, "The employee session changed. Sign in again.");
+                throw new BillingException(401, "Phiên đăng nhập nhân viên đã thay đổi. Vui lòng đăng nhập lại.");
             }
 
             var total = await movements.GetTotalAsync(shiftId, ct);
@@ -158,10 +158,10 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
         RequireRole(actor, false);
         if (id == Guid.Empty)
         {
-            throw new BillingException(400, "A valid cash movement ID is required.");
+            throw new BillingException(400, "Mã biến động tiền mặt không hợp lệ hoặc bị trống.");
         }
 
-        var value = await movements.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Cash movement not found.");
+        var value = await movements.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy biến động tiền mặt.");
         RequireBranch(actor, value.CashShift.CashRegister.RestaurantId);
         return Map(value);
     }
@@ -170,14 +170,14 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
     {
         if (actor.UserId == Guid.Empty)
         {
-            throw new BillingException(401, "A valid employee session is required.");
+            throw new BillingException(401, "Yêu cầu phiên đăng nhập nhân viên hợp lệ.");
         }
 
         var cashier = roles.Value.CashierRoleIds.Contains(actor.RoleId, StringComparer.Ordinal);
         var manager = roles.Value.ManagerRoleIds.Contains(actor.RoleId, StringComparer.Ordinal);
         if (write ? actor.IsAdministrator || !cashier : !actor.IsAdministrator && !cashier && !manager)
         {
-            throw new BillingException(403, write ? "Only a Cashier can post cash movements." : "Billing read permission is required.");
+            throw new BillingException(403, write ? "Chỉ thu ngân mới có quyền ghi nhận biến động tiền mặt." : "Yêu cầu quyền xem thông tin thanh toán.");
         }
     }
 
@@ -185,7 +185,7 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
     {
         if (!actor.IsAdministrator && !actor.RestaurantIds.Contains(restaurantId))
         {
-            throw new BillingException(403, "An active assignment to this restaurant is required.");
+            throw new BillingException(403, "Yêu cầu phân công đang hoạt động tại nhà hàng này.");
         }
     }
 
@@ -194,7 +194,7 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
         var reason = input?.Trim();
         if (string.IsNullOrWhiteSpace(reason) || reason.Length > 1000 || reason.Any(char.IsControl))
         {
-            throw new BillingException(400, "A reason of 1-1000 characters without control characters is required.");
+            throw new BillingException(400, "Lý do là bắt buộc, từ 1-1000 ký tự và không chứa ký tự điều khiển.");
         }
 
         var encoding = (Encoding)CodePagesEncodingProvider.Instance.GetEncoding(1252)!.Clone();
@@ -205,7 +205,7 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
         }
         catch (EncoderFallbackException)
         {
-            throw new BillingException(400, "The reason contains characters unsupported by the current database text column.");
+            throw new BillingException(400, "Lý do chứa ký tự không được cột văn bản hiện tại trong cơ sở dữ liệu hỗ trợ.");
         }
 
         return reason;
@@ -240,19 +240,19 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
         }
         catch (DbUpdateConcurrencyException)
         {
-            throw new BillingException(409, "The shift changed. Reload and retry with the same Idempotency-Key.");
+            throw new BillingException(409, "Ca làm việc đã thay đổi. Vui lòng tải lại và thử lại cùng Idempotency-Key.");
         }
         catch (DbUpdateException error) when (error.InnerException is SqlException sql && sql.Number is 1205 or 2601 or 2627)
         {
-            throw new BillingException(409, "Cash posting is busy. Retry with the same Idempotency-Key.");
+            throw new BillingException(409, "Ghi sổ tiền mặt đang bận. Vui lòng thử lại cùng Idempotency-Key.");
         }
         catch (SqlException error) when (error.Number is 1205 or 1222)
         {
-            throw new BillingException(409, "Cash posting is busy. Retry with the same Idempotency-Key.");
+            throw new BillingException(409, "Ghi sổ tiền mặt đang bận. Vui lòng thử lại cùng Idempotency-Key.");
         }
         catch (OverflowException)
         {
-            throw new BillingException(409, "The ledger total exceeds the supported amount range.");
+            throw new BillingException(409, "Tổng số dư sổ cái vượt quá giới hạn hỗ trợ.");
         }
     }
 }

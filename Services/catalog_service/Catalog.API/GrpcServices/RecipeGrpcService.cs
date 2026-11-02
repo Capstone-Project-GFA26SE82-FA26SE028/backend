@@ -247,6 +247,6 @@ public sealed class RecipeGrpcService(IRecipeService service) : RecipeGrpc.Recip
             return offset.UtcDateTime;
         }
 
-        throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid recipe timestamp."));
+        throw new RpcException(new Status(StatusCode.InvalidArgument, "Mốc thời gian công thức không hợp lệ."));
     }
 }

@@ -25,7 +25,7 @@ public sealed class TaxFeePolicyGrpcService(ITaxFeePolicyService service) : TaxF
     {
         if (!Guid.TryParse(request.TaxFeePolicyId, out var id) || id == Guid.Empty)
         {
-            throw new BillingException(400, "A valid tax policy ID is required.");
+            throw new BillingException(400, "Yêu cầu ID chính sách thuế hợp lệ.");
         }
 
         return Map(await service.GetById(id, context.CancellationToken));
@@ -53,7 +53,7 @@ public sealed class TaxFeePolicyGrpcService(ITaxFeePolicyService service) : TaxF
         if (!decimal.TryParse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
             CultureInfo.InvariantCulture, out var rate))
         {
-            throw new BillingException(400, "Provide rates as invariant decimal fractions, for example 0.08.");
+            throw new BillingException(400, "Vui lòng nhập tỷ lệ dưới dạng số thập phân dùng dấu chấm phân cách, ví dụ 0.08.");
         }
 
         return rate;

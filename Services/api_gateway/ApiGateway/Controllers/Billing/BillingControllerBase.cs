@@ -19,7 +19,7 @@ public abstract class BillingControllerBase(IOptions<BillingClientSettings> sett
         var authorization = Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
-            return Unauthorized(new ResponseDTO("A valid employee session is required.", 401));
+            return Unauthorized(new ResponseDTO("Yêu cầu phiên đăng nhập nhân viên hợp lệ.", 401));
         }
 
         var headers = new Metadata
@@ -30,7 +30,7 @@ public abstract class BillingControllerBase(IOptions<BillingClientSettings> sett
         try
         {
             var result = await action(options);
-            return StatusCode(result.Status, new ResponseDTO("Success.", result.Status, true, result.Value));
+            return StatusCode(result.Status, new ResponseDTO("Thành công.", result.Status, true, result.Value));
         }
         catch (RpcException error) when (!ct.IsCancellationRequested)
         {
@@ -46,7 +46,7 @@ public abstract class BillingControllerBase(IOptions<BillingClientSettings> sett
                 _ => 502
             };
             var message = code is 502 or 503 or 504
-                ? "Billing or a required service is unavailable."
+                ? "Hệ thống hiện đang bận hoặc tạm thời không khả dụng, vui lòng thử lại sau."
                 : error.Status.Detail;
             return StatusCode(code, new ResponseDTO(message, code));
         }

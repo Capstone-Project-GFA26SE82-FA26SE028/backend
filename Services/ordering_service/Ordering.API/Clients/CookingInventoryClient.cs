@@ -24,7 +24,7 @@ public sealed class CookingInventoryClient(
     {
         if (cookingEventId == Guid.Empty)
         {
-            throw new OrderingException(400, "Invalid cooking event ID.");
+            throw new OrderingException(400, "Mã sự kiện nấu bếp không hợp lệ.");
         }
 
         if (tasks is null || tasks.Count == 0)

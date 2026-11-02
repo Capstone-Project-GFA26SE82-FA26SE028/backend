@@ -33,12 +33,12 @@ public sealed class OrderValidationService(
 
         if (!PriceRules.TryConfiguration(settings.Value, out var timeZone))
         {
-            return new ResponseDTO("Catalog pricing is not configured.", 503);
+            return new ResponseDTO("Chưa cấu hình định giá danh mục thực đơn.", 503);
         }
 
         if (!settings.Value.Channels.Contains(request.Channel, StringComparer.Ordinal))
         {
-            return new ResponseDTO("A configured sales channel is required.", 400);
+            return new ResponseDTO("Yêu cầu kênh bán hàng hợp lệ đã cấu hình.", 400);
         }
 
         // Split queries must see a consistent catalog. This transaction does not reserve
@@ -77,17 +77,17 @@ public sealed class OrderValidationService(
             if (result.Errors.Count > 0)
             {
                 result.Items.Clear();
-                return new ResponseDTO("Some selections are no longer orderable.", 409, false, result);
+                return new ResponseDTO("Một số món hoặc tùy chọn không còn khả dụng để đặt hàng.", 409, false, result);
             }
 
             var total = result.Items.Sum(item => item.LineTotal);
             if (total > MaximumAmount)
             {
-                return new ResponseDTO("The order total exceeds the supported monetary range.", 400);
+                return new ResponseDTO("Tổng giá trị đơn hàng vượt quá giới hạn tiền tệ cho phép.", 400);
             }
 
             result.TotalAmount = total;
-            return new ResponseDTO("Order selections validated successfully.", 200, true, result);
+            return new ResponseDTO("Xác thực các món đã chọn thành công.", 200, true, result);
         }, IsolationLevel.Serializable, cancellationToken);
     }
 
@@ -99,24 +99,24 @@ public sealed class OrderValidationService(
         validated = null;
         if (item is null || !item.Category.IsActive || item.Availability == ItemAvailability.Inactive)
         {
-            return Error(index, selection.ItemId, "ItemUnavailable", "The item is missing or no longer offered for sale.");
+            return Error(index, selection.ItemId, "ItemUnavailable", "Món ăn không tồn tại hoặc đã ngừng kinh doanh.");
         }
 
         if (item.Availability != ItemAvailability.Available)
         {
-            return Error(index, item.ItemId, "ItemOutOfStock", "The item is currently unavailable.");
+            return Error(index, item.ItemId, "ItemOutOfStock", "Món ăn hiện tạm thời hết hàng.");
         }
 
         var price = PriceRules.ResolveForSale(item.Prices, channel, settings.Value, at, timeZone);
         if (price is null || !ValidMoney(price.Amount))
         {
-            return Error(index, item.ItemId, "PriceUnavailable", "No unambiguous valid price is available.");
+            return Error(index, item.ItemId, "PriceUnavailable", "Không có mức giá hợp lệ rõ ràng cho món ăn này.");
         }
 
         var recipeVersions = itemRecipes[item.ItemId].ToArray();
         if (recipeVersions.Length != 1)
         {
-            return Error(index, item.ItemId, "RecipeUnavailable", "The item must have exactly one active recipe.");
+            return Error(index, item.ItemId, "RecipeUnavailable", "Món ăn phải có đúng một công thức đang áp dụng.");
         }
 
         var allowed = item.ItemOptionGroups.SelectMany(link => link.OptionGroup.Options)
@@ -126,18 +126,18 @@ public sealed class OrderValidationService(
         {
             if (!allowed.TryGetValue(chosen.OptionId, out var option))
             {
-                return Error(index, item.ItemId, "OptionNotAllowed", "The option is not linked to this item.", chosen.OptionId);
+                return Error(index, item.ItemId, "OptionNotAllowed", "Tùy chọn không thuộc món ăn này.", chosen.OptionId);
             }
 
             if (option.Availability != ItemAvailability.Available || !ValidMoney(option.ExtraPrice))
             {
-                return Error(index, item.ItemId, "OptionUnavailable", "The option is unavailable or its price is invalid.", chosen.OptionId);
+                return Error(index, item.ItemId, "OptionUnavailable", "Tùy chọn không khả dụng hoặc giá không hợp lệ.", chosen.OptionId);
             }
 
             var versions = optionRecipes[option.OptionId].ToArray();
             if (versions.Length > 1)
             {
-                return Error(index, item.ItemId, "OptionRecipeConflict", "The option has overlapping active recipes.", chosen.OptionId);
+                return Error(index, item.ItemId, "OptionRecipeConflict", "Tùy chọn có công thức đang hoạt động bị trùng lặp.", chosen.OptionId);
             }
 
             optionSnapshots.Add(new ValidatedOrderOptionDTO
@@ -157,7 +157,7 @@ public sealed class OrderValidationService(
             if (link.MinSelection < 0 || link.MaxSelection < 1 || link.MinSelection > link.MaxSelection
                 || quantity < link.MinSelection || quantity > link.MaxSelection)
             {
-                return Error(index, item.ItemId, "SelectionLimit", "Option quantities must satisfy the group's min/max limits.",
+                return Error(index, item.ItemId, "SelectionLimit", "Số lượng tùy chọn phải thỏa mãn giới hạn tối thiểu/tối đa của nhóm.",
                     optionGroupId: link.OptionGroupId);
             }
         }
@@ -167,7 +167,7 @@ public sealed class OrderValidationService(
         var lineTotal = unitTotal * selection.Quantity;
         if (unitTotal > MaximumAmount || lineTotal > MaximumAmount)
         {
-            return Error(index, item.ItemId, "AmountOutOfRange", "The line total exceeds the supported monetary range.");
+            return Error(index, item.ItemId, "AmountOutOfRange", "Tổng dòng vượt quá giới hạn tiền tệ cho phép.");
         }
 
         validated = new ValidatedOrderItemDTO
@@ -193,7 +193,7 @@ public sealed class OrderValidationService(
     {
         if (request?.Items is null || request.Items.Count is < 1 or > 100)
         {
-            return "Provide between 1 and 100 order lines.";
+            return "Vui lòng chọn từ 1 đến 100 dòng món đặt.";
         }
 
         foreach (var line in request.Items)
@@ -201,7 +201,7 @@ public sealed class OrderValidationService(
             if (line is null || line.ItemId == Guid.Empty || line.Quantity is < 1 or > 1000
                 || line.Options is null || line.Options.Count > 100)
             {
-                return "Each line requires an item ID, quantity 1-1000, and at most 100 options.";
+                return "Mỗi dòng yêu cầu mã món, số lượng từ 1-1000 và tối đa 100 tùy chọn.";
             }
 
             var ids = new HashSet<Guid>();
@@ -210,7 +210,7 @@ public sealed class OrderValidationService(
                 if (option is null || option.OptionId == Guid.Empty || option.Quantity is < 1 or > 1000
                     || !ids.Add(option.OptionId))
                 {
-                    return "Option IDs must be valid and unique within a line, with quantity 1-1000 per item unit.";
+                    return "Mã tùy chọn phải hợp lệ và duy nhất trong một dòng, số lượng từ 1-1000 cho mỗi phần món.";
                 }
             }
         }

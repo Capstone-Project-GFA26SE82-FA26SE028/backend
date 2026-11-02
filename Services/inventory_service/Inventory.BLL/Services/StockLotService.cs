@@ -17,7 +17,7 @@ public sealed class StockLotService(StockLotRepository repository, IngredientRep
         return await transaction.ExecuteAsync(async () =>
         {
             var ingredient = await ingredients.GetByIdAsync(ingredientId, ct)
-                ?? throw new InventoryException(404, "Ingredient not found.");
+                ?? throw new InventoryException(404, "Không tìm thấy nguyên liệu.");
             var lots = await repository.GetAllAsync(ingredientId, ct);
             var today = BusinessDate(clock);
             foreach (var lot in lots)

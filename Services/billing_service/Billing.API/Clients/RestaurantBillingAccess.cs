@@ -18,7 +18,7 @@ public sealed class RestaurantBillingAccess(
         var authorization = accessor.HttpContext?.Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
-            throw new BillingException(401, "A valid employee session is required.");
+            throw new BillingException(401, "Yêu cầu phiên đăng nhập nhân viên hợp lệ.");
         }
 
         var request = new CurrentRestaurantScopeRequest();
@@ -37,7 +37,7 @@ public sealed class RestaurantBillingAccess(
             || string.IsNullOrWhiteSpace(reply.RoleId)
             || reply.RestaurantIds.Any(id => !Guid.TryParse(id, out var value) || value == Guid.Empty))
         {
-            throw new BillingException(503, "The restaurant service returned an invalid employee scope.");
+            throw new BillingException(503, "Dịch vụ nhà hàng trả về phạm vi truy cập nhân viên không hợp lệ.");
         }
 
         return new BillingAccessScope

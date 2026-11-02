@@ -20,7 +20,7 @@ public sealed class IdentityManagementAccess(AccessGrpc.AccessGrpcClient client,
         var authorization = http?.Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
-            throw new ManagementException(401, "Authentication is required.");
+            throw new ManagementException(401, "Yêu cầu xác thực tài khoản.");
         }
 
         var headers = new Metadata
@@ -31,7 +31,7 @@ public sealed class IdentityManagementAccess(AccessGrpc.AccessGrpcClient client,
             deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: ct);
         if (!Guid.TryParse(response.UserId, out var actor))
         {
-            throw new ManagementException(503, "Unable to verify access permissions.");
+            throw new ManagementException(503, "Không thể xác minh quyền truy cập.");
         }
 
         _actor = actor;

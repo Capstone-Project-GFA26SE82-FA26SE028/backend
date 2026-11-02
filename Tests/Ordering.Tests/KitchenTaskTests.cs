@@ -194,7 +194,7 @@ public sealed class KitchenTaskTests
         using var fixture = new Fixture();
         var (readyTask, _) = await fixture.SeedTaskAsync("Ready", 50);
 
-        var remake = await fixture.Service.RemakeTask(readyTask.KitchenTaskId, "M├│n bß╗ï nguß╗Öi, kh├ích y├¬u cß║ºu l├ám lß║íi", default);
+        var remake = await fixture.Service.RemakeTask(readyTask.KitchenTaskId, "Món bị nguội, khách yêu cầu làm lại", default);
         Assert.Equal("Pending", remake.Status);
         Assert.Equal(999, remake.Priority);
 
@@ -216,8 +216,8 @@ public sealed class KitchenTaskTests
         var (_, station) = await fixture.SeedTaskAsync("Pending", 0);
         var sessionId = Guid.NewGuid();
 
-        var (dessertTask1, _) = await fixture.SeedTaskCustomAsync("Hold", 20, station, null, "Ch├¿ Th├íi Sß║ºu Ri├¬ng", sessionId, 1);
-        var (dessertTask2, _) = await fixture.SeedTaskCustomAsync("Hold", 20, station, null, "Kem Tr├íi Dß╗½a", sessionId, 2);
+        var (dessertTask1, _) = await fixture.SeedTaskCustomAsync("Hold", 20, station, null, "Chè Thái Sầu Riêng", sessionId, 1);
+        var (dessertTask2, _) = await fixture.SeedTaskCustomAsync("Hold", 20, station, null, "Kem Trái Dừa", sessionId, 2);
 
         var result = await fixture.Service.FireCourse(sessionId, null, "Dessert", default);
         Assert.Equal(2, result.ActivatedCount);
@@ -310,13 +310,13 @@ public sealed class KitchenTaskTests
         using var fixture = new Fixture();
         var (task, _) = await fixture.SeedTaskAsync("Pending", 1);
         fixture.CookingClient.ShouldThrowInsufficientStock = true;
-        fixture.CookingClient.ErrorMessage = "Nguy├¬n liß╗çu 'Thß╗ït b├▓' kh├┤ng ─æß╗º tß╗ôn kho khß║ú dß╗Ñng ─æß╗â chß║┐ biß║┐n m├│n.";
+        fixture.CookingClient.ErrorMessage = "Nguyên liệu 'Thịt bò' không đủ tồn kho khả dụng để chế biến món.";
 
         var ex = await Assert.ThrowsAsync<OrderingException>(() =>
             fixture.Service.SetStatus(task.KitchenTaskId, "Cooking", null, default));
 
         Assert.Equal(409, ex.StatusCode);
-        Assert.Contains("kh├┤ng ─æß╗º tß╗ôn kho", ex.Message);
+        Assert.Contains("không đủ tồn kho", ex.Message);
 
         var taskInDb = await fixture.Db.KitchenTasks.FirstAsync(t => t.KitchenTaskId == task.KitchenTaskId);
         Assert.Equal("Pending", taskInDb.Status);

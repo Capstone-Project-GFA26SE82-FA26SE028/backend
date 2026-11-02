@@ -24,7 +24,7 @@ public sealed class StockIssueService(StockIssueRepository repository, StockLotR
             || request.Items.Any(x => x is null || x.IngredientId == Guid.Empty || x.Quantity <= 0 || !InventoryValidation.Quantity(x.Quantity))
             || request.Items.Select(x => x.IngredientId).Distinct().Count() != request.Items.Count)
         {
-            throw new InventoryException(400, "Provide a reason and 1-100 unique ingredients with positive base-unit quantities (maximum six decimal places).");
+            throw new InventoryException(400, "Cung cấp lý do xuất kho và 1-100 nguyên liệu không trùng lặp với số lượng đơn vị cơ sở dương (tối đa 6 chữ số thập phân).");
         }
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
         {
@@ -42,7 +42,7 @@ public sealed class StockIssueService(StockIssueRepository repository, StockLotR
             {
                 if (existing.RequestHash != hash || existing.CreatedByRef != actor)
                 {
-                    throw new InventoryException(409, "Issue ID already used with different data or by another account.");
+                    throw new InventoryException(409, "Mã phiếu xuất đã được dùng với dữ liệu khác hoặc bởi tài khoản khác.");
                 }
                 return existing;
             }
@@ -58,15 +58,15 @@ public sealed class StockIssueService(StockIssueRepository repository, StockLotR
             foreach (var line in request.Items.OrderBy(x => x.IngredientId))
             {
                 var ingredient = await ingredients.GetByIdAsync(line.IngredientId, ct)
-                    ?? throw new InventoryException(404, "Ingredient not found.");
+                    ?? throw new InventoryException(404, "Không tìm thấy nguyên liệu.");
                 if (!ingredient.IsActive || ingredient.StockQuantity < line.Quantity)
                 {
-                    throw new InventoryException(409, "Ingredient is inactive or has insufficient stock.");
+                    throw new InventoryException(409, "Nguyên liệu đang ngừng hoạt động hoặc không đủ tồn kho.");
                 }
                 var available = await lots.GetAllAsync(line.IngredientId, ct);
                 if (available.Any(x => x.RemainingQuantity < 0))
                 {
-                    throw new InventoryException(409, "Lot balance is inconsistent. Reconcile inventory before issuing.");
+                    throw new InventoryException(409, "Số dư lô hàng không nhất quán. Vui lòng đối soát kiểm kê trước khi xuất kho.");
                 }
                 var remaining = line.Quantity;
                 foreach (var lot in available.Where(x => x.ExpiryDate >= today && x.RemainingQuantity > 0))
@@ -92,7 +92,7 @@ public sealed class StockIssueService(StockIssueRepository repository, StockLotR
                 }
                 if (remaining > 0)
                 {
-                    throw new InventoryException(409, "Insufficient unexpired lot stock. No inventory was issued.");
+                    throw new InventoryException(409, "Không đủ tồn kho trong các lô hàng còn hạn. Chưa thực hiện xuất kho.");
                 }
                 ingredient.StockQuantity -= line.Quantity;
             }
@@ -133,7 +133,7 @@ public sealed class StockIssueService(StockIssueRepository repository, StockLotR
             InventoryValidation.Id(item.OrderItemId);
             if (item.Quantity <= 0)
             {
-                throw new InventoryException(400, "Item portion quantity must be positive.");
+                throw new InventoryException(400, "Số lượng khẩu phần món ăn phải lớn hơn 0.");
             }
 
             if (item.Ingredients is not null)
@@ -142,7 +142,7 @@ public sealed class StockIssueService(StockIssueRepository repository, StockLotR
                 {
                     if (line.IngredientId == Guid.Empty || line.Quantity <= 0 || !InventoryValidation.Quantity(line.Quantity))
                     {
-                        throw new InventoryException(400, "Provide valid ingredient IDs and positive quantities.");
+                        throw new InventoryException(400, "Cung cấp mã nguyên liệu hợp lệ và số lượng dương.");
                     }
                 }
             }
@@ -189,7 +189,7 @@ public sealed class StockIssueService(StockIssueRepository repository, StockLotR
             foreach (var (ingredientId, totalNeeded) in totalNeededPerIngredient)
             {
                 var ingredient = await ingredients.GetByIdAsync(ingredientId, ct)
-                    ?? throw new InventoryException(404, $"Ingredient '{ingredientId}' not found.");
+                    ?? throw new InventoryException(404, $"Không tìm thấy nguyên liệu '{ingredientId}'.");
 
                 if (!ingredient.IsActive)
                 {
@@ -204,7 +204,7 @@ public sealed class StockIssueService(StockIssueRepository repository, StockLotR
                 var available = await lots.GetAllAsync(ingredientId, ct);
                 if (available.Any(x => x.RemainingQuantity < 0))
                 {
-                    throw new InventoryException(409, "Lot balance is inconsistent. Reconcile inventory before issuing.");
+                    throw new InventoryException(409, "Số dư lô hàng không nhất quán. Vui lòng đối soát kiểm kê trước khi xuất kho.");
                 }
 
                 var unexpiredTotal = available
@@ -338,6 +338,6 @@ public sealed class StockIssueService(StockIssueRepository repository, StockLotR
     {
         await access.RequireAsync("Read", ct);
         InventoryValidation.Id(id);
-        return await repository.GetByIdAsync(id, ct) ?? throw new InventoryException(404, "Stock issue not found.");
+        return await repository.GetByIdAsync(id, ct) ?? throw new InventoryException(404, "Không tìm thấy phiếu xuất kho.");
     }
 }

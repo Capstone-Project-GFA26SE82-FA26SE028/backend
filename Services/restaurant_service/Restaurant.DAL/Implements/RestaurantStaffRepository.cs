@@ -12,7 +12,7 @@ public sealed class RestaurantStaffRepository(RestaurantDbContext db)
     {
         if (_context.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("An active transaction is required to lock an assignment.");
+            throw new InvalidOperationException("Cần có giao dịch đang hoạt động để khóa phân công.");
         }
 
         var source = _context.Database.IsSqlServer()

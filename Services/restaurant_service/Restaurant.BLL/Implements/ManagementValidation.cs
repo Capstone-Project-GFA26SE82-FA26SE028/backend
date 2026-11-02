@@ -11,7 +11,7 @@ internal static class ManagementValidation
         var result = value?.Trim();
         if (string.IsNullOrEmpty(result) || result.Length > max)
         {
-            throw new ManagementException(400, $"{field} is required and must not exceed {max} characters.");
+            throw new ManagementException(400, $"{field} là bắt buộc và không được vượt quá {max} ký tự.");
         }
 
         return result;
@@ -32,7 +32,7 @@ internal static class ManagementValidation
         if (query.Page < 1 || query.PageSize < 1 || query.PageSize > 100
             || query.Page > int.MaxValue / query.PageSize || query.Search?.Length > 255)
         {
-            throw new ManagementException(400, "Invalid pagination or search (page >= 1, pageSize 1-100).");
+            throw new ManagementException(400, "Phân trang hoặc tìm kiếm không hợp lệ (page >= 1, pageSize 1-100).");
         }
     }
 
@@ -45,17 +45,17 @@ internal static class ManagementValidation
         }
         catch (FormatException)
         {
-            throw new ManagementException(400, "Version must be a Base64 string.");
+            throw new ManagementException(400, "Version phải là chuỗi Base64 hợp lệ.");
         }
 
         if (version.Length == 0)
         {
-            throw new ManagementException(400, "Provide the Version returned by the latest read.");
+            throw new ManagementException(400, "Vui lòng cung cấp Version nhận được từ lần đọc mới nhất.");
         }
 
         if (!current.SequenceEqual(version))
         {
-            throw new ManagementException(409, "The table has changed. Reload the data.");
+            throw new ManagementException(409, "Dữ liệu bàn đã thay đổi. Vui lòng tải lại dữ liệu.");
         }
     }
 
@@ -63,7 +63,7 @@ internal static class ManagementValidation
     {
         if (!TimeOnly.TryParseExact(value, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var result))
         {
-            throw new ManagementException(400, "Operating hours must use the HH:mm format.");
+            throw new ManagementException(400, "Giờ hoạt động phải theo định dạng HH:mm.");
         }
 
         return result;

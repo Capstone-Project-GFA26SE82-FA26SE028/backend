@@ -34,7 +34,7 @@ public sealed class PayOsReconciliationWorker(IServiceScopeFactory scopes, IOpti
                         }
                         catch (Exception error)
                         {
-                            logger.LogWarning("PayOS reconciliation deferred for payment {PaymentId}; error type {ErrorType}.", id, error.GetType().Name);
+                            logger.LogWarning("Đã hoãn đối soát PayOS cho khoản thanh toán {PaymentId}; loại lỗi {ErrorType}.", id, error.GetType().Name);
                         }
                     }
 
@@ -47,7 +47,7 @@ public sealed class PayOsReconciliationWorker(IServiceScopeFactory scopes, IOpti
             }
             catch (Exception error)
             {
-                logger.LogWarning("PayOS reconciliation cycle deferred; error type {ErrorType}.", error.GetType().Name);
+                logger.LogWarning("Đã hoãn chu kỳ đối soát PayOS; loại lỗi {ErrorType}.", error.GetType().Name);
             }
 
             try

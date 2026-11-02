@@ -47,7 +47,7 @@ public sealed class BillGrpcService(IBillService service) : BillGrpc.BillGrpcBas
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "A valid ID is required."));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Yêu cầu ID hợp lệ."));
         }
 
         return id;

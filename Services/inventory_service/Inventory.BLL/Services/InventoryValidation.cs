@@ -8,7 +8,7 @@ public static class InventoryValidation
     {
         if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue)
         {
-            throw new InventoryException(400, "Invalid pagination.");
+            throw new InventoryException(400, "Phân trang không hợp lệ.");
         }
     }
 
@@ -21,7 +21,7 @@ public static class InventoryValidation
     {
         if (id == Guid.Empty)
         {
-            throw new InventoryException(400, "A non-empty ID is required.");
+            throw new InventoryException(400, "Mã ID không được để trống.");
         }
     }
 }

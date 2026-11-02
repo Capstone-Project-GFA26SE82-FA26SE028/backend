@@ -333,7 +333,7 @@ public sealed class CategoryFlowTests
                     services.AddOptions<GatewayCatalogClientSettings>()
                         .Bind(configuration.GetSection("CatalogClient"))
                         .Validate(settings => settings.TimeoutSeconds > 0,
-                            "CatalogClient:TimeoutSeconds must be positive.")
+                            "CatalogClient:TimeoutSeconds phải lớn hơn 0.")
                         .ValidateOnStart();
                     services.AddGrpcClient<GatewayCategoryGrpc.CategoryGrpcClient>(options =>
                     {

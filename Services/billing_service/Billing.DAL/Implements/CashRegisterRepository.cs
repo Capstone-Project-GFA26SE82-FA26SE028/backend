@@ -16,7 +16,7 @@ public sealed class CashRegisterRepository(BillingDbContext db)
     {
         if (_context.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("An active transaction is required to lock a cash register.");
+            throw new InvalidOperationException("Cần có giao dịch đang hoạt động để khóa quầy thu ngân.");
         }
 
         var source = _context.Database.IsSqlServer()
@@ -62,7 +62,7 @@ public sealed class CashRegisterRepository(BillingDbContext db)
     {
         if (_context.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("An active transaction is required to lock cash register creation.");
+            throw new InvalidOperationException("Cần có giao dịch đang hoạt động để khóa thao tác tạo quầy thu ngân.");
         }
 
         if (!_context.Database.IsSqlServer())

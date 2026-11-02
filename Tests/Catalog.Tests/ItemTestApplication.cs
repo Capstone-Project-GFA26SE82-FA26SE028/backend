@@ -225,7 +225,7 @@ internal sealed class ItemTestApplication : IDisposable
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("Item created successfully.", body.GetProperty("message").GetString());
+        Assert.Equal("Tạo món ăn thành công.", body.GetProperty("message").GetString());
         var item = body.GetProperty("result");
         Assert.Equal($"/api/items/{item.GetProperty("itemId").GetGuid()}", response.Headers.Location?.OriginalString);
         return item;

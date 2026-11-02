@@ -32,12 +32,12 @@ public sealed class InventoryInterceptor(ILogger<InventoryInterceptor> logger) :
         }
         catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
         {
-            throw new RpcException(new Status(StatusCode.Cancelled, "Request cancelled."));
+            throw new RpcException(new Status(StatusCode.Cancelled, "Yêu cầu đã bị hủy."));
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Inventory request failed: {Method}", context.Method);
-            throw new RpcException(new Status(StatusCode.Internal, "Inventory request failed."));
+            logger.LogError(exception, "Yêu cầu kho thất bại: {Method}", context.Method);
+            throw new RpcException(new Status(StatusCode.Internal, "Xử lý yêu cầu kho thất bại."));
         }
     }
 }

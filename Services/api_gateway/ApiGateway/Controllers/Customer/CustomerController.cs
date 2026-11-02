@@ -123,7 +123,7 @@ public sealed class CustomerController(Backend.Contracts.Customer.CustomerGrpc.C
                 BillId = request.BillId.ToString()
             }, Options(ct));
 
-            return new { Message = "Points committed successfully." };
+            return new { Message = "Đã xác nhận sử dụng điểm thành công." };
         }, ct);
     }
 
@@ -137,7 +137,7 @@ public sealed class CustomerController(Backend.Contracts.Customer.CustomerGrpc.C
                 BillId = request.BillId.ToString()
             }, Options(ct));
 
-            return new { Message = "Point reservation cancelled." };
+            return new { Message = "Đã hủy giữ điểm." };
         }, ct);
     }
 

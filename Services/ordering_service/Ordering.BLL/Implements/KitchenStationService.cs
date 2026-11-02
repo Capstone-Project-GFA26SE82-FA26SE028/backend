@@ -36,7 +36,7 @@ public sealed class KitchenStationService(
         if (page < 1 || pageSize is < 1 or > 100
             || (long)(page - 1) * pageSize > int.MaxValue || search?.Length > 255)
         {
-            throw new OrderingException(400, "Invalid pagination or search.");
+            throw new OrderingException(400, "Phân trang hoặc từ khóa tìm kiếm không hợp lệ.");
         }
         var result = await repository.GetPageAsync(page, pageSize, search?.Trim(), isActive, ct);
         return new KitchenStationPageDTO
@@ -83,17 +83,17 @@ public sealed class KitchenStationService(
     {
         if (id == Guid.Empty)
         {
-            throw new OrderingException(400, "Invalid kitchen station ID.");
+            throw new OrderingException(400, "Mã trạm bếp không hợp lệ.");
         }
         return await repository.GetByIdAsync(id, ct)
-            ?? throw new OrderingException(404, "Kitchen station not found.");
+            ?? throw new OrderingException(404, "Không tìm thấy trạm bếp.");
     }
 
     private async Task Unique(string code, Guid id, CancellationToken ct)
     {
         if (await repository.CodeExistsAsync(code, id, ct))
         {
-            throw new OrderingException(409, "Kitchen station code already exists.");
+            throw new OrderingException(409, "Mã trạm bếp đã tồn tại.");
         }
     }
 
@@ -105,7 +105,7 @@ public sealed class KitchenStationService(
             || code.Any(character => !(char.IsAsciiLetterOrDigit(character) || character is '-' or '_'))
             || name.Any(char.IsControl))
         {
-            throw new OrderingException(400, "Code must be 1-50 ASCII letters, digits, hyphens or underscores; name must be 1-255 characters.");
+            throw new OrderingException(400, "Mã phải từ 1-50 ký tự chữ cái, số, gạch ngang hoặc gạch dưới; tên phải từ 1-255 ký tự.");
         }
         return (code, name);
     }

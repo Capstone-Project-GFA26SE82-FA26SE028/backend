@@ -51,7 +51,7 @@ public sealed class CartService(ICartRepository carts, IOrderingTransaction tran
         OrderingRules.ValidateLines(request.Items, true);
         if (string.IsNullOrEmpty(request.Version))
         {
-            throw new OrderingException(400, "Cart version is required.");
+            throw new OrderingException(400, "Yêu cầu version của giỏ hàng.");
         }
 
         var result = await transaction.ExecuteAsync(async () =>
@@ -96,7 +96,7 @@ public sealed class CartService(ICartRepository carts, IOrderingTransaction tran
         var actor = await Guest(sessionId, guestToken, ct);
         if (string.IsNullOrEmpty(version))
         {
-            throw new OrderingException(400, "Cart version is required.");
+            throw new OrderingException(400, "Yêu cầu version của giỏ hàng.");
         }
 
         await transaction.ExecuteAsync(async () =>
@@ -113,7 +113,7 @@ public sealed class CartService(ICartRepository carts, IOrderingTransaction tran
         var actor = await access.RequireAsync(sessionId, null, token, ct);
         if (!actor.IsGuest)
         {
-            throw new OrderingException(403, "Carts belong to guests. Staff can create orders directly.");
+            throw new OrderingException(403, "Giỏ hàng dành cho khách. Nhân viên có thể tạo đơn hàng trực tiếp.");
         }
 
         return actor;

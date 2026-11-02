@@ -15,7 +15,7 @@ public sealed class StockMovementService(StockMovementRepository repository, Ing
         InventoryValidation.Page(page, pageSize);
         if (await ingredients.GetByIdAsync(ingredientId, ct) is null)
         {
-            throw new InventoryException(404, "Ingredient not found.");
+            throw new InventoryException(404, "Không tìm thấy nguyên liệu.");
         }
         return await repository.GetAllAsync(ingredientId, page, pageSize, ct);
     }

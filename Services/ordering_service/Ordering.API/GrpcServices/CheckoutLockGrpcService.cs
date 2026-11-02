@@ -33,7 +33,7 @@ public sealed class CheckoutLockGrpcService(ICheckoutLockService service) : Chec
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "A valid ID is required."));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã ID không hợp lệ hoặc bị trống."));
         }
 
         return id;

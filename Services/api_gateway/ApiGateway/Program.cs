@@ -1,6 +1,7 @@
 using Backend.Contracts.Identity;
 using Grpc.Core;
 using ApiGateway.Settings;
+using ApiGateway.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
@@ -26,45 +27,45 @@ builder.Services.AddGrpcClient<Backend.Contracts.Inventory.IngredientUnitGrpc.In
 builder.Services.AddGrpcClient<Backend.Contracts.Inventory.IngredientGrpc.IngredientGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]
-        ?? throw new InvalidOperationException("Configure GrpcServices:Inventory."));
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Inventory."));
 });
 builder.Services.AddGrpcClient<Backend.Contracts.Inventory.GoodsReceiptGrpc.GoodsReceiptGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]
-        ?? throw new InvalidOperationException("Configure GrpcServices:Inventory."));
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Inventory."));
 });
 builder.Services.AddGrpcClient<Backend.Contracts.Inventory.StockMovementGrpc.StockMovementGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]
-        ?? throw new InvalidOperationException("Configure GrpcServices:Inventory."));
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Inventory."));
 });
 builder.Services.AddOptions<OrderingClientSettings>().Bind(builder.Configuration.GetSection("OrderingClient"))
-    .Validate(settings => settings.TimeoutSeconds is > 0 and <= 120, "OrderingClient timeout must be 1-120 seconds.")
+    .Validate(settings => settings.TimeoutSeconds is > 0 and <= 120, "Thời gian chờ OrderingClient phải từ 1 đến 120 giây.")
     .ValidateOnStart();
 builder.Services.AddGrpcClient<Backend.Contracts.Ordering.CartGrpc.CartGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
-        ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
 });
 builder.Services.AddGrpcClient<Backend.Contracts.Ordering.OrderGrpc.OrderGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
-        ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
 });
 builder.Services.AddGrpcClient<Backend.Contracts.Ordering.KitchenStationGrpc.KitchenStationGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
-        ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
 });
 builder.Services.AddGrpcClient<Backend.Contracts.Ordering.KitchenTaskGrpc.KitchenTaskGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
-        ?? throw new InvalidOperationException("Configure GrpcServices:Ordering."));
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
 });
 builder.Services.AddOptions<CatalogClientSettings>()
     .Bind(builder.Configuration.GetSection("CatalogClient"))
     .Validate(settings => settings.TimeoutSeconds > 0,
-        "CatalogClient:TimeoutSeconds must be positive.")
+        "CatalogClient:TimeoutSeconds phải lớn hơn 0.")
     .ValidateOnStart();
 
 var catalogAddress = builder.Configuration["GrpcServices:Catalog"];
@@ -72,7 +73,7 @@ if (!Uri.TryCreate(catalogAddress, UriKind.Absolute, out var catalogUri)
     || (catalogUri.Scheme != Uri.UriSchemeHttp
         && catalogUri.Scheme != Uri.UriSchemeHttps))
 {
-    throw new InvalidOperationException("Configure GrpcServices:Catalog.");
+    throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Catalog.");
 }
 
 builder.Services.AddGrpcClient<Backend.Contracts.Catalog.CategoryGrpc.CategoryGrpcClient>(options =>
@@ -96,7 +97,7 @@ builder.Services.AddGrpcClient<Backend.Contracts.Catalog.PriceGrpc.PriceGrpcClie
     options.Address = catalogUri;
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddVietnameseValidation();
 builder.Services.AddGrpcClient<Backend.Contracts.Catalog.ItemImageGrpc.ItemImageGrpcClient>(options =>
 {
     options.Address = catalogUri;
@@ -141,7 +142,7 @@ builder.Services.AddSwaggerGen(options =>
         Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
         Scheme = "bearer",
         BearerFormat = "JWT",
-        Description = "Paste the access token returned by login or refresh."
+        Description = "Dán mã truy cập được trả về khi đăng nhập hoặc làm mới mã."
     });
     options.OperationFilter<ApiGateway.Swagger.BearerSecurityFilter>();
 });
@@ -149,7 +150,7 @@ builder.Services.AddSwaggerGen(options =>
 var identityAddress =
     builder.Configuration["GrpcServices:Identity"]
     ?? throw new InvalidOperationException(
-        "GrpcServices:Identity is not configured.");
+        "Chưa cấu hình GrpcServices:Identity.");
 
 builder.Services.AddGrpcClient<IdentityGrpc.IdentityGrpcClient>(
     options => options.Address = new Uri(identityAddress));
@@ -166,7 +167,7 @@ builder.Services.AddGrpcClient<RoleGrpc.RoleGrpcClient>(
     options => options.Address = new Uri(identityAddress));
 
 var restaurantAddress = builder.Configuration["GrpcServices:Restaurant"]
-    ?? throw new InvalidOperationException("Configure GrpcServices:Restaurant.");
+    ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Restaurant.");
 builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantGrpc.RestaurantGrpcClient>(options =>
 {
     options.Address = new Uri(restaurantAddress);
@@ -251,14 +252,14 @@ app.MapGet("/api/identity/ping", async (
     {
         return Results.Problem(
             statusCode: 503,
-            detail: "The Identity service is currently unavailable.");
+            detail: "Dịch vụ định danh hiện không khả dụng.");
     }
     catch (RpcException ex)
         when (ex.StatusCode == StatusCode.DeadlineExceeded)
     {
         return Results.Problem(
             statusCode: 504,
-            detail: "The Identity service timed out.");
+            detail: "Dịch vụ định danh đã hết thời gian chờ.");
     }
 });
 
