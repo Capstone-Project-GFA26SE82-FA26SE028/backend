@@ -29,7 +29,7 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
     {
         if (!IsConfigured)
         {
-            throw new BillingException(409, "Enable PayOS and configure its credentials, HTTPS URLs, expiry and operational limits on the server.");
+            throw new BillingException(409, "Bật PayOS và cấu hình thông tin xác thực, đường dẫn HTTPS và giới hạn trên máy chủ.");
         }
     }
 
@@ -39,7 +39,7 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
         var s = options.Value;
         if (!ValidUrl(s.ReturnUrl) || !ValidUrl(s.CancelUrl) || !ValidUrl(s.WebhookUrl) || s.LinkLifetimeMinutes <= 0)
         {
-            throw new BillingException(409, "Configure PayOS return, cancel and webhook HTTPS URLs and link validity.");
+            throw new BillingException(409, "Cấu hình các đường dẫn HTTPS return, cancel, webhook và hạn liên kết PayOS.");
         }
     }
 
@@ -88,7 +88,7 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
             if (!PayOsSignature.VerifyData(data, Text(root, "signature"), options.Value.ChecksumKey)
                 || Text(root, "code") != "00" || !root.GetProperty("success").GetBoolean())
             {
-                throw new BillingException(400, "Invalid PayOS webhook signature or envelope.");
+                throw new BillingException(400, "Chữ ký hoặc dữ liệu webhook PayOS không hợp lệ.");
             }
 
             var reference = Text(data, "reference");
@@ -112,7 +112,7 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
         }
         catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException or FormatException)
         {
-            throw new BillingException(400, "Malformed or unverifiable PayOS webhook.");
+            throw new BillingException(400, "Dữ liệu webhook PayOS sai định dạng hoặc không thể xác minh.");
         }
     }
 

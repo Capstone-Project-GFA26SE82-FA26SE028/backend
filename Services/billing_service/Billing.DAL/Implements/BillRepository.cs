@@ -15,7 +15,7 @@ public sealed class BillRepository(BillingDbContext db) : GenericRepository<Bill
     {
         if (_context.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("An active transaction is required to lock bill creation.");
+            throw new InvalidOperationException("Cần có giao dịch đang hoạt động để khóa thao tác tạo hóa đơn.");
         }
 
         if (!_context.Database.IsSqlServer())
@@ -58,7 +58,7 @@ public sealed class BillRepository(BillingDbContext db) : GenericRepository<Bill
     {
         if (_context.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("An active transaction is required to lock a bill for refresh.");
+            throw new InvalidOperationException("Cần có giao dịch đang hoạt động để khóa hóa đơn trước khi cập nhật.");
         }
 
         var query = _context.Database.IsSqlServer()

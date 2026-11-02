@@ -94,7 +94,7 @@ namespace Shared.Persistence.Repositories
         {
             if (id == Guid.Empty)
             {
-                throw new ArgumentException("Id cannot be empty", nameof(id));
+                throw new ArgumentException("ID không được để trống", nameof(id));
             }
 
             return await _dbSet.FindAsync(new object[] { id }, cancellationToken);
@@ -104,7 +104,7 @@ namespace Shared.Persistence.Repositories
         {
             if (id == 0)
             {
-                throw new ArgumentException("Id cannot be zero", nameof(id));
+                throw new ArgumentException("ID không được bằng 0", nameof(id));
             }
 
             return await _dbSet.FindAsync(id);

@@ -28,7 +28,7 @@ public sealed class CheckoutSourceClient(CheckoutLockGrpc.CheckoutLockGrpcClient
             || reply.Status is not ("WaitingConfirmation" or "Frozen" or "Released")
             || (reply.Status == "Frozen" && (!reply.HasSourceHash || reply.SourceHash.Length != 64 || !reply.SourceHash.All(Uri.IsHexDigit))))
         {
-            throw new BillingException(503, "Ordering returned an invalid checkout state.");
+            throw new BillingException(503, "Dịch vụ gọi món trả về trạng thái checkout không hợp lệ.");
         }
 
         return new BillCheckoutDTO
@@ -45,7 +45,7 @@ public sealed class CheckoutSourceClient(CheckoutLockGrpc.CheckoutLockGrpcClient
         var reply = await Call(async options => await client.ReleaseAsync(Write(sessionId, id, string.Empty), options), ct);
         if (reply.CheckoutId != id.ToString() || reply.TableSessionId != sessionId.ToString() || reply.Status != "Released")
         {
-            throw new BillingException(503, "Ordering has not confirmed reopening this session.");
+            throw new BillingException(503, "Dịch vụ gọi món chưa xác nhận việc mở lại phiên bàn này.");
         }
     }
 
@@ -58,7 +58,7 @@ public sealed class CheckoutSourceClient(CheckoutLockGrpc.CheckoutLockGrpcClient
         if (reply.CheckoutId != id.ToString() || reply.TableSessionId != sessionId.ToString()
             || reply.Status != "Frozen" || reply.SourceHash != hash)
         {
-            throw new BillingException(503, "Ordering has not confirmed the frozen bill snapshot.");
+            throw new BillingException(503, "Dịch vụ gọi món chưa xác nhận bản chụp hóa đơn đã khóa.");
         }
     }
 
@@ -86,7 +86,7 @@ public sealed class CheckoutSourceClient(CheckoutLockGrpc.CheckoutLockGrpcClient
                 StatusCode.AlreadyExists or StatusCode.FailedPrecondition or StatusCode.Aborted => 409,
                 _ => 503
             }, error.StatusCode is StatusCode.Unavailable or StatusCode.Internal or StatusCode.DeadlineExceeded
-                ? "Checkout outcome could not be verified. Retry the same checkout ID; orders have not been automatically reopened."
+                ? "Không thể xác minh kết quả chốt hóa đơn. Vui lòng thử lại với cùng ID chốt hóa đơn; các đơn hàng chưa được tự động mở lại."
                 : error.Status.Detail);
         }
     }

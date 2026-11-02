@@ -19,7 +19,7 @@ public sealed class ReservationController(ReservationGrpc.ReservationGrpcClient 
         return Execute(async () => Map(await client.RejectAsync(new ReservationIdRequest
         {
             ReservationId = id.ToString()
-        }, Options(ct))), ct, "Reservation rejected successfully.");
+        }, Options(ct))), ct, "Đã từ chối yêu cầu đặt bàn thành công.");
     }
 
     [HttpPost("{id}/check-in")]
@@ -29,7 +29,7 @@ public sealed class ReservationController(ReservationGrpc.ReservationGrpcClient 
         return Execute(async () => Map(await client.CheckInAsync(new ReservationIdRequest
         {
             ReservationId = id.ToString()
-        }, Options(ct))), ct, "Customer arrival recorded successfully.");
+        }, Options(ct))), ct, "Đã ghi nhận khách đến thành công.");
     }
 
     [HttpPost("{id}/cancel")]
@@ -39,7 +39,7 @@ public sealed class ReservationController(ReservationGrpc.ReservationGrpcClient 
         return Execute(async () => Map(await client.CancelAsync(new ReservationIdRequest
         {
             ReservationId = id.ToString()
-        }, Options(ct))), ct, "Reservation cancelled successfully.");
+        }, Options(ct))), ct, "Đã hủy đặt bàn thành công.");
     }
 
     [HttpPut("{id}")]
@@ -55,7 +55,7 @@ public sealed class ReservationController(ReservationGrpc.ReservationGrpcClient 
             };
             request.TableIds.AddRange((body.TableIds ?? []).Select(value => value.ToString()));
             return Map(await client.UpdateAsync(request, Options(ct)));
-        }, ct, "Reservation schedule updated successfully.");
+        }, ct, "Đã cập nhật lịch đặt bàn thành công.");
     }
 
     [HttpPost("{id}/confirm")]
@@ -70,7 +70,7 @@ public sealed class ReservationController(ReservationGrpc.ReservationGrpcClient 
             };
             request.TableIds.AddRange((body.TableIds ?? []).Select(value => value.ToString()));
             return Map(await client.ConfirmAsync(request, Options(ct)));
-        }, ct, "Reservation confirmed successfully.");
+        }, ct, "Đã xác nhận đặt bàn thành công.");
     }
 
     [HttpPost]
@@ -84,7 +84,7 @@ public sealed class ReservationController(ReservationGrpc.ReservationGrpcClient 
             Phone = body.Phone ?? string.Empty,
             PartySize = body.PartySize,
             StartAt = body.StartAt ?? string.Empty
-        }, Options(ct))), ct, "Reservation request received and pending review. The restaurant will contact you by phone to confirm availability.", 201);
+        }, Options(ct))), ct, "Đã tiếp nhận yêu cầu đặt bàn và đang chờ duyệt. Nhà hàng sẽ liên hệ qua điện thoại để xác nhận tình trạng bàn trống.", 201);
     }
 
     [HttpGet]
@@ -142,7 +142,7 @@ public sealed class ReservationController(ReservationGrpc.ReservationGrpcClient 
                 Page = page.Page,
                 PageSize = page.PageSize
             };
-        }, ct, "Reservations retrieved successfully.");
+        }, ct, "Lấy danh sách đặt bàn thành công.");
     }
 
     [HttpGet("{id}")]
@@ -152,7 +152,7 @@ public sealed class ReservationController(ReservationGrpc.ReservationGrpcClient 
         return Execute(async () => Map(await client.GetByIdAsync(new ReservationIdRequest
         {
             ReservationId = id.ToString()
-        }, Options(ct))), ct, "Reservation retrieved successfully.");
+        }, Options(ct))), ct, "Lấy thông tin đặt bàn thành công.");
     }
 
     [HttpGet("availability")]
@@ -193,7 +193,7 @@ public sealed class ReservationController(ReservationGrpc.ReservationGrpcClient 
                     Reasons = table.Reasons.ToArray()
                 }).ToArray()
             };
-        }, ct, "Reservation availability preview retrieved successfully. This does not hold a table.");
+        }, ct, "Lấy thông tin xem trước tình trạng bàn trống thành công. Thao tác này không giữ bàn.");
     }
 
     private static ReservationDto Map(ReservationInfo reservation)

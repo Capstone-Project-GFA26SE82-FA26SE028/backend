@@ -28,7 +28,7 @@ public sealed class TableSessionRepository(RestaurantDbContext db)
     {
         if (_context.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("Session lock requires a transaction.");
+            throw new InvalidOperationException("Cần có giao dịch để khóa phiên bàn.");
         }
 
         if (_context.Database.IsSqlServer())

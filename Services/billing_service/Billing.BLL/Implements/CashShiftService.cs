@@ -20,30 +20,30 @@ public sealed class CashShiftService(ICashRegisterRepository registers, ICashShi
         RequireCashier(actor);
         if (cashRegisterId == Guid.Empty)
         {
-            throw new BillingException(400, "A valid cash register ID is required.");
+            throw new BillingException(400, "Mã máy thu ngân không hợp lệ hoặc bị trống.");
         }
 
         if (request?.OpeningCash is not decimal openingCash || openingCash < 0
             || openingCash > 9999999999999999.99m || decimal.Truncate(openingCash) != openingCash)
         {
-            throw new BillingException(400, "Provide a non-negative whole-VND opening cash amount within decimal(18,2) limits. Fractional amounts are not rounded.");
+            throw new BillingException(400, "Vui lòng nhập số tiền đầu ca nguyên không âm theo giới hạn decimal(18,2). Không làm tròn số tiền lẻ.");
         }
 
         var result = await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             var register = await registers.LockByIdAsync(cashRegisterId, cancellationToken)
-                ?? throw new BillingException(404, "Cash register not found.");
+                ?? throw new BillingException(404, "Không tìm thấy quầy thu ngân.");
             var currentActor = await access.GetCurrentScopeAsync(register.RestaurantId, cancellationToken);
             RequireCashier(currentActor);
             if (currentActor.UserId != actor.UserId || !currentActor.RestaurantIds.Contains(register.RestaurantId))
             {
-                throw new BillingException(403, "An active assignment to this restaurant is required.");
+                throw new BillingException(403, "Yêu cầu phân công đang hoạt động tại nhà hàng này.");
             }
 
             var unclosed = await shifts.GetUnclosedAsync(cashRegisterId, cancellationToken);
             if (unclosed.Count != 0)
             {
-                throw new BillingException(409, "The cash register already has an unclosed shift.");
+                throw new BillingException(409, "Máy thu ngân đã có một ca làm việc chưa đóng.");
             }
 
             var shift = new CashShift
@@ -68,12 +68,12 @@ public sealed class CashShiftService(ICashRegisterRepository registers, ICashShi
         var unclosed = await shifts.GetUnclosedAsync(cashRegisterId, cancellationToken);
         if (unclosed.Count == 0)
         {
-            throw new BillingException(404, "No open cash shift exists for this register.");
+            throw new BillingException(404, "Không có ca làm việc nào đang mở cho máy thu ngân này.");
         }
 
         if (unclosed.Count != 1 || unclosed[0].Status != CashShiftStatuses.Active)
         {
-            throw new BillingException(409, "The register has inconsistent shift records. Review them before continuing.");
+            throw new BillingException(409, "Máy thu ngân có các bản ghi ca làm việc không nhất quán. Hãy kiểm tra trước khi tiếp tục.");
         }
 
         return Map(unclosed[0], register.RestaurantId);
@@ -83,17 +83,17 @@ public sealed class CashShiftService(ICashRegisterRepository registers, ICashShi
     {
         if (actor.UserId == Guid.Empty)
         {
-            throw new BillingException(401, "A valid employee session is required.");
+            throw new BillingException(401, "Yêu cầu phiên đăng nhập nhân viên hợp lệ.");
         }
 
         if (actor.IsAdministrator || !settings.Value.CashierRoleIds.Contains(actor.RoleId, StringComparer.Ordinal))
         {
-            throw new BillingException(403, "Only a Cashier can open a cash shift.");
+            throw new BillingException(403, "Chỉ thu ngân mới có quyền mở ca làm việc.");
         }
 
         if (actor.RestaurantIds.Count == 0)
         {
-            throw new BillingException(403, "An active restaurant assignment is required.");
+            throw new BillingException(403, "Yêu cầu phân công nhà hàng đang hoạt động.");
         }
     }
 

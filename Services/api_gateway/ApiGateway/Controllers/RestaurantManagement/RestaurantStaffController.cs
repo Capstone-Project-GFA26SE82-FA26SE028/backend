@@ -17,7 +17,7 @@ public sealed class RestaurantStaffController(RestaurantStaffGrpc.RestaurantStaf
         {
             RestaurantId = restaurantId.ToString(),
             UserIdRef = body.UserIdRef.ToString()
-        }, Options(ct))), ct, "Restaurant assignment created successfully.", 201);
+        }, Options(ct))), ct, "Đã tạo phân công nhà hàng thành công.", 201);
     }
 
     [HttpGet]
@@ -26,7 +26,7 @@ public sealed class RestaurantStaffController(RestaurantStaffGrpc.RestaurantStaf
         return Execute(async () => (await client.GetAllAsync(new RestaurantStaffListRequest
         {
             RestaurantId = restaurantId.ToString()
-        }, Options(ct))).Items.Select(Map).ToArray(), ct, "Restaurant assignments retrieved successfully.");
+        }, Options(ct))).Items.Select(Map).ToArray(), ct, "Lấy danh sách phân công nhà hàng thành công.");
     }
 
     [HttpDelete("{userIdRef}")]
@@ -36,7 +36,7 @@ public sealed class RestaurantStaffController(RestaurantStaffGrpc.RestaurantStaf
         {
             RestaurantId = restaurantId.ToString(),
             UserIdRef = userIdRef.ToString()
-        }, Options(ct))), ct, "Restaurant assignment revoked successfully.");
+        }, Options(ct))), ct, "Đã thu hồi phân công nhà hàng thành công.");
     }
 
     private static RestaurantStaffDto Map(RestaurantStaffInfo value)

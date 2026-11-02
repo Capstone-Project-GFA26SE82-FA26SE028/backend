@@ -1,7 +1,7 @@
 namespace Catalog.Common.Exceptions;
 
 public sealed class RecipePersistenceException(bool isConflict, Exception innerException)
-    : Exception("Unable to persist the recipe version.", innerException)
+    : Exception("Không thể lưu phiên bản công thức.", innerException)
 {
     public bool IsConflict { get; } = isConflict;
 }

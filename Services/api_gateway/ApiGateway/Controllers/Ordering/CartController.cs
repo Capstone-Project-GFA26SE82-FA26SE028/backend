@@ -48,7 +48,7 @@ public sealed class CartController(CartGrpc.CartGrpcClient client, IOptions<Orde
         {
             if (!ValidLines(body.Items))
             {
-                return BadRequest(new ResponseDTO("Invalid cart lines.", 400));
+                return BadRequest(new ResponseDTO("Các món trong giỏ hàng không hợp lệ.", 400));
             }
 
             var request = new CartUpdateRequest

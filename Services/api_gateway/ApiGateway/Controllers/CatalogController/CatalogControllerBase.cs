@@ -44,21 +44,21 @@ public abstract class CatalogControllerBase(
             var (statusCode, message) = exception.StatusCode switch
             {
                 Grpc.Core.StatusCode.Unauthenticated =>
-                    (401, "The token or session is invalid."),
+                    (401, "Token hoặc phiên đăng nhập không hợp lệ."),
                 Grpc.Core.StatusCode.PermissionDenied =>
-                    (403, "You do not have permission to perform this catalog operation."),
+                    (403, "Bạn không có quyền thực hiện thao tác này trên thực đơn."),
                 Grpc.Core.StatusCode.InvalidArgument =>
-                    (400, "Invalid request data."),
+                    (400, "Dữ liệu yêu cầu không hợp lệ."),
                 Grpc.Core.StatusCode.NotFound =>
-                    (404, "Category not found."),
+                    (404, "Không tìm thấy dữ liệu yêu cầu."),
                 Grpc.Core.StatusCode.AlreadyExists or Grpc.Core.StatusCode.FailedPrecondition
                     or Grpc.Core.StatusCode.Aborted =>
-                    (409, "The data has changed or the operation does not meet its preconditions."),
+                    (409, "Dữ liệu đã thay đổi hoặc thao tác không thỏa mãn điều kiện tiên quyết."),
                 Grpc.Core.StatusCode.Unavailable =>
-                    (503, "Catalog or a required service is unavailable."),
+                    (503, "Hệ thống hiện đang bận hoặc tạm thời không khả dụng, vui lòng thử lại sau."),
                 Grpc.Core.StatusCode.DeadlineExceeded =>
-                    (504, "The operation timed out."),
-                _ => (502, "Unable to process the response from Catalog.")
+                    (504, "Hết thời gian chờ phản hồi từ hệ thống, vui lòng thử lại sau."),
+                _ => (502, "Không thể xử lý yêu cầu lúc này, vui lòng thử lại sau.")
             };
 
             return StatusCode(statusCode, new ResponseDTO

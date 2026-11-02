@@ -18,7 +18,7 @@ public sealed class FeedbackService(
     {
         if (orderRef == Guid.Empty)
         {
-            throw new CustomerException(400, "Invalid order reference.");
+            throw new CustomerException(400, "Mã tham chiếu đơn hàng không hợp lệ.");
         }
 
         var existing = await feedbacks.GetAccessByOrderAsync(orderRef, ct);
@@ -48,17 +48,17 @@ public sealed class FeedbackService(
     {
         if (request is null)
         {
-            throw new CustomerException(400, "Feedback payload is required.");
+            throw new CustomerException(400, "Dữ liệu đánh giá là bắt buộc.");
         }
 
         if (request.OrderRef == Guid.Empty)
         {
-            throw new CustomerException(400, "Order reference is required.");
+            throw new CustomerException(400, "Mã tham chiếu đơn hàng là bắt buộc.");
         }
 
         if (request.Star < 1 || request.Star > 5)
         {
-            throw new CustomerException(400, "Overall star rating must be between 1 and 5.");
+            throw new CustomerException(400, "Đánh giá sao tổng thể phải từ 1 đến 5 sao.");
         }
 
         return await transaction.ExecuteAsync(async () =>
@@ -66,7 +66,7 @@ public sealed class FeedbackService(
             var alreadyReviewed = await feedbacks.GetFeedbackByOrderAsync(request.OrderRef, ct);
             if (alreadyReviewed is not null)
             {
-                throw new CustomerException(409, "This order has already been reviewed.");
+                throw new CustomerException(409, "Đơn hàng này đã được gửi đánh giá trước đó.");
             }
 
             var access = await feedbacks.GetAccessByOrderAsync(request.OrderRef, ct);
@@ -151,7 +151,7 @@ public sealed class FeedbackService(
     {
         if (orderRef == Guid.Empty)
         {
-            throw new CustomerException(400, "Invalid order reference.");
+            throw new CustomerException(400, "Mã tham chiếu đơn hàng không hợp lệ.");
         }
 
         var feedback = await feedbacks.GetFeedbackByOrderAsync(orderRef, ct);
@@ -171,7 +171,7 @@ public sealed class FeedbackService(
     {
         if (page < 1 || pageSize < 1 || pageSize > 100)
         {
-            throw new CustomerException(400, "Invalid pagination.");
+            throw new CustomerException(400, "Phân trang không hợp lệ.");
         }
 
         var (items, total) = await feedbacks.GetPageAsync(page, pageSize, starFilter, ct);

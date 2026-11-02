@@ -27,7 +27,7 @@ public sealed class KitchenTaskService(
 
         if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue)
         {
-            throw new OrderingException(400, "Invalid pagination.");
+            throw new OrderingException(400, "Phân trang không hợp lệ.");
         }
 
         var (items, total) = await repository.GetPageAsync(
@@ -54,11 +54,11 @@ public sealed class KitchenTaskService(
 
         if (id == Guid.Empty)
         {
-            throw new OrderingException(400, "Invalid kitchen task ID.");
+            throw new OrderingException(400, "Mã nhiệm vụ bếp không hợp lệ.");
         }
 
         var task = await repository.GetByIdAsync(id, ct)
-            ?? throw new OrderingException(404, "Kitchen task not found.");
+            ?? throw new OrderingException(404, "Không tìm thấy nhiệm vụ bếp.");
 
         return Map(task);
     }
@@ -69,25 +69,25 @@ public sealed class KitchenTaskService(
 
         if (id == Guid.Empty)
         {
-            throw new OrderingException(400, "Invalid kitchen task ID.");
+            throw new OrderingException(400, "Mã nhiệm vụ bếp không hợp lệ.");
         }
 
         if (string.IsNullOrWhiteSpace(status))
         {
-            throw new OrderingException(400, "Status is required.");
+            throw new OrderingException(400, "Trạng thái là bắt buộc.");
         }
 
         return await transaction.ExecuteAsync(async () =>
         {
             var task = await repository.GetByIdForUpdateAsync(id, ct)
-                ?? throw new OrderingException(404, "Kitchen task not found.");
+                ?? throw new OrderingException(404, "Không tìm thấy nhiệm vụ bếp.");
 
             if (!string.IsNullOrEmpty(version))
             {
                 var expected = Convert.FromBase64String(version);
                 if (task.Version is not null && !task.Version.SequenceEqual(expected))
                 {
-                    throw new OrderingException(409, "The kitchen task changed. Reload before updating.");
+                    throw new OrderingException(409, "Nhiệm vụ bếp đã thay đổi. Vui lòng tải lại trước khi cập nhật.");
                 }
             }
 
@@ -97,7 +97,7 @@ public sealed class KitchenTaskService(
                 await checkouts.LockSessionAsync(sessionId, ct);
                 if ((await checkouts.GetActiveAsync(sessionId, ct))?.Status == "Frozen")
                 {
-                    throw new OrderingException(409, "Checkout has frozen this item. Cancel the checkout before cancelling the item.");
+                    throw new OrderingException(409, "Thanh toán đã khóa món ăn này. Vui lòng hủy yêu cầu thanh toán trước khi hủy món.");
                 }
             }
 
@@ -109,7 +109,7 @@ public sealed class KitchenTaskService(
             {
                 if (!string.Equals(task.Status, "Pending", StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new OrderingException(400, $"Cannot start cooking a task in '{task.Status}' status. Must be 'Pending'.");
+                    throw new OrderingException(400, $"Không thể bắt đầu chế biến nhiệm vụ đang ở trạng thái '{task.Status}'. Phải ở trạng thái 'Pending'.");
                 }
 
                 await cookingClient.DeductCookingIngredientsAsync(eventId, [task], ct);
@@ -126,7 +126,7 @@ public sealed class KitchenTaskService(
                 if (!string.Equals(task.Status, "Cooking", StringComparison.OrdinalIgnoreCase)
                     && !string.Equals(task.Status, "Pending", StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new OrderingException(400, $"Cannot mark task as ready in '{task.Status}' status.");
+                    throw new OrderingException(400, $"Không thể đánh dấu sẵn sàng cho nhiệm vụ đang ở trạng thái '{task.Status}'.");
                 }
 
                 task.Status = "Ready";
@@ -156,7 +156,7 @@ public sealed class KitchenTaskService(
             {
                 if (!string.Equals(task.Status, "Pending", StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new OrderingException(400, $"Cannot cancel a kitchen task in '{task.Status}' status. Only 'Pending' tasks can be cancelled.");
+                    throw new OrderingException(400, $"Không thể hủy nhiệm vụ bếp ở trạng thái '{task.Status}'. Chỉ có thể hủy nhiệm vụ đang ở trạng thái 'Pending'.");
                 }
 
                 task.Status = "Cancelled";
@@ -167,7 +167,7 @@ public sealed class KitchenTaskService(
             }
             else
             {
-                throw new OrderingException(400, $"Invalid target status '{status}'.");
+                throw new OrderingException(400, $"Trạng thái đích '{status}' không hợp lệ.");
             }
 
             task.Events.Add(new Event
@@ -190,25 +190,25 @@ public sealed class KitchenTaskService(
 
         if (id == Guid.Empty)
         {
-            throw new OrderingException(400, "Invalid kitchen task ID.");
+            throw new OrderingException(400, "Mã nhiệm vụ bếp không hợp lệ.");
         }
 
         if (priority < 0)
         {
-            throw new OrderingException(400, "Priority cannot be negative.");
+            throw new OrderingException(400, "Mức độ ưu tiên không được là số âm.");
         }
 
         return await transaction.ExecuteAsync(async () =>
         {
             var task = await repository.GetByIdForUpdateAsync(id, ct)
-                ?? throw new OrderingException(404, "Kitchen task not found.");
+                ?? throw new OrderingException(404, "Không tìm thấy nhiệm vụ bếp.");
 
             if (!string.IsNullOrEmpty(version))
             {
                 var expected = Convert.FromBase64String(version);
                 if (task.Version is not null && !task.Version.SequenceEqual(expected))
                 {
-                    throw new OrderingException(409, "The kitchen task changed. Reload before updating.");
+                    throw new OrderingException(409, "Nhiệm vụ bếp đã thay đổi. Vui lòng tải lại trước khi cập nhật.");
                 }
             }
 
@@ -274,7 +274,7 @@ public sealed class KitchenTaskService(
         var actorId = await access.RequireKitchenTaskAccessAsync(ct);
         if (taskIds is null || taskIds.Count == 0)
         {
-            throw new OrderingException(400, "Provide at least one kitchen task ID to start.");
+            throw new OrderingException(400, "Cung cấp ít nhất một mã nhiệm vụ bếp để bắt đầu chế biến.");
         }
 
         return await transaction.ExecuteAsync(async () =>
@@ -325,7 +325,7 @@ public sealed class KitchenTaskService(
         var actorId = await access.RequireKitchenTaskAccessAsync(ct);
         if (taskIds is null || taskIds.Count == 0)
         {
-            throw new OrderingException(400, "Provide at least one kitchen task ID to complete.");
+            throw new OrderingException(400, "Cung cấp ít nhất một mã nhiệm vụ bếp để hoàn thành.");
         }
 
         return await transaction.ExecuteAsync(async () =>
@@ -383,20 +383,20 @@ public sealed class KitchenTaskService(
         var actorId = await access.RequireKitchenTaskAccessAsync(ct);
         if (id == Guid.Empty)
         {
-            throw new OrderingException(400, "Invalid kitchen task ID.");
+            throw new OrderingException(400, "Mã nhiệm vụ bếp không hợp lệ.");
         }
 
         return await transaction.ExecuteAsync(async () =>
         {
             var task = await repository.GetByIdForUpdateAsync(id, ct)
-                ?? throw new OrderingException(404, "Kitchen task not found.");
+                ?? throw new OrderingException(404, "Không tìm thấy nhiệm vụ bếp.");
 
             if (task.OrderItem?.Status == "Cancelled" && task.OrderItem.Order?.TableSessionRef is Guid sessionId)
             {
                 await checkouts.LockSessionAsync(sessionId, ct);
                 if ((await checkouts.GetActiveAsync(sessionId, ct))?.Status == "Frozen")
                 {
-                    throw new OrderingException(409, "A cancelled item cannot be restored during frozen checkout.");
+                    throw new OrderingException(409, "Không thể khôi phục món đã hủy trong lúc đang khóa thanh toán.");
                 }
             }
 
@@ -414,7 +414,7 @@ public sealed class KitchenTaskService(
                 OccurredAt = now
             });
 
-            var remakeReason = string.IsNullOrWhiteSpace(reason) ? "L├ám lß║íi do sß╗▒ cß╗æ bß║┐p" : reason.Trim();
+            var remakeReason = string.IsNullOrWhiteSpace(reason) ? "Làm lại do sự cố bếp" : reason.Trim();
             var newTask = new KitchenTask
             {
                 KitchenTaskId = Guid.NewGuid(),
@@ -442,8 +442,8 @@ public sealed class KitchenTaskService(
             {
                 task.OrderItem.Status = "Pending";
                 task.OrderItem.Note = string.IsNullOrEmpty(task.OrderItem.Note)
-                    ? $"[L├ÇM Lß║áI] {remakeReason}"
-                    : $"{task.OrderItem.Note} [L├ÇM Lß║áI] {remakeReason}";
+                    ? $"[LÀM LẠI] {remakeReason}"
+                    : $"{task.OrderItem.Note} [LÀM LẠI] {remakeReason}";
             }
 
             repository.Create(newTask);
@@ -456,7 +456,7 @@ public sealed class KitchenTaskService(
         var actorId = await access.RequireKitchenTaskAccessAsync(ct);
         if (sessionId == Guid.Empty)
         {
-            throw new OrderingException(400, "Invalid table session ID.");
+            throw new OrderingException(400, "Mã phiên bàn không hợp lệ.");
         }
 
         return await transaction.ExecuteAsync(async () =>
@@ -491,8 +491,8 @@ public sealed class KitchenTaskService(
             {
                 ActivatedCount = count,
                 Message = count > 0
-                    ? $"─É├ú k├¡ch hoß║ít {count} m├│n '{course ?? "Tr├íng miß╗çng"}' cho bß║┐p chß║┐ biß║┐n."
-                    : "Kh├┤ng c├│ m├│n n├áo ─æang ß╗ƒ trß║íng th├íi giß╗» (Hold) cß║ºn k├¡ch hoß║ít."
+                    ? $"Đã kích hoạt {count} món '{course ?? "Tráng miệng"}' cho bếp chế biến."
+                    : "Không có món nào đang ở trạng thái giữ (Hold) cần kích hoạt."
             };
         }, ct);
     }

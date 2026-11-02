@@ -11,7 +11,7 @@ public enum ItemPersistenceFailure
 
 public sealed class ItemPersistenceException(
     ItemPersistenceFailure failure,
-    Exception innerException) : Exception("The item operation could not be persisted.", innerException)
+    Exception innerException) : Exception("Không thể lưu thay đổi của món ăn.", innerException)
 {
     public ItemPersistenceFailure Failure { get; } = failure;
 }

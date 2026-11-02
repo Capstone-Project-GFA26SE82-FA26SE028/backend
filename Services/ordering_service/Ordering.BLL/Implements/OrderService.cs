@@ -29,12 +29,12 @@ public sealed class OrderService(
         var actor = await access.RequireAsync(sessionId, request.TableId, guestToken, ct);
         if (string.IsNullOrWhiteSpace(key) || key.Length > 128 || key.Any(char.IsControl) || key != key.Trim())
         {
-            throw new OrderingException(400, "Idempotency-Key is required, maximum 128 characters without surrounding whitespace.");
+            throw new OrderingException(400, "Idempotency-Key là bắt buộc, tối đa 128 ký tự và không chứa khoảng trắng ở hai đầu.");
         }
 
         if (!actor.TableId.HasValue)
         {
-            throw new OrderingException(400, "Choose a tableId when the session contains multiple tables.");
+            throw new OrderingException(400, "Vui lòng chọn tableId khi phiên phục vụ bao gồm nhiều bàn.");
         }
 
         if (actor.IsGuest)
@@ -42,14 +42,14 @@ public sealed class OrderService(
             if (!request.CartId.HasValue || request.CartId == Guid.Empty || string.IsNullOrEmpty(request.CartVersion)
                 || request.Items is null || request.Items.Count != 0)
             {
-                throw new OrderingException(400, "Guests submit cartId and cartVersion, without an items payload.");
+                throw new OrderingException(400, "Khách chỉ gửi cartId và cartVersion, không gửi kèm danh sách items trực tiếp.");
             }
         }
         else
         {
             if (request.CartId.HasValue || request.CartVersion is not null)
             {
-                throw new OrderingException(400, "Staff orders use items, not a guest cart.");
+                throw new OrderingException(400, "Đơn hàng của nhân viên phải dùng danh sách items, không dùng giỏ hàng của khách.");
             }
 
             OrderingRules.ValidateLines(request.Items, false);
@@ -83,7 +83,7 @@ public sealed class OrderService(
             {
                 if (!string.Equals(existing.RequestHash, requestHash, StringComparison.Ordinal))
                 {
-                    throw new OrderingException(409, "Idempotency-Key was already used with a different request.");
+                    throw new OrderingException(409, "Idempotency-Key đã được sử dụng với một yêu cầu khác trước đó.");
                 }
 
                 return (Order: existing, Created: false);
@@ -91,7 +91,7 @@ public sealed class OrderService(
 
             if (await checkouts.GetActiveAsync(sessionId, ct) is not null)
             {
-                throw new OrderingException(409, "Checkout has been requested for this session. Additional orders are blocked.");
+                throw new OrderingException(409, "Phiên này đã yêu cầu thanh toán. Không thể đặt thêm món mới.");
             }
 
             Cart? cart = null;
@@ -205,7 +205,7 @@ public sealed class OrderService(
         var actor = await access.RequireAsync(sessionId, null, guestToken, ct);
         if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue)
         {
-            throw new OrderingException(400, "Invalid pagination.");
+            throw new OrderingException(400, "Phân trang không hợp lệ.");
         }
 
         var result = await transaction.ExecuteAsync(() => orders.GetAllAsync(
@@ -223,13 +223,13 @@ public sealed class OrderService(
         var actor = await access.RequireAsync(sessionId, null, string.Empty, ct);
         if (actor.IsGuest || !actor.UserId.HasValue)
         {
-            throw new OrderingException(403, "Staff permission is required to confirm orders.");
+            throw new OrderingException(403, "Yêu cầu quyền nhân viên để xác nhận đơn hàng.");
         }
 
         var expected = new byte[8];
         if (version is null || !Convert.TryFromBase64String(version, expected, out var size) || size != 8)
         {
-            throw new OrderingException(400, "A valid order rowversion is required.");
+            throw new OrderingException(400, "Yêu cầu rowversion của đơn hàng hợp lệ.");
         }
 
         var order = await transaction.ExecuteAsync(async () =>
@@ -245,12 +245,12 @@ public sealed class OrderService(
 
             if (checkout?.Status == "Frozen")
             {
-                throw new OrderingException(409, "The checkout item set has already been frozen.");
+                throw new OrderingException(409, "Danh sách món thanh toán đã bị khóa (Frozen). Không thể thay đổi.");
             }
 
             if (found.Status != "PendingConfirmation" || !found.Version.SequenceEqual(expected))
             {
-                throw new OrderingException(409, "The order is no longer pending or its version changed.");
+                throw new OrderingException(409, "Đơn hàng không còn ở trạng thái chờ duyệt hoặc dữ liệu đã bị thay đổi.");
             }
 
             var lines = found.OrderItems.OrderBy(item => item.OrderItemId).Select(item => new SelectionDTO
@@ -305,7 +305,7 @@ public sealed class OrderService(
         var actor = await access.RequireAsync(sessionId, null, string.Empty, ct);
         if (actor.IsGuest || !actor.UserId.HasValue)
         {
-            throw new OrderingException(403, "Staff permission is required to serve order items.");
+            throw new OrderingException(403, "Yêu cầu quyền nhân viên để phục vụ món ăn.");
         }
 
         var order = await transaction.ExecuteAsync(async () =>
@@ -318,24 +318,24 @@ public sealed class OrderService(
                 var expected = new byte[8];
                 if (!Convert.TryFromBase64String(version, expected, out var size) || size != 8)
                 {
-                    throw new OrderingException(400, "A valid order rowversion is required.");
+                    throw new OrderingException(400, "Yêu cầu rowversion của đơn hàng hợp lệ.");
                 }
 
                 if (found!.Version is not null && !found.Version.SequenceEqual(expected))
                 {
-                    throw new OrderingException(409, "The order changed. Reload before serving.");
+                    throw new OrderingException(409, "Đơn hàng đã thay đổi. Vui lòng tải lại trước khi phục vụ món.");
                 }
             }
 
             var item = found!.OrderItems.FirstOrDefault(i => i.OrderItemId == orderItemId);
             if (item is null)
             {
-                throw new OrderingException(404, "Order item not found.");
+                throw new OrderingException(404, "Không tìm thấy món ăn trong đơn hàng.");
             }
 
             if (!string.Equals(item.Status, "Ready", StringComparison.OrdinalIgnoreCase))
             {
-                throw new OrderingException(400, $"Cannot serve item in '{item.Status}' status. Must be 'Ready'.");
+                throw new OrderingException(400, $"Không thể phục vụ món đang ở trạng thái '{item.Status}'. Món ăn phải ở trạng thái 'Ready'.");
             }
 
             item.Status = "Served";
@@ -376,8 +376,8 @@ public sealed class OrderService(
         if (!id.HasValue || !await kitchen.IsStationActiveAsync(id.Value, ct))
         {
             throw new OrderingException(409, itemStation.HasValue
-                ? $"Assigned kitchen station {itemStation.Value} is missing or inactive. Ask Manager to update the item routing."
-                : "No active kitchen station can be selected. Assign a station to the item or configure an active default station.");
+                ? $"Trạm bếp được phân công {itemStation.Value} không tồn tại hoặc đã ngừng hoạt động. Vui lòng yêu cầu quản lý cập nhật trạm bếp cho món ăn."
+                : "Không tìm thấy trạm bếp đang hoạt động. Vui lòng gán trạm bếp cho món hoặc cấu hình trạm mặc định.");
         }
 
         return id.Value;
@@ -459,7 +459,7 @@ public sealed class OrderService(
     {
         if (order is null || order.TableSessionRef != actor.SessionId)
         {
-            throw new OrderingException(404, "Order not found.");
+            throw new OrderingException(404, "Không tìm thấy đơn hàng.");
         }
     }
 

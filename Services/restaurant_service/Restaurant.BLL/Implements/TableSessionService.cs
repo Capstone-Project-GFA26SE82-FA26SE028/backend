@@ -16,20 +16,20 @@ public sealed class TableSessionService(IQrService qrService, ITableRepository t
         await orderAccess.RequireStaffAsync(ct);
         if (tableId == Guid.Empty)
         {
-            throw new ManagementException(400, "Invalid table ID.");
+            throw new ManagementException(400, "Mã bàn không hợp lệ.");
         }
         return await transaction.ExecuteAsync(async () =>
         {
             var table = await tables.LockForSessionAsync(tableId, ct)
-                ?? throw new ManagementException(404, "Table not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy bàn.");
             if (!table.IsActive || !table.Area.IsActive)
             {
-                throw new ManagementException(409, "Table or area is inactive.");
+                throw new ManagementException(409, "Bàn hoặc khu vực đang ngừng hoạt động.");
             }
             var open = await sessions.GetOpenForTableAsync(tableId, ct);
             if (open.Count > 1 || open.Any(session => session.Status != "Open"))
             {
-                throw new ManagementException(409, "Table has conflicting sessions. Resolve them before opening.");
+                throw new ManagementException(409, "Bàn đang có phiên phục vụ xung đột. Vui lòng xử lý trước khi mở mới.");
             }
             var session = open.SingleOrDefault();
             var created = session is null;
@@ -84,17 +84,17 @@ public sealed class TableSessionService(IQrService qrService, ITableRepository t
         }
 
         var session = await sessions.GetForOrderingAsync(sessionId, ct)
-            ?? throw new ManagementException(404, "Table session not found.");
+            ?? throw new ManagementException(404, "Không tìm thấy phiên phục vụ bàn.");
         if (session.Status != "Open" || session.ClosedAt.HasValue)
         {
-            throw new ManagementException(409, "The table session is closed.");
+            throw new ManagementException(409, "Phiên phục vụ bàn đã đóng.");
         }
 
         var activeTables = session.SessionTables.Where(link => link.Table.IsActive && link.Table.Area.IsActive)
             .Select(link => link.TableId).Distinct().ToArray();
         if (activeTables.Length == 0 || (tableId.HasValue && !activeTables.Contains(tableId.Value)))
         {
-            throw new ManagementException(409, "The table is not active in this session.");
+            throw new ManagementException(409, "Bàn không hoạt động trong phiên phục vụ này.");
         }
 
         result.TableId = tableId ?? (activeTables.Length == 1 ? activeTables[0] : null);
@@ -107,18 +107,18 @@ public sealed class TableSessionService(IQrService qrService, ITableRepository t
         return await transaction.ExecuteAsync(async () =>
         {
             var table = await tables.LockForSessionAsync(initial.TableId, ct)
-                ?? throw new ManagementException(404, "Table not found.");
+                ?? throw new ManagementException(404, "Không tìm thấy bàn.");
             // Validate again under the transaction: QR/area/table may have changed while waiting.
             var resolved = await qrService.Resolve(token, ct);
             if (resolved.TableId != table.TableId)
             {
-                throw new ManagementException(409, "The QR code has changed. Scan it again.");
+                throw new ManagementException(409, "Mã QR đã thay đổi. Vui lòng quét lại.");
             }
 
             var open = await sessions.GetOpenForTableAsync(table.TableId, ct);
             if (open.Count > 1)
             {
-                throw new ManagementException(409, "The table has multiple unclosed sessions. Contact staff for assistance.");
+                throw new ManagementException(409, "Bàn đang có nhiều phiên phục vụ chưa đóng. Vui lòng liên hệ nhân viên để được hỗ trợ.");
             }
 
             var created = open.Count == 0;

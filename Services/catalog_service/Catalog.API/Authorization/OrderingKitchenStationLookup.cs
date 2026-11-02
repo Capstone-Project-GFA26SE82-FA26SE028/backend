@@ -24,9 +24,9 @@ public sealed class OrderingKitchenStationLookup(KitchenStationGrpc.KitchenStati
             }, headers, deadline: DateTime.UtcNow.AddSeconds(5), cancellationToken: ct);
             if (!Guid.TryParse(station.Id, out var returnedId) || returnedId != stationId)
             {
-                return new ResponseDTO("Invalid kitchen station response.", 503);
+                return new ResponseDTO("Phản hồi trạm bếp không hợp lệ.", 503);
             }
-            return station.IsActive ? null : new ResponseDTO("Kitchen station is inactive.", 409);
+            return station.IsActive ? null : new ResponseDTO("Trạm bếp đang ngừng hoạt động.", 409);
         }
         catch (RpcException error) when (!ct.IsCancellationRequested)
         {
@@ -37,8 +37,8 @@ public sealed class OrderingKitchenStationLookup(KitchenStationGrpc.KitchenStati
                 StatusCode.PermissionDenied => 403,
                 _ => 503
             };
-            return new ResponseDTO(code == 404 ? "Kitchen station not found."
-                : "Unable to verify kitchen station. Retry after checking Ordering.", code);
+            return new ResponseDTO(code == 404 ? "Không tìm thấy trạm bếp."
+                : "Không thể xác minh trạm bếp. Vui lòng kiểm tra lại dịch vụ Ordering.", code);
         }
     }
 }

@@ -8,7 +8,7 @@ Ordering.API.Extensions.OrderingServiceExtensions.AddOrderingServices(builder.Se
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    throw new InvalidOperationException("Configure ConnectionStrings:DefaultConnection in appsettings.json or environment variables.");
+    throw new InvalidOperationException("Vui lòng cấu hình ConnectionStrings:DefaultConnection trong appsettings.json hoặc biến môi trường.");
 }
 
 builder.Services.AddOrderingPersistence(connectionString);

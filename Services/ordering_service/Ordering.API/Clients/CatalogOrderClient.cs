@@ -56,7 +56,7 @@ public sealed class CatalogOrderClient(OrderValidationGrpc.OrderValidationGrpcCl
 
         if (reply.Result is null || (reply.IsSuccess && reply.Result.Items.Count != items.Count))
         {
-            throw new OrderingException(503, "Invalid catalog quotation response.");
+            throw new OrderingException(503, "Phản hồi báo giá từ thực đơn không hợp lệ.");
         }
 
         var result = reply.Result;
@@ -70,7 +70,7 @@ public sealed class CatalogOrderClient(OrderValidationGrpc.OrderValidationGrpcCl
                     || line.Options.Any(option => !items[index].Options.Any(selection => selection.OptionId.ToString() == option.OptionId
                         && selection.Quantity == option.Quantity)))
                 {
-                    throw new OrderingException(503, "Catalog selections do not match the request.");
+                    throw new OrderingException(503, "Các món thực đơn trả về không khớp với yêu cầu.");
                 }
             }
         }
@@ -79,7 +79,7 @@ public sealed class CatalogOrderClient(OrderValidationGrpc.OrderValidationGrpcCl
         {
             IsValid = reply.IsSuccess,
             Message = result.Errors.Count > 0
-                ? string.Join("; ", result.Errors.Select(error => $"Line {error.LineIndex + 1}: {error.Message}")) : reply.Message,
+                ? string.Join("; ", result.Errors.Select(error => $"Dòng {error.LineIndex + 1}: {error.Message}")) : reply.Message,
             EvaluatedAt = DateTimeOffset.Parse(result.EvaluatedAt, CultureInfo.InvariantCulture),
             TotalAmount = result.HasTotalAmount ? decimal.Parse(result.TotalAmount, CultureInfo.InvariantCulture) : null,
             Items = result.Items.Select(item => new QuotedItemDTO

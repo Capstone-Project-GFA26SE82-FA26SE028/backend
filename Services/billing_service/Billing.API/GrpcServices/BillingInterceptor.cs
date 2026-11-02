@@ -32,12 +32,12 @@ public sealed class BillingInterceptor(ILogger<BillingInterceptor> logger) : Int
         }
         catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
         {
-            throw new RpcException(new Status(StatusCode.Cancelled, "The request was cancelled."));
+            throw new RpcException(new Status(StatusCode.Cancelled, "Yêu cầu đã bị hủy."));
         }
         catch (Exception error)
         {
-            logger.LogError(error, "Billing RPC failed: {Method}", context.Method);
-            throw new RpcException(new Status(StatusCode.Internal, "Unable to process the billing request."));
+            logger.LogError(error, "Yêu cầu RPC thanh toán thất bại: {Method}", context.Method);
+            throw new RpcException(new Status(StatusCode.Internal, "Không thể xử lý yêu cầu thanh toán."));
         }
     }
 }

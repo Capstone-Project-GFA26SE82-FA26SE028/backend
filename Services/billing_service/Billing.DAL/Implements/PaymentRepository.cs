@@ -19,7 +19,7 @@ public sealed class PaymentRepository(BillingDbContext db)
     {
         if (_context.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("An active transaction is required to lock a payment request.");
+            throw new InvalidOperationException("Cần có giao dịch đang hoạt động để khóa yêu cầu thanh toán.");
         }
 
         if (!_context.Database.IsSqlServer())
@@ -80,7 +80,7 @@ public sealed class PaymentRepository(BillingDbContext db)
     {
         if (_context.Database.CurrentTransaction is not null || _context.ChangeTracker.HasChanges())
         {
-            throw new InvalidOperationException("Provider stages require the preceding transaction to be saved and completed.");
+            throw new InvalidOperationException("Phải lưu và hoàn tất giao dịch trước đó trước khi thực hiện các bước với nhà cung cấp thanh toán.");
         }
 
         _context.ChangeTracker.Clear();
@@ -105,7 +105,7 @@ public sealed class PaymentRepository(BillingDbContext db)
     {
         if (!await LockResource("Billing.PayOS.OrderCode", 10000, ct))
         {
-            throw new InvalidOperationException("Provider order allocation is busy.");
+            throw new InvalidOperationException("Thao tác cấp mã đơn hàng của nhà cung cấp thanh toán đang bận.");
         }
 
         for (var attempt = 0; attempt < 10; attempt++)
@@ -123,7 +123,7 @@ public sealed class PaymentRepository(BillingDbContext db)
             }
         }
 
-        throw new InvalidOperationException("Could not allocate a unique provider order code.");
+        throw new InvalidOperationException("Không thể cấp mã đơn hàng duy nhất của nhà cung cấp thanh toán.");
     }
 
     public Task<Payment?> GetForProviderUpdateAsync(Guid id, CancellationToken ct)
@@ -156,7 +156,7 @@ public sealed class PaymentRepository(BillingDbContext db)
     {
         if (_context.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("Provider locks require an active transaction.");
+            throw new InvalidOperationException("Cần có giao dịch đang hoạt động để khóa dữ liệu nhà cung cấp thanh toán.");
         }
 
         if (!_context.Database.IsSqlServer())

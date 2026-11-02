@@ -21,7 +21,7 @@ public sealed class GoodsReceiptService(GoodsReceiptRepository repository, Ingre
             {
                 if (existing.CreatedByRef != actor || !Same(existing, request))
                 {
-                    throw new InventoryException(409, "Receipt ID was already used with different data or by another account.");
+                    throw new InventoryException(409, "Mã phiếu nhập đã được dùng với dữ liệu khác hoặc bởi tài khoản khác.");
                 }
                 return existing;
             }
@@ -41,11 +41,11 @@ public sealed class GoodsReceiptService(GoodsReceiptRepository repository, Ingre
                 }
                 catch (OverflowException)
                 {
-                    throw new InventoryException(400, "Converted quantity exceeds the supported range.");
+                    throw new InventoryException(400, "Số lượng sau quy đổi vượt quá phạm vi hỗ trợ.");
                 }
                 if (quantity <= 0 || !InventoryValidation.Quantity(quantity))
                 {
-                    throw new InventoryException(400, "Converted quantity must fit decimal(18,6) without rounding.");
+                    throw new InventoryException(400, "Số lượng sau quy đổi phải theo định dạng decimal(18,6) không làm tròn.");
                 }
                 lines.Add(new GoodsReceiptItem
                 {
@@ -86,19 +86,19 @@ public sealed class GoodsReceiptService(GoodsReceiptRepository repository, Ingre
             }
             if (receipt.Status != "Draft" || receipt.GoodsReceiptItems.Count == 0)
             {
-                throw new InventoryException(409, "Only a non-empty draft receipt can be confirmed.");
+                throw new InventoryException(409, "Chỉ phiếu nhập nháp có hàng mới có thể xác nhận.");
             }
             foreach (var line in receipt.GoodsReceiptItems.OrderBy(x => x.IngredientId))
             {
                 if (line.ExpiryDate is null || line.ReceivedQuantity <= 0 || !InventoryValidation.Quantity(line.ReceivedQuantity))
                 {
-                    throw new InventoryException(409, "Receipt contains invalid quantity or missing expiry date.");
+                    throw new InventoryException(409, "Phiếu nhập chứa số lượng không hợp lệ hoặc thiếu ngày hết hạn.");
                 }
                 var ingredient = await ActiveIngredient(line.IngredientId, ct);
                 var newQuantity = ingredient.StockQuantity + line.ReceivedQuantity;
                 if (!InventoryValidation.Quantity(newQuantity))
                 {
-                    throw new InventoryException(409, "Stock quantity exceeds the supported range.");
+                    throw new InventoryException(409, "Số lượng tồn kho vượt quá phạm vi hỗ trợ.");
                 }
                 ingredient.StockQuantity = newQuantity;
                 await movements.CreateAsync(new StockMovement
@@ -135,16 +135,16 @@ public sealed class GoodsReceiptService(GoodsReceiptRepository repository, Ingre
     private async Task<GoodsReceipt> Find(Guid id, CancellationToken ct)
     {
         InventoryValidation.Id(id);
-        return await repository.GetByIdAsync(id, ct) ?? throw new InventoryException(404, "Receipt not found.");
+        return await repository.GetByIdAsync(id, ct) ?? throw new InventoryException(404, "Không tìm thấy phiếu nhập kho.");
     }
 
     private async Task<Ingredient> ActiveIngredient(Guid id, CancellationToken ct)
     {
         var ingredient = await ingredients.GetByIdAsync(id, ct)
-            ?? throw new InventoryException(404, "Ingredient not found.");
+            ?? throw new InventoryException(404, "Không tìm thấy nguyên liệu.");
         if (!ingredient.IsActive)
         {
-            throw new InventoryException(409, "Cannot receive an inactive ingredient.");
+            throw new InventoryException(409, "Không thể nhập kho nguyên liệu đang ngừng hoạt động.");
         }
         return ingredient;
     }
@@ -157,7 +157,7 @@ public sealed class GoodsReceiptService(GoodsReceiptRepository repository, Ingre
                 || x.ReceivedQuantity <= 0 || !InventoryValidation.Quantity(x.ReceivedQuantity))
             || request.Items.Select(x => (x.IngredientId, x.ExpiryDate)).Distinct().Count() != request.Items.Count)
         {
-            throw new InventoryException(400, "Provide 1-100 unique ingredient/expiry lines with positive quantities (up to six decimal places), and a note of at most 1000 characters.");
+            throw new InventoryException(400, "Cung cấp từ 1-100 dòng nguyên liệu/hạn dùng không trùng lặp với số lượng dương (tối đa 6 chữ số thập phân), ghi chú tối đa 1000 ký tự.");
         }
     }
 

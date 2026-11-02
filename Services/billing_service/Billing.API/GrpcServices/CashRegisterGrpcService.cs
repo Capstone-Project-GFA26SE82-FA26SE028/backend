@@ -12,7 +12,7 @@ public sealed class CashRegisterGrpcService(ICashRegisterService service) : Cash
     {
         var result = await service.Create(new CreateCashRegisterDTO
         {
-            RestaurantId = ParseId(request.RestaurantId, "restaurant"),
+            RestaurantId = ParseId(request.RestaurantId, "nhà hàng"),
             Code = request.Code
         }, context.CancellationToken);
         return Map(result);
@@ -22,7 +22,7 @@ public sealed class CashRegisterGrpcService(ICashRegisterService service) : Cash
     {
         var result = await service.GetAll(new CashRegisterQueryDTO
         {
-            RestaurantId = request.HasRestaurantId ? ParseId(request.RestaurantId, "restaurant") : null,
+            RestaurantId = request.HasRestaurantId ? ParseId(request.RestaurantId, "nhà hàng") : null,
             Search = request.HasSearch ? request.Search : null,
             Page = request.Page,
             PageSize = request.PageSize
@@ -39,14 +39,14 @@ public sealed class CashRegisterGrpcService(ICashRegisterService service) : Cash
 
     public override async Task<CashRegisterInfo> GetById(CashRegisterIdRequest request, ServerCallContext context)
     {
-        return Map(await service.GetById(ParseId(request.CashRegisterId, "cash register"), context.CancellationToken));
+        return Map(await service.GetById(ParseId(request.CashRegisterId, "quầy thu ngân"), context.CancellationToken));
     }
 
     private static Guid ParseId(string value, string resource)
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new BillingException(400, $"A valid {resource} ID is required.");
+            throw new BillingException(400, $"Yêu cầu ID {resource} hợp lệ.");
         }
 
         return id;

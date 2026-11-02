@@ -26,7 +26,7 @@ public sealed class RecipeService(
 
         if (itemId == Guid.Empty)
         {
-            return new ResponseDTO("Item ID is required.", 400);
+            return new ResponseDTO("Mã món ăn là bắt buộc.", 400);
         }
 
         var validationError = ValidateRecipe(request);
@@ -38,7 +38,7 @@ public sealed class RecipeService(
         var item = await items.GetByIdAsync(itemId, cancellationToken);
         if (item is null)
         {
-            return new ResponseDTO("Item not found.", 404);
+            return new ResponseDTO("Không tìm thấy món ăn.", 404);
         }
 
         var inventoryError = await ResolveIngredients(request, cancellationToken);
@@ -54,7 +54,7 @@ public sealed class RecipeService(
             var latest = await recipes.GetLatestEffectiveFromAsync(itemId, null, cancellationToken);
             if (latest.HasValue && effectiveFrom <= latest.Value)
             {
-                return new ResponseDTO("A new recipe must start after the latest scheduled version. Equal or earlier start times are not allowed.", 409);
+                return new ResponseDTO("Công thức mới phải bắt đầu sau phiên bản gần nhất đã lên lịch. Không được trùng hoặc trước thời gian đó.", 409);
             }
 
             await recipes.CloseActiveVersionForItemAsync(itemId, effectiveFrom, cancellationToken);
@@ -76,7 +76,7 @@ public sealed class RecipeService(
 
             await recipes.AddAsync(entity, cancellationToken);
 
-            return new ResponseDTO("Recipe created successfully.", 201, true, Map(entity));
+            return new ResponseDTO("Tạo công thức thành công.", 201, true, Map(entity));
         }, cancellationToken);
     }
 
@@ -89,13 +89,13 @@ public sealed class RecipeService(
 
         if (itemId == Guid.Empty)
         {
-            return new ResponseDTO("Item ID is required.", 400);
+            return new ResponseDTO("Mã món ăn là bắt buộc.", 400);
         }
 
         var item = await items.GetByIdAsync(itemId, cancellationToken);
         if (item is null)
         {
-            return new ResponseDTO("Item not found.", 404);
+            return new ResponseDTO("Không tìm thấy món ăn.", 404);
         }
 
         if (at.HasValue)
@@ -107,10 +107,10 @@ public sealed class RecipeService(
         var active = await recipes.GetActiveForItemAsync(itemId, queryTime, cancellationToken);
         if (active is null)
         {
-            return new ResponseDTO("No active recipe found for this item.", 404);
+            return new ResponseDTO("Không tìm thấy công thức đang hoạt động cho món ăn này.", 404);
         }
 
-        return new ResponseDTO("Active recipe retrieved successfully.", 200, true, Map(active));
+        return new ResponseDTO("Lấy công thức đang hoạt động thành công.", 200, true, Map(active));
     }
 
     public async Task<ResponseDTO> GetItemRecipeHistory(
@@ -121,19 +121,19 @@ public sealed class RecipeService(
 
         if (itemId == Guid.Empty)
         {
-            return new ResponseDTO("Item ID is required.", 400);
+            return new ResponseDTO("Mã món ăn là bắt buộc.", 400);
         }
 
         var item = await items.GetByIdAsync(itemId, cancellationToken);
         if (item is null)
         {
-            return new ResponseDTO("Item not found.", 404);
+            return new ResponseDTO("Không tìm thấy món ăn.", 404);
         }
 
         var history = await recipes.GetHistoryForItemAsync(itemId, cancellationToken);
         var result = history.Select(Map).ToList();
 
-        return new ResponseDTO("Recipe history retrieved successfully.", 200, true, result);
+        return new ResponseDTO("Lấy lịch sử công thức thành công.", 200, true, result);
     }
 
     public async Task<ResponseDTO> CreateOptionRecipe(
@@ -145,7 +145,7 @@ public sealed class RecipeService(
 
         if (optionId == Guid.Empty)
         {
-            return new ResponseDTO("Option ID is required.", 400);
+            return new ResponseDTO("Mã tùy chọn là bắt buộc.", 400);
         }
 
         var validationError = ValidateRecipe(request);
@@ -157,7 +157,7 @@ public sealed class RecipeService(
         var option = await options.GetByIdAsync(optionId, cancellationToken);
         if (option is null)
         {
-            return new ResponseDTO("Option not found.", 404);
+            return new ResponseDTO("Không tìm thấy tùy chọn.", 404);
         }
 
         var inventoryError = await ResolveIngredients(request, cancellationToken);
@@ -173,7 +173,7 @@ public sealed class RecipeService(
             var latest = await recipes.GetLatestEffectiveFromAsync(null, optionId, cancellationToken);
             if (latest.HasValue && effectiveFrom <= latest.Value)
             {
-                return new ResponseDTO("A new recipe must start after the latest scheduled version. Equal or earlier start times are not allowed.", 409);
+                return new ResponseDTO("Công thức mới phải bắt đầu sau phiên bản gần nhất đã lên lịch. Không được trùng hoặc trước thời gian đó.", 409);
             }
 
             await recipes.CloseActiveVersionForOptionAsync(optionId, effectiveFrom, cancellationToken);
@@ -195,7 +195,7 @@ public sealed class RecipeService(
 
             await recipes.AddAsync(entity, cancellationToken);
 
-            return new ResponseDTO("Recipe created successfully.", 201, true, Map(entity));
+            return new ResponseDTO("Tạo công thức thành công.", 201, true, Map(entity));
         }, cancellationToken);
     }
 
@@ -208,13 +208,13 @@ public sealed class RecipeService(
 
         if (optionId == Guid.Empty)
         {
-            return new ResponseDTO("Option ID is required.", 400);
+            return new ResponseDTO("Mã tùy chọn là bắt buộc.", 400);
         }
 
         var option = await options.GetByIdAsync(optionId, cancellationToken);
         if (option is null)
         {
-            return new ResponseDTO("Option not found.", 404);
+            return new ResponseDTO("Không tìm thấy tùy chọn.", 404);
         }
 
         if (at.HasValue)
@@ -226,10 +226,10 @@ public sealed class RecipeService(
         var active = await recipes.GetActiveForOptionAsync(optionId, queryTime, cancellationToken);
         if (active is null)
         {
-            return new ResponseDTO("No active recipe found for this option.", 404);
+            return new ResponseDTO("Không tìm thấy công thức đang hoạt động cho tùy chọn này.", 404);
         }
 
-        return new ResponseDTO("Active recipe retrieved successfully.", 200, true, Map(active));
+        return new ResponseDTO("Lấy công thức đang hoạt động thành công.", 200, true, Map(active));
     }
 
     public async Task<ResponseDTO> GetOptionRecipeHistory(
@@ -240,19 +240,19 @@ public sealed class RecipeService(
 
         if (optionId == Guid.Empty)
         {
-            return new ResponseDTO("Option ID is required.", 400);
+            return new ResponseDTO("Mã tùy chọn là bắt buộc.", 400);
         }
 
         var option = await options.GetByIdAsync(optionId, cancellationToken);
         if (option is null)
         {
-            return new ResponseDTO("Option not found.", 404);
+            return new ResponseDTO("Không tìm thấy tùy chọn.", 404);
         }
 
         var history = await recipes.GetHistoryForOptionAsync(optionId, cancellationToken);
         var result = history.Select(Map).ToList();
 
-        return new ResponseDTO("Recipe history retrieved successfully.", 200, true, result);
+        return new ResponseDTO("Lấy lịch sử công thức thành công.", 200, true, result);
     }
 
     public async Task<ResponseDTO> GetById(
@@ -263,13 +263,13 @@ public sealed class RecipeService(
 
         if (recipeVersionId == Guid.Empty)
         {
-            return new ResponseDTO("Recipe version ID is required.", 400);
+            return new ResponseDTO("Mã phiên bản công thức là bắt buộc.", 400);
         }
 
         var entity = await recipes.GetByIdAsync(recipeVersionId, cancellationToken);
         if (entity is null)
         {
-            return new ResponseDTO("Recipe not found.", 404);
+            return new ResponseDTO("Không tìm thấy công thức.", 404);
         }
 
         var now = DateTime.UtcNow;
@@ -278,7 +278,7 @@ public sealed class RecipeService(
             await access.RequireMenuManagerAsync(cancellationToken);
         }
 
-        return new ResponseDTO("Recipe retrieved successfully.", 200, true, Map(entity));
+        return new ResponseDTO("Lấy thông tin công thức thành công.", 200, true, Map(entity));
     }
 
     private async Task<ResponseDTO> WriteAsync(Func<Task<ResponseDTO>> action, CancellationToken cancellationToken)
@@ -289,10 +289,10 @@ public sealed class RecipeService(
         }
         catch (RecipePersistenceException exception)
         {
-            logger.LogWarning(exception, "Recipe version could not be persisted.");
+            logger.LogWarning(exception, "Không thể lưu phiên bản công thức.");
             return exception.IsConflict
-                ? new ResponseDTO("Recipe data changed concurrently. Reload and try again.", 409)
-                : new ResponseDTO("The recipe data store is unavailable.", 503);
+                ? new ResponseDTO("Dữ liệu công thức đã bị thay đổi đồng thời. Vui lòng tải lại và thử lại.", 409)
+                : new ResponseDTO("Kho dữ liệu công thức hiện không khả dụng.", 503);
         }
     }
 
@@ -312,13 +312,13 @@ public sealed class RecipeService(
             }
             catch (OverflowException)
             {
-                return new ResponseDTO("Converted recipe quantity exceeds the supported range.", 400);
+                return new ResponseDTO("Định lượng công thức sau quy đổi vượt quá phạm vi cho phép.", 400);
             }
             if (factor <= 0 || factor > 999999999999.999999m || decimal.Round(factor, 6) != factor
                 || quantity <= 0 || quantity > 999999999999.999999m || decimal.Round(quantity, 6) != quantity
                 || ingredient.Quantity > 999999999999.999999m || decimal.Round(ingredient.Quantity, 6) != ingredient.Quantity)
             {
-                return new ResponseDTO("Recipe quantity must fit decimal(18,6) without rounding.", 400);
+                return new ResponseDTO("Định lượng công thức phải phù hợp với decimal(18,6) không làm tròn.", 400);
             }
             ingredient.ConversionFactor = factor;
         }
@@ -329,7 +329,7 @@ public sealed class RecipeService(
     {
         if (request is null)
         {
-            return new ResponseDTO("Recipe request cannot be empty.", 400);
+            return new ResponseDTO("Yêu cầu công thức không được để trống.", 400);
         }
 
         if (request.EffectiveFrom.HasValue
@@ -337,12 +337,12 @@ public sealed class RecipeService(
                 || request.EffectiveFrom.Value < new DateTime(1753, 1, 1, 0, 0, 0, DateTimeKind.Utc)
                 || request.EffectiveFrom.Value > new DateTime(9999, 12, 31, 23, 59, 59, 997, DateTimeKind.Utc)))
         {
-            return new ResponseDTO("EffectiveFrom must be a UTC timestamp within the SQL datetime range.", 400);
+            return new ResponseDTO("EffectiveFrom phải là mốc thời gian UTC trong phạm vi datetime SQL.", 400);
         }
 
         if (request.Ingredients is null || request.Ingredients.Count is < 1 or > 100)
         {
-            return new ResponseDTO("Recipe must have at least one ingredient.", 400);
+            return new ResponseDTO("Công thức phải có ít nhất một nguyên liệu.", 400);
         }
 
         var ingredientRefs = new HashSet<Guid>();
@@ -350,22 +350,22 @@ public sealed class RecipeService(
         {
             if (ingredient is null || ingredient.IngredientRef == Guid.Empty || ingredient.UnitRef == Guid.Empty)
             {
-                return new ResponseDTO("Invalid ingredient reference or unit reference.", 400);
+                return new ResponseDTO("Mã nguyên liệu hoặc đơn vị không hợp lệ.", 400);
             }
 
             if (ingredient.Quantity <= 0)
             {
-                return new ResponseDTO("Ingredient quantity must be greater than 0.", 400);
+                return new ResponseDTO("Định lượng nguyên liệu phải lớn hơn 0.", 400);
             }
 
             if (ingredient.ConversionFactor.HasValue && ingredient.ConversionFactor.Value <= 0)
             {
-                return new ResponseDTO("Conversion factor must be greater than 0.", 400);
+                return new ResponseDTO("Hệ số quy đổi phải lớn hơn 0.", 400);
             }
 
             if (!ingredientRefs.Add(ingredient.IngredientRef))
             {
-                return new ResponseDTO("Duplicate ingredient in recipe.", 400);
+                return new ResponseDTO("Nguyên liệu bị trùng lặp trong công thức.", 400);
             }
         }
 
@@ -375,17 +375,17 @@ public sealed class RecipeService(
             {
                 if (string.IsNullOrWhiteSpace(media.MediaType) || media.MediaType.Length > 50)
                 {
-                    return new ResponseDTO("Media type must not be empty and at most 50 characters.", 400);
+                    return new ResponseDTO("Loại tệp đa phương tiện không được rỗng và tối đa 50 ký tự.", 400);
                 }
 
                 if (string.IsNullOrWhiteSpace(media.Url) || media.Url.Length > 2048)
                 {
-                    return new ResponseDTO("Media URL must not be empty and at most 2048 characters.", 400);
+                    return new ResponseDTO("Đường dẫn đa phương tiện không được rỗng và tối đa 2048 ký tự.", 400);
                 }
 
                 if (media.DisplayOrder < 0)
                 {
-                    return new ResponseDTO("Media display order must be non-negative.", 400);
+                    return new ResponseDTO("Thứ tự hiển thị phải là số không âm.", 400);
                 }
             }
         }

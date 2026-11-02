@@ -35,17 +35,17 @@ public static class BillingServiceExtensions
                 && value.ManagerRoleIds.All(role => !string.IsNullOrWhiteSpace(role))
                 && value.CashierRoleIds.All(role => !string.IsNullOrWhiteSpace(role))
                 && !value.ManagerRoleIds.Intersect(value.CashierRoleIds, StringComparer.Ordinal).Any(),
-                "Configure separate manager and cashier role IDs for cash register access.")
+                "Vui lòng cấu hình ID vai trò quản lý và thu ngân riêng biệt để truy cập quầy thu ngân.")
             .ValidateOnStart();
         services.AddOptions<RestaurantAccessSettings>()
             .Bind(configuration.GetSection("RestaurantAccess"))
-            .Validate(value => value.TimeoutSeconds is > 0 and <= 30, "Restaurant access timeout must be 1-30 seconds.")
+            .Validate(value => value.TimeoutSeconds is > 0 and <= 30, "Thời gian chờ truy cập dịch vụ nhà hàng phải từ 1 đến 30 giây.")
             .ValidateOnStart();
         var address = configuration["GrpcServices:Restaurant"];
         if (!Uri.TryCreate(address, UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
-            throw new InvalidOperationException("Configure GrpcServices:Restaurant.");
+            throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Restaurant.");
         }
 
         services.AddGrpcClient<RestaurantAccessGrpc.RestaurantAccessGrpcClient>(options =>
@@ -58,7 +58,7 @@ public static class BillingServiceExtensions
             if (!Uri.TryCreate(orderingAddress, UriKind.Absolute, out var orderingUri)
                 || (orderingUri.Scheme != Uri.UriSchemeHttp && orderingUri.Scheme != Uri.UriSchemeHttps))
             {
-                throw new InvalidOperationException("Configure GrpcServices:Ordering.");
+                throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering.");
             }
 
             options.Address = orderingUri;
@@ -77,7 +77,7 @@ public static class BillingServiceExtensions
         services.AddOptions<CashPaymentSettings>().Bind(configuration.GetSection("CashPayment"))
             .Validate(value => !string.IsNullOrWhiteSpace(value.MethodCode) && value.MethodCode.Length <= 50
                 && value.MethodCode == value.MethodCode.Trim() && value.MethodCode.All(character => character is >= '!' and <= '~'),
-                "Configure CashPayment:MethodCode.")
+                "Vui lòng cấu hình CashPayment:MethodCode.")
             .ValidateOnStart();
         services.AddScoped<IShiftReportService, ShiftReportService>();
         services.AddScoped<IPaymentService, PaymentService>();

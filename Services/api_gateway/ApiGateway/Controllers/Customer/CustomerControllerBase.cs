@@ -30,7 +30,7 @@ public abstract class CustomerControllerBase : ControllerBase
                 return response;
             }
 
-            return StatusCode(status, new ResponseDTO("Success.", status, true, result));
+            return StatusCode(status, new ResponseDTO("Thành công.", status, true, result));
         }
         catch (GatewayRequestException ex)
         {
@@ -49,7 +49,8 @@ public abstract class CustomerControllerBase : ControllerBase
                 Grpc.Core.StatusCode.DeadlineExceeded => 504,
                 _ => 500
             };
-            return StatusCode(code, new ResponseDTO(ex.Status.Detail, code));
+            var detail = code >= 500 ? "Hệ thống hiện đang bận hoặc tạm thời không khả dụng, vui lòng thử lại sau." : ex.Status.Detail;
+            return StatusCode(code, new ResponseDTO(detail, code));
         }
     }
 }

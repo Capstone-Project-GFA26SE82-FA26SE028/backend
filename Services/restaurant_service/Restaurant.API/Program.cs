@@ -23,7 +23,7 @@ builder.Services.AddScoped<Restaurant.BLL.Interfaces.IGuestAccessService, Restau
 builder.Services.AddOptions<Restaurant.Common.Settings.GuestAccessSettings>()
     .Bind(builder.Configuration.GetSection("GuestAccess"))
     .Validate(x => double.IsFinite(x.LifetimeHours) && x.LifetimeHours > 0 && x.LifetimeHours <= 8760,
-        "GuestAccess:LifetimeHours must be greater than 0 and no more than 8760.")
+        "GuestAccess:LifetimeHours phải lớn hơn 0 và không vượt quá 8760.")
     .ValidateOnStart();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IManagementAccess, Restaurant.API.Management.IdentityManagementAccess>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantService, Restaurant.BLL.Implements.RestaurantService>();
@@ -46,19 +46,19 @@ builder.Services.AddScoped<Restaurant.BLL.Interfaces.IQrImageStore, Restaurant.B
 builder.Services.AddGrpcClient<Backend.Contracts.Identity.AccessGrpc.AccessGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]
-        ?? throw new InvalidOperationException("Configure GrpcServices:Identity."));
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Identity."));
 });
 
 builder.Services.AddGrpcClient<Backend.Contracts.Identity.UserGrpc.UserGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]
-        ?? throw new InvalidOperationException("Configure GrpcServices:Identity."));
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Identity."));
 });
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    throw new InvalidOperationException("Configure ConnectionStrings:DefaultConnection in appsettings.json or environment variables.");
+    throw new InvalidOperationException("Vui lòng cấu hình ConnectionStrings:DefaultConnection trong appsettings.json hoặc biến môi trường.");
 }
 
 builder.Services.AddRestaurantPersistence(connectionString);

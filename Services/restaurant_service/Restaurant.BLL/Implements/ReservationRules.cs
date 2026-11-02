@@ -38,7 +38,7 @@ internal static class ReservationRules
             || settings.DurationMinutesByRestaurant.Any(pair => pair.Key == Guid.Empty || pair.Value <= 0)
             || settings.ExpirationIntervalSeconds is < 1 or > 3600 || settings.ExpirationBatchSize is < 1 or > 1000)
         {
-            throw new ManagementException(503, "Configure valid reservation durations, time limits, and expiration settings.");
+            throw new ManagementException(503, "Cấu hình thời lượng đặt bàn, giới hạn thời gian và hết hạn không hợp lệ.");
         }
     }
 
@@ -48,7 +48,7 @@ internal static class ReservationRules
         Configuration(settings);
         if (!TryUtc(timestamp, out var start))
         {
-            throw new ManagementException(400, "StartAt must be an ISO 8601 timestamp with an explicit UTC offset within the SQL datetime range.");
+            throw new ManagementException(400, "StartAt phải là mốc thời gian ISO 8601 có múi giờ UTC hợp lệ trong phạm vi datetime SQL.");
         }
 
         start = repository.NormalizeTimestamp(start);
@@ -56,7 +56,7 @@ internal static class ReservationRules
         {
             if (start < now.AddMinutes(settings.MinimumAdvanceMinutes) || start > now.AddDays(settings.MaximumAdvanceDays))
             {
-                throw new ManagementException(400, "StartAt is outside the configured advance booking interval.");
+                throw new ManagementException(400, "StartAt nằm ngoài khoảng thời gian cho phép đặt trước.");
             }
 
             var duration = settings.DurationMinutesByRestaurant.TryGetValue(restaurantId, out var minutes)
@@ -76,7 +76,7 @@ internal static class ReservationRules
         }
         catch (Exception exception) when (exception is ArgumentOutOfRangeException)
         {
-            throw new ManagementException(400, "The calculated reservation interval is outside the supported timestamp range.");
+            throw new ManagementException(400, "Khoảng thời gian đặt bàn tính toán vượt quá phạm vi mốc thời gian được hỗ trợ.");
         }
     }
 

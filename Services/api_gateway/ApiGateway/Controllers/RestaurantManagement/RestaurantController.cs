@@ -63,7 +63,7 @@ public sealed class RestaurantController(RestaurantGrpc.RestaurantGrpcClient cli
     {
         if (body.OpeningHours is null || body.OpeningHours.Any(x => x is null))
         {
-            throw new GatewayRequestException(400, "Invalid operating hours list.");
+            throw new GatewayRequestException(400, "Danh sách giờ hoạt động không hợp lệ.");
         }
 
         return ManagementMapping.ToWire(new RestaurantDto

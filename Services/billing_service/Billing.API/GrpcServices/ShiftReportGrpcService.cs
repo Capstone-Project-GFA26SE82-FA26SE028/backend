@@ -94,7 +94,7 @@ public sealed class ShiftReportGrpcService(IShiftReportService service) : ShiftR
         if (!present || !decimal.TryParse(value, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
             CultureInfo.InvariantCulture, out var amount))
         {
-            throw new BillingException(400, "Provide both actual cash and cash handed over as invariant decimal amounts.");
+            throw new BillingException(400, "Vui lòng nhập cả tiền mặt thực tế và tiền bàn giao dưới dạng số thập phân dùng dấu chấm phân cách.");
         }
 
         return amount;
@@ -109,7 +109,7 @@ public sealed class ShiftReportGrpcService(IShiftReportService service) : ShiftR
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new BillingException(400, "A valid ID is required.");
+            throw new BillingException(400, "Yêu cầu ID hợp lệ.");
         }
 
         return id;

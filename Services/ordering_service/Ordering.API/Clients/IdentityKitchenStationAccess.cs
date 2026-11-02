@@ -18,7 +18,7 @@ public sealed class IdentityKitchenStationAccess(
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
-            throw new OrderingException(401, "Authentication is required.");
+            throw new OrderingException(401, "Yêu cầu xác thực tài khoản.");
         }
 
         var headers = new Metadata
@@ -37,13 +37,13 @@ public sealed class IdentityKitchenStationAccess(
             throw new OrderingException(
                 reply.StatusCode is 401 or 404 ? 401
                 : reply.StatusCode == 403 ? 403 : 503,
-                "Unable to verify the account.");
+                "Không thể xác minh tài khoản.");
         }
 
         if (reply.Result is null || !reply.Result.IsActive
             || !Guid.TryParse(reply.Result.UserId, out var id) || id == Guid.Empty)
         {
-            throw new OrderingException(401, "Invalid or inactive account.");
+            throw new OrderingException(401, "Tài khoản không hợp lệ hoặc đang bị khóa.");
         }
 
         var allowed = write
@@ -52,7 +52,7 @@ public sealed class IdentityKitchenStationAccess(
 
         if (!allowed.Contains(reply.Result.RoleId, StringComparer.Ordinal))
         {
-            throw new OrderingException(403, "You do not have permission to access kitchen stations.");
+            throw new OrderingException(403, "Bạn không có quyền truy cập trạm bếp.");
         }
     }
 
@@ -61,7 +61,7 @@ public sealed class IdentityKitchenStationAccess(
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
-            throw new OrderingException(401, "Authentication is required.");
+            throw new OrderingException(401, "Yêu cầu xác thực tài khoản.");
         }
 
         var headers = new Metadata
@@ -80,13 +80,13 @@ public sealed class IdentityKitchenStationAccess(
             throw new OrderingException(
                 reply.StatusCode is 401 or 404 ? 401
                 : reply.StatusCode == 403 ? 403 : 503,
-                "Unable to verify the account.");
+                "Không thể xác minh tài khoản.");
         }
 
         if (reply.Result is null || !reply.Result.IsActive
             || !Guid.TryParse(reply.Result.UserId, out var id) || id == Guid.Empty)
         {
-            throw new OrderingException(401, "Invalid or inactive account.");
+            throw new OrderingException(401, "Tài khoản không hợp lệ hoặc đang bị khóa.");
         }
 
         var allowed = roles.Value.WriterRoleIds
@@ -95,7 +95,7 @@ public sealed class IdentityKitchenStationAccess(
 
         if (!allowed.Contains(reply.Result.RoleId, StringComparer.Ordinal))
         {
-            throw new OrderingException(403, "You do not have permission to access kitchen tasks.");
+            throw new OrderingException(403, "Bạn không có quyền truy cập nhiệm vụ bếp.");
         }
 
         return id;

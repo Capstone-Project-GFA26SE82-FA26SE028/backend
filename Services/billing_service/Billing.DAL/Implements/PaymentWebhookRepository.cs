@@ -13,7 +13,7 @@ public sealed class PaymentWebhookRepository(BillingDbContext db) : GenericRepos
     {
         if (_context.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("Webhook deduplication requires a transaction.");
+            throw new InvalidOperationException("Cần có giao dịch để chống trùng lặp webhook.");
         }
 
         if (!_context.Database.IsSqlServer())

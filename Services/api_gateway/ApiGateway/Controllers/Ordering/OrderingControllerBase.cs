@@ -52,14 +52,14 @@ public abstract class OrderingControllerBase(IOptions<OrderingClientSettings> se
                 _ => 502
             };
             return StatusCode(status, new ResponseDTO(status is 502 or 503 or 504
-                ? "Ordering or a required service is unavailable. Retry with the same idempotency key."
+                ? "Hệ thống hiện đang bận hoặc tạm thời không khả dụng, vui lòng thử lại sau."
                 : exception.Status.Detail, status));
         }
     }
 
     protected IActionResult Result(object? value, int status = 200)
     {
-        return StatusCode(status, new ResponseDTO("Success.", status, true, value));
+        return StatusCode(status, new ResponseDTO("Thành công.", status, true, value));
     }
 
     protected static bool ValidLines(List<ApiGateway.DTOs.Ordering.SelectionDTO>? lines)

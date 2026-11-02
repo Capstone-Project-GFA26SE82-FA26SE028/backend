@@ -19,17 +19,17 @@ public sealed class OptionService(
         await access.RequireMenuManagerAsync(cancellationToken);
         if (query is null || !query.IsValid())
         {
-            return new ResponseDTO("Invalid pagination or option filter.", 400);
+            return new ResponseDTO("Phân trang hoặc bộ lọc tùy chọn không hợp lệ.", 400);
         }
 
         if (query.OptionGroupId.HasValue
             && await groups.GetByIdAsync(query.OptionGroupId.Value, cancellationToken) is null)
         {
-            return new ResponseDTO("Option group not found.", 404);
+            return new ResponseDTO("Không tìm thấy nhóm tùy chọn.", 404);
         }
 
         var page = await options.GetPageAsync(query, cancellationToken);
-        return new ResponseDTO("Options retrieved successfully.", 200, true,
+        return new ResponseDTO("Lấy danh sách tùy chọn thành công.", 200, true,
             new PagedResult<OptionDTO>(page.Items.Select(Map).ToArray(), page.TotalCount, page.Page, page.PageSize));
     }
 
@@ -42,7 +42,7 @@ public sealed class OptionService(
         }
 
         var entity = await options.GetByIdAsync(id, cancellationToken);
-        return entity is null ? NotFound() : new ResponseDTO("Option retrieved successfully.", 200, true, Map(entity));
+        return entity is null ? NotFound() : new ResponseDTO("Lấy thông tin tùy chọn thành công.", 200, true, Map(entity));
     }
 
     public async Task<ResponseDTO> Create(CreateOptionDTO request, CancellationToken cancellationToken)
@@ -59,7 +59,7 @@ public sealed class OptionService(
         {
             if (await groups.GetByIdAsync(request.OptionGroupId, cancellationToken) is null)
             {
-                return new ResponseDTO("Option group not found.", 404);
+                return new ResponseDTO("Không tìm thấy nhóm tùy chọn.", 404);
             }
 
             if (await options.NameExistsAsync(request.OptionGroupId, name, Guid.Empty, cancellationToken))
@@ -76,7 +76,7 @@ public sealed class OptionService(
                 Availability = ItemAvailability.Inactive
             };
             options.Create(entity);
-            return new ResponseDTO("Option created successfully.", 201, true, Map(entity));
+            return new ResponseDTO("Tạo tùy chọn thành công.", 201, true, Map(entity));
         }, cancellationToken);
     }
 
@@ -109,7 +109,7 @@ public sealed class OptionService(
 
             entity.OptionName = name;
             entity.ExtraPrice = amount;
-            return new ResponseDTO("Option updated successfully.", 200, true, Map(entity));
+            return new ResponseDTO("Cập nhật tùy chọn thành công.", 200, true, Map(entity));
         }, cancellationToken);
     }
 
@@ -123,7 +123,7 @@ public sealed class OptionService(
 
         if (request?.Availability is not (ItemAvailability.Available or ItemAvailability.OutOfStock or ItemAvailability.Inactive))
         {
-            return new ResponseDTO("Availability must be Available, OutOfStock, or Inactive.", 400);
+            return new ResponseDTO("Trạng thái phải là Available, OutOfStock hoặc Inactive.", 400);
         }
 
         return await writer.ExecuteAsync(async () =>
@@ -135,7 +135,7 @@ public sealed class OptionService(
             }
 
             entity.Availability = request.Availability;
-            return new ResponseDTO("Option status updated successfully.", 200, true, Map(entity));
+            return new ResponseDTO("Cập nhật trạng thái tùy chọn thành công.", 200, true, Map(entity));
         }, cancellationToken);
     }
 
@@ -157,32 +157,32 @@ public sealed class OptionService(
 
             if (await options.HasDependenciesAsync(id, cancellationToken))
             {
-                return new ResponseDTO("Cannot delete an option with recipes or whose group is assigned to an item. Set it to Inactive instead.", 409);
+                return new ResponseDTO("Không thể xóa tùy chọn đã có công thức hoặc thuộc nhóm đã gán cho món. Hãy chuyển sang Inactive.", 409);
             }
 
             options.Delete(entity);
-            return new ResponseDTO("Option deleted successfully.", 200, true);
+            return new ResponseDTO("Xóa tùy chọn thành công.", 200, true);
         }, cancellationToken);
     }
 
     private static ResponseDTO InvalidFields()
     {
-        return new ResponseDTO("A valid group ID (on creation), a name of 1 to 255 characters without control characters, and a non-negative extra price fitting decimal(18,2) are required.", 400);
+        return new ResponseDTO("Yêu cầu mã nhóm hợp lệ, tên từ 1 đến 255 ký tự và giá cộng thêm không âm theo định dạng decimal(18,2).", 400);
     }
 
     private static ResponseDTO InvalidId()
     {
-        return new ResponseDTO("Invalid option ID.", 400);
+        return new ResponseDTO("Mã tùy chọn không hợp lệ.", 400);
     }
 
     private static ResponseDTO NotFound()
     {
-        return new ResponseDTO("Option not found.", 404);
+        return new ResponseDTO("Không tìm thấy tùy chọn.", 404);
     }
 
     private static ResponseDTO DuplicateName()
     {
-        return new ResponseDTO("The option name already exists in this group.", 409);
+        return new ResponseDTO("Tên tùy chọn đã tồn tại trong nhóm này.", 409);
     }
 
     private static OptionDTO Map(Option entity)

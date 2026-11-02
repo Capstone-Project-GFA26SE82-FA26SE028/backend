@@ -113,7 +113,7 @@ public sealed class ReservationRepository(RestaurantDbContext db) : IReservation
     {
         if (db.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("Reservation locking requires a transaction.");
+            throw new InvalidOperationException("Cần có giao dịch để khóa yêu cầu đặt bàn.");
         }
 
         var source = db.Database.IsSqlServer()

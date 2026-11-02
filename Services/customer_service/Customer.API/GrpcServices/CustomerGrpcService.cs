@@ -34,7 +34,7 @@ public sealed class CustomerGrpcService(ICustomerLoyaltyService service) : Backe
             var customer = await service.GetByPhone(request.Phone, context.CancellationToken);
             if (customer is null)
             {
-                throw new RpcException(new Status(StatusCode.NotFound, "Customer not found."));
+                throw new RpcException(new Status(StatusCode.NotFound, "Không tìm thấy khách hàng."));
             }
 
             return CustomerMapping.Map(customer);
@@ -51,13 +51,13 @@ public sealed class CustomerGrpcService(ICustomerLoyaltyService service) : Backe
         {
             if (!Guid.TryParse(request.CustomerId, out var id))
             {
-                throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid customer ID."));
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã khách hàng không hợp lệ."));
             }
 
             var customer = await service.GetById(id, context.CancellationToken);
             if (customer is null)
             {
-                throw new RpcException(new Status(StatusCode.NotFound, "Customer not found."));
+                throw new RpcException(new Status(StatusCode.NotFound, "Không tìm thấy khách hàng."));
             }
 
             return CustomerMapping.Map(customer);
@@ -82,7 +82,7 @@ public sealed class CustomerGrpcService(ICustomerLoyaltyService service) : Backe
         {
             if (!Guid.TryParse(request.CustomerId, out var customerId) || !Guid.TryParse(request.BillId, out var billId))
             {
-                throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid CustomerId or BillId."));
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã khách hàng hoặc mã hóa đơn không hợp lệ."));
             }
 
             decimal.TryParse(request.FinalAmount, out var finalAmount);
@@ -114,7 +114,7 @@ public sealed class CustomerGrpcService(ICustomerLoyaltyService service) : Backe
         {
             if (!Guid.TryParse(request.CustomerId, out var customerId) || !Guid.TryParse(request.BillId, out var billId))
             {
-                throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid CustomerId or BillId."));
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã khách hàng hoặc mã hóa đơn không hợp lệ."));
             }
 
             var result = await service.ReservePoints(new PointReservationRequestDTO
@@ -144,7 +144,7 @@ public sealed class CustomerGrpcService(ICustomerLoyaltyService service) : Backe
         {
             if (!Guid.TryParse(request.BillId, out var billId))
             {
-                throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid BillId."));
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã hóa đơn không hợp lệ."));
             }
 
             await service.CommitPoints(billId, context.CancellationToken);
@@ -162,7 +162,7 @@ public sealed class CustomerGrpcService(ICustomerLoyaltyService service) : Backe
         {
             if (!Guid.TryParse(request.BillId, out var billId))
             {
-                throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid BillId."));
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã hóa đơn không hợp lệ."));
             }
 
             await service.CancelPoints(billId, context.CancellationToken);

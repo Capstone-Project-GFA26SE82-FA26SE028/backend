@@ -24,7 +24,7 @@ public sealed class MenuService(
             || (long)(query.Page - 1) * query.PageSize > int.MaxValue
             || query.CategoryId == Guid.Empty || query.Search?.Length > 255)
         {
-            return new ResponseDTO("Invalid category, search (maximum 255 characters), or pagination (page >= 1, pageSize 1-100).", 400);
+            return new ResponseDTO("Danh mục, tìm kiếm (tối đa 255 ký tự) hoặc phân trang không hợp lệ (page >= 1, pageSize 1-100).", 400);
         }
 
         var error = ValidateChannel(query.Channel, out var timeZone);
@@ -35,7 +35,7 @@ public sealed class MenuService(
 
         var now = prices.NormalizeTimestamp(clock.GetUtcNow().UtcDateTime);
         var page = await items.GetMenuPageAsync(query, now, cancellationToken);
-        return new ResponseDTO("Menu retrieved successfully.", 200, true, new PagedResult<MenuItemDTO>(
+        return new ResponseDTO("Lấy thực đơn thành công.", 200, true, new PagedResult<MenuItemDTO>(
             page.Items.Select(item => Map(item, query.Channel, now, timeZone)).ToArray(),
             page.TotalCount, page.Page, page.PageSize));
     }
@@ -46,7 +46,7 @@ public sealed class MenuService(
         await access.RequireReadAsync(tableSessionId, guestToken, cancellationToken);
         if (id == Guid.Empty)
         {
-            return new ResponseDTO("Invalid item ID.", 400);
+            return new ResponseDTO("Mã món ăn không hợp lệ.", 400);
         }
 
         var error = ValidateChannel(channel, out var timeZone);
@@ -59,22 +59,22 @@ public sealed class MenuService(
         var item = await items.GetMenuByIdAsync(id, now, cancellationToken);
         if (item is null)
         {
-            return new ResponseDTO("Menu item not found.", 404);
+            return new ResponseDTO("Không tìm thấy món trong thực đơn.", 404);
         }
 
-        return new ResponseDTO("Menu item retrieved successfully.", 200, true, Map(item, channel, now, timeZone));
+        return new ResponseDTO("Lấy thông tin món trong thực đơn thành công.", 200, true, Map(item, channel, now, timeZone));
     }
 
     private ResponseDTO? ValidateChannel(string channel, out TimeZoneInfo timeZone)
     {
         if (!PriceRules.TryConfiguration(settings.Value, out timeZone))
         {
-            return new ResponseDTO("Menu pricing is not configured.", 503);
+            return new ResponseDTO("Chưa cấu hình định giá thực đơn.", 503);
         }
 
         if (!settings.Value.Channels.Contains(channel, StringComparer.Ordinal))
         {
-            return new ResponseDTO("A configured sales channel is required.", 400);
+            return new ResponseDTO("Yêu cầu kênh bán hàng hợp lệ đã cấu hình.", 400);
         }
 
         return null;

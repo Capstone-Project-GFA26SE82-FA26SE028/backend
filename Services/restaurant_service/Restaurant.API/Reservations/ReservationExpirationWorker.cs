@@ -20,7 +20,7 @@ public sealed class ReservationExpirationWorker(
         var seconds = settings.Value.ExpirationIntervalSeconds;
         if (seconds is < 1 or > 3600)
         {
-            logger.LogError("Reservation expiration requires an interval between 1 and 3600 seconds.");
+            logger.LogError("Chu kỳ xử lý đặt bàn hết hạn phải từ 1 đến 3600 giây.");
             return;
         }
 
@@ -33,7 +33,7 @@ public sealed class ReservationExpirationWorker(
                 var count = await scope.ServiceProvider.GetRequiredService<IReservationExpirationService>().Expire(stoppingToken);
                 if (count > 0)
                 {
-                    logger.LogInformation("Processed {Count} expired or no-show reservations.", count);
+                    logger.LogInformation("Đã xử lý {Count} yêu cầu đặt bàn hết hạn hoặc khách không đến.", count);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -42,7 +42,7 @@ public sealed class ReservationExpirationWorker(
             }
             catch (Exception exception)
             {
-                logger.LogError(exception, "Reservation expiration failed and will retry on the next interval.");
+                logger.LogError(exception, "Xử lý đặt bàn hết hạn thất bại và sẽ thử lại ở chu kỳ tiếp theo.");
             }
         }
     }

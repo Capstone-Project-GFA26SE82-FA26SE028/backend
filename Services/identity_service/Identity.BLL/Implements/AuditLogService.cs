@@ -17,7 +17,7 @@ public sealed class AuditLogService(
     {
         if (!await IsAdmin(actorId, ct))
         {
-            return new ResponseDTO("Access denied.", 403);
+            return new ResponseDTO("Truy cập bị từ chối.", 403);
         }
 
         var pagination = new PaginationRequest
@@ -28,7 +28,7 @@ public sealed class AuditLogService(
 
         if (!pagination.IsValid() || userId == Guid.Empty)
         {
-            return new ResponseDTO("Invalid pagination or userId. PageSize must be between 1 and 100.", 400);
+            return new ResponseDTO("Phân trang hoặc mã người dùng không hợp lệ. Số lượng mỗi trang phải từ 1 đến 100.", 400);
         }
 
         var (items, total) = await repository.GetAllAsync(page, pageSize, userId, ct);
@@ -51,7 +51,7 @@ public sealed class AuditLogService(
             PageSize = pageSize
         };
 
-        return new ResponseDTO("Success.", 200, true, result);
+        return new ResponseDTO("Thành công.", 200, true, result);
     }
     
     private async Task<bool> IsAdmin(Guid actorId, CancellationToken ct)

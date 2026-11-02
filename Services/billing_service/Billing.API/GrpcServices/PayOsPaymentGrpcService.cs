@@ -42,7 +42,7 @@ public sealed class PayOsPaymentGrpcService(IPayOsPaymentService service) : PayO
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new BillingException(400, "A valid ID is required.");
+            throw new BillingException(400, "Yêu cầu ID hợp lệ.");
         }
 
         return id;

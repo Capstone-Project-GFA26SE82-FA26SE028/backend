@@ -14,15 +14,15 @@ public sealed class IngredientUnitService(IngredientRepository ingredients, Unit
         await access.RequireAsync("ManageIngredients", ct);
         if (factor <= 0 || !InventoryValidation.Quantity(factor))
         {
-            throw new InventoryException(400, "Conversion factor must be positive with at most six decimal places.");
+            throw new InventoryException(400, "Hệ số quy đổi phải là số dương có tối đa 6 chữ số thập phân.");
         }
         return await transaction.ExecuteAsync(async () =>
         {
             var ingredient = await Find(ingredientId, ct);
-            var unit = await units.GetByIdAsync(unitId, ct) ?? throw new InventoryException(404, "Unit not found.");
+            var unit = await units.GetByIdAsync(unitId, ct) ?? throw new InventoryException(404, "Không tìm thấy đơn vị tính.");
             if (string.Equals(unit.Code, ingredient.BaseUnit, StringComparison.OrdinalIgnoreCase) && factor != 1)
             {
-                throw new InventoryException(409, "Base unit conversion factor must be one.");
+                throw new InventoryException(409, "Hệ số quy đổi của đơn vị tính cơ sở phải bằng 1.");
             }
             var conversion = await repository.GetByIdAsync(ingredientId, unitId, ct);
             if (conversion is null)
@@ -73,21 +73,21 @@ public sealed class IngredientUnitService(IngredientRepository ingredients, Unit
         var ingredient = await Find(ingredientId, ct);
         if (!ingredient.IsActive)
         {
-            throw new InventoryException(409, "Ingredient is inactive.");
+            throw new InventoryException(409, "Nguyên liệu đang ngừng hoạt động.");
         }
-        var unit = await units.GetByIdAsync(unitId, ct) ?? throw new InventoryException(404, "Unit not found.");
+        var unit = await units.GetByIdAsync(unitId, ct) ?? throw new InventoryException(404, "Không tìm thấy đơn vị tính.");
         if (string.Equals(unit.Code, ingredient.BaseUnit, StringComparison.OrdinalIgnoreCase))
         {
             return 1;
         }
         var conversion = await repository.GetByIdAsync(ingredientId, unitId, ct)
-            ?? throw new InventoryException(409, "Unit has no conversion for this ingredient.");
+            ?? throw new InventoryException(409, "Đơn vị tính chưa có tỷ lệ quy đổi cho nguyên liệu này.");
         return conversion.ConversionFactor;
     }
 
     private async Task<Ingredient> Find(Guid id, CancellationToken ct)
     {
         InventoryValidation.Id(id);
-        return await ingredients.GetByIdAsync(id, ct) ?? throw new InventoryException(404, "Ingredient not found.");
+        return await ingredients.GetByIdAsync(id, ct) ?? throw new InventoryException(404, "Không tìm thấy nguyên liệu.");
     }
 }

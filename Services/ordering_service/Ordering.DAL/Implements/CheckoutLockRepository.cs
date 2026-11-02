@@ -13,7 +13,7 @@ public sealed class CheckoutLockRepository(OrderingDbContext db) : ICheckoutLock
     {
         if (db.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("Checkout requires an active transaction.");
+            throw new InvalidOperationException("Cần có giao dịch đang hoạt động để chốt hóa đơn.");
         }
 
         if (!db.Database.IsSqlServer())
@@ -31,7 +31,7 @@ public sealed class CheckoutLockRepository(OrderingDbContext db) : ICheckoutLock
             [result, resource], ct);
         if ((int)result.Value < 0)
         {
-            throw new OrderingException(409, "The session is busy. Retry the same request.");
+            throw new OrderingException(409, "Phiên phục vụ đang bận. Vui lòng thử lại cùng yêu cầu.");
         }
     }
 

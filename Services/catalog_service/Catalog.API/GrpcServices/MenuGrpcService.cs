@@ -58,7 +58,7 @@ public sealed class MenuGrpcService(IMenuService service) : MenuGrpc.MenuGrpcBas
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid ID."));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "ID không hợp lệ."));
         }
 
         return id;

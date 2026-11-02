@@ -52,7 +52,7 @@ public sealed class StockIssueGrpcService(StockIssueService service) : StockIssu
         {
             IsSuccess = true,
             StatusCode = 200,
-            Message = "Cooking inventory deducted successfully.",
+            Message = "Đã trừ nguyên liệu chế biến trong kho thành công.",
             StockIssueId = result.StockIssueId.ToString()
         };
 

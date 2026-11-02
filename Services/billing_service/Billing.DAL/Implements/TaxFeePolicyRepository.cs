@@ -14,7 +14,7 @@ public sealed class TaxFeePolicyRepository(BillingDbContext db) : ITaxFeePolicyR
     {
         if (db.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("An active transaction is required to lock tax policy creation.");
+            throw new InvalidOperationException("Cần có giao dịch đang hoạt động để khóa thao tác tạo chính sách thuế.");
         }
 
         if (!db.Database.IsSqlServer())

@@ -13,7 +13,7 @@ public sealed class CurrentRestaurantScopeService(IStaffIdentity identity,
         var actor = await identity.GetCurrentAsync(ct);
         if (restaurantId == Guid.Empty)
         {
-            throw new ManagementException(400, "A valid restaurant ID is required.");
+            throw new ManagementException(400, "Yêu cầu ID nhà hàng hợp lệ.");
         }
 
         var restaurantIds = actor.IsAdministrator
@@ -23,12 +23,12 @@ public sealed class CurrentRestaurantScopeService(IStaffIdentity identity,
         {
             if (!actor.IsAdministrator && !restaurantIds.Contains(restaurantId.Value))
             {
-                throw new ManagementException(403, "An active assignment to this restaurant is required.");
+                throw new ManagementException(403, "Yêu cầu phân công đang hoạt động tại nhà hàng này.");
             }
 
             if (await restaurants.GetByIdAsync(restaurantId.Value, ct) is null)
             {
-                throw new ManagementException(404, "Restaurant not found.");
+                throw new ManagementException(404, "Không tìm thấy nhà hàng.");
             }
         }
 

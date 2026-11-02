@@ -16,7 +16,7 @@ public sealed class AccessGrpcService(IUserService users, IOptions<UserManagemen
         if (!response.IsSuccess || response.Result is not UserDTO user || !user.IsActive
             || !settings.Value.AdminRoleIds.Contains(user.RoleId, StringComparer.Ordinal))
         {
-            throw new RpcException(new Status(StatusCode.PermissionDenied, "Only Admin can manage restaurants."));
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "Chỉ quản trị viên mới có quyền quản lý nhà hàng."));
         }
 
         return new AdminAccessReply

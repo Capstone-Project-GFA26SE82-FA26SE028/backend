@@ -40,12 +40,12 @@ public abstract class ReservationControllerBase : ControllerBase
             };
             var detail = code switch
             {
-                401 => "The account or login session is invalid.",
-                403 => "You do not have permission to perform this operation at this restaurant.",
-                503 when exception.Status.Detail.StartsWith("Configure valid reservation", StringComparison.Ordinal)
-                    || exception.Status.Detail.StartsWith("The restaurant business time zone", StringComparison.Ordinal)
+                401 => "Tài khoản hoặc phiên đăng nhập không hợp lệ.",
+                403 => "Bạn không có quyền thực hiện thao tác này tại nhà hàng.",
+                503 when exception.Status.Detail.StartsWith("Cấu hình thời lượng đặt bàn", StringComparison.Ordinal)
+                    || exception.Status.Detail.StartsWith("Múi giờ kinh doanh của nhà hàng", StringComparison.Ordinal)
                     => exception.Status.Detail,
-                >= 500 => "The restaurant service is unavailable or could not process the request.",
+                >= 500 => "Hệ thống hiện đang bận hoặc tạm thời không khả dụng, vui lòng thử lại sau.",
                 _ => exception.Status.Detail
             };
             return StatusCode(code, new ResponseDTO(detail, code));

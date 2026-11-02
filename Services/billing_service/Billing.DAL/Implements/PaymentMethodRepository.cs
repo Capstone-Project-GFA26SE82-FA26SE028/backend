@@ -10,7 +10,7 @@ public sealed class PaymentMethodRepository(BillingDbContext db) : IPaymentMetho
     {
         if (db.Database.CurrentTransaction is null)
         {
-            throw new InvalidOperationException("An active transaction is required to lock a payment method.");
+            throw new InvalidOperationException("Cần có giao dịch đang hoạt động để khóa phương thức thanh toán.");
         }
 
         var source = db.Database.IsSqlServer()

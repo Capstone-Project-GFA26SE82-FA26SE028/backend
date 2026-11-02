@@ -37,7 +37,7 @@ public sealed class IdentityCatalogAccess(
         {
             throw new RpcException(new Status(
                 StatusCode.Unauthenticated,
-                "Authentication is required."));
+                "Yêu cầu xác thực tài khoản."));
         }
 
         var headers = new Metadata
@@ -63,7 +63,7 @@ public sealed class IdentityCatalogAccess(
 
             throw new RpcException(new Status(
                 status,
-                "Unable to verify the account."));
+                "Không thể xác minh tài khoản."));
         }
 
         var user = response.Result;
@@ -75,14 +75,14 @@ public sealed class IdentityCatalogAccess(
         {
             throw new RpcException(new Status(
                 StatusCode.Unauthenticated,
-                "The account is invalid or inactive."));
+                "Tài khoản không hợp lệ hoặc đang bị khóa."));
         }
 
         if (!allowedRoles.Contains(user.RoleId, StringComparer.Ordinal))
         {
             throw new RpcException(new Status(
                 StatusCode.PermissionDenied,
-                "You do not have permission to manage the shared menu."));
+                "Bạn không có quyền quản lý thực đơn."));
         }
 
         return userId;

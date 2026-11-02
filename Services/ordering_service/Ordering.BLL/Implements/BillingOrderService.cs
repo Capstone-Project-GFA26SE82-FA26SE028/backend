@@ -11,7 +11,7 @@ public sealed class BillingOrderService(IOrderRepository orders, IBillingSession
     {
         if (sessionId == Guid.Empty)
         {
-            throw new OrderingException(400, "A valid table session ID is required.");
+            throw new OrderingException(400, "Mã phiên bàn không hợp lệ hoặc bị trống.");
         }
 
         var branch = await sessions.GetRestaurantIdAsync(sessionId, ct);
@@ -28,7 +28,7 @@ public sealed class BillingOrderService(IOrderRepository orders, IBillingSession
             {
                 if (item.CancelledQuantity < 0 || item.CancelledQuantity > item.Quantity)
                 {
-                    throw new OrderingException(409, "An order item has inconsistent cancelled quantities.");
+                    throw new OrderingException(409, "Món ăn có số lượng hủy không nhất quán.");
                 }
 
                 if (item.Status == "Cancelled" || item.Quantity == item.CancelledQuantity)
@@ -38,7 +38,7 @@ public sealed class BillingOrderService(IOrderRepository orders, IBillingSession
 
                 if (!item.OriginalTableRef.HasValue || item.OriginalTableRef == Guid.Empty)
                 {
-                    throw new OrderingException(409, "An order item is missing its original table reference.");
+                    throw new OrderingException(409, "Món ăn bị thiếu thông tin bàn phục vụ gốc.");
                 }
 
                 result.Items.Add(new BillingOrderLineDTO

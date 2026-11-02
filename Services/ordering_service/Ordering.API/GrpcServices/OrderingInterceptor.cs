@@ -15,7 +15,7 @@ public sealed class OrderingInterceptor : Interceptor
         }
         catch (FormatException)
         {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Invalid ID or numeric format."));
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã ID hoặc định dạng số không hợp lệ."));
         }
         catch (OrderingException exception)
         {

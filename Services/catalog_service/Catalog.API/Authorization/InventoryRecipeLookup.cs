@@ -29,7 +29,7 @@ public sealed class InventoryRecipeLookup(IngredientUnitGrpc.IngredientUnitGrpcC
                 || !decimal.TryParse(reply.Factor, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var factor)
                 || factor <= 0 || factor > 999999999999.999999m || decimal.Round(factor, 6) != factor)
             {
-                return (0, new ResponseDTO("Invalid conversion returned by Inventory.", 503));
+                return (0, new ResponseDTO("Hệ thống hiện đang bận hoặc tạm thời không khả dụng, vui lòng thử lại sau.", 503));
             }
             return (factor, null);
         }
@@ -45,7 +45,7 @@ public sealed class InventoryRecipeLookup(IngredientUnitGrpc.IngredientUnitGrpcC
                 StatusCode.DeadlineExceeded => 504,
                 _ => 503
             };
-            return (0, new ResponseDTO(status >= 500 ? "Inventory is unavailable; recipe was not saved." : exception.Status.Detail, status));
+            return (0, new ResponseDTO(status >= 500 ? "Hệ thống hiện đang bận hoặc tạm thời không khả dụng, công thức chưa được lưu." : exception.Status.Detail, status));
         }
     }
 }

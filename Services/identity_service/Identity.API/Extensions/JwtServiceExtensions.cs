@@ -13,11 +13,11 @@ public static class JwtServiceExtensions
     {
         services.AddOptions<JwtSettingModel>().Bind(configuration.GetSection("Jwt"))
             .Validate(s => !string.IsNullOrWhiteSpace(s.SecretKey) && Encoding.UTF8.GetByteCount(s.SecretKey) >= 32,
-                "Set Jwt:SecretKey to a random signing key of at least 32 UTF-8 bytes.")
+                "Đặt Jwt:SecretKey thành khóa ký ngẫu nhiên có độ dài ít nhất 32 byte UTF-8.")
             .Validate(s => !string.IsNullOrWhiteSpace(s.Issuer) && !string.IsNullOrWhiteSpace(s.Audience),
-                "JWT issuer and audience are required.")
+                "Yêu cầu cấu hình bên phát hành và đối tượng nhận JWT.")
             .Validate(s => s.AccessTokenMinutes > 0 && s.AccessTokenMinutes <= 60
-                && s.SessionHours > 0 && s.SessionHours <= 24, "Invalid token/session lifetime.")
+                && s.SessionHours > 0 && s.SessionHours <= 24, "Thời hạn mã xác thực hoặc phiên đăng nhập không hợp lệ.")
             .ValidateOnStart();
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
         services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
@@ -49,7 +49,7 @@ public static class JwtServiceExtensions
                             || !await context.HttpContext.RequestServices.GetRequiredService<ISessionRepository>()
                                 .IsActiveAsync(sid, uid, user.FindFirst("RoleId")?.Value ?? "", DateTime.UtcNow))
                         {
-                            context.Fail("Session is no longer active.");
+                            context.Fail("Phiên đăng nhập không còn hoạt động.");
                         }
                     },
                     OnChallenge = async context =>
@@ -59,7 +59,7 @@ public static class JwtServiceExtensions
                         await context.Response.WriteAsJsonAsync(new
                         {
                             statusCode = 401,
-                            message = "The token or session is invalid or expired.",
+                            message = "Mã xác thực hoặc phiên đăng nhập không hợp lệ hoặc đã hết hạn.",
                             isSuccess = false
                         });
                     },
@@ -69,7 +69,7 @@ public static class JwtServiceExtensions
                         await context.Response.WriteAsJsonAsync(new
                         {
                             statusCode = 403,
-                            message = "You do not have permission to access this feature.",
+                            message = "Bạn không có quyền truy cập chức năng này.",
                             isSuccess = false
                         });
                     }
