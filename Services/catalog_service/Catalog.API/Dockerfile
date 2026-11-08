@@ -1,6 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 COPY Shared/ Shared/
+COPY Contracts/ Contracts/
 COPY Services/catalog_service/ Services/catalog_service/
 RUN dotnet restore Services/catalog_service/Catalog.API/Catalog.API.csproj
 RUN dotnet publish Services/catalog_service/Catalog.API/Catalog.API.csproj -c Release --no-restore -o /app/publish /p:UseAppHost=false

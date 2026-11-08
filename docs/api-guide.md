@@ -4,10 +4,9 @@
 
 ## 1. Cách gọi và đọc phản hồi
 
-Frontend/Postman gọi Gateway; Gateway gọi gRPC đến Identity hoặc Restaurant. Cần chạy các service tương ứng và cấu hình database.
+Frontend/Postman gọi Gateway; Gateway gọi gRPC đến Identity, Restaurant hoặc Catalog. Cần chạy các service tương ứng và cấu hình database.
 
-- Local profile HTTPS: `https://localhost:5000`; Swagger: `https://localhost:5000/swagger`.
-- Local profile HTTP: `http://localhost:15000`.
+- Gateway local profile `http`: `http://localhost:5000`; Swagger: `http://localhost:5000/swagger`.
 - Docker: `http://localhost:5000` theo port mapping hiện tại.
 - Body JSON: header `Content-Type: application/json`.
 - API có xác thực: header `Authorization: Bearer <accessToken>`.
@@ -435,7 +434,7 @@ Result tạo/tạo lại:
 {
   "qr": {
     "qrId": "55555555-5555-5555-5555-555555555555",
-    "imageUrl": "/api/qr/55555555-5555-5555-5555-555555555555/image",
+    "imageUrl": "https://res.cloudinary.com/your-cloud/image/upload/restaurant/qr/55555555555555555555555555555555.png",
     "tableId": "33333333-3333-3333-3333-333333333333",
     "tableCode": "B01",
     "areaId": "22222222-2222-2222-2222-222222222222",
@@ -480,11 +479,11 @@ Luồng frontend: đọc `qr` trong URL fragment → POST resolve → hiển th�
 
 Danh sách trả phân trang với items là các object `qr` như trên. Riêng bộ lọc `isActive=true` nghĩa là QR chưa bị thu hồi; `isUsable` còn xét bàn và khu vực đang hoạt động. Mã cũ sau regenerate hoặc bàn/khu vực ngừng hoạt động sẽ resolve 404. Database chỉ giữ hash; PNG lưu riêng theo qrId và lấy lại qua imageUrl, không cần đổi token khi in lại.
 
-GET image trả trực tiếp bytes `image/png`, không bọc ResponseDTO khi thành công; lỗi dùng envelope thông thường. Cần Bearer Admin, phản hồi no-store. Ảnh QR đã thu hồi vẫn xem được để đối chiếu lịch sử nhưng không quét sử dụng được. Nếu chưa có/mất file ảnh thì imageUrl null và GET image trả 404; QR tạo trước tính năng lưu ảnh cần regenerate một lần để có ảnh lưu.
+GET image trả trực tiếp bytes `image/png`, không bọc ResponseDTO khi thành công; lỗi dùng envelope thông thường. Cần Bearer Admin, phản hồi no-store. Ảnh QR đã thu hồi vẫn xem được để đối chiếu lịch sử nhưng không quét sử dụng được. QR chưa có URL Cloudinary trả imageUrl null; cần regenerate để có ảnh mới. Xóa ảnh trực tiếp trên Cloudinary không xóa URL trong database; tải ảnh sẽ trả 404.
 
-Lưu ảnh mặc định tại Restaurant.API/App_Data/qr-images, tùy chỉnh bằng Qr:ImageDirectory. Docker dùng volume qr-images. Ảnh không đưa lên Git. Hướng dẫn tải ảnh bằng fetch có Authorization, sao lưu và xử lý lỗi lưu ảnh xem [qr-management.md](qr-management.md).
+Ảnh lưu trên Cloudinary, URL HTTPS lưu tại Qr.ImageUrl. Frontend dùng trực tiếp imageUrl trong img, không gửi bearer token tới Cloudinary. Ảnh món ăn upload bằng POST /api/items/images (multipart/form-data, field file, tối đa 2 MiB), rồi gửi result.imageUrl khi tạo/cập nhật món. Cấu hình và nâng cấp database xem [cloudinary.md](cloudinary.md).
 
-Chưa có GET metadata QR theo ID, DELETE QR, tạo phiên khách hoặc quyền gọi món từ QR. Resolve hiện chỉ xác định bàn.
+Đã có POST /api/table-sessions/scan để tự mở hoặc lấy lại phiên bàn ngay khi quét QR. Body gồm token, công khai, trả thông tin bàn và tableSessionId/isNewSession. Xem [table-sessions.md](table-sessions.md). Chưa có GET metadata QR theo ID, DELETE QR hoặc cấp quyền gọi món từ QR. Resolve vẫn chỉ xác định bàn; frontend gọi scan cho luồng tự mở phiên.
 
 ## 11. Kiểm tra kết nối và health
 
@@ -493,7 +492,19 @@ Chưa có GET metadata QR theo ID, DELETE QR, tạo phiên khách hoặc quyền
 - `GET /health/ready`: tại sáu service trên; kiểm tra kết nối database, 200 nếu kết nối được, 503 nếu không kết nối được theo nhánh CanConnect. Đây chưa phải kiểm tra đầy đủ schema/nghiệp vụ.
 - Health chưa được route qua Gateway. Gọi đúng host/port/protocol của service khi vận hành; frontend nghiệp vụ vẫn gọi Gateway.
 
-Catalog, Inventory, Ordering, Billing và Customer hiện chưa có HTTP API nghiệp vụ qua Gateway. Có model/persistence không đồng nghĩa đã có API menu, kho, gọi món, hóa đơn, thanh toán hay khách hàng.
+Catalog đã có API quản lý Category, Item và Price qua Gateway. Thao tác `PATCH /api/items/{id}/status` và quyền Manager/Kitchen được mô tả tại [Trạng thái bán của món](catalog-item-status.md).
+
+API đọc thực đơn cho khách và waiter: `GET /api/menu`, `GET /api/menu/{id}`. Hỗ trợ giá hiện tại, nhóm option, trạng thái bán, tìm kiếm và phân trang; xem [Menu cho khách và waiter](catalog-menu.md) để biết cách dùng cookie GuestAccess hoặc Bearer token.
+
+`POST /api/menu/validate-order-items` kiểm tra lựa chọn, số lượng, giá và công thức hiện hành, trả snapshot cho luồng Ordering. Xem [Validate lựa chọn đặt món](catalog-order-validation.md). Món chưa có công thức đang hiệu lực không được chuyển sang `Available`.
+
+API quản lý OptionGroup, Option và gán nhóm vào Item đã được bổ sung; xem [Tùy chọn món và dữ liệu mẫu](catalog-options.md) để biết đủ 16 endpoint, quyền và quy tắc dữ liệu.
+
+API quản lý Công thức món (Recipe), định lượng nguyên liệu (BOM) và tài liệu chế biến (SOP) phục vụ Manager (UC_MGR_05) và Kitchen (UC_KIT_09); xem [Công thức món và định lượng](catalog-recipes.md) để biết chi tiết các endpoint và cơ chế versioning.
+
+Ordering đã có API giỏ khách, gửi đơn, đọc đơn và waiter xác nhận. Xem [Luồng Ordering và dữ liệu mẫu](ordering.md).
+
+Inventory, Billing và Customer hiện chưa có HTTP API nghiệp vụ qua Gateway. Có model/persistence không đồng nghĩa đã có API kho, gọi món, hóa đơn, thanh toán hay khách hàng.
 
 ## 12. Thứ tự thử bằng Swagger/Postman
 
@@ -510,3 +521,7 @@ Catalog, Inventory, Ordering, Billing và Customer hiện chưa có HTTP API ngh
 11. Khi thử cập nhật bàn, luôn lấy version mới nhất; khi thử khóa tài khoản/đổi mật khẩu/logout, dự kiến token hiện tại có thể hết hiệu lực.
 
 Các API GET không có request body. Các placeholder `{id}` trên route là biến phải thay trước khi gọi, không gửi nguyên dấu ngoặc. Không copy các GUID minh họa rồi kỳ vọng có dữ liệu tương ứng trong database.
+
+## Quyền khách trong phiên bàn
+
+Xem [Tham gia phiên và cookie khách](table-sessions.md#tham-gia-phiên-và-cookie-khách): POST /api/table-sessions/{sessionId}/guest-access/join và GET /api/table-sessions/{sessionId}/guest-access/me.

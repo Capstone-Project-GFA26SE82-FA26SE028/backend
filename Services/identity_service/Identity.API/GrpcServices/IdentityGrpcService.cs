@@ -128,7 +128,7 @@ public sealed class IdentityGrpcService(IAuthService authService) : IdentityGrpc
     {
         return Task.FromResult(new PingReply
         {
-            Message = $"Identity nhận được: {request.Name}"
+            Message = $"Dịch vụ định danh đã nhận: {request.Name}"
         });
     }
 }

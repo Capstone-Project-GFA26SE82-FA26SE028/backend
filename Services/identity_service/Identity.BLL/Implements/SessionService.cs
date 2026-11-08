@@ -17,7 +17,7 @@ public sealed class SessionService(
     {
         if (!await IsAdmin(actorId, ct))
         {
-            return new ResponseDTO("Không có quyền truy cập.", 403);
+            return new ResponseDTO("Truy cập bị từ chối.", 403);
         }
 
         return await GetPage(page, pageSize, userId, ct, filter);
@@ -32,19 +32,19 @@ public sealed class SessionService(
     {
         if (sessionId == Guid.Empty)
         {
-            return new ResponseDTO("Session không hợp lệ.", 400);
+            return new ResponseDTO("Phiên đăng nhập không hợp lệ.", 400);
         }
 
         var revoked = await repository.RevokeOwnAsync(userId, sessionId, ct);
         return revoked
-            ? new ResponseDTO("Đã thu hồi phiên.", 200, true)
-            : new ResponseDTO("Không tìm thấy phiên.", 404);
+            ? new ResponseDTO("Đã thu hồi phiên đăng nhập.", 200, true)
+            : new ResponseDTO("Không tìm thấy phiên đăng nhập.", 404);
     }
 
     public async Task<ResponseDTO> DeleteAll(Guid userId, CancellationToken ct)
     {
         await repository.RevokeOwnAsync(userId, null, ct);
-        return new ResponseDTO("Đã đăng xuất tất cả phiên.", 200, true);
+        return new ResponseDTO("Đã đăng xuất toàn bộ các phiên hoạt động.", 200, true);
     }
 
     private async Task<ResponseDTO> GetPage(int page, int pageSize, Guid? userId, CancellationToken ct, Identity.Common.DTOs.SessionFilter? filter = null)
@@ -57,7 +57,7 @@ public sealed class SessionService(
 
         if (!pagination.IsValid() || userId == Guid.Empty || filter?.IsValid() == false)
         {
-            return new ResponseDTO("Phân trang hoặc userId không hợp lệ. PageSize từ 1 đến 100.", 400);
+            return new ResponseDTO("Phân trang hoặc mã người dùng không hợp lệ. Số lượng mỗi trang phải từ 1 đến 100.", 400);
         }
 
         var (items, total) = await repository.GetAllAsync(page, pageSize, userId, ct, filter);

@@ -11,7 +11,7 @@ internal static class ManagementMapping
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new GatewayRequestException(400, "ID phải là GUID khác rỗng.");
+            throw new GatewayRequestException(400, "ID phải là GUID hợp lệ và khác rỗng.");
         }
 
         return id;

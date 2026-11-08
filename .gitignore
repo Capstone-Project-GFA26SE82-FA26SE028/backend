@@ -7,7 +7,7 @@
 *.db-wal
 TestResults/
 
-# Docker local credentials
+# Local secrets must never be committed.
 .env
 .env.*
 !.env.example
@@ -15,3 +15,9 @@ TestResults/
 # Original pasted requirements stay local; share the Markdown specification.
 /docs/requirements/sources/*.txt
 **/App_Data/qr-images/
+
+# Machine-specific AI development settings and runtime files.
+**/appsettings.Local.json
+/.ai/
+*.gguf
+**/.ollama/

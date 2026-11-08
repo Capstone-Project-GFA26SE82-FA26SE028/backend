@@ -32,12 +32,12 @@ public sealed class ManagementInterceptor(ILogger<ManagementInterceptor> logger)
         }
         catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
         {
-            throw new RpcException(new Status(StatusCode.Cancelled, "Yêu cầu đã hủy."));
+            throw new RpcException(new Status(StatusCode.Cancelled, "Yêu cầu đã bị hủy."));
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Restaurant RPC failed: {Method}", context.Method);
-            throw new RpcException(new Status(StatusCode.Internal, "Không xử lý được yêu cầu nhà hàng."));
+            logger.LogError(ex, "Yêu cầu RPC nhà hàng thất bại: {Method}", context.Method);
+            throw new RpcException(new Status(StatusCode.Internal, "Không thể xử lý yêu cầu nhà hàng."));
         }
     }
 }

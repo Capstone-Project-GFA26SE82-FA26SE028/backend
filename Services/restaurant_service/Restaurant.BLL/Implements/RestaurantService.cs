@@ -47,11 +47,11 @@ public sealed class RestaurantService(IRestaurantRepository repository, IManagem
         var address = ManagementValidation.Required(body.Address, 500, "Địa chỉ");
         var hotline = ManagementValidation.Required(body.Hotline, 20, "Hotline");
         var taxCode = ManagementValidation.Optional(body.TaxCode, 50, "Mã số thuế");
-        var logo = ManagementValidation.Optional(body.LogoUrl, 2048, "Logo URL");
+        var logo = ManagementValidation.Optional(body.LogoUrl, 2048, "Đường dẫn Logo");
         if (logo is not null && (!Uri.TryCreate(logo, UriKind.Absolute, out var uri)
             || (uri.Scheme != "https" && uri.Scheme != "http")))
         {
-            throw new ManagementException(400, "Logo phải là URL HTTP/HTTPS hợp lệ.");
+            throw new ManagementException(400, "Logo phải là đường dẫn URL HTTP/HTTPS hợp lệ.");
         }
 
         var zone = ManagementValidation.Required(body.TimeZone, 100, "Múi giờ");
@@ -68,7 +68,7 @@ public sealed class RestaurantService(IRestaurantRepository repository, IManagem
             || body.OpeningHours.Any(x => x is null || x.DayOfWeek < 0 || x.DayOfWeek > 6)
             || body.OpeningHours.Select(x => x.DayOfWeek).Distinct().Count() != body.OpeningHours.Count)
         {
-            throw new ManagementException(400, "Giờ hoạt động: ngày 0–6, không trùng ngày.");
+            throw new ManagementException(400, "Giờ hoạt động phải từ thứ 2 đến chủ nhật (0-6) và không được trùng ngày.");
         }
 
         var hours = body.OpeningHours.Select(x => new OpeningHour
@@ -80,7 +80,7 @@ public sealed class RestaurantService(IRestaurantRepository repository, IManagem
         }).ToList();
         if (hours.Any(x => x.OpenAt >= x.CloseAt))
         {
-            throw new ManagementException(400, "Giờ mở phải trước giờ đóng trong cùng ngày.");
+            throw new ManagementException(400, "Giờ mở cửa phải trước giờ đóng cửa trong cùng một ngày.");
         }
 
         var entity = await transaction.ExecuteAsync(async () =>

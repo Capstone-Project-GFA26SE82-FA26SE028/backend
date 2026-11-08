@@ -3,7 +3,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <UserSecretsId>backend-restaurant-local</UserSecretsId>
+    <UserSecretsId>815a2d0b-9704-4e92-a294-313ef86b31de</UserSecretsId>
+
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.84.0" />

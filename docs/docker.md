@@ -1,106 +1,69 @@
-# Chạy backend bằng Docker (local development)
+# Chạy backend bằng Docker
 
-## Quy ước cổng
+## Khởi động cho nhóm FE
 
-| Dịch vụ | Local | Docker |
-| --- | --- | --- |
-| Gateway HTTPS | https://localhost:5000 | Không cấu hình HTTPS |
-| Gateway HTTP | http://localhost:15000 | http://localhost:5000 (container: 5000) |
-| Identity gRPC | https://localhost:5001 | http://identity:5001 (chỉ nội bộ) |
-| Restaurant | https://localhost:5002 | http://restaurant:5002 (chỉ nội bộ) |
-| Catalog | https://localhost:5003 | http://catalog:5003 (chỉ nội bộ) |
-| Ordering | https://localhost:5004 | http://ordering:5004 (chỉ nội bộ) |
-| Customer | https://localhost:5005 | http://customer:5005 (chỉ nội bộ) |
-| Inventory | https://localhost:5006 | http://inventory:5006 (chỉ nội bộ) |
-| Billing | https://localhost:5007 | http://billing:5007 (chỉ nội bộ) |
-
-Chạy local với profile `https`, mở https://localhost:5000/swagger. Chạy Docker, mở http://localhost:5000/swagger. Local HTTPS và Docker dùng chung cổng 5000 nên chạy luân phiên. HTTP phụ khi chạy local dùng dãy 15000 trở lên (Gateway 15000), không chiếm dãy cổng chính.
-
-## Sáu service mới
-
-Restaurant, Catalog, Ordering, Customer, Inventory và Billing đã được cấu hình DbContext, repository theo entity và UnitOfWork scoped. Chúng có endpoint `/health/live` (tiến trình hoạt động) và `/health/ready` (kết nối database được: 200, không được: 503). Readiness chỉ kiểm tra kết nối, chưa xác nhận schema đầy đủ. Các cổng này chỉ nhận HTTP/2; dùng client hỗ trợ HTTP/2 khi kiểm tra health.
-
-Restaurant đã có API quản lý thông tin nhà hàng, khu vực, bàn và gán khu vực qua Gateway; xem [hướng dẫn và JSON mẫu](restaurant-management.md). Năm service mới còn lại chưa có RPC nghiệp vụ hoặc controller tương ứng ở Gateway. Thêm `.proto`, gRPC service, BLL và controller theo từng chức năng; xem [hướng dẫn chuẩn bị code](development.md).
-
-Chạy local với User Secrets, ví dụ Catalog:
-
-```powershell
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost;Database=CatalogDb;Integrated Security=True;TrustServerCertificate=True" --project Services/catalog_service/Catalog.API
-dotnet run --project Services/catalog_service/Catalog.API --launch-profile https
-```
-
-Thay database và kiểu xác thực cho phù hợp máy của bạn. Các service còn lại cấu hình tương tự theo project API của chúng. `appsettings.json` để trống connection string; ứng dụng báo lỗi ngay nếu chưa cấu hình. User Secrets chỉ được nạp tự động trong Development. Docker đọc `ConnectionStrings__DefaultConnection` từ Compose.
-
-Compose mặc định vẫn chạy Gateway + Identity. Để chạy thêm sáu service, bổ sung các biến `RESTAURANT_DB_CONNECTION`, `CATALOG_DB_CONNECTION`, `ORDERING_DB_CONNECTION`, `CUSTOMER_DB_CONNECTION`, `INVENTORY_DB_CONNECTION`, `BILLING_DB_CONNECTION` vào `.env` theo `.env.example`, sau đó:
-
-```powershell
-docker compose --profile services config --quiet
-docker compose --profile services up -d --build
-docker compose --profile services ps
-docker compose --profile services logs -f catalog
-```
-
-Có thể chạy riêng một service mới bằng `docker compose up -d --build catalog`. Các connection string mới mặc định rỗng để không ảnh hưởng chế độ chỉ chạy Identity; service được chọn sẽ từ chối khởi động nếu biến của nó chưa có giá trị. `config --quiet` chỉ kiểm tra cấu trúc Compose, không xác nhận kết nối SQL. Không chép đè `.env` đang dùng; bổ sung các biến còn thiếu. Dùng `docker compose --profile services down` để dừng cả nhóm.
-
-## Chuẩn bị
-
-- Bật Docker Desktop, dùng Linux containers.
-- SQL Server hiện có phải truy cập được bằng TCP. Compose này không tạo database/schema hay tài khoản Admin, và không chạy SQL Server mới.
-- Database cần có schema và dữ liệu Role/Admin đang dùng. Linux container không dùng được Windows Integrated Security của máy host; dùng SQL login có quyền phù hợp.
-
-## Cấu hình
-
-Tại thư mục Backend:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Sửa .env:
-
-- IDENTITY_DB_CONNECTION: connection string SQL Server thật. SQL trên máy host Docker Desktop dùng host.docker.internal và cổng TCP thực tế (ví dụ 1433), không dùng localhost hay LocalDB. SQL Express thường cần bật TCP/IP và cấu hình cổng cố định. Database ở máy khác dùng DNS/IP của máy đó.
-- JWT_SECRET_KEY: khóa ngẫu nhiên ít nhất 32 byte UTF-8. Để tạo khóa trên PowerShell:
-
-```powershell
-$jwtBytes = New-Object byte[] 48
-$jwtRng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-$jwtRng.GetBytes($jwtBytes)
-[Convert]::ToBase64String($jwtBytes)
-$jwtRng.Dispose()
-```
-
-Dán kết quả vào JWT_SECRET_KEY trong .env. Không commit .env. Dùng dấu nháy đơn quanh connection string để bảo toàn ký tự $ trong mật khẩu. File appsettings thường và secrets được loại khỏi Docker build context; cấu hình không nhạy cảm lấy từ appsettings.Docker.json.
-
-## Chạy
+Cần Docker Desktop đang chạy Linux containers. Không cần cài SQL Server hay .NET trên máy FE.
 
 ```powershell
 docker compose config --quiet
 docker compose up -d --build
-docker compose ps
-docker compose logs -f gateway identity
+docker compose ps -a
 ```
 
-- Gateway Swagger: http://localhost:5000/swagger
-- Ping Gateway → Identity gRPC: http://localhost:5000/api/identity/ping
+Mở http://localhost:5000/swagger. FE gọi API tại `http://localhost:5000` (HTTP). Gateway local cũng dùng cổng 5000, nên dừng Gateway local trước khi chạy Docker.
 
-Gateway gọi http://identity:5001 qua mạng Compose (HTTP/2). Cổng 5001 của Identity không publish ra host. Identity chỉ phục vụ gRPC, không có REST/Swagger hoặc cổng publish ra host. Không dùng launchSettings.json hoặc dev certificate trong container. Cấu hình HTTP/2 tách cổng là cần thiết khi không có TLS.
+Compose gồm SQL Server, một container `db-init` chạy một lần và 8 container ứng dụng. SQL Server phải healthy, sau đó `db-init` tạo đủ 7 database và seed thành công thì các service mới chạy. `db-init` có trạng thái `Exited (0)` là bình thường.
 
-Đăng nhập lại qua Gateway Docker để lấy token, vì issuer/audience/key có thể khác phiên Visual Studio. Swagger chạy bằng môi trường Docker; các cổng publish chỉ bind 127.0.0.1. Đây là cấu hình local development, cần TLS ở ingress và cấu hình Swagger phù hợp khi triển khai public.
+## Dữ liệu có sẵn
 
-## Dừng / cập nhật
+- 6 tài khoản: `admin@gmail.com`, `manager@gmail.com`, `waiter@gmail.com`, `cashier@gmail.com`, `kitchen@gmail.com`, `inventory@gmail.com`. Mật khẩu chung: **123**.
+- Nhà hàng Demo Restaurant, khu MAIN, 3 bàn T01–T03.
+- Hai trạm bếp HOT và BAR.
+- Steamed Rice: 20.000, vào HOT; Iced Tea: 10.000, vào BAR.
+- Món cơm có option Extra rice: thêm 5.000. Hai món và option có công thức, nguyên liệu demo.
+- CustomerDb và BillingDb có đầy đủ bảng nhưng chưa có giao dịch demo.
+
+Đăng nhập lại để lấy token của bộ Docker. Dùng Admin tạo QR cho bàn qua API; dùng Waiter mở phiên bàn hoặc khách quét QR và tham gia phiên, sau đó thử order. QR không được seed sẵn vì token và ảnh được tạo bởi backend.
+
+ID cố định của T01: `20000000-0000-0000-0000-000000000011`; T02/T03 kết thúc bằng `012`/`013`. Món cơm kết thúc bằng `051`, trà `052`, option `072`, trạm HOT `021`, BAR `022` (cùng tiền tố GUID). UnitRef demo kết thúc bằng `100`, đại diện gram với hệ số 1; hiện dự án chưa có bảng/API quản lý đơn vị.
+
+## Cấu hình
+
+Secrets belong in `.env`, in the repository root, ignored by Git. Copy `.env.example` there and fill in credentials. Compose uses SQL_SA_PASSWORD and JWT_SECRET_KEY.
+
+Docker kết nối `sqlserver:1433` trong mạng nội bộ, không dùng database SQL trên máy host và không publish cổng SQL. Các connection string `*_DB_CONNECTION` của cấu hình Docker cũ không còn được sử dụng. Cấu hình chạy .NET local vẫn độc lập trong appsettings/User Secrets.
+
+- `GATEWAY_HTTP_PORT=5000`: cổng Gateway trên máy.
+- `QR_MENU_BASE_URL`: địa chỉ trang FE mà khách mở sau khi quét QR. Mặc định `http://localhost:5173/menu`; đổi theo FE của nhóm. localhost trên điện thoại là chính điện thoại.
+- TestUI không nằm trong Compose. TestUI gọi Gateway tại `http://localhost:5000`, khớp với `GATEWAY_HTTP_PORT=5000`.
+
+Gateway chỉ publish trên loopback. Các service gRPC chỉ dùng HTTP/2 trong mạng Docker: Identity 5001, Restaurant 5002, Catalog 5003, Ordering 5004, Customer 5005, Inventory 5006, Billing 5007. Không cần dev HTTPS certificate trong container.
+
+## Lưu dữ liệu và cập nhật
+
+Schema tại `docker/sql/schema` được xuất từ 7 database hiện có, giữ bảng, khóa và index; không chứa dữ liệu thật. Seed tại `docker/sql/seed` là dữ liệu demo riêng. Mỗi database khởi tạo trong transaction và được đánh dấu bằng extended property `DockerBootstrapVersion`.
+
+Khởi động lại sẽ bỏ qua database đã khởi tạo, không reset tài khoản, menu hoặc đơn hàng đã test. Database có bảng nhưng chưa có dấu khởi tạo sẽ bị từ chối ghi đè. Thay đổi schema/seed trong repo không tự áp dụng vào volume đã khởi tạo; cần script nâng cấp riêng hoặc tạo môi trường Docker mới.
 
 ```powershell
 docker compose down
 docker compose up -d --build
 ```
 
-Compose không xóa database SQL Server hiện có. depends_on chỉ điều khiển thứ tự khởi động; nếu Ping trả 503 ngay lúc startup, kiểm tra logs và thử lại sau khi Identity báo listening.
+`down` giữ dữ liệu trong volume `sql-data` và ảnh QR trong `qr-images`. **Không dùng `down -v` nếu muốn giữ dữ liệu**: tùy chọn này xóa cả database Docker và ảnh QR. Đổi mật khẩu trong `.env` không tự đổi mật khẩu SQL đã lưu trong volume.
 
-## Lỗi thường gặp
+## Kiểm tra và xử lý lỗi
 
-- dockerDesktopLinuxEngine / daemon unavailable: mở Docker Desktop và chờ engine sẵn sàng.
-- Biến JWT_SECRET_KEY chưa đặt: sửa .env; Compose cố ý dừng nếu thiếu khóa.
-- Login lỗi SQL: kiểm tra connection string, SQL authentication, TCP port và firewall. Ping thành công không xác nhận database kết nối được.
-- Cổng 5000 bị chiếm: đổi GATEWAY_HTTP_PORT trong .env.
+```powershell
+docker compose logs db-init
+docker compose logs --tail 100 sqlserver
+docker compose logs --tail 100 gateway identity restaurant catalog ordering
+```
 
-Tham khảo: https://learn.microsoft.com/en-us/aspnet/core/grpc/troubleshoot và https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/
+- SQL unhealthy: kiểm tra log SQL, tài nguyên Docker và mật khẩu khi tạo volume lần đầu.
+- db-init lỗi: xem lỗi SQL đầu tiên; service sẽ không chạy với schema chưa hoàn tất. Sau khi sửa, chạy lại `docker compose up -d --build`.
+- Cổng 5000 bị chiếm: dừng tiến trình đang dùng hoặc đổi `GATEWAY_HTTP_PORT`.
+- Swagger lên nhưng API chưa đáp ứng ngay: chờ service hoàn tất startup và kiểm tra logs.
+- Các service Restaurant/Catalog/Ordering/Customer/Inventory/Billing có `/health/ready` trên cổng HTTP/2 nội bộ. Readiness chỉ kiểm tra kết nối DB.
+
+Inventory có API nguyên liệu, nhập kho và lịch sử tồn; xem [hướng dẫn Inventory](inventory.md). Customer và Billing hiện có nền tảng persistence/health; Docker chạy được các service không có nghĩa tất cả API nghiệp vụ đã được triển khai.

@@ -11,7 +11,7 @@ internal static class ManagementMapping
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new ManagementException(400, "ID phải là GUID khác rỗng.");
+            throw new ManagementException(400, "Mã ID phải là GUID hợp lệ và không được rỗng.");
         }
 
         return id;

@@ -1,3 +1,5 @@
+using Customer.API.GrpcServices;
+using Customer.BLL.Extensions;
 using Customer.DAL.Extensions;
 using Customer.DAL.Models;
 
@@ -8,12 +10,16 @@ builder.Services.AddGrpc();
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    throw new InvalidOperationException("Configure ConnectionStrings:DefaultConnection using User Secrets or environment variables.");
+    throw new InvalidOperationException("Vui lòng cấu hình ConnectionStrings:DefaultConnection trong appsettings.json hoặc biến môi trường.");
 }
 
 builder.Services.AddCustomerPersistence(connectionString);
+builder.Services.AddCustomerBusinessServices();
 
 var app = builder.Build();
+
+app.MapGrpcService<CustomerGrpcService>();
+app.MapGrpcService<FeedbackGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

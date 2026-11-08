@@ -17,7 +17,7 @@ public sealed class AuditLogService(
     {
         if (!await IsAdmin(actorId, ct))
         {
-            return new ResponseDTO("Không có quyền truy cập.", 403);
+            return new ResponseDTO("Truy cập bị từ chối.", 403);
         }
 
         var pagination = new PaginationRequest
@@ -28,7 +28,7 @@ public sealed class AuditLogService(
 
         if (!pagination.IsValid() || userId == Guid.Empty)
         {
-            return new ResponseDTO("Phân trang hoặc userId không hợp lệ. PageSize từ 1 đến 100.", 400);
+            return new ResponseDTO("Phân trang hoặc mã người dùng không hợp lệ. Số lượng mỗi trang phải từ 1 đến 100.", 400);
         }
 
         var (items, total) = await repository.GetAllAsync(page, pageSize, userId, ct);

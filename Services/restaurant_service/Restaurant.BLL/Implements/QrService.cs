@@ -31,12 +31,18 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
     public async Task<byte[]> GetImage(Guid id, CancellationToken ct)
     {
         await access.RequireAdmin(ct);
-        if (!await repository.AnyAsync(x => x.QrId == id, ct))
+        var qr = await repository.GetByIdAsync(id, ct);
+        if (qr is null)
         {
-            throw new ManagementException(404, "Không tìm thấy QR.");
+            throw new ManagementException(404, "Không tìm thấy mã QR.");
         }
 
-        return await images.ReadAsync(id, ct);
+        if (string.IsNullOrWhiteSpace(qr.ImageUrl))
+        {
+            throw new ManagementException(404, "Không có hình ảnh trên Cloudinary. Vui lòng tạo lại mã QR.");
+        }
+
+        return await images.ReadAsync(qr.ImageUrl, ct);
     }
 
     public Task<QrCreatedDto> Create(Guid tableId, CancellationToken ct)
@@ -48,7 +54,7 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
     {
         if (expectedQrId == Guid.Empty)
         {
-            throw new ManagementException(400, "Phải gửi ExpectedQrId của mã QR hiện tại.");
+            throw new ManagementException(400, "ExpectedQrId phải xác định mã QR hiện tại.");
         }
 
         return Issue(tableId, expectedQrId, ct);
@@ -59,7 +65,7 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
         await access.RequireAdmin(ct);
         if (tableId == Guid.Empty)
         {
-            throw new ManagementException(400, "TableId không hợp lệ.");
+            throw new ManagementException(400, "Mã bàn không hợp lệ.");
         }
 
         if (!Uri.TryCreate(settings.Value.MenuBaseUrl, UriKind.Absolute, out var baseUri)
@@ -67,7 +73,7 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
             || !string.IsNullOrEmpty(baseUri.Fragment) || !string.IsNullOrEmpty(baseUri.Query)
             || !string.IsNullOrEmpty(baseUri.UserInfo) || settings.Value.MenuBaseUrl.Length > 1024)
         {
-            throw new ManagementException(503, "Cấu hình Qr:MenuBaseUrl phải là URL HTTP/HTTPS không chứa query hoặc fragment.");
+            throw new ManagementException(503, "Qr:MenuBaseUrl phải là URL HTTP/HTTPS không chứa query hoặc fragment.");
         }
 
         return await transaction.ExecuteAsync(async () =>
@@ -76,18 +82,18 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
                 ?? throw new ManagementException(404, "Không tìm thấy bàn.");
             if (!table.IsActive || table.Area is null || !table.Area.IsActive)
             {
-                throw new ManagementException(409, "Bàn phải đang hoạt động và thuộc khu vực đang hoạt động.");
+                throw new ManagementException(409, "Bàn và khu vực phải đang hoạt động.");
             }
 
             var active = await repository.GetActiveAsync(tableId, ct);
             if (!expectedQrId.HasValue && active.Count > 0)
             {
-                throw new ManagementException(409, "Bàn đã có QR. Dùng chức năng tạo lại với mã QR hiện tại.");
+                throw new ManagementException(409, "Bàn đã có mã QR. Vui lòng tạo lại bằng mã QR hiện tại.");
             }
 
             if (expectedQrId.HasValue && !active.Any(x => x.QrId == expectedQrId.Value))
             {
-                throw new ManagementException(409, "QR đã thay đổi hoặc không thuộc bàn. Hãy tải lại danh sách.");
+                throw new ManagementException(409, "Mã QR đã thay đổi hoặc thuộc về bàn khác. Vui lòng tải lại danh sách.");
             }
 
             var now = DateTime.UtcNow;
@@ -111,9 +117,8 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
                 CreatedAt = now,
                 TokenHash = Hash(token)
             };
-            // Persist the complete image before committing the database transaction.
-            // If commit fails, any orphan file is inaccessible without a matching database row.
-            await images.SaveAsync(entity.QrId, image, ct);
+            // Upload before commit so a failed upload cannot revoke the current QR.
+            entity.ImageUrl = await images.SaveAsync(entity.QrId, image, ct);
             repository.Add(entity);
             return new QrCreatedDto
             {
@@ -129,13 +134,13 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
     {
         if (string.IsNullOrEmpty(token) || token.Length != 64 || !token.All(Uri.IsHexDigit))
         {
-            throw new ManagementException(404, "QR không hợp lệ hoặc đã bị thu hồi.");
+            throw new ManagementException(404, "Mã QR không hợp lệ hoặc đã bị thu hồi.");
         }
 
         var qr = await repository.FindByHashAsync(Hash(token), ct);
         if (qr is null || !qr.Table.IsActive || !qr.Table.Area.IsActive)
         {
-            throw new ManagementException(404, "QR không hợp lệ hoặc đã bị thu hồi.");
+            throw new ManagementException(404, "Mã QR không hợp lệ hoặc đã bị thu hồi.");
         }
 
         return new QrTableDto
@@ -157,7 +162,7 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
         return new QrDto
         {
             QrId = qr.QrId,
-            ImageUrl = images.Exists(qr.QrId) ? $"/api/qr/{qr.QrId}/image" : null,
+            ImageUrl = qr.ImageUrl,
             TableId = qr.TableId,
             TableCode = qr.Table.TableCode,
             AreaId = qr.Table.AreaId,

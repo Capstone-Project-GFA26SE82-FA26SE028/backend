@@ -61,12 +61,12 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
             };
             if (item.RestaurantId != body.RestaurantId)
             {
-                throw new ManagementException(409, "Không chuyển khu vực sang nhà hàng khác.");
+                throw new ManagementException(409, "Không thể chuyển khu vực sang nhà hàng khác.");
             }
 
             if (await repository.CodeExistsAsync(body.RestaurantId, code, item.AreaId, ct))
             {
-                throw new ManagementException(409, "Mã khu vực đã tồn tại trong nhà hàng.");
+                throw new ManagementException(409, "Mã khu vực đã tồn tại trong nhà hàng này.");
             }
 
             item.AreaCode = code;
@@ -91,7 +91,7 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
             var entity = await Find(id, ct);
             if (!active && await repository.HasOpenSessionsAsync(id, ct))
             {
-                throw new ManagementException(409, "Khu vực còn phiên phục vụ chưa đóng.");
+                throw new ManagementException(409, "Khu vực đang có phiên phục vụ chưa đóng.");
             }
 
             entity.IsActive = active;
@@ -107,7 +107,7 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
             var entity = await Find(id, ct);
             if (await repository.HasTablesAsync(id, ct))
             {
-                throw new ManagementException(409, "Khu vực còn bàn. Hãy chuyển bàn hoặc ngừng sử dụng khu vực.");
+                throw new ManagementException(409, "Khu vực vẫn còn bàn. Hãy chuyển bàn hoặc ngừng kích hoạt khu vực.");
             }
 
             repository.Delete(entity);

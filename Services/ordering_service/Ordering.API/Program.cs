@@ -3,17 +3,25 @@ using Ordering.DAL.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddGrpc();
+Ordering.API.Extensions.OrderingServiceExtensions.AddOrderingServices(builder.Services, builder.Configuration);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    throw new InvalidOperationException("Configure ConnectionStrings:DefaultConnection using User Secrets or environment variables.");
+    throw new InvalidOperationException("Vui lòng cấu hình ConnectionStrings:DefaultConnection trong appsettings.json hoặc biến môi trường.");
 }
 
 builder.Services.AddOrderingPersistence(connectionString);
 
 var app = builder.Build();
+
+app.MapGrpcService<Ordering.API.GrpcServices.KitchenStationGrpcService>();
+app.MapGrpcService<Ordering.API.GrpcServices.KitchenTaskGrpcService>();
+
+app.MapGrpcService<Ordering.API.GrpcServices.CartGrpcService>();
+app.MapGrpcService<Ordering.API.GrpcServices.OrderGrpcService>();
+app.MapGrpcService<Ordering.API.GrpcServices.BillingOrderGrpcService>();
+app.MapGrpcService<Ordering.API.GrpcServices.CheckoutLockGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

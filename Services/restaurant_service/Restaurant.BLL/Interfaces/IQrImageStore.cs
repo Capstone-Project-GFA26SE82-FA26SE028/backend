@@ -2,9 +2,7 @@ namespace Restaurant.BLL.Interfaces;
 
 public interface IQrImageStore
 {
-    bool Exists(Guid id);
+    Task<string> SaveAsync(Guid id, byte[] png, CancellationToken ct);
 
-    Task SaveAsync(Guid id, byte[] png, CancellationToken ct);
-
-    Task<byte[]> ReadAsync(Guid id, CancellationToken ct);
+    Task<byte[]> ReadAsync(string url, CancellationToken ct);
 }

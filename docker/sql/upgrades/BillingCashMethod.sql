@@ -1,0 +1,7 @@
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+IF NOT EXISTS (SELECT 1 FROM dbo.PaymentMethod WITH (UPDLOCK, HOLDLOCK) WHERE MethodCode = 'Cash')
+BEGIN
+    INSERT dbo.PaymentMethod (MethodCode, IsEnabled) VALUES ('Cash', 1);
+END;
+COMMIT TRANSACTION;

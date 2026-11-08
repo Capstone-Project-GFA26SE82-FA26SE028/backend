@@ -4,7 +4,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>3bc7ad1d-be5b-44bc-8157-3b0c10dbc5e4</UserSecretsId>
+
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,5 +26,11 @@
   </ItemGroup>
   <ItemGroup>
     <Protobuf Include="../../../Contracts/Protos/restaurant.proto" Link="Protos\restaurant.proto" GrpcServices="Client" />
+    <Protobuf Include="../../../Contracts/Protos/billing.proto" Link="Protos/billing.proto" GrpcServices="Client" />
+    <Protobuf Include="../../../Contracts/Protos/ordering.proto" Link="Protos/ordering.proto" GrpcServices="Client" />
+    <Protobuf Include="../../../Contracts/Protos/inventory.proto" Link="Protos/inventory.proto" GrpcServices="Client" />
+    <Protobuf Include="../../../Contracts/Protos/catalog.proto" Link="Protos\catalog.proto" GrpcServices="Client" />
+    <Protobuf Include="../../ai_service/AI.API/Protos/assistant.proto" Link="Protos/assistant.proto" GrpcServices="Client" />
+    <Protobuf Include="../../../Contracts/Protos/customer.proto" Link="Protos\customer.proto" GrpcServices="Client" />
   </ItemGroup>
 </Project>

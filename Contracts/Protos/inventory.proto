@@ -1,0 +1,188 @@
+syntax = "proto3";
+option csharp_namespace = "Backend.Contracts.Inventory";
+package inventory;
+
+service IngredientGrpc {
+  rpc Create (IngredientWriteRequest) returns (IngredientInfo);
+  rpc Update (IngredientWriteRequest) returns (IngredientInfo);
+  rpc SetStatus (IngredientStatusRequest) returns (IngredientInfo);
+  rpc GetById (InventoryIdRequest) returns (IngredientInfo);
+  rpc GetAll (IngredientListRequest) returns (IngredientPage);
+}
+service GoodsReceiptGrpc {
+  rpc Create (ReceiptWriteRequest) returns (ReceiptInfo);
+  rpc Confirm (InventoryIdRequest) returns (ReceiptInfo);
+  rpc GetById (InventoryIdRequest) returns (ReceiptInfo);
+  rpc GetAll (InventoryPageRequest) returns (ReceiptPage);
+}
+service StockMovementGrpc {
+  rpc GetAll (MovementListRequest) returns (MovementPage);
+}
+message InventoryIdRequest { string id = 1; }
+message InventoryPageRequest { int32 page = 1; int32 page_size = 2; }
+message IngredientWriteRequest {
+  string id = 1;
+  string name = 2;
+  string base_unit = 3;
+  string low_stock_threshold = 4;
+}
+message IngredientStatusRequest { string id = 1; bool is_active = 2; }
+message IngredientListRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional string search = 3;
+  optional bool is_active = 4;
+  bool low_stock_only = 5;
+}
+message IngredientInfo {
+  string id = 1;
+  string code = 2;
+  string name = 3;
+  string base_unit = 4;
+  string stock_quantity = 5;
+  string low_stock_threshold = 6;
+  bool is_active = 7;
+  bool is_low_stock = 8;
+  string stock_version = 9;
+}
+message IngredientPage {
+  repeated IngredientInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+message ReceiptLine {
+  string ingredient_id = 1;
+  string received_quantity = 2;
+  string expiry_date = 3;
+  string id = 4;
+  optional string unit_id = 5;
+  optional string input_quantity = 6;
+  optional string conversion_factor = 7;
+}
+
+service UnitGrpc {
+  rpc Create (UnitWriteRequest) returns (UnitInfo);
+  rpc GetAll (UnitListRequest) returns (UnitList);
+}
+service IngredientUnitGrpc {
+  rpc Update (ConversionWriteRequest) returns (ConversionInfo);
+  rpc GetAll (InventoryIdRequest) returns (ConversionList);
+  rpc Resolve (ConversionRequest) returns (ConversionInfo);
+}
+message UnitListRequest {}
+message UnitWriteRequest { string code = 1; string name = 2; }
+message UnitInfo { string id = 1; string code = 2; string name = 3; }
+message UnitList { repeated UnitInfo items = 1; }
+message ConversionWriteRequest { string ingredient_id = 1; string unit_id = 2; string factor = 3; }
+message ConversionRequest { string ingredient_id = 1; string unit_id = 2; }
+message ConversionInfo { string ingredient_id = 1; string unit_id = 2; string factor = 3; }
+message ConversionList { repeated ConversionInfo items = 1; }
+message ReceiptWriteRequest {
+  string id = 1;
+  string note = 2;
+  repeated ReceiptLine items = 3;
+}
+message ReceiptInfo {
+  string id = 1;
+  string code = 2;
+  string status = 3;
+  string created_by = 4;
+  string created_at = 5;
+  optional string confirmed_at = 6;
+  string note = 7;
+  repeated ReceiptLine items = 8;
+}
+message ReceiptPage {
+  repeated ReceiptInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+message MovementListRequest { string ingredient_id = 1; int32 page = 2; int32 page_size = 3; }
+message MovementInfo {
+  string id = 1;
+  string ingredient_id = 2;
+  string receipt_item_id = 3;
+  string movement_type = 4;
+  string quantity_change = 5;
+  string performed_by = 6;
+  string reason = 7;
+  string created_at = 8;
+  optional string stock_issue_id = 9;
+  optional string cooking_event_ref = 10;
+  optional string order_item_ref = 11;
+}
+
+service StockLotGrpc {
+  rpc GetAll (MovementListRequest) returns (StockLotPage);
+}
+service StockIssueGrpc {
+  rpc Create (StockIssueWriteRequest) returns (StockIssueInfo);
+  rpc GetById (InventoryIdRequest) returns (StockIssueInfo);
+  rpc DeductForCooking (CookingDeductionRequest) returns (CookingDeductionReply);
+}
+message StockLotInfo {
+  string receipt_item_id = 1;
+  string ingredient_id = 2;
+  string received_at = 3;
+  optional string expiry_date = 4;
+  string received_quantity = 5;
+  string remaining_quantity = 6;
+  string expiry_status = 7;
+  bool can_issue = 8;
+}
+message StockLotPage {
+  repeated StockLotInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+message StockIssueLine { string ingredient_id = 1; string quantity = 2; }
+message StockIssueWriteRequest {
+  string id = 1;
+  string reason = 2;
+  repeated StockIssueLine items = 3;
+}
+message StockIssueInfo {
+  string id = 1;
+  string created_by = 2;
+  string created_at = 3;
+  string reason = 4;
+  repeated MovementInfo allocations = 5;
+}
+message MovementPage {
+  repeated MovementInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message CookingItemDeduction {
+  string task_id = 1;
+  string order_item_id = 2;
+  string dish_name = 3;
+  int32 quantity = 4;
+  repeated StockIssueLine ingredients = 5;
+}
+
+message CookingDeductionRequest {
+  string cooking_event_id = 1;
+  repeated CookingItemDeduction items = 2;
+}
+
+message LowStockAlert {
+  string ingredient_id = 1;
+  string ingredient_name = 2;
+  string current_stock = 3;
+  string threshold = 4;
+}
+
+message CookingDeductionReply {
+  bool is_success = 1;
+  int32 status_code = 2;
+  string message = 3;
+  string stock_issue_id = 4;
+  repeated MovementInfo movements = 5;
+  repeated LowStockAlert low_stock_alerts = 6;
+}

@@ -48,14 +48,14 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
         {
             unitOfWork.RecordAudit(user?.UserId, "LOGIN_FAILED", "User", user?.UserId.ToString());
             await unitOfWork.SaveAsync();
-            return new ResponseDTO("Email hoặc mật khẩu không đúng.", 401);
+            return new ResponseDTO("Email hoặc mật khẩu không chính xác.", 401);
         }
 
         if (!user.IsActive)
         {
             unitOfWork.RecordAudit(user.UserId, "LOGIN_BLOCKED", "User", user.UserId.ToString());
             await unitOfWork.SaveAsync();
-            return new ResponseDTO("Tài khoản đã bị khóa.", 403);
+            return new ResponseDTO("Tài khoản đã bị vô hiệu hóa hoặc chưa kích hoạt.", 403);
         }
 
         var now = UtcNow();
@@ -86,7 +86,7 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
         if (request is null || string.IsNullOrWhiteSpace(request.RefreshToken)
             || request.RefreshToken.Length > 512)
         {
-            return new ResponseDTO("Refresh token không hợp lệ.", 400);
+            return new ResponseDTO("Mã làm mới (refresh token) không hợp lệ.", 400);
         }
 
         var hash = Hash(request.RefreshToken);
@@ -94,7 +94,7 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
         var now = UtcNow();
         if (session is null || session.RevokedAt != null || session.ExpiresAt <= now || !session.User.IsActive)
         {
-            return new ResponseDTO("Phiên đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.", 401);
+            return new ResponseDTO("Phiên đăng nhập đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.", 401);
         }
 
         var refreshToken = NewRefreshToken();
@@ -102,7 +102,7 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
         // Compare-and-swap prevents concurrent requests from reusing the same token.
         if (!await sessions.RotateAsync(session.UserSessionId, hash, Hash(refreshToken), now))
         {
-            return new ResponseDTO("Refresh token đã được sử dụng hoặc phiên đã bị thu hồi.", 401);
+            return new ResponseDTO("Mã làm mới đã được sử dụng hoặc phiên đăng nhập đã bị thu hồi.", 401);
         }
 
         return new ResponseDTO("Làm mới token thành công.", 200, true, result);
@@ -123,7 +123,7 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
             || request.NewPassword != request.ConfirmPassword
             || request.CurrentPassword == request.NewPassword)
         {
-            return new ResponseDTO("Mật khẩu mới cần ít nhất 8 ký tự, tối đa 72 byte UTF-8, khác mật khẩu hiện tại và khớp xác nhận.", 400);
+            return new ResponseDTO("Mật khẩu mới phải từ 8 đến 72 ký tự, khác mật khẩu hiện tại và khớp với xác nhận mật khẩu.", 400);
         }
 
         var user = await unitOfWork.UserRepo.FindUserAsync(userId, ct);
@@ -136,7 +136,7 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
         {
             unitOfWork.RecordAudit(userId, "CHANGE_PASSWORD_FAILED", "User", userId.ToString());
             await unitOfWork.SaveAsync(ct);
-            return new ResponseDTO("Mật khẩu hiện tại không đúng.", 400);
+            return new ResponseDTO("Mật khẩu hiện tại không chính xác.", 400);
         }
 
         var hash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
@@ -144,7 +144,7 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
             () => unitOfWork.UserRepo.ChangePasswordAsync(userId, user.PasswordHash, hash, ct), ct);
         if (!changed)
         {
-            return new ResponseDTO("Tài khoản đã thay đổi. Vui lòng đăng nhập lại.", 409);
+            return new ResponseDTO("Thông tin tài khoản đã thay đổi. Vui lòng đăng nhập lại.", 409);
         }
 
         return new ResponseDTO("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.", 200, true);

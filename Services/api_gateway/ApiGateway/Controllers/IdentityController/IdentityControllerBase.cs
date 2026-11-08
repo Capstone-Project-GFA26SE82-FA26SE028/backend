@@ -35,13 +35,13 @@ public abstract class IdentityControllerBase : ControllerBase
         {
             var (status, message) = ex.StatusCode switch
             {
-                Grpc.Core.StatusCode.Unauthenticated => (401, "Token hoặc phiên không hợp lệ."),
-                Grpc.Core.StatusCode.PermissionDenied => (403, "Không có quyền truy cập."),
+                Grpc.Core.StatusCode.Unauthenticated => (401, "Token hoặc phiên đăng nhập không hợp lệ."),
+                Grpc.Core.StatusCode.PermissionDenied => (403, "Truy cập bị từ chối."),
                 Grpc.Core.StatusCode.InvalidArgument => (400, "Dữ liệu không hợp lệ."),
-                Grpc.Core.StatusCode.NotFound => (404, "Không tìm thấy user."),
-                Grpc.Core.StatusCode.Unavailable => (503, "Identity service không khả dụng."),
-                Grpc.Core.StatusCode.DeadlineExceeded => (504, "Identity service phản hồi quá thời gian."),
-                _ => (502, "Không thể xử lý phản hồi từ Identity service.")
+                Grpc.Core.StatusCode.NotFound => (404, "Không tìm thấy người dùng."),
+                Grpc.Core.StatusCode.Unavailable => (503, "Hệ thống hiện đang bận hoặc tạm thời không khả dụng, vui lòng thử lại sau."),
+                Grpc.Core.StatusCode.DeadlineExceeded => (504, "Hết thời gian chờ phản hồi từ hệ thống, vui lòng thử lại sau."),
+                _ => (502, "Không thể xử lý yêu cầu lúc này, vui lòng thử lại sau.")
             };
             return StatusCode(status, new ResponseDTO { StatusCode = status, Message = message, IsSuccess = false });
         }

@@ -1,6 +1,6 @@
 # UC_ADM_10 — QR bàn
 
-Đã triển khai Gateway → QrGrpcService → QrService → QrRepository trên model Qr hiện có. Không thay đổi schema. QR chứa đường dẫn menu, token ngẫu nhiên và mã bàn.
+Đã triển khai Gateway → QrGrpcService → QrService → QrRepository trên model Qr hiện có. Schema bổ sung Qr.ImageUrl để lưu URL Cloudinary. QR chứa đường dẫn menu, token ngẫu nhiên và mã bàn.
 
 ## Cấu hình địa chỉ mở menu
 
@@ -49,26 +49,13 @@ Database chỉ lưu SHA-256 của token; token ngẫu nhiên 32 byte được bi
 
 ## Lưu ảnh và in lại
 
-Qr:ImageDirectory mặc định là App_Data/qr-images, tính từ ContentRoot của Restaurant.API. Có thể cấu hình đường dẫn tuyệt đối bằng Qr__ImageDirectory. Thư mục phải cho tài khoản chạy service đọc/ghi; không đặt vào wwwroot hoặc mở thành static files. Ảnh chứa token QR, chỉ API có xác thực Admin mới được đọc.
+Ảnh QR được upload lên Cloudinary trước khi commit database; URL HTTPS được lưu trong Qr.ImageUrl. Cấu hình Cloudinary, script nâng cấp database và cách xử lý QR cũ xem [cloudinary.md](cloudinary.md).
 
-Compose mount named volume qr-images tại /app/App_Data/qr-images; Dockerfile tạo thư mục với owner là APP_UID. Volume giữ ảnh khi tạo lại container. Không dùng docker compose down -v nếu muốn giữ ảnh. Sao lưu volume cùng database. Nếu chạy nhiều instance Restaurant thì phải dùng kho ảnh chia sẻ; volume cục bộ trên các máy khác nhau không tự đồng bộ. Thư mục mặc định bị loại khỏi Git và Docker build context; đường dẫn tùy chỉnh nên nằm ngoài repository.
+Frontend gán trực tiếp qr.imageUrl vào src của img, không ghép thêm địa chỉ Gateway và không gửi bearer token tới Cloudinary. URL ảnh là public. Route GET /api/qr/{qrId}/image vẫn yêu cầu Admin và tải ảnh từ Cloudinary để trả PNG với Cache-Control: no-store.
 
-imageUrl có dạng /api/qr/{qrId}/image, là đường dẫn tương đối trên Gateway. Frontend tải với Bearer token rồi tạo blob URL, không gắn trực tiếp imageUrl vào img khi cần header Authorization:
+QR cũ chưa có URL Cloudinary trả imageUrl null và GET image trả 404. Token cũ vẫn resolve được; regenerate để tạo ảnh mới và thay QR đã in vì token sẽ đổi. Nếu xóa ảnh trực tiếp trên Cloudinary, URL trong database vẫn giữ nguyên và tải ảnh trả 404.
 
-```javascript
-const response = await fetch(gatewayBaseUrl + qr.imageUrl, {
-  headers: { Authorization: `Bearer ${accessToken}` }
-});
-if (!response.ok) {
-  throw new Error(`Không tải được ảnh QR: ${response.status}`);
-}
-const imageObjectUrl = URL.createObjectURL(await response.blob());
-// Gán imageObjectUrl vào src của img; gọi URL.revokeObjectURL khi không còn dùng.
-```
-
-QR cũ trước khi có tính năng lưu ảnh, hoặc ảnh đã mất: imageUrl null, GET image trả 404; phải tạo lại QR một lần nếu cần ảnh. QR vẫn resolve được nếu token còn hợp lệ. QR đã thu hồi vẫn cho Admin xem ảnh lịch sử, nhưng quét ảnh đó không còn hiệu lực; giao diện nên hiển thị isUsable và tránh in mã hết hiệu lực.
-
-Lưu ảnh thất bại trả 503 và rollback thao tác tạo/tạo lại, giữ nguyên QR cũ. File được ghi tạm rồi đổi tên để không đọc phải ảnh đang ghi dở. Filesystem và SQL không có transaction chung: nếu database commit thất bại hoặc tiến trình dừng đột ngột, có thể còn file thừa. API kiểm tra bản ghi QR trước khi đọc nên file không có bản ghi không truy cập được. Không tự xóa file khi kết quả commit không chắc chắn; dọn file thừa cần đối chiếu database khi bảo trì. Không thay đổi model/schema.
+Upload thất bại rollback thao tác tạo/tạo lại, giữ nguyên QR cũ. Cloudinary và SQL không có transaction chung: commit thất bại sau upload có thể để lại ảnh thừa, cần đối chiếu database khi dọn. QR bị thu hồi vẫn có thể xem ảnh nhưng token không còn sử dụng được.
 
 ## Frontend khi khách quét QR
 
@@ -84,7 +71,7 @@ Lưu ảnh thất bại trả 503 và rollback thao tác tạo/tạo lại, gi�
 3. Nếu thành công, hiển thị tableCode do backend trả về, ví dụ “Bàn B01”. Có thể dùng history.replaceState để bỏ token khỏi thanh địa chỉ sau khi đọc; tránh lưu vào analytics/log.
 4. Nếu 404, báo QR không còn hợp lệ; không dùng thông tin bàn từ URL để tiếp tục.
 
-Phần hiện tại chỉ xác minh QR và nhận diện bàn. Chưa triển khai giao diện /menu, tham gia phiên, cookie khách hoặc gọi món UC_CUS_02. Resolve không tự tạo phiên/GuestAccess và không cấp quyền đặt món. Luồng tham gia/gọi món sau này phải kiểm tra lại QR, phiên và quyền truy cập.
+API resolve chỉ xác minh QR và nhận diện bàn. Đã có API POST /api/table-sessions/scan để tự mở hoặc lấy lại phiên ngay khi quét; frontend dùng scan cho luồng này, xem [table-sessions.md](table-sessions.md). Chưa triển khai giao diện /menu, tham gia phiên, cookie khách hoặc gọi món UC_CUS_02. Resolve không tự tạo phiên/GuestAccess và không cấp quyền đặt món. Luồng tham gia/gọi món sau này phải kiểm tra lại QR, phiên và quyền truy cập.
 
 ## Quy tắc và kiểm tra
 

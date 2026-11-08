@@ -23,12 +23,12 @@ public sealed class RoleService(IRoleRepository repository, IUnitOfWork unitOfWo
     {
         if (!await IsAdmin(actorId, ct))
         {
-            return new ResponseDTO("Không có quyền quản lý role.", 403);
+            return new ResponseDTO("Bạn không có quyền quản lý vai trò.", 403);
         }
 
         if (search?.Length > 50)
         {
-            return new ResponseDTO("Từ khóa vai trò tối đa 50 ký tự.", 400);
+            return new ResponseDTO("Từ khóa tìm kiếm vai trò không được vượt quá 50 ký tự.", 400);
         }
 
         var roles = await repository.GetAllAsync(ct);
@@ -44,17 +44,17 @@ public sealed class RoleService(IRoleRepository repository, IUnitOfWork unitOfWo
     {
         if (!await IsAdmin(actorId, ct))
         {
-            return new ResponseDTO("Không có quyền quản lý role.", 403);
+            return new ResponseDTO("Bạn không có quyền quản lý vai trò.", 403);
         }
 
         if (!ValidId(id))
         {
-            return new ResponseDTO("RoleId không hợp lệ.", 400);
+            return new ResponseDTO("Mã vai trò không hợp lệ.", 400);
         }
 
         var role = await repository.GetByIdAsync(id.Trim(), ct);
         return role is null
-            ? new ResponseDTO("Không tìm thấy role.", 404)
+            ? new ResponseDTO("Không tìm thấy vai trò.", 404)
             : new ResponseDTO("Thành công.", 200, true, Map(role));
     }
 
@@ -77,10 +77,10 @@ public sealed class RoleService(IRoleRepository repository, IUnitOfWork unitOfWo
     {
         if (!await IsAdmin(actorId, ct))
         {
-            return new ResponseDTO("Không có quyền quản lý vai trò.", 403);
+            return new ResponseDTO("Bạn không có quyền quản lý vai trò.", 403);
         }
 
-        return new ResponseDTO("Vai trò hệ thống là cố định. Chỉ được xem và gán vai trò cho tài khoản.", 409);
+        return new ResponseDTO("Các vai trò hệ thống là cố định. Vai trò chỉ có thể xem và gán cho tài khoản.", 409);
     }
     private static bool ValidId(string? id)
     {

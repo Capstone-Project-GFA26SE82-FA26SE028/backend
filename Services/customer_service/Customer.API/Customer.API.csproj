@@ -3,7 +3,6 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <UserSecretsId>backend-customer-local</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.84.0" />
@@ -11,5 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Customer.BLL\Customer.BLL.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Protobuf Include="../../../Contracts/Protos/customer.proto" Link="Protos/customer.proto" GrpcServices="Server" />
+  </ItemGroup>
 </Project>
-

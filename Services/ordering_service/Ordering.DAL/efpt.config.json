@@ -19,6 +19,10 @@
    "T4TemplatePath": null,
    "Tables": [
       {
+         "Name": "[dbo].[CheckoutLock]",
+         "ObjectType": 0
+      },
+      {
          "Name": "[dbo].[CancellationRequest]",
          "ObjectType": 0
       },

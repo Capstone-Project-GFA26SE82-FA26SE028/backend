@@ -26,7 +26,7 @@ internal static class GrpcAuthentication
             || !Guid.TryParse(user.FindFirst("UserId")?.Value, out var userId)
             || !Guid.TryParse(user.FindFirst("sid")?.Value, out var sessionId))
         {
-            throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid or expired session."));
+            throw new RpcException(new Status(StatusCode.Unauthenticated, "Phiên đăng nhập không hợp lệ hoặc đã hết hạn."));
         }
 
         return (userId, sessionId);

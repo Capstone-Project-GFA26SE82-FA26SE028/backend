@@ -1,3 +1,4 @@
+using System.Reflection;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
@@ -7,8 +8,9 @@ public sealed class BearerSecurityFilter : IOperationFilter
 {
     public void Apply(OpenApiOperation operation, OperationFilterContext context)
     {
-        if (!context.MethodInfo.IsDefined(typeof(RequireBearerTokenAttribute), true)
-            && context.MethodInfo.DeclaringType?.IsDefined(typeof(RequireBearerTokenAttribute), true) != true)
+        var attribute = context.MethodInfo.GetCustomAttribute<RequireBearerTokenAttribute>(true)
+            ?? context.MethodInfo.DeclaringType?.GetCustomAttribute<RequireBearerTokenAttribute>(true);
+        if (attribute is null)
         {
             return;
         }
@@ -17,8 +19,16 @@ public sealed class BearerSecurityFilter : IOperationFilter
         {
             [new OpenApiSecurityScheme
             {
-                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
             }] = Array.Empty<string>()
         });
+        if (attribute.Optional)
+        {
+            operation.Security.Add(new OpenApiSecurityRequirement());
+        }
     }
 }
