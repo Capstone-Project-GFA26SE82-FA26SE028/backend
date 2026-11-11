@@ -42,6 +42,10 @@ public static class BillingServiceExtensions
         {
             options.Address = uri;
         });
+        services.AddGrpcClient<CashHandoverGrpc.CashHandoverGrpcClient>(options =>
+        {
+            options.Address = uri;
+        });
         services.AddGrpcClient<PaymentGrpc.PaymentGrpcClient>(options =>
         {
             options.Address = uri;

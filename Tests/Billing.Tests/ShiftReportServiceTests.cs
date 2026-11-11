@@ -163,13 +163,7 @@ public sealed class ShiftReportServiceTests
         Assert.Contains((await service.Preview(f.ShiftId, default)).Blockers, value => value.Code == "UnsupportedPaymentFlow");
         await Status(409, () => service.Close(f.ShiftId, Body(1232, 0), default));
         payment.MethodCode = "Cash";
-        f.Db.CashHandovers.Add(new CashHandover
-        {
-            PaymentId = payment.PaymentId,
-            WaiterUserRef = Guid.NewGuid(),
-            Status = "Pending",
-            CollectedAt = DateTime.UtcNow
-        });
+        (await f.Db.CashHandovers.SingleAsync()).Status = "Pending";
         await f.Db.SaveChangesAsync();
         Assert.Contains((await service.Preview(f.ShiftId, default)).Blockers, value => value.Code == "UnsupportedCashHandover");
         await Status(409, () => service.Close(f.ShiftId, Body(1232, 0), default));

@@ -73,17 +73,32 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
                 if (existing is not null)
                 {
                     if (existing.BillId != billId || existing.CashShiftId != request.CashShiftId
-                        || existing.CashReceived != received || existing.ConfirmedByRef != verified.UserId)
+                        || existing.CashReceived != received
+                        || (existing.Status == PaymentStatuses.Paid && existing.ConfirmedByRef != verified.UserId))
                     {
                         throw new BillingException(409, "Idempotency-Key đã được sử dụng cho một yêu cầu thanh toán khác.");
                     }
 
-                    if (checkout.Status != PaymentStatuses.Paid || existing.Bill.Status != PaymentStatuses.Paid)
+                    if (existing.Status == PaymentStatuses.Paid)
                     {
-                        throw new BillingException(409, "Thanh toán đã lưu không phải là biên lai tiền mặt hoàn tất. Hãy kiểm tra trước khi thử lại.");
+                        if (checkout.Status != PaymentStatuses.Paid || existing.Bill.Status != PaymentStatuses.Paid)
+                        {
+                            throw new BillingException(409, "Thanh toán đã lưu không phải là biên lai tiền mặt hoàn tất. Hãy kiểm tra trước khi thử lại.");
+                        }
+
+                        return (Map(existing, checkout.CheckoutId), false);
                     }
 
-                    return (Map(existing, checkout.CheckoutId), false);
+                    if (existing.Status != CashHandoverStatuses.PendingPayment || existing.CashHandover is null
+                        || existing.CashHandover.Status != CashHandoverStatuses.Pending || existing.CashHandover.WaiterUserRef == Guid.Empty
+                        || existing.CashHandover.CashierUserRef.HasValue || existing.CashHandover.ConfirmedAt.HasValue
+                        || existing.CashHandover.ConfirmedAmount.HasValue || existing.PaidAt.HasValue || existing.ConfirmedByRef.HasValue
+                        || existing.VerificationSource is not null || existing.MethodCode != settings.Value.MethodCode
+                        || existing.ProviderOrderCode is not null || existing.ProviderTransactionId is not null
+                        || existing.Refunds.Count != 0 || existing.CashMovements.Count != 0)
+                    {
+                        throw new BillingException(409, "Bản ghi thu hộ không còn chờ bàn giao hoặc có dữ liệu không nhất quán.");
+                    }
                 }
 
                 if (checkout.Status != "Ready" || string.IsNullOrEmpty(checkout.SourceHash))
@@ -123,7 +138,7 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
 
                 var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
                 if (bill.RestaurantId != register.RestaurantId || bill.Status != "Unpaid" || bill.PaidAt.HasValue
-                    || bill.Payments.Any(PayOsPaymentRules.IsBlocking) || bill.Currency != "VND" || bill.TotalAmount <= 0
+                    || bill.Payments.Any(value => value.PaymentId != existing?.PaymentId && PayOsPaymentRules.IsBlocking(value)) || bill.Currency != "VND" || bill.TotalAmount <= 0
                     || bill.TotalAmount > MaximumMoney || decimal.Truncate(bill.TotalAmount) != bill.TotalAmount)
                 {
                     throw new BillingException(409, "Chỉ hóa đơn chưa thanh toán, số tiền nguyên dương VND và chưa có giao dịch mới có thể thanh toán tiền mặt.");
@@ -163,30 +178,34 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
                 }
 
                 var paidAt = DateTime.SpecifyKind(new SqlDateTime(clock.GetUtcNow().UtcDateTime).Value, DateTimeKind.Utc);
-                var payment = new Payment
+                if (existing is null || existing.CashHandover is null)
                 {
-                    PaymentId = Guid.NewGuid(),
-                    BillId = billId,
-                    Bill = bill,
-                    CashShiftId = shift.CashShiftId,
-                    CashShift = shift,
-                    MethodCode = method.MethodCode,
-                    MethodCodeNavigation = method,
-                    Status = PaymentStatuses.Paid,
-                    Amount = bill.TotalAmount,
-                    CashReceived = received,
-                    ChangeAmount = received - bill.TotalAmount,
-                    IdempotencyKey = key,
-                    PaidAt = paidAt,
-                    ConfirmedByRef = verified.UserId,
-                    VerificationSource = PaymentStatuses.CashierVerification
-                };
+                    throw new BillingException(409, "Phục vụ phải ghi nhận thu hộ trước khi thu ngân xác nhận nhận tiền.");
+                }
+
+                if (existing.Amount != bill.TotalAmount || existing.ChangeAmount != received - bill.TotalAmount
+                    || existing.CashHandover.CollectedAt > paidAt)
+                {
+                    throw new BillingException(409, "Số tiền hoặc thời điểm thu hộ không khớp hóa đơn. Chưa ghi nhận thanh toán.");
+                }
+
+                var payment = await payments.GetForCashConfirmationAsync(existing.PaymentId, ct)
+                    ?? throw new BillingException(404, "Không tìm thấy khoản thu hộ.");
+                payment.Bill = bill;
+                payment.CashShift = shift;
+                payment.Status = PaymentStatuses.Paid;
+                payment.PaidAt = paidAt;
+                payment.ConfirmedByRef = verified.UserId;
+                payment.VerificationSource = PaymentStatuses.CashierVerification;
+                payment.CashHandover.Status = CashHandoverStatuses.Confirmed;
+                payment.CashHandover.CashierUserRef = verified.UserId;
+                payment.CashHandover.ConfirmedAt = paidAt;
+                payment.CashHandover.ConfirmedAmount = received;
                 if (await movements.PaymentHasMovementAsync(payment.PaymentId, ct))
                 {
                     throw new BillingException(409, "Thanh toán này đã được ghi nhận biến động tiền mặt.");
                 }
 
-                await payments.AddAsync(payment);
                 await movements.AddAsync(new CashMovement
                 {
                     CashMovementId = Guid.NewGuid(),

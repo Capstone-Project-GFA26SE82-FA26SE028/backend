@@ -122,7 +122,7 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
     {
         var source = new BillServiceTests.BillSource();
         var actor = CashActor(source);
-        var prepared = await PrepareCash(source, actor);
+        var prepared = await PrepareCash(source, actor, true);
         await using var paying = Context();
         await using var posting = Context();
         var payment = CashPaymentServiceTests.Fixture.MakeService(paying, actor, Service(paying, source, actor), new CashPaymentServiceTests.CheckoutSource());
@@ -140,7 +140,7 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
             }
         }
 
-        var pay = payment.PayCash(prepared.BillId, Guid.NewGuid().ToString(), prepared.Body, default);
+        var pay = payment.PayCash(prepared.BillId, prepared.Body.CheckoutId.ToString(), prepared.Body, default);
         var withdrawal = Withdraw();
         await Task.WhenAll(pay, withdrawal);
         Assert.True(pay.Result.Created);
@@ -193,7 +193,7 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
     {
         var source = new BillServiceTests.BillSource();
         var actor = CashActor(source);
-        var prepared = await PrepareCash(source, actor);
+        var prepared = await PrepareCash(source, actor, includeSale);
         const decimal opening = 9999999999999767m;
         await using (var setup = Context())
         {
@@ -212,7 +212,7 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
                 {
                     await CashPaymentServiceTests.Fixture.MakeService(db, actor, Service(db, source, actor),
                         new CashPaymentServiceTests.CheckoutSource()).PayCash(prepared.BillId,
-                        Guid.NewGuid().ToString(), prepared.Body, default);
+                        prepared.Body.CheckoutId.ToString(), prepared.Body, default);
                 }
                 else
                 {
@@ -236,7 +236,11 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
         Assert.Equal(232m, movement.SignedAmount);
         Assert.Equal(9999999999999999m, opening + movement.SignedAmount);
         var paid = movement.Type == "Sale";
-        Assert.Equal(paid ? 1 : 0, await check.Payments.CountAsync());
+        Assert.Equal(includeSale ? 1 : 0, await check.Payments.CountAsync());
+        if (includeSale)
+        {
+            Assert.Equal(paid ? "Paid" : "PendingHandover", (await check.Payments.SingleAsync()).Status);
+        }
         Assert.Equal(paid ? "Paid" : "Unpaid", (await check.Bills.SingleAsync()).Status);
         Assert.Equal(paid ? "Paid" : "Ready", (await check.BillCheckouts.SingleAsync()).Status);
     }
@@ -246,7 +250,7 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
     {
         var source = new BillServiceTests.BillSource();
         var actor = CashActor(source);
-        var prepared = await PrepareCash(source, actor);
+        var prepared = await PrepareCash(source, actor, true);
         await using (var setup = Context())
         {
             var shift = await setup.CashShifts.SingleAsync();
@@ -258,10 +262,10 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
         var service = CashPaymentServiceTests.Fixture.MakeService(paying, actor, Service(paying, source, actor),
             new CashPaymentServiceTests.CheckoutSource());
         var error = await Assert.ThrowsAsync<BillingException>(() => service.PayCash(prepared.BillId,
-            Guid.NewGuid().ToString(), prepared.Body, default));
+            prepared.Body.CheckoutId.ToString(), prepared.Body, default));
         Assert.Equal(409, error.StatusCode);
         await using var check = Context();
-        Assert.Empty(await check.Payments.ToListAsync());
+        Assert.Equal("PendingHandover", (await check.Payments.SingleAsync()).Status);
         Assert.Empty(await check.CashMovements.ToListAsync());
         Assert.Equal("Unpaid", (await check.Bills.SingleAsync()).Status);
         Assert.Equal("Ready", (await check.BillCheckouts.SingleAsync()).Status);
@@ -315,7 +319,7 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
         };
     }
 
-    private async Task<(Guid BillId, CreateCashPaymentDTO Body)> PrepareCash(BillServiceTests.BillSource source, ShiftIdentity actor)
+    private async Task<(Guid BillId, CreateCashPaymentDTO Body)> PrepareCash(BillServiceTests.BillSource source, ShiftIdentity actor, bool withHandover = false)
     {
         await using var db = Context();
         var bill = await Service(db, source, actor).Create(source.Value.TableSessionId, default);
@@ -354,6 +358,11 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
             SourceHash = bill.Items[0].Item.SourceFingerprint,
             CreatedAt = DateTime.UtcNow
         });
+        if (withHandover)
+        {
+            CashPaymentServiceTests.Fixture.SeedPending(db, bill.BillId, shiftId, checkoutId, bill.TotalAmount);
+        }
+
         await db.SaveChangesAsync();
         return (bill.BillId, new CreateCashPaymentDTO
         {

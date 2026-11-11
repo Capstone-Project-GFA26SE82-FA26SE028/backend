@@ -20,6 +20,7 @@ public static class PersistenceExtensions
             options.UseSqlServer(connectionString);
         });
         services.AddScoped<IUnitOfWork, UnitOfWork<BillingDbContext>>();
+        services.AddScoped<ICashHandoverRepository, CashHandoverRepository>();
         services.AddScoped<IShiftReportRepository, ShiftReportRepository>();
         services.AddScoped<ICashRegisterRepository, CashRegisterRepository>();
         services.AddScoped<IBillRepository, BillRepository>();

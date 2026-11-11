@@ -530,3 +530,44 @@ Chỉ Cashier sở hữu ca đang mở tại quầy nhận được xem inbox v�
 
 - Kiểm tra cuối: `dotnet test Backend.sln --no-restore -m:1 --verbosity quiet` đạt **955 test, 80 test điều kiện bị bỏ qua, 0 lỗi**, đủ chín test assembly. Trong lượt Billing SQL riêng, cả 374 test đã chạy đạt, không bỏ qua. 36 test Restaurant SQL và một test model AI không chạy trong lượt solution; không tính là đã đạt. `dotnet build Backend.sln --no-restore -c Release -m:1 --verbosity quiet` đạt, 0 lỗi và 10 cảnh báo nullable có sẵn ở Identity.Common/Shared.Persistence. Build image Billing/Gateway/db-init đạt; bash -n trên initializer đạt (không chạy toàn bộ initializer vào database các service khác).
 - Đã đọc lại diff, kiểm tra `git diff --check`, xác nhận FK mới trusted/enabled và đọc lại trực tiếp SQL của fixture. Đã dọn đúng database/container/người dùng/nhà hàng/đơn thử do đợt này tạo. Gateway dev hiện phục vụ Swagger 200 tại cổng 15000 từ image mới. Không push.
+
+
+## 2026-11-11 — Đợt 3, Waiter thu hộ tiền mặt và Cashier xác nhận nhận tiền
+
+### Các thay đổi cần cập nhật trên SQL/ERD
+
+**Không có thay đổi schema.** Không thêm/sửa/xóa bảng, cột, kiểu dữ liệu, NULL/DEFAULT, PK/FK/UNIQUE/CHECK hoặc index. Không cần upgrade hoặc scaffold. Không chạy script thay đổi cấu trúc database trong đợt này. Không đồng bộ lại SQL riêng trong Downloads vì cấu trúc không đổi.
+
+Các bảng/cột sau đều đã có trước đợt này:
+
+| Bảng có sẵn | Cột được sử dụng | Cách lưu dữ liệu |
+| --- | --- | --- |
+| BillingDb.Payment | PaymentId, BillId, CashShiftId, MethodCode, Amount, CashReceived, ChangeAmount, IdempotencyKey, Status | Waiter tạo một Payment PendingHandover, Amount bằng tổng bill, CashReceived bằng toàn bộ tiền khách đưa; backend tính ChangeAmount. Ca lấy từ quầy nhận có duy nhất ca Active. PaidAt/ConfirmedByRef/VerificationSource giữ NULL lúc thu hộ. |
+| BillingDb.CashHandover | PaymentId, WaiterUserRef, CollectedAt, Status | Ghi nhân viên phục vụ từ phiên đăng nhập đã xác minh và đối chiếu người phụ trách ServiceRequest; CollectedAt là UTC SQL datetime. Ban đầu Pending. |
+| BillingDb.CashHandover | CashierUserRef, ConfirmedAt, ConfirmedAmount, Status | Cashier sở hữu ca xác nhận toàn bộ tiền khách giao bằng đúng CashReceived; lưu người nhận, UTC và số tiền gộp, chuyển Confirmed. Không lấy số tiền hóa đơn làm ConfirmedAmount. |
+| BillingDb.Payment/Bill/BillCheckout | Các cột Status, PaidAt/ConfirmedByRef/VerificationSource hiện có | Chỉ chuyển Paid cùng transaction xác nhận nhận tiền. Không tạo Payment lần hai. |
+| BillingDb.CashMovement | PaymentId, CashShiftId, Type, SignedAmount, PostedAt, Reason, IdempotencyKey | Một Sale bằng tiền hóa đơn, không ghi thêm CashIn cho tiền khách đưa hoặc CashOut cho tiền thừa. |
+
+Dây ERD giữ nguyên: Bill 1–n Payment; CashShift 1–n Payment; PaymentMethod 1–n Payment; Payment 1–0..1 CashHandover (PaymentId vừa PK vừa FK nội bộ); Payment 1–n CashMovement theo schema hiện có. Nghiệp vụ thu tiền này chỉ tạo một Sale cho mỗi Payment. WaiterUserRef/CashierUserRef/ConfirmedByRef vẫn là tham chiếu logic Identity, không FK xuyên database.
+
+### Code và API
+
+- Thêm CashHandoverRepository, CashHandoverService, CashHandoverGrpcService, CashHandoverController và DTO/contract/DI tương ứng. BLL kiểm tra nghiệp vụ; DAL chỉ truy vấn/thêm dữ liệu. Không sửa frontend hoặc nghiệp vụ service khác.
+- Waiter phụ trách gọi POST `/api/bills/{billId}/cash-handovers`, có Idempotency-Key UUID và body checkoutId/cashReceived. 201 khi tạo, 200 khi lặp đúng dữ liệu. Các trường người thực hiện, ca, số tiền bill, tiền thừa và Paid không do client quyết định.
+- Cashier sở hữu ca đang mở ở quầy nhận gọi GET `/api/cash-registers/{cashRegisterId}/cash-handovers` để xem khoản chờ, POST `/api/cash-handovers/{paymentId}/confirm` với confirmedAmount để xác nhận. GET `/api/cash-handovers/{paymentId}` cho Waiter phụ trách và phạm vi đọc Admin/Manager/Cashier hiện có. Không cấp Waiter quyền xem bill/receipt tổng quát.
+- Xác nhận dùng PaymentService và khóa key → phiên → quầy → ca, đọc lại trạng thái và nguồn Ordering. Hash bill phải khớp tập món đã chốt. Waiter không gọi RPC Bind dành cho Cashier; khi thu hộ chỉ kiểm tra bill Ready đã Presented và hash/source hiện hành. Confirm gọi Bind bằng quyền Cashier. Không mở rộng quyền Ordering.
+- Payment PendingHandover chặn giao dịch thanh toán mới, hủy checkout và đóng ca. Sai số tiền hoặc lỗi xác nhận giữ khoản đã thu ở trạng thái chờ; không xóa tiền đã nhận, không tự hoàn tiền/mở lại gọi món. Khi xác nhận đã hoàn tất, retry trả cùng biên lai và mốc thời gian, kể cả ca đóng/phương thức đã tắt; không ghi Sale lần hai.
+- API PayCash cũ không tạo thanh toán mới khi thiếu bản ghi thu hộ. Nó chỉ xác nhận khoản chờ khớp đúng key/payload hoặc replay biên lai Paid cũ. Biên lai cũ không có CashHandover vẫn đọc/replay được.
+- Đối soát ca chấp nhận CashHandover Confirmed có Cashier/thời điểm/gross amount khớp Payment; Pending hoặc dữ liệu lệch vẫn chặn đóng ca. Giữ giới hạn quỹ decimal(18,2), tiền VND nguyên và tính Sale theo tổng hóa đơn.
+
+### Kiểm chứng và giới hạn
+
+- `dotnet test Backend.sln --no-restore -m:1 --verbosity quiet`: 969 đạt, 80 bỏ qua có điều kiện, 0 lỗi, đủ chín assembly. Không coi skip là đạt.
+- Chạy lại Billing.Tests với BILLING_SQL_TEST_CONNECTION trên SQL Server Docker: **388 đạt, 0 bỏ qua, 0 lỗi**. Test BLL/SQL dùng upstream/Identity/provider giả lập và dữ liệu riêng; test Gateway tự động dùng gRPC giả lập. Có kiểm tra rollback giữ Pending, thiếu/thừa tiền bàn giao, quyền/nhà hàng/chủ ca, key trùng/đổi payload, legacy Paid replay, sát giới hạn quỹ, hai xác nhận và đóng ca đồng thời.
+- Release build toàn solution đạt, 0 lỗi, 10 cảnh báo nullable có sẵn tại Identity.Common/Shared.Persistence. Image Billing/Gateway build đạt.
+- Gateway Docker với Identity, Restaurant, Catalog, Ordering, Billing và SQL Server thật: từ khách QR gửi đơn → Waiter kiểm tra/chuyển quầy → Cashier chuẩn bị → Waiter đưa bill → thu hộ → Cashier xác nhận đạt. Bill 23.100 VND, tender/ConfirmedAmount 100.000 VND, change 76.900 VND, một Sale 23.100 VND. Quỹ đầu 100.000 VND nên ExpectedCash sau xác nhận 123.100 VND. Đã đọc trực tiếp SQL: đúng một Payment, một CashHandover và một Sale; checkout Paid chưa Released, TableSession vẫn Open chưa ClosedAt.
+- Hai request thu hộ khác key cho 201/409; hai request Confirm cùng PaymentId cho 200/200 với cùng ConfirmedAt. Sai Waiter, sai Cashier, số tiền thực nhận lệch, thu thẳng bỏ qua Waiter, hủy checkout và đóng ca khi còn tiền chờ đều bị chặn. Lượt fixture đầu thiếu seed Cash nên bị 409 có kiểm soát; đã bổ sung Cash chỉ trong database thử rồi chạy lại thành công, không tự bật phương thức của database chính.
+- Dùng BillingDb thử riêng có VAT 10%, phí 5%; không sửa chính sách hoặc seed database đang dùng. Đã dọn đúng người dùng/nhà hàng/đơn và database/container thử do đợt này tạo. Bằng chứng chạy nằm ngoài repository.
+- Chưa hỗ trợ hủy/điều chỉnh/refund khoản Waiter đã thu, chưa có timestamp riêng xác nhận Waiter trả tiền thừa (schema không biểu diễn), chưa làm quyền Waiter lấy QR PayOS hoặc xác nhận khách rời bàn/dọn bàn. Không kiểm thử UI/frontend hoặc PayOS/ngân hàng thật trong đợt tiền mặt này. Thanh toán không tự đóng phiên, vô hiệu QR hoặc giải phóng bàn.
+
+- Giới hạn môi trường cuối lượt: hệ thống kiểm duyệt tự động từ chối lệnh gộp khởi động lại hai container chính Billing/Gateway và dọn SQL forwarding helper, chỉ trả "blocked by policy". Lệnh đó không thực thi. Vì vậy backend-billing-1/backend-gateway-1 vẫn chạy image đợt trước; kết quả Gateway đợt 3 là trên hai container kiểm thử từ image mới đã xác minh image ID, sau đó đã dọn. Container helper billing-phase3-sql-forward còn chạy; đây chỉ là cổng chuyển tiếp SQL dùng cho test, không chứa database riêng. Chưa tuyên bố môi trường chính đã nạp bản đợt 3. Không push.

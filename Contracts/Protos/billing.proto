@@ -373,3 +373,49 @@ message PayOsPaymentInfo {
   bool requires_review = 17;
   bool link_details_available = 18;
 }
+
+service CashHandoverGrpc {
+  rpc Create(CreateCashHandoverRequest) returns (CashHandoverReply);
+  rpc GetById(PaymentIdRequest) returns (CashHandoverInfo);
+  rpc GetAll(CashHandoverListRequest) returns (CashHandoverPage);
+  rpc Confirm(ConfirmCashHandoverRequest) returns (CashHandoverInfo);
+}
+message CreateCashHandoverRequest {
+  string bill_id = 1;
+  string checkout_id = 2;
+  optional string cash_received = 3;
+  string idempotency_key = 4;
+}
+message ConfirmCashHandoverRequest {
+  string payment_id = 1;
+  optional string confirmed_amount = 2;
+}
+message CashHandoverListRequest {
+  string cash_register_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+message CashHandoverInfo {
+  string payment_id = 1;
+  string bill_id = 2;
+  string restaurant_id = 3;
+  string cash_register_id = 4;
+  string cash_shift_id = 5;
+  string waiter_user_ref = 6;
+  optional string cashier_user_ref = 7;
+  string amount = 8;
+  string cash_received = 9;
+  string change_amount = 10;
+  optional string confirmed_amount = 11;
+  string status = 12;
+  string payment_status = 13;
+  string collected_at = 14;
+  optional string confirmed_at = 15;
+}
+message CashHandoverReply { CashHandoverInfo handover = 1; bool created = 2; }
+message CashHandoverPage {
+  repeated CashHandoverInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}

@@ -78,12 +78,12 @@ public sealed class CashPaymentSqlServerTests : IAsyncLifetime
         var prepared = await PrepareCash(source, actor);
         await using var first = Context();
         await using var second = Context();
-        async Task<int> Pay(BillingDbContext db)
+        async Task<int> Pay(BillingDbContext db, string key)
         {
             try
             {
                 var service = CashPaymentServiceTests.Fixture.MakeService(db, actor, Service(db, source, actor), new CashPaymentServiceTests.CheckoutSource());
-                await service.PayCash(prepared.BillId, Guid.NewGuid().ToString(), prepared.Body, default);
+                await service.PayCash(prepared.BillId, key, prepared.Body, default);
                 return 201;
             }
             catch (BillingException error)
@@ -92,7 +92,7 @@ public sealed class CashPaymentSqlServerTests : IAsyncLifetime
             }
         }
 
-        var results = await Task.WhenAll(Pay(first), Pay(second));
+        var results = await Task.WhenAll(Pay(first, prepared.Body.CheckoutId.ToString()), Pay(second, Guid.NewGuid().ToString()));
         Assert.Equal(new[] { 201, 409 }, results.Order().ToArray());
         await using var check = Context();
         Assert.Single(await check.Payments.ToListAsync());
@@ -107,7 +107,7 @@ public sealed class CashPaymentSqlServerTests : IAsyncLifetime
         var source = new BillServiceTests.BillSource();
         var actor = CashActor(source);
         var prepared = await PrepareCash(source, actor);
-        var key = Guid.NewGuid().ToString();
+        var key = prepared.Body.CheckoutId.ToString();
         await using var first = Context();
         await using var second = Context();
         var results = await Task.WhenAll(
@@ -151,7 +151,7 @@ public sealed class CashPaymentSqlServerTests : IAsyncLifetime
             }
         }
 
-        var results = await Task.WhenAll(Result(() => payment.PayCash(prepared.BillId, Guid.NewGuid().ToString(), prepared.Body, default), 201),
+        var results = await Task.WhenAll(Result(() => payment.PayCash(prepared.BillId, prepared.Body.CheckoutId.ToString(), prepared.Body, default), 201),
             Result(() => checkout.Cancel(source.Value.TableSessionId, prepared.Body.CheckoutId, default), 200));
         Assert.Contains(409, results);
         Assert.Single(results, status => status is 200 or 201);
@@ -169,7 +169,7 @@ public sealed class CashPaymentSqlServerTests : IAsyncLifetime
         var source = new BillServiceTests.BillSource();
         var actor = CashActor(source);
         var prepared = await PrepareCash(source, actor);
-        var key = Guid.NewGuid().ToString();
+        var key = prepared.Body.CheckoutId.ToString();
         await Execute(_connection, "CREATE TRIGGER dbo.CashTestFailure ON dbo.CashMovement AFTER INSERT AS BEGIN THROW 51000, 'Test ledger failure', 1; END;");
         await using (var failing = Context())
         {
@@ -179,7 +179,7 @@ public sealed class CashPaymentSqlServerTests : IAsyncLifetime
 
         await using (var check = Context())
         {
-            Assert.Empty(await check.Payments.ToListAsync());
+            Assert.Equal("PendingHandover", (await check.Payments.SingleAsync()).Status);
             Assert.Empty(await check.CashMovements.ToListAsync());
             Assert.Equal("Unpaid", (await check.Bills.SingleAsync()).Status);
             Assert.Equal("Ready", (await check.BillCheckouts.SingleAsync()).Status);
@@ -256,6 +256,7 @@ public sealed class CashPaymentSqlServerTests : IAsyncLifetime
             SourceHash = bill.Items[0].Item.SourceFingerprint,
             CreatedAt = DateTime.UtcNow
         });
+        CashPaymentServiceTests.Fixture.SeedPending(db, bill.BillId, shiftId, checkoutId, bill.TotalAmount);
         await db.SaveChangesAsync();
         return (bill.BillId, new CreateCashPaymentDTO
         {

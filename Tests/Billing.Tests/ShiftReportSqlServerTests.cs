@@ -153,15 +153,18 @@ public sealed class ShiftReportSqlServerTests : IAsyncLifetime
     {
         var source = new BillServiceTests.BillSource();
         var actor = CashActor(source);
-        var p = await PrepareCash(source, actor);
+        var p = await PrepareCash(source, actor, true);
         await using var closing = Context();
         await using var paying = Context();
-        async Task<int> Pay()
+        var closeTask = Close();
+        var payTask = CashPaymentServiceTests.Fixture.MakeService(paying, actor, Service(paying, source, actor),
+            new CashPaymentServiceTests.CheckoutSource()).PayCash(p.BillId, p.Body.CheckoutId.ToString(), p.Body, default);
+        async Task<int> Close()
         {
             try
             {
-                await CashPaymentServiceTests.Fixture.MakeService(paying, actor, Service(paying, source, actor),
-                    new CashPaymentServiceTests.CheckoutSource()).PayCash(p.BillId, Guid.NewGuid().ToString(), p.Body, default);
+                await ShiftReportServiceTests.Make(closing, actor).Close(p.Body.CashShiftId,
+                    ShiftReportServiceTests.Body(1232, 0, "End count"), default);
                 return 201;
             }
             catch (BillingException error)
@@ -170,16 +173,19 @@ public sealed class ShiftReportSqlServerTests : IAsyncLifetime
             }
         }
 
-        var close = ShiftReportServiceTests.Make(closing, actor).Close(p.Body.CashShiftId,
-            ShiftReportServiceTests.Body(1000, 0, "End count"), default);
-        var pay = Pay();
-        await Task.WhenAll(close, pay);
-        Assert.Contains(pay.Result, new[] { 201, 409 });
-        Assert.Equal(pay.Result == 201 ? 1232 : 1000, close.Result.Report.ExpectedCash);
+        await Task.WhenAll(closeTask, payTask);
+        Assert.True(payTask.Result.Created);
+        Assert.Contains(closeTask.Result, new[] { 201, 409 });
         await using var check = Context();
-        Assert.Equal(pay.Result == 201 ? 1 : 0, await check.Payments.CountAsync());
-        Assert.Equal(pay.Result == 201 ? 1 : 0, await check.CashMovements.CountAsync());
-        Assert.Single(await check.ShiftReports.ToListAsync());
+        if (closeTask.Result == 409)
+        {
+            await ShiftReportServiceTests.Make(check, actor).Close(p.Body.CashShiftId,
+                ShiftReportServiceTests.Body(1232, 0), default);
+        }
+
+        Assert.Equal("Paid", (await check.Payments.SingleAsync()).Status);
+        Assert.Single(await check.CashMovements.ToListAsync());
+        Assert.Equal(1232, (await check.ShiftReports.SingleAsync()).ExpectedCash);
     }
 
     [BillingSqlServerFact]
@@ -221,7 +227,7 @@ public sealed class ShiftReportSqlServerTests : IAsyncLifetime
         };
     }
 
-    private async Task<(Guid BillId, CreateCashPaymentDTO Body)> PrepareCash(BillServiceTests.BillSource source, ShiftIdentity actor)
+    private async Task<(Guid BillId, CreateCashPaymentDTO Body)> PrepareCash(BillServiceTests.BillSource source, ShiftIdentity actor, bool withHandover = false)
     {
         await using var db = Context();
         var bill = await Service(db, source, actor).Create(source.Value.TableSessionId, default);
@@ -255,6 +261,17 @@ public sealed class ShiftReportSqlServerTests : IAsyncLifetime
             SourceHash = bill.Items[0].Item.SourceFingerprint,
             CreatedAt = DateTime.UtcNow
         });
+        if (withHandover)
+        {
+            var checkout = db.BillCheckouts.Local.Single();
+            checkout.CashRegisterId = db.CashShifts.Local.Single().CashRegister.CashRegisterId;
+            checkout.SubmittedAt = DateTime.UtcNow;
+            checkout.PreparedByRef = actor.Scope.UserId;
+            checkout.PreparedAt = DateTime.UtcNow;
+            checkout.PresentedAt = DateTime.UtcNow;
+            CashPaymentServiceTests.Fixture.SeedPending(db, bill.BillId, shiftId, checkoutId, bill.TotalAmount);
+        }
+
         await db.SaveChangesAsync();
         return (bill.BillId, new CreateCashPaymentDTO
         {

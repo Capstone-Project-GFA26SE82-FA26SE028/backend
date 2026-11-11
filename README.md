@@ -209,7 +209,7 @@ After the assigned Waiter acknowledges and reviews the Payment ServiceRequest:
 - Responsible Waiter submits: `POST /api/table-sessions/{sessionId}/checkout/{checkoutId}/submit` with `{ "cashRegisterId": "<register UUID>" }`. Same target is idempotent; another target returns 409. Registers must belong to the session's restaurant and have exactly one unclosed Active shift.
 - Owning Cashier reads `GET /api/cash-registers/{cashRegisterId}/checkouts?page=1&pageSize=20`, then calls the existing `/synchronize`. Ready records PreparedByRef/PreparedAt; no money is collected.
 - Responsible Waiter reads `GET /api/table-sessions/{sessionId}/checkout/{checkoutId}/prebill`, gives the bill to the customer, then calls `POST /api/table-sessions/{sessionId}/checkout/{checkoutId}/present` without a body. PresentedAt is stored once. Other Waiters cannot read/present it; general bill readers retain existing permissions.
-- New cash/PayOS collection requires the receiving register and presentation milestone. Existing payment replay and PayOS settlement recovery remain available. Cash handover through Waiter and customer-departure/cleaning are subsequent increments, not implemented by these routing endpoints.
+- New cash/PayOS collection requires the receiving register and presentation milestone. Existing payment replay and PayOS settlement recovery remain available. Cash handover through Waiter uses the Cash payment endpoints below. Customer departure/cleaning remains a subsequent increment.
 
 Checkout prepares the bill before collection. Cash collection is described below. Neither operation closes the table session, revokes guest access or marks the table for cleaning.
 
@@ -254,32 +254,46 @@ docker compose up -d --no-deps billing gateway
 
 For SQL Server outside Docker, run `docker/sql/upgrades/BillingCashMethod.sql` against BillingDb using the team's connection. This is **data only**: it inserts `Cash`/enabled if missing and preserves an existing disabled method. New databases also use `docker/sql/seed/BillingDb.sql`. No tables, columns, constraints or ERD relationships are added in this increment. Billing local/Docker configuration contains `CashPayment:MethodCode = Cash`.
 
-After synchronizing checkout to Ready, the Cashier sends:
+Cash collection now uses the existing **CashHandover** table. No schema changes are required for this workflow. After the responsible Waiter has presented the Ready bill:
+
+1. Waiter records all cash handed over by the customer, using a new UUID `Idempotency-Key` and the Waiter's normal Bearer token:
 
 ```http
-POST /api/bills/{billId}/payments/cash
-Authorization: Bearer <cashier-access-token>
-Idempotency-Key: <new-UUID-for-this-payment>
-Content-Type: application/json
+POST /api/bills/{billId}/cash-handovers
+Idempotency-Key: <UUID-reused-on-retry>
 ```
 
 ```json
 {
   "checkoutId": "<Ready-checkout-UUID>",
-  "cashShiftId": "<your-Active-shift-UUID>",
   "cashReceived": 200000
 }
 ```
 
-Use the returned IDs rather than literal placeholder strings. The backend reads the bill total; the request cannot supply total, change, cashier identity or payment status. Cash received must be whole VND and cover a positive whole-VND bill. Zero-total bills and partial/mixed payments are not supported in this increment.
+The response is 201 for creation or 200 for the exact replay. Save PaymentId. Payment remains `PendingHandover`, CashHandover remains `Pending`, Bill stays `Unpaid`, and no Sale is recorded. Backend selects the receiving register's unique active shift; the client cannot select the employee, shift, bill amount or paid status. Insufficient/fractional VND is rejected without rounding.
 
-A new receipt returns 201 with Location `/api/payments/{paymentId}`. Read it through GET on that route. Response includes server amount, tender, change, cashier, UTC paid time and the Sale movement ID. For example, total 177871 and tender 200000 yield change 22129. Exactly one Sale movement records **177871**, not 200000; no second change movement is written.
+2. Cashier reads pending handovers for their register with `GET /api/cash-registers/{cashRegisterId}/cash-handovers?page=1&pageSize=20`.
+3. Waiter brings **all customer tender** to Cashier. After physically receiving it, the owning Cashier confirms:
 
-Reuse the **same payment UUID and exact payload** after timeout/retry; successful replay returns 200 with the original receipt, even if that shift has since closed or Cash has been disabled. Current employee session/branch access is still required. Changed payload with the same UUID, a second payment key on a Paid bill, insufficient cash, pending/stale checkout, or another Cashier's shift are rejected. After an unknown outcome, read/retry the existing payment; do not start a new payment or cancel checkout based only on a client timeout.
+```http
+POST /api/cash-handovers/{paymentId}/confirm
+```
 
-Payment, Sale, Bill Paid/PaidAt and BillCheckout Paid are committed together. Checkout remains unreleased; Ordering remains frozen. Guest QR access and the open TableSession are preserved, and previously confirmed cooking/serving can continue. Neither checkout retries nor synchronization may revert Paid or reopen ordering. This is cash collection and a JSON receipt, not PayOS, printing, refunds, shift closing, outside-sales cash movements or table departure/cleaning.
+```json
+{
+  "confirmedAmount": 200000
+}
+```
 
-Verification distinguishes service tests with fake upstream clients, SQL Server locking/rollback tests, and Gateway tests using real services against isolated seeded test databases. See the database change log for the current increment's evidence and limits. Conditional skipped tests are not counted as verified SQL integration.
+ConfirmedAmount is the gross tender, not the bill total, and must equal the saved CashReceived. A discrepancy is rejected and remains pending for staff investigation. Confirmation updates Payment/Bill/checkout to Paid, CashHandover to Confirmed with receiving Cashier/time/gross amount, and posts exactly one net Sale equal to the bill amount in the same transaction. For a bill of 177871 and tender 200000, ChangeAmount is 22129 and Sale is 177871. No additional change movement is written. Cashier gives the change to Waiter to return to the customer; the schema does not record a separate change-return acknowledgement.
+
+4. Responsible Waiter reads `GET /api/cash-handovers/{paymentId}` to see confirmation/change. Admin/Manager/Cashier retain restaurant-scoped read rights; another Waiter cannot read it. The existing `GET /api/payments/{paymentId}` remains the authorized final cash receipt.
+
+Retry creation with the same key/payload and retry confirmation by the same PaymentId. Pending cash blocks another payment, checkout cancellation and shift closing. A write/Ordering failure must not mark the bill Paid or erase collected cash. Completed confirmation replays after shift close or method disable without a second Sale. No automatic expiry/unlock/refund or adjustment of already collected cash is implemented.
+
+The legacy `POST /api/bills/{billId}/payments/cash` no longer creates an immediate payment without a Waiter collection. It can confirm an existing matching pending handover using its original key, or replay a legacy completed receipt. New integrations should use the handover routes above.
+
+Checkout remains unreleased and Ordering frozen after payment. Payment does not close TableSession, revoke QR, stop cooking/serving or mark tables for cleaning. Departure and cleaning are later staff workflows.
 
 
 ## Outside-bill cash movements
@@ -369,7 +383,7 @@ New close returns 201 with Location `/api/shift-reports/{id}`; repeating identic
 
 Closing locks the register/shift using the same locks as cash Payment and outside-bill movements. Writes committed before close are included; new writes after close are rejected. Report creation and CashShift Closed/ClosedAt commit together. CashHandleOver is stored on the report only: it does not create another CashOut or alter the expected-cash calculation. It is not a recipient-confirmed handover workflow.
 
-Closing accepts the implemented Cash/Paid/Cashier flow with exactly one matching Sale, and the verified PayOS flow described below. Unknown/non-Paid states, unsupported methods/provider flows, refunds, Waiter CashHandover, duplicate outstanding/settled bill payments, duplicate ledger keys, orphan/mismatched sales and inconsistent movements block close with identifiable records. A provider-confirmed zero-money terminal PayOS attempt does not count as an outstanding/settled payment. In particular, no handover status is guessed to mean completed when that workflow has no implemented contract. Resolve those records through their supported workflow; this API never silently marks them Paid, failed, expired or cancelled. Preview has the full blocker list; Close returns 409 with a short summary.
+Closing accepts the implemented Cash/Paid/Cashier flow with exactly one matching Sale, and the verified PayOS flow described below. Unknown/non-Paid states, unsupported methods/provider flows, refunds, incomplete/inconsistent Waiter CashHandover, duplicate outstanding/settled bill payments, duplicate ledger keys, orphan/mismatched sales and inconsistent movements block close with identifiable records. A provider-confirmed zero-money terminal PayOS attempt does not count as an outstanding/settled payment. A cash handover must be Confirmed and match the receiving Cashier, gross tender and paid time before closing. Resolve those records through their supported workflow; this API never silently marks them Paid, failed, expired or cancelled. Preview has the full blocker list; Close returns 409 with a short summary.
 
 Unpaid bills/checkout attempts have no CashShift binding and are not assigned to a shift by assumption. They do not prevent closing an otherwise valid cash shift, and remain unchanged/frozen as applicable. Payment success and shift close do not close the table session, invalidate QR, reopen ordering, mark cleaning or log out Identity. Existing Open shift remains the explicit way to begin a subsequent shift; RemainingCash is not silently copied into its OpeningCash.
 

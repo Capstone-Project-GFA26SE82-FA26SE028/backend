@@ -49,7 +49,8 @@ public sealed class BillingBalanceSafetyTests
         }
 
         fixture.Db.ChangeTracker.Clear();
-        Assert.Equal(allowed ? 1 : 0, await fixture.Db.Payments.CountAsync());
+        Assert.Single(await fixture.Db.Payments.ToListAsync());
+        Assert.Equal(allowed ? "Paid" : "PendingHandover", (await fixture.Db.Payments.SingleAsync()).Status);
         Assert.Equal(allowed ? 1 : 0, await fixture.Db.CashMovements.CountAsync());
         Assert.Equal(allowed ? "Paid" : "Unpaid", (await fixture.Db.Bills.SingleAsync()).Status);
         Assert.Equal(allowed ? "Paid" : "Ready", (await fixture.Db.BillCheckouts.SingleAsync()).Status);

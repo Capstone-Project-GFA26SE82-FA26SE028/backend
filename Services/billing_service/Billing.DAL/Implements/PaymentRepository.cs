@@ -181,6 +181,11 @@ public sealed class PaymentRepository(BillingDbContext db)
         return (int)result.Value >= 0;
     }
 
+    public Task<Payment?> GetForCashConfirmationAsync(Guid id, CancellationToken ct)
+    {
+        return _context.Payments.Include(value => value.CashHandover).SingleOrDefaultAsync(value => value.PaymentId == id, ct);
+    }
+
     private IQueryable<Payment> Details()
     {
         return _context.Payments.AsNoTracking().Include(payment => payment.Bill)

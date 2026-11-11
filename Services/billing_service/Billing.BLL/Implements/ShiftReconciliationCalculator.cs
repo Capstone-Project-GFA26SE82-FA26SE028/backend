@@ -71,9 +71,14 @@ internal static class ShiftReconciliationCalculator
                 Add(result, "UnsupportedPaymentFlow", "Khoản thanh toán này nằm ngoài quy trình thu ngân thanh toán bằng tiền mặt được hỗ trợ.", payment.PaymentId);
             }
 
-            if (payment.CashHandover is not null)
+            if (payment.CashHandover is { } handover
+                && (handover.Status != CashHandoverStatuses.Confirmed || handover.WaiterUserRef == Guid.Empty
+                    || handover.PaymentId != payment.PaymentId || handover.CashierUserRef != payment.ConfirmedByRef
+                    || handover.CashierUserRef != shift.CashierUserRef || handover.ConfirmedAt != payment.PaidAt
+                    || handover.ConfirmedAt is null || handover.CollectedAt > handover.ConfirmedAt
+                    || handover.ConfirmedAmount != payment.CashReceived))
             {
-                Add(result, "UnsupportedCashHandover", "Phải kiểm tra bàn giao tiền mặt của nhân viên phục vụ theo quy trình riêng được hỗ trợ trước khi đóng ca.", payment.PaymentId);
+                Add(result, "UnsupportedCashHandover", "Bàn giao tiền mặt chưa hoàn tất hoặc không khớp người nhận, thời điểm và toàn bộ tiền khách đưa.", payment.PaymentId);
             }
 
             if (payment.Amount <= 0 || decimal.Truncate(payment.Amount) != payment.Amount

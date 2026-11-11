@@ -214,12 +214,13 @@ public sealed class CashPaymentServiceTests
     }
 
     [Fact]
-    public async Task OrderingFailureRollsBackPaymentMovementBillAndCheckout()
+    public async Task OrderingFailurePreservesCollectedCashWithoutPaidBillAndRetryCanConfirm()
     {
         await using var fixture = await Fixture.Create();
         fixture.Remote.Failure = new BillingException(503, "Ordering unavailable.");
         await Status(503, () => fixture.Pay(300));
-        Assert.Empty(await fixture.Db.Payments.ToListAsync());
+        Assert.Equal("PendingHandover", (await fixture.Db.Payments.SingleAsync()).Status);
+        Assert.Equal("Pending", (await fixture.Db.CashHandovers.SingleAsync()).Status);
         Assert.Empty(await fixture.Db.CashMovements.ToListAsync());
         Assert.Equal("Unpaid", (await fixture.Db.Bills.AsNoTracking().SingleAsync()).Status);
         Assert.Equal("Ready", (await fixture.Db.BillCheckouts.AsNoTracking().SingleAsync()).Status);
@@ -252,6 +253,7 @@ public sealed class CashPaymentServiceTests
         public BillDTO Bill { get; private set; } = null!;
         public Guid CheckoutId { get; } = Guid.NewGuid();
         public Guid ShiftId { get; } = Guid.NewGuid();
+        public Guid WaiterId { get; } = Guid.NewGuid();
         public string Key { get; } = Guid.NewGuid().ToString();
         public CheckoutSource Remote { get; } = new();
         public PaymentService Service { get; }
@@ -328,9 +330,77 @@ public sealed class CashPaymentServiceTests
             };
         }
 
-        public Task<(PaymentDTO Payment, bool Created)> Pay(decimal? received)
+        public static void SeedPending(BillingDbContext db, Guid billId, Guid shiftId, Guid checkoutId, decimal amount, decimal received = 300)
         {
-            return Service.PayCash(Bill.BillId, Key, Body(received), default);
+            db.CashHandovers.Add(new CashHandover
+            {
+                Payment = new Payment
+                {
+                    PaymentId = Guid.NewGuid(),
+                    BillId = billId,
+                    CashShiftId = shiftId,
+                    MethodCode = "Cash",
+                    Amount = amount,
+                    CashReceived = received,
+                    ChangeAmount = received - amount,
+                    Status = "PendingHandover",
+                    IdempotencyKey = checkoutId.ToString("N")
+                },
+                WaiterUserRef = Guid.NewGuid(),
+                Status = "Pending",
+                CollectedAt = DateTime.UtcNow.AddMinutes(-1)
+            });
+        }
+
+        public CashHandoverService Handovers(ShiftIdentity actor)
+        {
+            return new CashHandoverService(new CashHandoverRepository(Db), new PaymentRepository(Db),
+                new BillRepository(Db), new BillCheckoutRepository(Db), new CashRegisterRepository(Db),
+                new CashShiftRepository(Db), new PaymentMethodRepository(Db), new UnitOfWork<BillingDbContext>(Db),
+                actor, new TestPaymentRequestClient
+                {
+                    ReviewedWaiterId = WaiterId
+                }, CheckoutRoutingTests.Bills(Db, Core.Source, actor, WaiterId), Service,
+                Options.Create(new CashRegisterAccessSettings
+                {
+                    WaiterRoleIds = ["waiter"],
+                    CashierRoleIds = ["cashier"],
+                    ManagerRoleIds = ["manager"]
+                }), Options.Create(new CashPaymentSettings
+                {
+                    MethodCode = "Cash"
+                }), TimeProvider.System);
+        }
+
+        public Task<(CashHandoverDTO Handover, bool Created)> Collect(decimal? received, string? key = null)
+        {
+            var waiter = CheckoutRoutingTests.Waiter(Core.Source, WaiterId);
+            waiter.Scope.RestaurantIds = Core.Actor.Scope.RestaurantIds;
+            return Handovers(waiter).Create(Bill.BillId, key ?? Key, new CreateCashHandoverDTO
+            {
+                CheckoutId = CheckoutId,
+                CashReceived = received
+            }, default);
+        }
+
+        public async Task<(PaymentDTO Payment, bool Created)> Pay(decimal? received)
+        {
+            try
+            {
+                if (Core.Actor.Scope.RoleId == "cashier" && !Core.Actor.Scope.IsAdministrator
+                    && Core.Actor.Scope.UserId == (await Db.CashShifts.AsNoTracking().SingleAsync()).CashierUserRef
+                    && !await Db.Payments.AsNoTracking().AnyAsync(value => value.IdempotencyKey == Guid.Parse(Key).ToString("N")))
+                {
+                    await Collect(received);
+                }
+
+                return await Service.PayCash(Bill.BillId, Key, Body(received), default);
+            }
+            catch
+            {
+                Db.ChangeTracker.Clear();
+                throw;
+            }
         }
 
         public ValueTask DisposeAsync()

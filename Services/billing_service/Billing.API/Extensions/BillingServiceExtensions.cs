@@ -87,6 +87,7 @@ public static class BillingServiceExtensions
                 "Vui lòng cấu hình CashPayment:MethodCode.")
             .ValidateOnStart();
         services.AddScoped<IShiftReportService, ShiftReportService>();
+        services.AddScoped<ICashHandoverService, CashHandoverService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<ICashMovementService, CashMovementService>();
         services.AddScoped<IBillService, BillService>();
