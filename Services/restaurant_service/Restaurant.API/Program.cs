@@ -20,6 +20,12 @@ builder.Services.AddOptions<Restaurant.Common.Settings.ServiceRequestSettings>()
     .ValidateOnStart();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IServiceRequestService, Restaurant.BLL.Implements.ServiceRequestService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IPaymentRequestOrderClient, Restaurant.API.Management.PaymentRequestOrderClient>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.ISessionPaymentClient, Restaurant.API.Management.SessionPaymentClient>();
+builder.Services.AddGrpcClient<Backend.Contracts.Billing.PaymentGrpc.PaymentGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Billing"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Billing."));
+});
 builder.Services.AddGrpcClient<Backend.Contracts.Ordering.CheckoutLockGrpc.CheckoutLockGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]

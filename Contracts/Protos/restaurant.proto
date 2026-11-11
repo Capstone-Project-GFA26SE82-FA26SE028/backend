@@ -157,9 +157,11 @@ message ServiceTableInfo {
   string restaurant_id = 5;
   string cleaning_status = 6;
   repeated string open_session_ids = 7;
+  string version = 8;
 }
 message ServiceTablePage { repeated ServiceTableInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
 service TableGrpc {
+  rpc ConfirmClean(IdRequest) returns (TableInfo);
   rpc GetServiceTables(ListRequest) returns (ServiceTablePage);
   rpc GetAll(ListRequest) returns (TablePage);
   rpc GetById(IdRequest) returns (TableInfo);
@@ -205,9 +207,18 @@ message TableSessionScanReply {
   bool is_new_session = 8;
 }
 service TableSessionGrpc {
+  rpc Depart(IdRequest) returns (TableSessionDepartureReply);
   rpc OpenForWaiter(IdRequest) returns (TableSessionScanReply);
   rpc Scan(QrTokenRequest) returns (TableSessionScanReply);
   rpc GetForOrdering(OrderSessionRequest) returns (OrderSessionReply);
+}
+
+message TableSessionDepartureReply {
+  string table_session_id = 1;
+  string restaurant_id = 2;
+  string status = 3;
+  string closed_at = 4;
+  repeated string table_ids = 5;
 }
 
 message OrderSessionRequest {

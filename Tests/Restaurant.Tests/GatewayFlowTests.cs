@@ -56,6 +56,8 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 services.AddSingleton<TimeProvider>(_reservationClock);
                 services.RemoveAll<IPaymentRequestOrderClient>();
                 services.AddSingleton<IPaymentRequestOrderClient>(new PaymentRequestOrders(() => _pendingPaymentOrders));
+                services.RemoveAll<ISessionPaymentClient>();
+                services.AddSingleton<ISessionPaymentClient>(_departurePayment);
                 services.RemoveAll<IManagementAccess>();
                 services.AddScoped<IManagementAccess, TestAccess>();
                 services.RemoveAll<IStaffIdentity>();

@@ -7,9 +7,11 @@ using Shared.Persistence.Interfaces;
 
 namespace Restaurant.BLL.Implements;
 
-public sealed class TableSessionService(IQrService qrService, ITableRepository tables,
+public sealed partial class TableSessionService(IQrService qrService, ITableRepository tables,
     ITableSessionRepository sessions, IGenericRepository<SessionTable> sessionTables,
-    IManagementTransaction transaction, IGuestAccessService guestAccess, ITableSessionOrderAccess orderAccess) : ITableSessionService
+    IManagementTransaction transaction, IGuestAccessService guestAccess, ITableSessionOrderAccess orderAccess,
+    ICurrentRestaurantScopeService scope, ISessionPaymentClient payments, IGuestAccessRepository guests,
+    Microsoft.Extensions.Options.IOptions<Restaurant.Common.Settings.ServiceRequestSettings> settings, TimeProvider clock) : ITableSessionService
 {
     public async Task<TableSessionScanDto> OpenForWaiter(Guid tableId, CancellationToken ct)
     {
@@ -35,6 +37,7 @@ public sealed class TableSessionService(IQrService qrService, ITableRepository t
             var created = session is null;
             if (session is null)
             {
+                RequireClean(table);
                 var now = DateTime.UtcNow;
                 session = new TableSession
                 {
@@ -125,6 +128,7 @@ public sealed class TableSessionService(IQrService qrService, ITableRepository t
             var session = open.SingleOrDefault();
             if (session is null)
             {
+                RequireClean(table);
                 var now = DateTime.UtcNow;
                 session = new TableSession
                 {

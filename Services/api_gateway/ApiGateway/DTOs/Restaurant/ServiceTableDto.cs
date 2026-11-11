@@ -2,6 +2,7 @@ namespace ApiGateway.DTOs.Restaurant;
 
 public sealed class ServiceTableDto
 {
+    public string Version { get; set; } = string.Empty;
     public Guid TableId { get; set; }
     public string TableCode { get; set; } = string.Empty;
     public Guid AreaId { get; set; }

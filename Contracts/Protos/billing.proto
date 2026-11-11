@@ -4,9 +4,11 @@ option csharp_namespace = "Backend.Contracts.Billing";
 package billing;
 import "google/protobuf/empty.proto";
 service PaymentGrpc {
+  rpc RequirePaid(DeparturePaymentRequest) returns (google.protobuf.Empty);
   rpc PayCash(PayCashRequest) returns (CashPaymentReply);
   rpc GetById(PaymentIdRequest) returns (PaymentInfo);
 }
+message DeparturePaymentRequest { string table_session_id = 1; string restaurant_id = 2; }
 message PayCashRequest {
   string bill_id = 1;
   string checkout_id = 2;

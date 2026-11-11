@@ -271,6 +271,7 @@ public sealed class CashPaymentServiceTests
                 new CashMovementRepository(db), new UnitOfWork<BillingDbContext>(db), actor, billService, remote,
                 Options.Create(new CashRegisterAccessSettings
                 {
+                    WaiterRoleIds = ["waiter"],
                     CashierRoleIds = ["cashier"],
                     ManagerRoleIds = ["manager"]
                 }), Options.Create(new CashPaymentSettings

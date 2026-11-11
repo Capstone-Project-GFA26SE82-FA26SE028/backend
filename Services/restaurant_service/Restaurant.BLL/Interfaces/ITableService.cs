@@ -4,6 +4,8 @@ namespace Restaurant.BLL.Interfaces;
 
 public interface ITableService
 {
+    Task<TableDto> ConfirmClean(Guid id, string version, CancellationToken ct);
+
     Task<PageResult<ServiceTableDto>> GetServiceTables(ListQuery query, CancellationToken ct);
 
     Task<PageResult<TableDto>> GetAll(ListQuery query, CancellationToken ct);

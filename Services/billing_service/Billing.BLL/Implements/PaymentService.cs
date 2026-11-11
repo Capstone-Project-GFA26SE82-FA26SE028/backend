@@ -14,7 +14,7 @@ using Shared.Persistence.Interfaces;
 
 namespace Billing.BLL.Implements;
 
-public sealed class PaymentService(IPaymentRepository payments, IBillRepository bills,
+public sealed partial class PaymentService(IPaymentRepository payments, IBillRepository bills,
     IBillCheckoutRepository checkouts, ICashShiftRepository shifts, ICashRegisterRepository registers,
     IPaymentMethodRepository methods, ICashMovementRepository movements, IUnitOfWork unitOfWork,
     IBillingAccess access, IBillService billService, ICheckoutSourceClient ordering,

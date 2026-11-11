@@ -9,6 +9,12 @@ namespace Billing.API.GrpcServices;
 
 public sealed class PaymentGrpcService(IPaymentService service) : PaymentGrpc.PaymentGrpcBase
 {
+    public override async Task<Google.Protobuf.WellKnownTypes.Empty> RequirePaid(DeparturePaymentRequest request, ServerCallContext context)
+    {
+        await service.RequirePaid(Id(request.TableSessionId), Id(request.RestaurantId), context.CancellationToken);
+        return new Google.Protobuf.WellKnownTypes.Empty();
+    }
+
     public override async Task<CashPaymentReply> PayCash(PayCashRequest request, ServerCallContext context)
     {
         if (!request.HasCashReceived || !decimal.TryParse(request.CashReceived,

@@ -209,7 +209,7 @@ After the assigned Waiter acknowledges and reviews the Payment ServiceRequest:
 - Responsible Waiter submits: `POST /api/table-sessions/{sessionId}/checkout/{checkoutId}/submit` with `{ "cashRegisterId": "<register UUID>" }`. Same target is idempotent; another target returns 409. Registers must belong to the session's restaurant and have exactly one unclosed Active shift.
 - Owning Cashier reads `GET /api/cash-registers/{cashRegisterId}/checkouts?page=1&pageSize=20`, then calls the existing `/synchronize`. Ready records PreparedByRef/PreparedAt; no money is collected.
 - Responsible Waiter reads `GET /api/table-sessions/{sessionId}/checkout/{checkoutId}/prebill`, gives the bill to the customer, then calls `POST /api/table-sessions/{sessionId}/checkout/{checkoutId}/present` without a body. PresentedAt is stored once. Other Waiters cannot read/present it; general bill readers retain existing permissions.
-- New cash/PayOS collection requires the receiving register and presentation milestone. Existing payment replay and PayOS settlement recovery remain available. Cash handover through Waiter uses the Cash payment endpoints below. Customer departure/cleaning remains a subsequent increment.
+- New cash/PayOS collection requires the receiving register and presentation milestone. Existing payment replay and PayOS settlement recovery remain available. Cash handover through Waiter uses the Cash payment endpoints below. Customer departure and cleaning are explicit staff actions described below.
 
 Checkout prepares the bill before collection. Cash collection is described below. Neither operation closes the table session, revokes guest access or marks the table for cleaning.
 
@@ -239,6 +239,35 @@ For PowerShell testing, use `Invoke-RestMethod -WebSession $guestSession` for QR
 
 Cash payment now consumes the matching Ready checkout through Billing's session lock and keeps Ordering blocked after success. Unknown outcomes must not release checkout. Customer departure, QR invalidation and cleaning confirmation remain separate staff workflows.
 
+
+## Customer departure and table cleaning
+
+Payment success does not mean the customer has left. Any currently assigned **Waiter** at the session's restaurant may confirm departure; this is not limited to the Waiter who handled checkout. Admin, Manager, Cashier and QR guests cannot perform departure or cleaning confirmation through these APIs.
+
+```http
+POST /api/table-sessions/{sessionId}/depart
+Authorization: Bearer {waiter-access-token}
+```
+
+There is no request body. Restaurant first asks Billing to verify the session's completed payment through the read-only `PaymentGrpc.RequirePaid` RPC, forwarding the employee identity. Billing requires a matching Paid bill/checkout, frozen financial hash and exactly one consistent settled Cash receipt/Sale or verified PayOS receipt; unresolved/review attempts block departure. A closed Cashier shift does not invalidate an already settled receipt. This is a read of persisted verification, not a new bank query or a client-supplied paid flag. Restaurant configuration includes `GrpcServices:Billing` for native/Docker operation; Billing unavailability prevents departure without changing the session. No startup dependency cycle or database upgrade is added.
+
+After verification, Restaurant locks the session's current tables in stable order and then the session, rechecks staff scope and table assignments, and commits `TableSession.Status = Closed`, UTC `ClosedAt`, current `SessionTable.ReleasedAt/ChangedByRef`, guest `RevokedAt` and `Table.CleaningStatus = Dirty` together. Previous table-assignment history stays unchanged. A replay returns the original close time and cannot affect a later session or its guests. Billing's checkout/Ordering lock remains held as historical payment state; closing the session does not reopen ordering for it.
+
+The table QR remains reusable. Its old **guest session access** is revoked. Both anonymous QR scan and staff open refuse to create a new session for a table whose cleaning status is not `Clean`; scanning a clean table retains the original create-or-reuse behavior.
+
+Read the latest table `version` from `GET /api/tables/service?restaurantId={restaurantId}` and, after physically cleaning it, send:
+
+```http
+POST /api/tables/{tableId}/confirm-clean
+Authorization: Bearer {waiter-access-token}
+Content-Type: application/json
+
+{ "version": "<latest Base64 rowversion>" }
+```
+
+Cleaning uses the same table lock as opening/scanning, rejects occupied tables and stale versions, and returns the current table DTO/version. Confirm each table separately for a multi-table session. Reload after 409; do not reuse an old cleaning confirmation for a subsequent party. Schema is unchanged: there is no dedicated historical cleaner/time or session ClosedBy field; release attribution uses the existing SessionTable.ChangedByRef.
+
+Tests: run `dotnet test Tests/Restaurant.Tests/Restaurant.Tests.csproj` and `dotnet test Tests/Billing.Tests/Billing.Tests.csproj`. To enable the isolated SQL Server tests, set `RESTAURANT_DEPARTURE_SQL_CONNECTION` and `BILLING_SQL_TEST_CONNECTION` to a private dev SQL Server connection with permission to create/drop owned test databases. These tests create uniquely named databases; never put credentials in Git. Gateway/Restaurant tests use fake upstream identity/payment verification; Docker workflow checks and real-bank acceptance are reported separately in the existing database change log.
 
 ## Cash payment
 
@@ -476,4 +505,4 @@ Paid PayOS payments remain eligible for background reconciliation while their sh
 
 Opening cash must be whole VND: `250000` and `250000.00` are accepted, `250000.50` is rejected without rounding. CashIn and cash Sale validate `OpeningCash + existing SignedAmount total + new amount` under the same register/shift transaction locks against the `decimal(18,2)` limit. A rejected sale records no Payment, Sale or Paid bill/checkout. Existing fractional opening balances and already over-limit balances are not rewritten automatically; review those legacy records separately.
 
-Manual transfer confirmation, refunds and departure/cleaning remain outside this PayOS increment. Waiter cash collection/handover is implemented separately in the cash payment workflow above. [Official PayOS testing guidance](https://payos.vn/docs/moi-truong-test/) states that a separate sandbox is not available. Local mock/HTTP-provider tests do not prove a real bank transfer. Live acceptance still requires real channel credentials, registered public HTTPS webhook and an authorized real test payment; do not claim this based on redirect success or simulated callbacks.
+Manual transfer confirmation and refunds remain outside this PayOS increment. Waiter cash collection/handover and departure/cleaning are implemented separately in the staff workflows above. [Official PayOS testing guidance](https://payos.vn/docs/moi-truong-test/) states that a separate sandbox is not available. Local mock/HTTP-provider tests do not prove a real bank transfer. Live acceptance still requires real channel credentials, registered public HTTPS webhook and an authorized real test payment; do not claim this based on redirect success or simulated callbacks.
