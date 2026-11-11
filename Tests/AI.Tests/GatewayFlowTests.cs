@@ -79,26 +79,18 @@ public sealed class GatewayFlowTests
         Assert.Equal(HttpStatusCode.BadRequest, result.StatusCode);
     }
 
-    [Fact]
-    public async Task ReadinessDistinguishesRuntimeMissingModelAndLoadedModel()
+    [Theory]
+    [InlineData("", false)]
+    [InlineData("configured-key", true)]
+    public async Task ConfigurationReadinessDoesNotCallProvider(string key, bool ready)
     {
-        foreach (var installed in new[] { false, true })
-        {
-            foreach (var loaded in new[] { false, true })
-            {
-                var data = new AssistantTestContext();
-                using var capacity = new OllamaCapacity(Options.Create(data.Settings));
-                using var http = new HttpClient(new StatusHandler(installed, loaded))
-                {
-                    BaseAddress = new Uri("http://localhost:11434/")
-                };
-                var model = new OllamaModelClient(http, capacity, Options.Create(ClientContractTests.ModelSettings()), Options.Create(data.Settings));
-                var status = await model.GetStatusAsync(default);
-                Assert.True(status.RuntimeAvailable);
-                Assert.Equal(installed, status.Installed);
-                Assert.Equal(installed && loaded, status.Ready);
-            }
-        }
+        var data = new AssistantTestContext();
+        using var capacity = new AssistantCapacity(Options.Create(data.Settings));
+        using var http = new HttpClient();
+        var settings = ClientContractTests.ModelSettings();
+        settings.ApiKey = key;
+        var model = new GeminiModelClient(http, capacity, Options.Create(settings), Options.Create(data.Settings));
+        Assert.Equal(ready, await model.IsReadyAsync(default));
     }
 
     [Fact]
@@ -107,16 +99,16 @@ public sealed class GatewayFlowTests
         var path = Path.Combine(Path.GetTempPath(), $"ai-config-{Guid.NewGuid():N}.json");
         try
         {
-            File.WriteAllText(path, "{\"Ollama\":{\"Endpoint\":\"http://local-file:11434\"}}");
-            var key = "AI_CONFIG_TEST_Ollama__Endpoint";
-            Environment.SetEnvironmentVariable(key, "http://environment:11434");
+            File.WriteAllText(path, "{\"Gemini\":{\"Endpoint\":\"https://local-file\"}}");
+            var key = "AI_CONFIG_TEST_Gemini__Endpoint";
+            Environment.SetEnvironmentVariable(key, "https://environment");
             try
             {
                 var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["Ollama:Endpoint"] = "http://shared:11434"
+                    ["Gemini:Endpoint"] = "https://shared"
                 }).AddJsonFile(path).AddEnvironmentVariables("AI_CONFIG_TEST_").Build();
-                Assert.Equal("http://environment:11434", config["Ollama:Endpoint"]);
+                Assert.Equal("https://environment", config["Gemini:Endpoint"]);
             }
             finally
             {
@@ -129,7 +121,7 @@ public sealed class GatewayFlowTests
         }
     }
 
-    private static async Task<WebApplication> Start(WebApplication ai)
+    internal static async Task<WebApplication> Start(WebApplication ai)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -146,27 +138,6 @@ public sealed class GatewayFlowTests
         app.MapControllers();
         await app.StartAsync();
         return app;
-    }
-
-    private sealed class StatusHandler(bool installed, bool loaded) : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
-            var present = request.RequestUri!.AbsolutePath == "/api/tags" ? installed : loaded;
-            var models = present ? new[]
-            {
-                new
-                {
-                    name = "qwen3:4b-instruct-2507-q4_K_M",
-                    context_length = 2048,
-                    details = new { quantization_level = "Q4_K_M" }
-                }
-            } : [];
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = JsonContent.Create(new { models })
-            });
-        }
     }
 
     private sealed class UnavailableGuest : IGuestAccessClient

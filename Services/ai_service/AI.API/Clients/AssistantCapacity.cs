@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 
 namespace AI.API.Clients;
 
-public sealed class OllamaCapacity(IOptions<AISettings> settings) : IDisposable
+public sealed class AssistantCapacity(IOptions<AISettings> settings) : IDisposable
 {
     private readonly SemaphoreSlim _slots = new(settings.Value.MaximumConcurrentInferences, settings.Value.MaximumConcurrentInferences);
 

@@ -15,17 +15,25 @@ public static class AIServiceExtensions
     public static IServiceCollection AddAssistant(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<AISettings>().Bind(configuration.GetSection("AI"))
-            .Validate(value => value.Channel == "DineIn" && value.DuplicatePolicy == "ItemId", "Configure the approved channel and ItemId duplicate policy.")
+            .Validate(value => value.Channel == "DineIn" && value.Currency == "VND" && value.DuplicatePolicy == "ItemId", "Configure the approved channel, VND currency and ItemId duplicate policy.")
             .Validate(value => value.RequestTimeoutSeconds is > 0 and <= 90 && value.DependencyTimeoutSeconds is > 0 and <= 10
                 && value.MaximumConcurrentInferences == 1 && value.MaximumSuggestions is > 0 and <= 3
                 && value.MaximumMenuItems is > 0 and <= 1000 && value.MenuPageSize is > 0 and <= 100
                 && value.ModelCandidateCount is > 0 and <= 10 && value.ModelCandidateCount <= value.MaximumMenuItems
                 && value.MaximumMessageLength is > 0 and <= 1000 && value.MaximumHistoryTurns is >= 0 and <= 6, "Invalid assistant limits.")
             .ValidateOnStart();
-        services.AddOptions<OllamaSettings>().Bind(configuration.GetSection("Ollama"))
-            .Validate(value => value.Model == "qwen3:4b-instruct-2507-q4_K_M" && value.ContextLength == 2048, "Configure the approved Qwen model and context.")
-            .Validate(value => IsHttpAddress(value.Endpoint) && value.MaximumOutputTokens is >= 128 and <= 512
-                && value.MaximumPromptCharacters is >= 1000 and <= 6000 && value.KeepAliveMinutes is >= 0 and <= 60, "Invalid Ollama configuration.")
+        services.AddOptions<GeminiSettings>().Bind(configuration.GetSection("Gemini"))
+            .Validate(value => Uri.TryCreate(value.Endpoint, UriKind.Absolute, out var address)
+                && address.Scheme == "https" && string.IsNullOrEmpty(address.UserInfo)
+                && string.IsNullOrEmpty(address.Query) && string.IsNullOrEmpty(address.Fragment),
+                "Configure Gemini:Endpoint with an HTTPS address.")
+            .Validate(value => !string.IsNullOrWhiteSpace(value.Model)
+                && value.Model.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.')
+                && value.MaximumOutputTokens is >= 256 and <= 4096
+                && double.IsFinite(value.Temperature) && value.Temperature is >= 0 and <= 2
+                && value.ThinkingLevel == "minimal"
+                && value.MaximumPromptCharacters is >= 1000 and <= 50000,
+                "Invalid Gemini configuration.")
             .ValidateOnStart();
         services.TryAddSingleton(TimeProvider.System);
         services.AddGrpc(options =>
@@ -39,15 +47,15 @@ public static class AIServiceExtensions
         services.AddScoped<IGuestAccessClient, GuestAccessClient>();
         services.AddScoped<ICatalogMenuClient, CatalogMenuClient>();
         services.AddScoped<ICartClient, OrderingCartClient>();
-        services.AddSingleton<OllamaCapacity>();
-        services.AddHttpClient<OllamaModelClient>((provider, client) =>
+        services.AddSingleton<AssistantCapacity>();
+        services.AddHttpClient<GeminiModelClient>((provider, client) =>
         {
-            var settings = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<OllamaSettings>>().Value;
+            var settings = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<GeminiSettings>>().Value;
             client.BaseAddress = new Uri(settings.Endpoint.TrimEnd('/') + "/");
             client.Timeout = Timeout.InfiniteTimeSpan;
             client.MaxResponseContentBufferSize = 1024 * 1024;
         });
-        services.AddScoped<IAssistantModelClient>(provider => provider.GetRequiredService<OllamaModelClient>());
+        services.AddScoped<IAssistantModelClient>(provider => provider.GetRequiredService<GeminiModelClient>());
         services.AddGrpcClient<GuestAccessGrpc.GuestAccessGrpcClient>(options =>
         {
             options.Address = Address(configuration, "Restaurant");

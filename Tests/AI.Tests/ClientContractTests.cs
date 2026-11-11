@@ -95,10 +95,10 @@ public sealed class ClientContractTests
     [InlineData("not-json", 502)]
     [InlineData("{\"done\":false}", 502)]
     [InlineData("{\"done\":true,\"done_reason\":\"length\"}", 502)]
-    public async Task InvalidOllamaResponsesFailWithoutReturningModelText(string body, int code)
+    public async Task InvalidGeminiResponsesFailWithoutReturningModelText(string body, int code)
     {
         var context = new AssistantTestContext();
-        using var capacity = new OllamaCapacity(Options.Create(context.Settings));
+        using var capacity = new AssistantCapacity(Options.Create(context.Settings));
         using var http = Http(new Handler((_, _) => Task.FromResult(Response(body))));
         var client = Model(http, capacity, context);
         var error = await Assert.ThrowsAsync<AIException>(() => client.ChatAsync(new ChatModelRequestDTO("Hello", [], []), default));
@@ -111,17 +111,20 @@ public sealed class ClientContractTests
     public async Task ModelRequestUsesConfiguredParametersAndNoGuestCredentials()
     {
         var context = new AssistantTestContext();
-        using var capacity = new OllamaCapacity(Options.Create(context.Settings));
+        using var capacity = new AssistantCapacity(Options.Create(context.Settings));
         using var http = Http(new Handler(async (request, ct) =>
         {
             var body = await request.Content!.ReadAsStringAsync(ct);
             Assert.DoesNotContain(context.Guest.Token, body);
             Assert.DoesNotContain(context.Guest.TableSessionId.ToString(), body);
             using var json = JsonDocument.Parse(body);
-            Assert.Equal("qwen3:4b-instruct-2507-q4_K_M", json.RootElement.GetProperty("model").GetString());
-            Assert.Equal(2048, json.RootElement.GetProperty("options").GetProperty("num_ctx").GetInt32());
-            Assert.False(json.RootElement.GetProperty("stream").GetBoolean());
-            return Response("{\"done\":true,\"done_reason\":\"stop\",\"message\":{\"content\":\"{\\\"intent\\\":\\\"out_of_scope\\\",\\\"informationKeys\\\":[],\\\"recommendationKeys\\\":[],\\\"maximumPrice\\\":null}\"}}");
+            Assert.Equal("minimal", json.RootElement.GetProperty("generationConfig").GetProperty("thinkingConfig").GetProperty("thinkingLevel").GetString());
+            Assert.EndsWith("/models/gemini-3.1-flash-lite:generateContent", request.RequestUri!.AbsolutePath);
+            Assert.Equal("test-key", request.Headers.GetValues("x-goog-api-key").Single());
+            Assert.True(json.RootElement.TryGetProperty("contents", out _));
+            Assert.True(json.RootElement.GetProperty("generationConfig").TryGetProperty("responseJsonSchema", out _));
+
+            return Response("{\"candidates\":[{\"finishReason\":\"STOP\",\"content\":{\"parts\":[{\"text\":\"{\\\"intent\\\":\\\"out_of_scope\\\",\\\"informationKeys\\\":[],\\\"recommendationKeys\\\":[],\\\"maximumPrice\\\":null}\"}]}}]}");
         }));
         var plan = await Model(http, capacity, context).ChatAsync(new ChatModelRequestDTO("Hello", [], []), default);
         Assert.Equal("out_of_scope", plan.Intent);
@@ -132,7 +135,7 @@ public sealed class ClientContractTests
     public async Task BusyModelReturnsImmediatelyWithoutQueueingAndCancellationReleasesSlot()
     {
         var context = new AssistantTestContext();
-        using var capacity = new OllamaCapacity(Options.Create(context.Settings));
+        using var capacity = new AssistantCapacity(Options.Create(context.Settings));
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var http = Http(new Handler(async (_, ct) =>
         {
@@ -153,10 +156,10 @@ public sealed class ClientContractTests
     }
 
     [Fact]
-    public async Task OllamaNetworkFailureHasExplicitUnavailableError()
+    public async Task GeminiNetworkFailureHasExplicitUnavailableError()
     {
         var context = new AssistantTestContext();
-        using var capacity = new OllamaCapacity(Options.Create(context.Settings));
+        using var capacity = new AssistantCapacity(Options.Create(context.Settings));
         using var http = Http(new Handler((_, _) => throw new HttpRequestException("private details")));
         var error = await Assert.ThrowsAsync<AIException>(() => Model(http, capacity, context).ChatAsync(new ChatModelRequestDTO("Hello", [], []), default));
         Assert.Equal(503, error.StatusCode);
@@ -167,7 +170,7 @@ public sealed class ClientContractTests
     public async Task PromptLimitRejectsOversizedInputBeforeContactingModel()
     {
         var context = new AssistantTestContext();
-        using var capacity = new OllamaCapacity(Options.Create(context.Settings));
+        using var capacity = new AssistantCapacity(Options.Create(context.Settings));
         using var http = Http(new Handler((_, _) => throw new InvalidOperationException("HTTP must not be called")));
         var error = await Assert.ThrowsAsync<AIException>(() => Model(http, capacity, context)
             .ChatAsync(new ChatModelRequestDTO(new string('x', 6000), [], []), default));
@@ -191,29 +194,30 @@ public sealed class ClientContractTests
         Assert.Equal(401, error.StatusCode);
     }
 
-    public static OllamaSettings ModelSettings()
+    public static GeminiSettings ModelSettings()
     {
-        return new OllamaSettings
+        return new GeminiSettings
         {
-            Endpoint = "http://127.0.0.1:11434",
-            Model = "qwen3:4b-instruct-2507-q4_K_M",
-            ContextLength = 2048,
-            MaximumOutputTokens = 256,
+            Endpoint = "https://generativelanguage.googleapis.com/v1beta",
+            ApiKey = "test-key",
+            Model = "gemini-3.1-flash-lite",
+            MaximumOutputTokens = 2048,
             MaximumPromptCharacters = 5000,
-            KeepAliveMinutes = 5
+            Temperature = 1,
+            ThinkingLevel = "minimal"
         };
     }
 
-    private static OllamaModelClient Model(HttpClient http, OllamaCapacity capacity, AssistantTestContext context)
+    private static GeminiModelClient Model(HttpClient http, AssistantCapacity capacity, AssistantTestContext context)
     {
-        return new OllamaModelClient(http, capacity, Options.Create(ModelSettings()), Options.Create(context.Settings));
+        return new GeminiModelClient(http, capacity, Options.Create(ModelSettings()), Options.Create(context.Settings));
     }
 
     private static HttpClient Http(HttpMessageHandler handler)
     {
         return new HttpClient(handler)
         {
-            BaseAddress = new Uri("http://127.0.0.1:11434/"),
+            BaseAddress = new Uri("https://generativelanguage.googleapis.com/v1beta/"),
             Timeout = Timeout.InfiniteTimeSpan,
             MaxResponseContentBufferSize = 1024 * 1024
         };

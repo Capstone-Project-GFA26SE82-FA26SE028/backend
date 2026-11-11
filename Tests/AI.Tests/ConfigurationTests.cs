@@ -17,7 +17,7 @@ public sealed class ConfigurationTests
     }
 
     [Fact]
-    public void ApprovedLimitsAndModelAreConfigured()
+    public void ApprovedLimitsAndProviderAreConfigured()
     {
         var services = new ServiceCollection().AddLogging();
         services.AddAssistant(Configuration());
@@ -27,25 +27,25 @@ public sealed class ConfigurationTests
         Assert.Equal(10, limits.DependencyTimeoutSeconds);
         Assert.Equal(1, limits.MaximumConcurrentInferences);
         Assert.Equal("ItemId", limits.DuplicatePolicy);
-        Assert.Equal("qwen3:4b-instruct-2507-q4_K_M", provider.GetRequiredService<IOptions<OllamaSettings>>().Value.Model);
+        Assert.Equal("https://generativelanguage.googleapis.com/v1beta", provider.GetRequiredService<IOptions<GeminiSettings>>().Value.Endpoint);
     }
 
     [Theory]
-    [InlineData("Ollama:Model", "different-model", true)]
-    [InlineData("Ollama:Endpoint", "file:///tmp/model", true)]
+    [InlineData("Gemini:ThinkingLevel", "invalid", true)]
+    [InlineData("Gemini:Endpoint", "file:///tmp/model", true)]
     [InlineData("AI:MaximumConcurrentInferences", "0", false)]
     [InlineData("AI:RequestTimeoutSeconds", "91", false)]
     [InlineData("AI:DuplicatePolicy", "ItemAndOptions", false)]
-    public void InvalidConfigurationFailsClearly(string key, string value, bool ollama)
+    public void InvalidConfigurationFailsClearly(string key, string value, bool gemini)
     {
         var services = new ServiceCollection().AddLogging();
         services.AddAssistant(Configuration((key, value)));
         using var provider = services.BuildServiceProvider();
         Assert.Throws<OptionsValidationException>(() =>
         {
-            if (ollama)
+            if (gemini)
             {
-                _ = provider.GetRequiredService<IOptions<OllamaSettings>>().Value;
+                _ = provider.GetRequiredService<IOptions<GeminiSettings>>().Value;
             }
             else
             {

@@ -12,6 +12,7 @@ public sealed class AssistantTestContext : IGuestAccessClient, ICatalogMenuClien
     public AISettings Settings { get; } = new()
     {
         Channel = "DineIn",
+        Currency = "VND",
         DuplicatePolicy = "ItemId",
         RequestTimeoutSeconds = 90,
         DependencyTimeoutSeconds = 10,
@@ -34,6 +35,8 @@ public sealed class AssistantTestContext : IGuestAccessClient, ICatalogMenuClien
     public CartContextDTO Cart { get; set; }
     public ChatPlanDTO Plan { get; set; } = new()
     {
+        Language = "en",
+        Topic = "overview",
         Intent = "menu",
         InformationKeys = ["m0"]
     };
@@ -41,7 +44,11 @@ public sealed class AssistantTestContext : IGuestAccessClient, ICatalogMenuClien
     public int GuestReads { get; private set; }
     public int CartReads { get; private set; }
     public int ModelCalls { get; private set; }
+    public int AnswerCalls { get; private set; }
     public Action? AfterModel { get; set; }
+    public Action? AfterAnswer { get; set; }
+    public ChatAnswerRequestDTO? AnswerRequest { get; private set; }
+    public ChatAnswerDTO? ForcedAnswer { get; set; }
     public Func<ModelItemDTO, bool> Select { get; set; } = _ => true;
     public IReadOnlyList<ModelSuggestionDTO>? ForcedSuggestions { get; set; }
     public RecommendationModelRequestDTO? ModelRequest { get; private set; }
@@ -117,6 +124,22 @@ public sealed class AssistantTestContext : IGuestAccessClient, ICatalogMenuClien
         ModelCalls++;
         ChatModelRequest = request;
         AfterModel?.Invoke();
+        var keys = Plan.Intent == "recommendation" ? Plan.RecommendationKeys : Plan.InformationKeys;
+        var selected = request.Menu.Where(item => keys.Contains(item.Key)).ToArray();
+        var notice = request.Notices?.GetValueOrDefault(Plan.Intent);
+        var fallback = selected.Length == 0
+            ? request.Notices?.GetValueOrDefault("no_match") ?? "Please ask staff."
+            : selected[0].CanOrder
+                ? $"You can try {selected[0].Name} with your meal."
+                : $"Not currently available: {selected[0].Name}. Please ask a staff member.";
+        var reply = ForcedAnswer ?? new ChatAnswerDTO
+        {
+            Answer = (notice ?? fallback) + (request.SearchLimited ? " This is a limited selection." : ""),
+            UsedKeys = notice is not null ? [] : keys.ToList()
+        };
+        Plan.Answer = reply.Answer;
+        Plan.UsedKeys = reply.UsedKeys;
+        AfterAnswer?.Invoke();
         return Task.FromResult(Plan);
     }
 
@@ -131,6 +154,30 @@ public sealed class AssistantTestContext : IGuestAccessClient, ICatalogMenuClien
             Key = item.Key,
             Reason = RecommendationReasons.Allowed[0]
         }).ToArray());
+    }
+
+    public Task<ChatAnswerDTO> AnswerAsync(ChatAnswerRequestDTO request, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        AnswerCalls++;
+        AnswerRequest = request;
+        AfterAnswer?.Invoke();
+        if (request.VerifiedNotice is not null)
+        {
+            return Task.FromResult(ForcedAnswer ?? new ChatAnswerDTO
+            {
+                Answer = request.VerifiedNotice,
+                UsedKeys = []
+            });
+        }
+
+        return Task.FromResult(ForcedAnswer ?? new ChatAnswerDTO
+        {
+            Answer = request.VerifiedMenu[0].CanOrder
+                ? $"You can try {request.VerifiedMenu[0].Name} with your meal." + (request.SearchLimited ? " This is a limited selection." : "")
+                : $"Not currently available: {request.VerifiedMenu[0].Name}. Please ask a staff member.",
+            UsedKeys = request.VerifiedMenu.Select(item => item.Key).ToList()
+        });
     }
 
     public Task<bool> IsReadyAsync(CancellationToken ct)

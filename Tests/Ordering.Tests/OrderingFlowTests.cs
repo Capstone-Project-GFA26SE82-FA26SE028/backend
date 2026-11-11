@@ -97,6 +97,32 @@ public sealed class OrderingFlowTests
     }
 
     [Fact]
+    public async Task AddingSuggestionUsesCurrentCatalogQuoteAndRejectsUnavailableItem()
+    {
+        using var app = new Fixture();
+        var cart = await app.FilledCart();
+        var suggestion = Guid.NewGuid();
+        var lines = app.Lines();
+        lines.Add(new SelectionDTO { ItemId = suggestion, Quantity = 1 });
+        var update = new CartWriteDTO { Version = cart.Version, Items = lines };
+
+        app.Valid = false;
+        await Error(409, () => app.Carts.Update(app.Session, cart.CartId, update, "guest", default));
+        var unchanged = await app.Carts.GetById(app.Session, cart.CartId, "guest", default);
+        Assert.Equal(cart.Version, unchanged.Version);
+        Assert.DoesNotContain(unchanged.Items, item => item.ItemId == suggestion);
+
+        app.Valid = true;
+        app.Price = 60000;
+        app.Names[suggestion] = "Current Catalog name";
+        var result = await app.Carts.Update(app.Session, cart.CartId, update, "guest", default);
+        Assert.NotNull(result.Quote);
+        var quote = Assert.Single(result.Quote.Items, item => item.ItemId == suggestion);
+        Assert.Equal(60000m, quote.UnitPrice);
+        Assert.Equal("Current Catalog name", quote.Name);
+    }
+
+    [Fact]
     public async Task CartOwnershipVersionAndReplacementSurviveReload()
     {
         using var app = new Fixture();

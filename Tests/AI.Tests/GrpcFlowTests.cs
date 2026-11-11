@@ -151,6 +151,11 @@ public sealed class GrpcFlowTests
             return data.RecommendAsync(request, ct);
         }
 
+        public Task<ChatAnswerDTO> AnswerAsync(ChatAnswerRequestDTO request, CancellationToken ct)
+        {
+            return data.AnswerAsync(request, ct);
+        }
+
         public Task<bool> IsReadyAsync(CancellationToken ct)
         {
             return Task.FromResult(true);

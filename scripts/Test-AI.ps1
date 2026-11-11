@@ -50,7 +50,7 @@ $report = [ordered]@{
     allergy = $allergy
     refusal = $refusal
     cartUnchanged = $true
-    scope = 'Real Gateway, AI, Catalog, Restaurant, Ordering and configured Ollama. No AI data-write endpoint was invoked.'
+    scope = 'Real Gateway, AI, Catalog, Restaurant, Ordering and configured Gemini API. No AI data-write endpoint was invoked.'
 }
 $json = $report | ConvertTo-Json -Depth 15
 if ($OutputFile) { [IO.File]::WriteAllText($OutputFile, $json) }

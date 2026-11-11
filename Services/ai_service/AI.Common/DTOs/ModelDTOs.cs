@@ -4,7 +4,27 @@ public sealed record ModelItemDTO(string Key, string Name, string Category, stri
 
 public sealed record ModelCartLineDTO(string Name, string Category, int Quantity);
 
-public sealed record ChatModelRequestDTO(string Message, IReadOnlyList<ConversationTurn> History, IReadOnlyList<ModelItemDTO> Menu);
+public sealed record ChatModelRequestDTO(
+    string Message,
+    IReadOnlyList<ConversationTurn> History,
+    IReadOnlyList<ModelItemDTO> Menu,
+    bool SearchLimited = false,
+    IReadOnlyDictionary<string, string>? Notices = null,
+    string? Currency = null);
+
+public sealed record ChatAnswerRequestDTO(
+    string Message,
+    IReadOnlyList<ConversationTurn> History,
+    string Intent,
+    IReadOnlyList<ModelItemDTO> VerifiedMenu,
+    bool SearchLimited,
+    string? VerifiedNotice = null);
+
+public sealed class ChatAnswerDTO
+{
+    public string Answer { get; set; } = string.Empty;
+    public List<string> UsedKeys { get; set; } = [];
+}
 
 public sealed record RecommendationModelRequestDTO(
     IReadOnlyList<ModelCartLineDTO> Cart,
@@ -13,6 +33,10 @@ public sealed record RecommendationModelRequestDTO(
 
 public sealed class ChatPlanDTO
 {
+    public string Language { get; set; } = string.Empty;
+    public string Topic { get; set; } = string.Empty;
+    public string Answer { get; set; } = string.Empty;
+    public List<string> UsedKeys { get; set; } = [];
     public string Intent { get; set; } = string.Empty;
     public List<string> InformationKeys { get; set; } = [];
     public List<string> RecommendationKeys { get; set; } = [];

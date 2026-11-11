@@ -3,6 +3,7 @@ namespace AI.Common.Settings;
 public sealed class AISettings
 {
     public string Channel { get; set; } = string.Empty;
+    public string Currency { get; set; } = string.Empty;
     public int RequestTimeoutSeconds { get; set; }
     public int DependencyTimeoutSeconds { get; set; }
     public int MaximumConcurrentInferences { get; set; }
