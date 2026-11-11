@@ -284,7 +284,7 @@ public sealed class ShiftReportSqlServerTests : IAsyncLifetime
             {
                 Currency = "VND",
                 OrderPriceBasis = "Exclusive"
-            }), TimeProvider.System);
+            }), TimeProvider.System, new TestPaymentRequestClient());
     }
 
     private BillingDbContext Context()

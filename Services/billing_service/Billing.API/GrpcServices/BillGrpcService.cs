@@ -43,6 +43,11 @@ public sealed class BillGrpcService(IBillService service) : BillGrpc.BillGrpcBas
         return page;
     }
 
+    public override async Task<BillInfo> GetPrebill(BillCheckoutRequest request, ServerCallContext context)
+    {
+        return Map(await service.GetPrebill(Id(request.TableSessionId), Id(request.CheckoutId), context.CancellationToken));
+    }
+
     private static Guid Id(string value)
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)

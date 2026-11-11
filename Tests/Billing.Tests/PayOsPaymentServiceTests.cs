@@ -14,6 +14,19 @@ namespace Billing.Tests;
 public sealed class PayOsPaymentServiceTests
 {
     [Fact]
+    public async Task CreatingPayOsLinkRequiresPresentedBillBeforeCallingProvider()
+    {
+        await using var fixture = await Fixture.Create();
+        var checkout = await fixture.Core.Db.BillCheckouts.SingleAsync();
+        checkout.PresentedAt = null;
+        await fixture.Core.Db.SaveChangesAsync();
+        await Status(409, () => fixture.CreatePayment());
+        Assert.Equal(0, fixture.Provider.CreateCalls);
+        Assert.Empty(await fixture.Core.Db.Payments.ToListAsync());
+        Assert.Equal("Unpaid", (await fixture.Core.Db.Bills.SingleAsync()).Status);
+    }
+
+    [Fact]
     public async Task CreateAndReplayKeepOneProviderOrderAndPersistRealLinkDetails()
     {
         await using var fixture = await Fixture.Create();

@@ -73,6 +73,27 @@ public sealed class CashRegisterController(
         }, options)), ct);
     }
 
+    [HttpGet("/api/checkout/cash-registers")]
+    public Task<IActionResult> GetAvailableForCheckout([FromQuery] CashRegisterQueryDTO query, CancellationToken ct)
+    {
+        return Execute(async options =>
+        {
+            var request = new CashRegisterListRequest
+            {
+                RestaurantId = query.RestaurantId?.ToString() ?? string.Empty,
+                Page = query.Page,
+                PageSize = query.PageSize
+            };
+            if (query.Search is not null)
+            {
+                request.Search = query.Search;
+            }
+
+            var reply = await client.GetAvailableForCheckoutAsync(request, options);
+            return new PagedResult<CashRegisterDTO>(reply.Items.Select(Map).ToArray(), reply.TotalCount, reply.Page, reply.PageSize);
+        }, ct);
+    }
+
     private static CashRegisterDTO Map(CashRegisterInfo value)
     {
         return new CashRegisterDTO(Guid.Parse(value.CashRegisterId), Guid.Parse(value.RestaurantId), value.Code);

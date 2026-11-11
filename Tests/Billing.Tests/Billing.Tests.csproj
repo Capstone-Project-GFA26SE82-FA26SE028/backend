@@ -22,6 +22,7 @@
     <None Include="../../docker/sql/upgrades/BillingBillRestaurant.sql" Link="Sql/BillingBillRestaurant.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../docker/sql/schema/BillingDb.sql" Link="Sql/BillingDb.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../docker/sql/upgrades/BillingCheckout.sql" Link="Sql/BillingCheckout.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../docker/sql/upgrades/BillingCheckoutRouting.sql" Link="Sql/BillingCheckoutRouting.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../docker/sql/upgrades/BillingCashMethod.sql" Link="Sql/BillingCashMethod.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../docker/sql/upgrades/BillingPayOs.sql" Link="Sql/BillingPayOs.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

@@ -494,3 +494,39 @@ Không có thay đổi schema. Không thêm bảng, cột, DEFAULT, PK, FK hoặ
 - Đã thử Gateway Docker với Identity, Restaurant, Catalog, Ordering, Billing và SQL Server thật. Dùng database Billing kiểm thử riêng với VAT 10%, phí 5%. Hai đơn đã xác nhận được đưa đủ vào bill hai dòng, tổng 23.100 VND. Hai Waiter nhận đồng thời cho kết quả 200 và 409. Các ca thiếu quyền, khác nhà hàng, gọi thêm sau checkout và chốt bill trước kiểm tra đều bị chặn. Database, container và dữ liệu thử riêng đã được dọn; chính sách VAT/phí của BillingDb đang dùng không bị thay đổi.
 
 Đợt này chưa triển khai chọn quầy, thu hộ/bàn giao tiền, quyền Waiter xem QR PayOS hoặc đóng/dọn bàn. Các phần đó thuộc các đợt tiếp theo.
+
+
+## 2026-11-11 — Đợt 2, chuyển quầy và đưa hóa đơn cho khách
+
+### Các thay đổi cần cập nhật trên SQL/ERD
+
+BillCheckout và CashRegister đều là bảng có sẵn. Đợt này không thêm bảng.
+
+| Database/bảng | Cột thêm | Kiểu đầy đủ | NULL / DEFAULT | Khóa và quan hệ |
+| --- | --- | --- | --- | --- |
+| BillingDb.dbo.BillCheckout | CashRegisterId | uniqueidentifier | NULL, không DEFAULT | FK_BillCheckout_CashRegister đến CashRegister.CashRegisterId; CashRegister 1–n BillCheckout, mỗi checkout có 0–1 quầy nhận. Không cascade. |
+| BillingDb.dbo.BillCheckout | SubmittedAt | datetime2(7) | NULL, không DEFAULT | Thời điểm UTC Waiter chuyển quầy; không thêm khóa/index. |
+| BillingDb.dbo.BillCheckout | PreparedByRef | uniqueidentifier | NULL, không DEFAULT | Tham chiếu logic đến Identity.User; một người chuẩn bị nhiều checkout; không FK xuyên database. |
+| BillingDb.dbo.BillCheckout | PreparedAt | datetime2(7) | NULL, không DEFAULT | Thời điểm UTC Cashier chuẩn bị bill thành công. |
+| BillingDb.dbo.BillCheckout | PresentedAt | datetime2(7) | NULL, không DEFAULT | Thời điểm UTC Waiter phụ trách xác nhận đã đưa bill cho khách. |
+
+- SQL tạo mới: `docker/sql/schema/BillingDb.sql`. Upgrade bảo toàn dữ liệu: `docker/sql/upgrades/BillingCheckoutRouting.sql`. Không thay đổi PK, UNIQUE, CHECK hoặc index đã có. Giữ UX_BillCheckout_ActiveSession. Script BillingCheckout.sql chấp nhận cả bản bảy cột trước routing và bản mười hai cột sau routing để db-init chạy lại được; init.sh chạy routing sau upgrade CashRegister.RestaurantId.
+- Database First: đã chạy upgrade trên SQL Server Docker cô lập, scaffold bằng dotnet-ef 8.0.24 trong project tạm không chứa connection string, chỉ nhập BillCheckout/CashRegister và mapping quan hệ bị ảnh hưởng. Dữ liệu cũ giữ nguyên năm giá trị NULL; không đoán quầy, nhân viên hay thời điểm.
+- Đã áp dụng đúng upgrade routing lên BillingDb tại backend-sqlserver-1 ngày 2026-11-11; kiểm tra đủ năm cột và FK. Đã kiểm thử nâng cấp từ bản bảy cột, chạy lặp và bảo toàn phiếu cũ trên database SQL Server riêng. Chưa áp dụng lên SQL Server bên ngoài Docker hoặc đồng bộ repository SQL độc lập trong Downloads trong đợt này.
+- Source đợt này được commit riêng cùng mục nhật ký này; mã commit tra bằng `git log -1 -- docs/database-change-log.md`. Không sửa lịch sử Git.
+
+### Quyền và luồng xử lý
+
+Waiter phụ trách được đối chiếu từ Restaurant.ServiceRequest.HandledByRef, sau Reviewed. Chỉ quầy cùng nhà hàng có đúng một ca Active chưa đóng mới được chọn. Submit cùng quầy trả lại mốc ban đầu, đổi quầy trả 409. Quầy được khóa và ca được đọc lại trong transaction; không tự gán ca cho bill.
+
+Chỉ Cashier sở hữu ca đang mở tại quầy nhận được xem inbox và Synchronize. Kiểm tra trước chuẩn bị bill và khi lưu Ready; PreparedByRef/PreparedAt lưu một lần. Waiter phụ trách có GetPrebill riêng, không được quyền Bill.GetAll/GetById. Present kiểm tra bill khớp nguồn và lưu PresentedAt một lần. Không tạo Payment hoặc đóng phiên ở bước này. Lượt thu Cash/PayOS mới phải đúng quầy nhận và đã Presented; replay giao dịch cũ và xử lý kết quả PayOS đã tạo giữ cơ chế phục hồi. Hủy checkout cũ không có ServiceRequest vẫn phục hồi được sau khi Ordering đã xác nhận mở lại; không tạo thông báo giả.
+
+### Kiểm chứng
+
+- Billing.Tests với SQL Server Docker thật: **374 đạt, 0 bỏ qua, 0 lỗi**. Bao gồm nâng cấp giữ nguyên dữ liệu cũ, hai request chuyển khác quầy, hai request chuẩn bị bill và hai request Presented đồng thời, quyền người phụ trách/nhà hàng/chủ ca, retry giữ mốc thời gian, chặn thu tiền trước Presented và không để lại Payment/Sale dở dang. Identity/Ordering/Restaurant/provider là giả lập trong các test BLL/SQL này; không gọi PayOS thật.
+- Gateway Docker với Identity/Restaurant/Catalog/Ordering/Billing và SQL Server thật: khách QR tạo đơn chờ, Waiter xử lý và review, chọn quầy, Cashier chuẩn bị bill, Waiter lấy và xác nhận đưa khách đạt. Hai Waiter tranh tiếp nhận và hai request chuyển khác quầy đều cho 200/409. Bill đủ hai dòng, tổng 23.100 VND, vẫn Unpaid; không phát sinh Payment. Sai quyền, khác nhà hàng, quầy chưa mở ca, Cashier quầy khác, Waiter không phụ trách và thu tiền trước Presented bị chặn.
+- Dữ liệu thử Billing dùng database riêng với VAT 10%, phí 5%, không sửa chính sách thiếu cấu hình của BillingDb chính. Log/bằng chứng thử nằm ngoài repository. Container Billing/Gateway chính đã được khởi động từ image build mới; chỉ hai service này được recreate trong đợt 2.
+- Chưa triển khai thu hộ/bàn giao tiền qua Waiter, quyền Waiter lấy QR PayOS hoặc xác nhận khách rời bàn/dọn bàn. Chưa kiểm thử thu hộ/PayOS thật hoặc giao diện frontend; đợt này chỉ backend chuyển quầy và đưa hóa đơn.
+
+- Kiểm tra cuối: `dotnet test Backend.sln --no-restore -m:1 --verbosity quiet` đạt **955 test, 80 test điều kiện bị bỏ qua, 0 lỗi**, đủ chín test assembly. Trong lượt Billing SQL riêng, cả 374 test đã chạy đạt, không bỏ qua. 36 test Restaurant SQL và một test model AI không chạy trong lượt solution; không tính là đã đạt. `dotnet build Backend.sln --no-restore -c Release -m:1 --verbosity quiet` đạt, 0 lỗi và 10 cảnh báo nullable có sẵn ở Identity.Common/Shared.Persistence. Build image Billing/Gateway/db-init đạt; bash -n trên initializer đạt (không chạy toàn bộ initializer vào database các service khác).
+- Đã đọc lại diff, kiểm tra `git diff --check`, xác nhận FK mới trusted/enabled và đọc lại trực tiếp SQL của fixture. Đã dọn đúng database/container/người dùng/nhà hàng/đơn thử do đợt này tạo. Gateway dev hiện phục vụ Swagger 200 tại cổng 15000 từ image mới. Không push.

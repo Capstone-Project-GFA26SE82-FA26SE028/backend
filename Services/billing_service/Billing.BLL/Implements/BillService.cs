@@ -14,7 +14,7 @@ namespace Billing.BLL.Implements;
 
 public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository policies,
     IUnitOfWork unitOfWork, IBillingAccess access, IBillSourceClient source,
-    IOptions<CashRegisterAccessSettings> roles, IOptions<BillSettings> settings, TimeProvider clock) : IBillService
+    IOptions<CashRegisterAccessSettings> roles, IOptions<BillSettings> settings, TimeProvider clock, IPaymentRequestClient paymentRequests) : IBillService
 {
     private const decimal MaximumMoney = 9999999999999999.99m;
 
@@ -378,6 +378,11 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
 
         var bill = await bills.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
         RequireBranch(actor, bill.RestaurantId);
+        return await Read(bill, ct);
+    }
+
+    private async Task<BillDTO> Read(Bill bill, CancellationToken ct)
+    {
         var result = Map(bill);
         var sessions = bill.BillLines.Select(line => line.TableSessionRef).Distinct().ToArray();
         if (sessions.Length != 1 || result.Items.Any(line => string.IsNullOrEmpty(line.Item.SourceFingerprint)))
@@ -407,6 +412,40 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         }
 
         return result;
+    }
+
+    public async Task<BillDTO> GetPrebill(Guid sessionId, Guid checkoutId, CancellationToken ct)
+    {
+        if (sessionId == Guid.Empty || checkoutId == Guid.Empty)
+        {
+            throw new BillingException(400, "Vui lòng cung cấp mã phiên và yêu cầu thanh toán hợp lệ.");
+        }
+
+        var snapshot = await source.GetBySessionAsync(sessionId, ct);
+        var actor = await access.GetCurrentScopeAsync(snapshot.RestaurantId, ct);
+        if (actor.UserId == Guid.Empty || actor.IsAdministrator
+            || !roles.Value.WaiterRoleIds.Contains(actor.RoleId, StringComparer.Ordinal)
+            || !actor.RestaurantIds.Contains(snapshot.RestaurantId)
+            || await paymentRequests.GetReviewedWaiterAsync(sessionId, checkoutId, ct) != actor.UserId)
+        {
+            throw new BillingException(403, "Chỉ phục vụ phụ trách yêu cầu tại nhà hàng được xem hóa đơn để đưa khách.");
+        }
+
+        var checkout = await bills.GetActiveCheckoutAsync(sessionId, ct);
+        if (checkout?.CheckoutId != checkoutId || checkout.Status is not ("Ready" or "Paid")
+            || !checkout.PreparedAt.HasValue || !checkout.PreparedByRef.HasValue || !checkout.BillId.HasValue)
+        {
+            throw new BillingException(409, "Thu ngân chưa chuẩn bị xong hóa đơn cho yêu cầu này.");
+        }
+
+        var bill = await bills.GetDetailsAsync(checkout.BillId.Value, ct)
+            ?? throw new BillingException(404, "Không tìm thấy hóa đơn đã chuẩn bị.");
+        if (bill.RestaurantId != snapshot.RestaurantId || bill.BillLines.Any(line => line.TableSessionRef != sessionId))
+        {
+            throw new BillingException(409, "Hóa đơn không thuộc phiên bàn và nhà hàng của yêu cầu.");
+        }
+
+        return await Read(bill, ct);
     }
 
     private void RequireRole(BillingAccessScope actor, bool create)

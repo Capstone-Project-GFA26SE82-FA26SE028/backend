@@ -310,7 +310,7 @@ public sealed class TaxFeePolicyServiceTests
                 {
                     Currency = "VND",
                     OrderPriceBasis = "Exclusive"
-                }), Clock);
+                }), Clock, new TestPaymentRequestClient());
         }
 
         public async ValueTask DisposeAsync()

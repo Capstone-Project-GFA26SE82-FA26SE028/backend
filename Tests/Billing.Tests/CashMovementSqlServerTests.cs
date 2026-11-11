@@ -346,6 +346,11 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
             BillId = bill.BillId,
             TableSessionRef = source.Value.TableSessionId,
             Status = "Ready",
+            CashRegisterId = db.CashShifts.Local.Single().CashRegister.CashRegisterId,
+            SubmittedAt = DateTime.UtcNow,
+            PreparedByRef = actor.Scope.UserId,
+            PreparedAt = DateTime.UtcNow,
+            PresentedAt = DateTime.UtcNow,
             SourceHash = bill.Items[0].Item.SourceFingerprint,
             CreatedAt = DateTime.UtcNow
         });
@@ -378,7 +383,7 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
             {
                 Currency = "VND",
                 OrderPriceBasis = "Exclusive"
-            }), TimeProvider.System);
+            }), TimeProvider.System, new TestPaymentRequestClient());
     }
 
     private BillingDbContext Context()

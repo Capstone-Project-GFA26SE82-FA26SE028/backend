@@ -220,6 +220,12 @@ public sealed class BillingApiBoundaryTests
             throw new InvalidOperationException("Malformed IDs must be rejected before the business service.");
         }
 
+        public Task<PagedResult<CashRegisterDTO>> GetAvailableForCheckout(CashRegisterQueryDTO query, CancellationToken ct)
+        {
+            Calls++;
+            throw new InvalidOperationException("Invalid queries must be rejected before the business service.");
+        }
+
         public Task<CashRegisterDTO> GetById(Guid id, CancellationToken ct)
         {
             Calls++;

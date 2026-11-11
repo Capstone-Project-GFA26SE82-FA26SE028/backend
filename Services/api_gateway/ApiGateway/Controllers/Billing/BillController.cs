@@ -73,6 +73,16 @@ public sealed class BillController(BillGrpc.BillGrpcClient client, IOptions<Bill
         }, options)), ct);
     }
 
+    [HttpGet("/api/table-sessions/{sessionId:guid}/checkout/{checkoutId:guid}/prebill")]
+    public Task<IActionResult> GetPrebill(Guid sessionId, Guid checkoutId, CancellationToken ct)
+    {
+        return Execute(async options => Map(await client.GetPrebillAsync(new BillCheckoutRequest
+        {
+            TableSessionId = sessionId.ToString(),
+            CheckoutId = checkoutId.ToString()
+        }, options)), ct);
+    }
+
     private static decimal Decimal(string value)
     {
         return decimal.Parse(value, CultureInfo.InvariantCulture);

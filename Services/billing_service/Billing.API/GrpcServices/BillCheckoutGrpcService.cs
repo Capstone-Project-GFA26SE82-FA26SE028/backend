@@ -34,6 +34,29 @@ public sealed class BillCheckoutGrpcService(IBillCheckoutService service) : Bill
         return new Empty();
     }
 
+    public override async Task<BillCheckoutInfo> Submit(SubmitCheckoutRequest request, ServerCallContext context)
+    {
+        return Map(await service.Submit(Id(request.TableSessionId), Id(request.CheckoutId), Id(request.CashRegisterId), context.CancellationToken));
+    }
+
+    public override async Task<BillCheckoutInfo> Present(BillCheckoutRequest request, ServerCallContext context)
+    {
+        return Map(await service.Present(Id(request.TableSessionId), Id(request.CheckoutId), context.CancellationToken));
+    }
+
+    public override async Task<BillCheckoutPage> GetIncoming(IncomingCheckoutRequest request, ServerCallContext context)
+    {
+        var value = await service.GetIncoming(Id(request.CashRegisterId), request.Page, request.PageSize, context.CancellationToken);
+        var reply = new BillCheckoutPage
+        {
+            TotalCount = value.TotalCount,
+            Page = value.Page,
+            PageSize = value.PageSize
+        };
+        reply.Items.AddRange(value.Items.Select(Map));
+        return reply;
+    }
+
     private static Guid Id(string value)
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
@@ -61,6 +84,31 @@ public sealed class BillCheckoutGrpcService(IBillCheckoutService service) : Bill
         if (value.SourceHash is not null)
         {
             reply.SourceHash = value.SourceHash;
+        }
+
+        if (value.CashRegisterId.HasValue)
+        {
+            reply.CashRegisterId = value.CashRegisterId.Value.ToString();
+        }
+
+        if (value.SubmittedAt.HasValue)
+        {
+            reply.SubmittedAt = value.SubmittedAt.Value.ToString("O");
+        }
+
+        if (value.PreparedByRef.HasValue)
+        {
+            reply.PreparedByRef = value.PreparedByRef.Value.ToString();
+        }
+
+        if (value.PreparedAt.HasValue)
+        {
+            reply.PreparedAt = value.PreparedAt.Value.ToString("O");
+        }
+
+        if (value.PresentedAt.HasValue)
+        {
+            reply.PresentedAt = value.PresentedAt.Value.ToString("O");
         }
 
         return reply;

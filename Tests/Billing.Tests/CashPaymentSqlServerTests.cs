@@ -137,7 +137,7 @@ public sealed class CashPaymentSqlServerTests : IAsyncLifetime
             Options.Create(new CashRegisterAccessSettings
             {
                 CashierRoleIds = ["cashier"]
-            }), TimeProvider.System, new TestPaymentRequestClient());
+            }), TimeProvider.System, new TestPaymentRequestClient(), new CashRegisterRepository(cancelling), new CashShiftRepository(cancelling));
         async Task<int> Result(Func<Task> action, int success)
         {
             try
@@ -248,6 +248,11 @@ public sealed class CashPaymentSqlServerTests : IAsyncLifetime
             BillId = bill.BillId,
             TableSessionRef = source.Value.TableSessionId,
             Status = "Ready",
+            CashRegisterId = db.CashShifts.Local.Single().CashRegister.CashRegisterId,
+            SubmittedAt = DateTime.UtcNow,
+            PreparedByRef = actor.Scope.UserId,
+            PreparedAt = DateTime.UtcNow,
+            PresentedAt = DateTime.UtcNow,
             SourceHash = bill.Items[0].Item.SourceFingerprint,
             CreatedAt = DateTime.UtcNow
         });
@@ -280,7 +285,7 @@ public sealed class CashPaymentSqlServerTests : IAsyncLifetime
             {
                 Currency = "VND",
                 OrderPriceBasis = "Exclusive"
-            }), TimeProvider.System);
+            }), TimeProvider.System, new TestPaymentRequestClient());
     }
 
     private BillingDbContext Context()

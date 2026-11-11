@@ -244,7 +244,7 @@ public sealed class BillServiceTests
                 {
                     CashierRoleIds = ["cashier"],
                     ManagerRoleIds = ["manager"]
-                }), Options.Create(Settings), TimeProvider.System);
+                }), Options.Create(Settings), TimeProvider.System, new TestPaymentRequestClient());
         }
 
         public static async Task<BillFixture> Create()

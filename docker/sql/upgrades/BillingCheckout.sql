@@ -17,7 +17,7 @@ CREATE TABLE dbo.BillCheckout
 );
 CREATE UNIQUE INDEX UX_BillCheckout_ActiveSession ON dbo.BillCheckout(TableSessionRef) WHERE ReleasedAt IS NULL;
 END;
-IF (SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.BillCheckout')) <> 7
+IF (SELECT COUNT(*) FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.BillCheckout')) NOT IN (7, 12)
     THROW 51000, 'BillCheckout has an unexpected schema. Review it before upgrading.', 1;
 IF EXISTS
 (

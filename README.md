@@ -201,6 +201,16 @@ This keeps SQL/model volumes. Do not append `-v` unless you intend to delete the
 
 ## Checkout before payment
 
+Waiter-to-register routing requires `docker/sql/upgrades/BillingCheckoutRouting.sql` on **BillingDb**, after the existing CashRegister restaurant upgrade. It adds only the five approved nullable BillCheckout fields; legacy rows remain unassigned. Compose db-init runs this repeatable upgrade. Do not run a creation/reset script over an existing database.
+
+After the assigned Waiter acknowledges and reviews the Payment ServiceRequest:
+
+- Waiter lists registers with an active shift: `GET /api/checkout/cash-registers?restaurantId={restaurantId}`. This does not grant general register-management access.
+- Responsible Waiter submits: `POST /api/table-sessions/{sessionId}/checkout/{checkoutId}/submit` with `{ "cashRegisterId": "<register UUID>" }`. Same target is idempotent; another target returns 409. Registers must belong to the session's restaurant and have exactly one unclosed Active shift.
+- Owning Cashier reads `GET /api/cash-registers/{cashRegisterId}/checkouts?page=1&pageSize=20`, then calls the existing `/synchronize`. Ready records PreparedByRef/PreparedAt; no money is collected.
+- Responsible Waiter reads `GET /api/table-sessions/{sessionId}/checkout/{checkoutId}/prebill`, gives the bill to the customer, then calls `POST /api/table-sessions/{sessionId}/checkout/{checkoutId}/present` without a body. PresentedAt is stored once. Other Waiters cannot read/present it; general bill readers retain existing permissions.
+- New cash/PayOS collection requires the receiving register and presentation milestone. Existing payment replay and PayOS settlement recovery remain available. Cash handover through Waiter and customer-departure/cleaning are subsequent increments, not implemented by these routing endpoints.
+
 Checkout prepares the bill before collection. Cash collection is described below. Neither operation closes the table session, revokes guest access or marks the table for cleaning.
 
 Update an existing Docker environment without deleting its databases:
@@ -220,7 +230,7 @@ API sequence in Gateway Swagger:
 1. Join a real open QR session through `POST /api/table-sessions/{sessionId}/guest-access/join`. Preserve the returned HttpOnly guest cookie, as with carts/orders.
 2. Guest calls `POST /api/table-sessions/{sessionId}/checkout`, without a body. Set `Idempotency-Key` to a new UUID for this checkout and **reuse that same UUID on retries**. A second device can retrieve the existing checkout with `GET` on the same route; a different new key cannot replace an active checkout.
 3. `WaitingConfirmation` means new orders are blocked, but already received pending orders still require the existing Waiter confirmation API. Nothing is automatically confirmed or omitted. `Frozen` means Ordering holds the item set and is waiting for Cashier synchronization.
-4. Cashier sends `POST /api/table-sessions/{sessionId}/checkout/{checkoutId}/synchronize` with the normal bearer token, without a body. This resumes the same checkout and creates or refreshes the unpaid bill. `Ready` is returned only after its financial hash matches Ordering. Read bill amounts through the existing authorized `GET /api/bills/{billId}` endpoint. Missing tax/fee policy or invalid source data leaves checkout unready and returns a controlled error.
+4. After the responsible Waiter submits the reviewed request to an open register and before payment collection (see the routing steps above), the Cashier owning that register's active shift sends `POST /api/table-sessions/{sessionId}/checkout/{checkoutId}/synchronize` with the normal bearer token, without a body. This resumes the same checkout and creates or refreshes the unpaid bill. `Ready` is returned only after its financial hash matches Ordering. Read bill amounts through the existing authorized `GET /api/bills/{billId}` endpoint. Missing tax/fee policy or invalid source data leaves checkout unready and returns a controlled error.
 5. Only an assigned Cashier may send `POST /api/table-sessions/{sessionId}/checkout/{checkoutId}/cancel`, before any Payment exists. Only `Released` with `orderingReopened: true` confirms that Ordering acknowledged reopening. An old cancelled key cannot resurrect checkout; a deliberate new checkout needs a new UUID.
 
 For PowerShell testing, use `Invoke-RestMethod -WebSession $guestSession` for QR requests and `-Headers @{ Authorization = "Bearer $cashierAccessToken" }` for Cashier requests. Do not send a staff token in place of the guest cookie when testing the customer flow.
@@ -232,7 +242,7 @@ Cash payment now consumes the matching Ready checkout through Billing's session 
 
 ## Cash payment
 
-Requires the existing Billing/Ordering checkout upgrades above, an enabled `Cash` payment method, a Ready checkout and the collecting Cashier's own Active shift at a register in the bill's assigned restaurant. Admin/Manager cannot collect payments. Admin can read receipts globally; Manager/Cashier can read within active restaurant assignments.
+Requires the existing Billing/Ordering checkout upgrades above, an enabled `Cash` payment method, a Ready checkout already presented by the responsible Waiter, and the collecting Cashier's own Active shift at the selected receiving register in the bill's restaurant. Admin/Manager cannot collect payments. Admin can read receipts globally; Manager/Cashier can read within active restaurant assignments.
 
 Update Docker without resetting data:
 
@@ -368,7 +378,7 @@ ShiftReport persists only the existing ExpectedCash, ActualCash, CashHandleOver,
 
 ## Billing: automatic PayOS bank transfer (increment 6)
 
-Prerequisites: the existing authenticated Cashier, assigned restaurant, own Active shift, held Ready checkout and current Unpaid whole-VND bill. Apply `docker/sql/upgrades/BillingPayOs.sql` to an existing BillingDb before running the new binary. Fresh creation uses `docker/sql/schema/BillingDb.sql`; Compose initialization applies the upgrade automatically. The upgrade adds only three nullable Payment metadata columns and inserts BankTransfer when absent; it preserves a disabled BankTransfer row. Never run the creation script over an existing database.
+Prerequisites: the existing authenticated Cashier, assigned restaurant, own Active shift, held Ready checkout already presented by the responsible Waiter at the selected receiving register, and current Unpaid whole-VND bill. Apply `docker/sql/upgrades/BillingPayOs.sql` to an existing BillingDb before running the new binary. Fresh creation uses `docker/sql/schema/BillingDb.sql`; Compose initialization applies the upgrade automatically. The upgrade adds only three nullable Payment metadata columns and inserts BankTransfer when absent; it preserves a disabled BankTransfer row. Never run the creation script over an existing database.
 
 PayOS is disabled by default. No merchant credentials are committed. For native development:
 

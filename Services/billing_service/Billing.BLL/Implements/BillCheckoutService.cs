@@ -12,10 +12,10 @@ using Shared.Persistence.Interfaces;
 
 namespace Billing.BLL.Implements;
 
-public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBillRepository bills,
+public sealed partial class BillCheckoutService(IBillCheckoutRepository checkouts, IBillRepository bills,
     IUnitOfWork unitOfWork, ICheckoutSourceClient ordering, IBillSourceClient source,
     IBillService billService, IBillingAccess access, IOptions<CashRegisterAccessSettings> roles,
-    TimeProvider clock, IPaymentRequestClient paymentRequests) : IBillCheckoutService
+    TimeProvider clock, IPaymentRequestClient paymentRequests, ICashRegisterRepository registers, ICashShiftRepository shifts) : IBillCheckoutService
 {
     public async Task<BillCheckoutDTO> Request(Guid sessionId, Guid id, string guestToken, CancellationToken ct)
     {
@@ -106,6 +106,12 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         }
 
         await paymentRequests.RequireReviewedAsync(sessionId, id, ct);
+        await InSession(sessionId, async () =>
+        {
+            var current = await Find(sessionId, id, ct);
+            await RequireReceivingCashier(current, ct);
+            return true;
+        }, ct);
         var billId = await checkouts.GetBillIdAsync(sessionId, ct);
         BillDTO bill;
         if (billId.HasValue)
@@ -147,6 +153,9 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
                 throw new BillingException(409, "Yêu cầu thanh toán đã thay đổi trong khi đồng bộ hóa đơn.");
             }
 
+            var cashier = await RequireReceivingCashier(current, ct);
+            current.PreparedAt ??= clock.GetUtcNow().UtcDateTime;
+            current.PreparedByRef ??= cashier.UserId;
             current.BillId = bill.BillId;
             current.SourceHash = hash;
             current.Status = "Ready";
@@ -208,7 +217,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         }, ct);
     }
 
-    private async Task RequireStaff(Guid sessionId, bool allowWaiter, CancellationToken ct)
+    private async Task<BillingAccessScope> RequireStaff(Guid sessionId, bool allowWaiter, CancellationToken ct)
     {
         var snapshot = await source.GetBySessionAsync(sessionId, ct);
         var actor = await access.GetCurrentScopeAsync(snapshot.RestaurantId, ct);
@@ -220,6 +229,8 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         {
             throw new BillingException(403, "Chỉ thu ngân được phân công vào nhà hàng này mới có thể quản lý thanh toán.");
         }
+
+        return actor;
     }
 
     private async Task<T> InSession<T>(Guid sessionId, Func<Task<T>> action, CancellationToken ct)
@@ -268,6 +279,11 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
             CheckoutId = value.CheckoutId,
             TableSessionId = value.TableSessionRef,
             BillId = value.BillId,
+            CashRegisterId = value.CashRegisterId,
+            SubmittedAt = Utc(value.SubmittedAt),
+            PreparedByRef = value.PreparedByRef,
+            PreparedAt = Utc(value.PreparedAt),
+            PresentedAt = Utc(value.PresentedAt),
             Status = value.Status,
             SourceHash = value.SourceHash,
             OrderingReopened = value.Status == "Released" && value.ReleasedAt.HasValue

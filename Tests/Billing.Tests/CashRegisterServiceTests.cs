@@ -272,7 +272,7 @@ public sealed class CashRegisterServiceTests
         }
 
         public Task<PagedResult<CashRegister>> GetPageAsync(CashRegisterQueryDTO query, IReadOnlyList<Guid>? restaurantIds,
-            CancellationToken cancellationToken)
+            bool activeShiftsOnly, CancellationToken cancellationToken)
         {
             ReadScope = restaurantIds;
             var filtered = Values.Where(register => restaurantIds is null || restaurantIds.Contains(register.RestaurantId))

@@ -90,6 +90,12 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
                 throw new BillingException(409, "Yêu cầu trạng thái checkout Ready và ca làm việc duy nhất đang mở của bạn.");
             }
 
+            if (checkout.CashRegisterId != register.CashRegisterId || !checkout.SubmittedAt.HasValue
+                || !checkout.PreparedByRef.HasValue || !checkout.PreparedAt.HasValue || !checkout.PresentedAt.HasValue)
+            {
+                throw new BillingException(409, "Phải dùng đúng quầy nhận và phục vụ đã xác nhận đưa hóa đơn cho khách trước khi thanh toán.");
+            }
+
             var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
             if (bill.Status != "Unpaid" || bill.PaidAt.HasValue || bill.Payments.Any(PayOsPaymentRules.IsBlocking)
                 || bill.Currency != "VND" || bill.TotalAmount <= 0 || bill.TotalAmount > 9999999999999999.99m

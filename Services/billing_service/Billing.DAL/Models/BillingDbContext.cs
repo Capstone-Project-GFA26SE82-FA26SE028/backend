@@ -600,6 +600,10 @@ public partial class BillingDbContext : DbContext
             entity.HasOne(d => d.Bill).WithMany(p => p.BillCheckouts)
                 .HasForeignKey(d => d.BillId)
                 .HasConstraintName("FK_BillCheckout_Bill");
+
+            entity.HasOne(d => d.CashRegister).WithMany(p => p.BillCheckouts)
+                .HasForeignKey(d => d.CashRegisterId)
+                .HasConstraintName("FK_BillCheckout_CashRegister");
         });
 
         OnModelCreatingPartial(modelBuilder);

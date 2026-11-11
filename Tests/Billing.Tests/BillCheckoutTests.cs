@@ -41,6 +41,7 @@ public sealed class BillCheckoutTests
         Assert.Equal("WaitingConfirmation", (await service.Synchronize(requested.TableSessionId, id, default)).Status);
         fixture.Source.Value.PendingOrderCount = 0;
         fixture.Source.Value.Items[0].Quantity = 3;
+        await Route(fixture, service, requested.TableSessionId, id);
         var ready = await service.Synchronize(requested.TableSessionId, id, default);
         Assert.Equal("Ready", ready.Status);
         Assert.Equal(603.75m, (await fixture.Db.Bills.SingleAsync()).SubTotal);
@@ -60,6 +61,7 @@ public sealed class BillCheckoutTests
         var service = Service(fixture, new Remote(fixture.Source));
         var state = await service.Request(fixture.Source.Value.TableSessionId, Guid.NewGuid(), "qr", default);
         await Error(409, () => fixture.Service.Refresh(original.BillId, default));
+        await Route(fixture, service, state.TableSessionId, state.CheckoutId);
         var ready = await service.Synchronize(state.TableSessionId, state.CheckoutId, default);
         Assert.Equal(original.BillId, ready.BillId);
         Assert.Equal(402.5m, (await fixture.Db.Bills.SingleAsync()).SubTotal);
@@ -95,6 +97,7 @@ public sealed class BillCheckoutTests
         };
         var service = Service(fixture, remote);
         var state = await service.Request(fixture.Source.Value.TableSessionId, Guid.NewGuid(), "qr", default);
+        await Route(fixture, service, state.TableSessionId, state.CheckoutId);
         await Error(503, () => service.Synchronize(state.TableSessionId, state.CheckoutId, default));
         Assert.Single(await fixture.Db.Bills.ToListAsync());
         Assert.Equal("Frozen", (await service.GetCurrent(state.TableSessionId, "qr", default)).Status);
@@ -113,6 +116,7 @@ public sealed class BillCheckoutTests
         await fixture.Db.SaveChangesAsync();
         var service = Service(fixture, new Remote(fixture.Source));
         var state = await service.Request(fixture.Source.Value.TableSessionId, Guid.NewGuid(), "qr", default);
+        await Route(fixture, service, state.TableSessionId, state.CheckoutId);
         await Error(409, () => service.Synchronize(state.TableSessionId, state.CheckoutId, default));
         Assert.Empty(await fixture.Db.Bills.ToListAsync());
         Assert.Equal("Frozen", (await service.GetCurrent(state.TableSessionId, "qr", default)).Status);
@@ -162,6 +166,7 @@ public sealed class BillCheckoutTests
         var service = Service(fixture, new Remote(fixture.Source));
         var state = await service.Request(fixture.Source.Value.TableSessionId, Guid.NewGuid(), "qr", default);
         await Error(409, () => service.AuthorizeRelease(state.TableSessionId, state.CheckoutId, default));
+        await Route(fixture, service, state.TableSessionId, state.CheckoutId);
         await service.Synchronize(state.TableSessionId, state.CheckoutId, default);
         var bill = await fixture.Db.Bills.SingleAsync();
         bill.Status = "Paid";
@@ -192,6 +197,8 @@ public sealed class BillCheckoutTests
         await Error(409, () => service.Synchronize(session, id, default));
         Assert.Empty(await fixture.Db.Bills.ToListAsync());
         requests.Reviewed = true;
+        requests.ReviewedWaiterId = fixture.Actor.Scope.UserId;
+        await Route(fixture, service, session, id);
         Assert.Equal("Ready", (await service.Synchronize(session, id, default)).Status);
         Assert.Single(requests.Requests);
         Assert.Single(await fixture.Db.Bills.ToListAsync());
@@ -222,8 +229,44 @@ public sealed class BillCheckoutTests
             new UnitOfWork<BillingDbContext>(fixture.Db), remote, fixture.Source, fixture.Service, fixture.Actor,
             Options.Create(new CashRegisterAccessSettings
             {
+                WaiterRoleIds = ["waiter"],
                 CashierRoleIds = ["cashier"]
-            }), TimeProvider.System, requests ?? new TestPaymentRequestClient());
+            }), TimeProvider.System, requests ?? new TestPaymentRequestClient
+            {
+                ReviewedWaiterId = fixture.Actor.Scope.UserId
+            }, new CashRegisterRepository(fixture.Db), new CashShiftRepository(fixture.Db));
+    }
+
+    private static async Task Route(BillServiceTests.BillFixture fixture, BillCheckoutService service, Guid session, Guid id)
+    {
+        if (await fixture.Db.CashRegisters.CountAsync() == 0)
+        {
+            fixture.Db.CashShifts.Add(new CashShift
+            {
+                CashShiftId = Guid.NewGuid(),
+                CashRegister = new CashRegister
+                {
+                    CashRegisterId = Guid.NewGuid(),
+                    RestaurantId = fixture.Source.Value.RestaurantId,
+                    Code = "CHECKOUT"
+                },
+                CashierUserRef = fixture.Actor.Scope.UserId,
+                OpenedAt = DateTime.UtcNow,
+                Status = "Active"
+            });
+            await fixture.Db.SaveChangesAsync();
+        }
+
+        var previous = fixture.Actor.Scope.RoleId;
+        fixture.Actor.Scope.RoleId = "waiter";
+        try
+        {
+            await service.Submit(session, id, (await fixture.Db.CashRegisters.FirstAsync()).CashRegisterId, default);
+        }
+        finally
+        {
+            fixture.Actor.Scope.RoleId = previous;
+        }
     }
 
     private static async Task Error(int status, Func<Task> action)

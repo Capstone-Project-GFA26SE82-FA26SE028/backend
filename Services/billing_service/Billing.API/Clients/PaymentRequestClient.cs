@@ -18,6 +18,11 @@ public sealed class PaymentRequestClient(ServiceRequestGrpc.ServiceRequestGrpcCl
 
     public async Task RequireReviewedAsync(Guid sessionId, Guid checkoutId, CancellationToken ct)
     {
+        await GetReviewedWaiterAsync(sessionId, checkoutId, ct);
+    }
+
+    public async Task<Guid> GetReviewedWaiterAsync(Guid sessionId, Guid checkoutId, CancellationToken ct)
+    {
         var reply = await Call(options => client.GetByIdAsync(Request(sessionId, checkoutId, string.Empty), options).ResponseAsync,
             sessionId, checkoutId, ct);
         if (reply.Status != "Reviewed" || !reply.HasHandledByRef
@@ -26,12 +31,23 @@ public sealed class PaymentRequestClient(ServiceRequestGrpc.ServiceRequestGrpcCl
         {
             throw new BillingException(409, "Nhân viên phục vụ phải tiếp nhận và xác nhận đã kiểm tra trước khi chốt hóa đơn.");
         }
+
+        return waiterId;
     }
 
     public async Task CancelAsync(Guid sessionId, Guid checkoutId, CancellationToken ct)
     {
-        var reply = await Call(options => client.CancelAsync(Request(sessionId, checkoutId, string.Empty), options).ResponseAsync,
-            sessionId, checkoutId, ct);
+        ServiceRequestInfo reply;
+        try
+        {
+            reply = await Call(options => client.CancelAsync(Request(sessionId, checkoutId, string.Empty), options).ResponseAsync,
+                sessionId, checkoutId, ct);
+        }
+        catch (BillingException error) when (error.StatusCode == 404)
+        {
+            return;
+        }
+
         if (reply.Status != "Cancelled")
         {
             throw new BillingException(503, "Chưa xác minh được kết quả hủy yêu cầu thanh toán.");
@@ -66,7 +82,7 @@ public sealed class PaymentRequestClient(ServiceRequestGrpc.ServiceRequestGrpcCl
                 StatusCode.InvalidArgument => 400,
                 StatusCode.Unauthenticated => 401,
                 StatusCode.PermissionDenied => 403,
-                StatusCode.NotFound => 409,
+                StatusCode.NotFound => 404,
                 StatusCode.FailedPrecondition or StatusCode.Aborted => 409,
                 _ => 503
             }, error.StatusCode is StatusCode.InvalidArgument or StatusCode.Unauthenticated or StatusCode.PermissionDenied

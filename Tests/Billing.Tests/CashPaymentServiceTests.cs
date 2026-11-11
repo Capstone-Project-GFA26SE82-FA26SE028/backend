@@ -24,12 +24,44 @@ public sealed class CashPaymentServiceTests
             fixture.Core.Actor, Options.Create(new CashRegisterAccessSettings
             {
                 CashierRoleIds = ["cashier"]
-            }), TimeProvider.System, new TestPaymentRequestClient());
+            }), TimeProvider.System, new TestPaymentRequestClient(), new CashRegisterRepository(fixture.Db), new CashShiftRepository(fixture.Db));
         var sessionId = fixture.Core.Source.Value.TableSessionId;
         Assert.Equal("Paid", (await checkout.Request(sessionId, fixture.CheckoutId, "guest-session", default)).Status);
         Assert.Equal("Paid", (await checkout.Synchronize(sessionId, fixture.CheckoutId, default)).Status);
         Assert.Equal(0, fixture.Remote.ReleaseCalls);
         Assert.Null((await fixture.Db.BillCheckouts.SingleAsync()).ReleasedAt);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NewCashPaymentRequiresWaiterPresentationAndTheReceivingRegister(bool wrongRegister)
+    {
+        await using var fixture = await Fixture.Create();
+        var checkout = await fixture.Db.BillCheckouts.SingleAsync();
+        if (wrongRegister)
+        {
+            var other = new CashRegister
+            {
+                CashRegisterId = Guid.NewGuid(),
+                RestaurantId = fixture.Bill.RestaurantId,
+                Code = "OTHER"
+            };
+            fixture.Db.CashRegisters.Add(other);
+            checkout.CashRegisterId = other.CashRegisterId;
+        }
+        else
+        {
+            checkout.PresentedAt = null;
+        }
+
+        await fixture.Db.SaveChangesAsync();
+        var error = await Assert.ThrowsAsync<BillingException>(() => fixture.Pay(300));
+        Assert.Equal(409, error.StatusCode);
+        Assert.Empty(await fixture.Db.Payments.ToListAsync());
+        Assert.Empty(await fixture.Db.CashMovements.ToListAsync());
+        Assert.Equal("Unpaid", (await fixture.Db.Bills.SingleAsync()).Status);
+        Assert.Equal("Ready", (await fixture.Db.BillCheckouts.SingleAsync()).Status);
     }
 
     [Fact]
@@ -275,6 +307,11 @@ public sealed class CashPaymentServiceTests
                 TableSessionRef = fixture.Core.Source.Value.TableSessionId,
                 Status = "Ready",
                 CreatedAt = DateTime.UtcNow,
+                CashRegisterId = fixture.Db.CashShifts.Local.Single().CashRegister.CashRegisterId,
+                SubmittedAt = DateTime.UtcNow,
+                PreparedByRef = fixture.Core.Actor.Scope.UserId,
+                PreparedAt = DateTime.UtcNow,
+                PresentedAt = DateTime.UtcNow,
                 SourceHash = fixture.Bill.Items[0].Item.SourceFingerprint
             });
             await fixture.Db.SaveChangesAsync();

@@ -559,7 +559,13 @@ CREATE TABLE dbo.BillCheckout
     Status varchar(20) NOT NULL,
     CreatedAt datetime2(7) NOT NULL,
     ReleasedAt datetime2(7) NULL,
+    CashRegisterId uniqueidentifier NULL,
+    SubmittedAt datetime2(7) NULL,
+    PreparedByRef uniqueidentifier NULL,
+    PreparedAt datetime2(7) NULL,
+    PresentedAt datetime2(7) NULL,
     CONSTRAINT FK_BillCheckout_Bill FOREIGN KEY (BillId) REFERENCES dbo.Bill(BillId),
+    CONSTRAINT FK_BillCheckout_CashRegister FOREIGN KEY (CashRegisterId) REFERENCES dbo.CashRegister(CashRegisterId),
     CONSTRAINT PK_BillCheckout PRIMARY KEY (CheckoutId)
 );
 CREATE UNIQUE INDEX UX_BillCheckout_ActiveSession ON dbo.BillCheckout(TableSessionRef) WHERE ReleasedAt IS NULL;

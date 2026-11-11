@@ -75,7 +75,7 @@ public sealed class CashRegisterService(ICashRegisterRepository registers, IUnit
             RequireBranch(actor, query.RestaurantId.Value);
         }
 
-        var result = await registers.GetPageAsync(query, actor.IsAdministrator ? null : actor.RestaurantIds, cancellationToken);
+        var result = await registers.GetPageAsync(query, actor.IsAdministrator ? null : actor.RestaurantIds, false, cancellationToken);
         return new PagedResult<CashRegisterDTO>(result.Items.Select(Map).ToArray(), result.TotalCount, result.Page, result.PageSize);
     }
 
@@ -92,6 +92,31 @@ public sealed class CashRegisterService(ICashRegisterRepository registers, IUnit
             ?? throw new BillingException(404, "Không tìm thấy quầy thu ngân.");
         RequireBranch(actor, register.RestaurantId);
         return Map(register);
+    }
+
+    public async Task<PagedResult<CashRegisterDTO>> GetAvailableForCheckout(CashRegisterQueryDTO query, CancellationToken cancellationToken)
+    {
+        if (query?.RestaurantId is not Guid restaurantId || restaurantId == Guid.Empty
+            || !new PaginationRequest
+            {
+                Page = query.Page,
+                PageSize = query.PageSize
+            }.IsValid()
+            || query.Search?.Length > 50 || query.Search?.Any(char.IsControl) == true)
+        {
+            throw new BillingException(400, "Yêu cầu nhà hàng, phân trang và từ khóa hợp lệ để chọn quầy thanh toán.");
+        }
+
+        var actor = await access.GetCurrentScopeAsync(restaurantId, cancellationToken);
+        if (actor.UserId == Guid.Empty || actor.IsAdministrator
+            || !settings.Value.WaiterRoleIds.Contains(actor.RoleId, StringComparer.Ordinal))
+        {
+            throw new BillingException(403, "Chỉ nhân viên phục vụ được phân công mới có thể chọn quầy chuyển yêu cầu thanh toán.");
+        }
+
+        RequireBranch(actor, restaurantId);
+        var result = await registers.GetPageAsync(query, [restaurantId], true, cancellationToken);
+        return new PagedResult<CashRegisterDTO>(result.Items.Select(Map).ToArray(), result.TotalCount, result.Page, result.PageSize);
     }
 
     private void RequireRole(BillingAccessScope actor, bool allowCashier)

@@ -36,6 +36,23 @@ public sealed class BillCheckoutRepository(BillingDbContext db) : IBillCheckoutR
                 .AnyAsync(value => value.Bill.BillLines.Any(line => line.TableSessionRef == sessionId), ct);
     }
 
+    public async Task<IReadOnlyList<BillCheckout>> GetIncomingAsync(Guid cashRegisterId, int page, int pageSize, CancellationToken ct)
+    {
+        return await Incoming(cashRegisterId).OrderBy(value => value.SubmittedAt).ThenBy(value => value.CheckoutId)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+    }
+
+    public Task<int> CountIncomingAsync(Guid cashRegisterId, CancellationToken ct)
+    {
+        return Incoming(cashRegisterId).CountAsync(ct);
+    }
+
+    private IQueryable<BillCheckout> Incoming(Guid cashRegisterId)
+    {
+        return db.BillCheckouts.AsNoTracking().Where(value => value.CashRegisterId == cashRegisterId
+            && value.SubmittedAt != null && value.ReleasedAt == null && (value.Status == "Frozen" || value.Status == "Ready"));
+    }
+
     public void Add(BillCheckout value)
     {
         db.BillCheckouts.Add(value);

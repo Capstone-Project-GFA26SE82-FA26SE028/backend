@@ -10,5 +10,6 @@ public interface IBillService
     Task<BillDTO> Refresh(Guid id, CancellationToken ct);
     Task<BillDTO> RefreshForCheckout(Guid id, Guid checkoutId, CancellationToken ct);
     Task<PagedResult<BillDTO>> GetAll(BillQueryDTO query, CancellationToken ct);
+    Task<BillDTO> GetPrebill(Guid sessionId, Guid checkoutId, CancellationToken ct);
     Task<BillDTO> GetById(Guid id, CancellationToken ct);
 }

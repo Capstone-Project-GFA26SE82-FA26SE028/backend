@@ -30,16 +30,16 @@ public sealed class CashRegisterRepositoryTests
             Search = "pos",
             Page = 2,
             PageSize = 1
-        }, [firstRestaurant], default);
+        }, [firstRestaurant], false, default);
 
         Assert.Equal(2, result.TotalCount);
         Assert.Equal("POS-B", Assert.Single(result.Items).Code);
         var empty = await repository.GetPageAsync(new CashRegisterQueryDTO
         {
             RestaurantId = secondRestaurant
-        }, [firstRestaurant], default);
+        }, [firstRestaurant], false, default);
         Assert.Equal(0, empty.TotalCount);
-        var all = await repository.GetPageAsync(new CashRegisterQueryDTO(), null, default);
+        var all = await repository.GetPageAsync(new CashRegisterQueryDTO(), null, false, default);
         Assert.Equal(4, all.TotalCount);
     }
 

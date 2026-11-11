@@ -5,6 +5,7 @@ namespace Billing.Tests;
 
 internal sealed class TestPaymentRequestClient : IPaymentRequestClient
 {
+    public Guid ReviewedWaiterId { get; set; }
     public bool Reviewed { get; set; } = true;
     public bool FailCreate { get; set; }
     public bool FailCancel { get; set; }
@@ -30,6 +31,12 @@ internal sealed class TestPaymentRequestClient : IPaymentRequestClient
         }
 
         return Task.CompletedTask;
+    }
+
+    public async Task<Guid> GetReviewedWaiterAsync(Guid sessionId, Guid checkoutId, CancellationToken ct)
+    {
+        await RequireReviewedAsync(sessionId, checkoutId, ct);
+        return ReviewedWaiterId;
     }
 
     public Task CancelAsync(Guid sessionId, Guid checkoutId, CancellationToken ct)

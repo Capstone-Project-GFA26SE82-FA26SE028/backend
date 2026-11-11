@@ -8,4 +8,5 @@ public interface ICashRegisterService
     Task<CashRegisterDTO> Create(CreateCashRegisterDTO request, CancellationToken cancellationToken);
     Task<PagedResult<CashRegisterDTO>> GetAll(CashRegisterQueryDTO query, CancellationToken cancellationToken);
     Task<CashRegisterDTO> GetById(Guid id, CancellationToken cancellationToken);
+    Task<PagedResult<CashRegisterDTO>> GetAvailableForCheckout(CashRegisterQueryDTO query, CancellationToken cancellationToken);
 }

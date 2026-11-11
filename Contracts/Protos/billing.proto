@@ -39,7 +39,26 @@ service BillCheckoutGrpc {
   rpc GetCurrent(BillCheckoutRequest) returns (BillCheckoutInfo);
   rpc Synchronize(BillCheckoutRequest) returns (BillCheckoutInfo);
   rpc Cancel(BillCheckoutRequest) returns (BillCheckoutInfo);
+  rpc Submit(SubmitCheckoutRequest) returns (BillCheckoutInfo);
+  rpc GetIncoming(IncomingCheckoutRequest) returns (BillCheckoutPage);
+  rpc Present(BillCheckoutRequest) returns (BillCheckoutInfo);
   rpc AuthorizeRelease(BillCheckoutRequest) returns (google.protobuf.Empty);
+}
+message SubmitCheckoutRequest {
+  string table_session_id = 1;
+  string checkout_id = 2;
+  string cash_register_id = 3;
+}
+message IncomingCheckoutRequest {
+  string cash_register_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+message BillCheckoutPage {
+  repeated BillCheckoutInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
 }
 message BillCheckoutRequest {
   string table_session_id = 1;
@@ -53,6 +72,11 @@ message BillCheckoutInfo {
   string status = 4;
   optional string source_hash = 5;
   bool ordering_reopened = 6;
+  optional string cash_register_id = 7;
+  optional string submitted_at = 8;
+  optional string prepared_by_ref = 9;
+  optional string prepared_at = 10;
+  optional string presented_at = 11;
 }
 
 service TaxFeePolicyGrpc {
@@ -90,6 +114,7 @@ service CashRegisterGrpc {
   rpc Create(CreateCashRegisterRequest) returns (CashRegisterInfo);
   rpc GetAll(CashRegisterListRequest) returns (CashRegisterPage);
   rpc GetById(CashRegisterIdRequest) returns (CashRegisterInfo);
+  rpc GetAvailableForCheckout(CashRegisterListRequest) returns (CashRegisterPage);
 }
 
 service CashShiftGrpc {
@@ -146,6 +171,7 @@ message CashRegisterPage {
 }
 
 service BillGrpc {
+  rpc GetPrebill(BillCheckoutRequest) returns (BillInfo);
   rpc Create(CreateBillRequest) returns (BillInfo);
   rpc Refresh(BillIdRequest) returns (BillInfo);
   rpc GetAll(BillListRequest) returns (BillPage);

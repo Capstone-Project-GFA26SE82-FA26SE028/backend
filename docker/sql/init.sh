@@ -19,6 +19,7 @@ for database in IdentityDb RestaurantDb OrderingDb InventoryDb CatalogDb Custome
     if [[ "$database" == "BillingDb" ]]; then
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCheckout.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashRegisterRestaurant.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCheckoutRouting.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingBillRestaurant.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashMethod.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingPayOs.sql
@@ -66,6 +67,7 @@ GO
     if [[ "$database" == "BillingDb" ]]; then
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCheckout.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashRegisterRestaurant.sql
+        "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCheckoutRouting.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingBillRestaurant.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingCashMethod.sql
         "${sqlcmd[@]}" -d "$database" -i /init/upgrades/BillingPayOs.sql

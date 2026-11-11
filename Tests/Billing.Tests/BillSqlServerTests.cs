@@ -12,7 +12,7 @@ using Shared.Persistence.UnitOfWorks;
 
 namespace Billing.Tests;
 
-public sealed class BillSqlServerTests : IAsyncLifetime
+public sealed partial class BillSqlServerTests : IAsyncLifetime
 {
     private const string Prefix = "CodexBillingBill_";
     private readonly string _database = Prefix + Guid.NewGuid().ToString("N");
@@ -208,7 +208,7 @@ public sealed class BillSqlServerTests : IAsyncLifetime
             {
                 Currency = "VND",
                 OrderPriceBasis = "Exclusive"
-            }), TimeProvider.System);
+            }), TimeProvider.System, new TestPaymentRequestClient());
     }
 
     [BillingSqlServerFact]

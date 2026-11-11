@@ -26,9 +26,15 @@ public sealed class CashRegisterRepository(BillingDbContext db)
     }
 
     public async Task<PagedResult<CashRegister>> GetPageAsync(CashRegisterQueryDTO query,
-        IReadOnlyList<Guid>? restaurantIds, CancellationToken cancellationToken)
+        IReadOnlyList<Guid>? restaurantIds, bool activeShiftsOnly, CancellationToken cancellationToken)
     {
         var source = _context.CashRegisters.AsNoTracking();
+        if (activeShiftsOnly)
+        {
+            source = source.Where(register => register.CashShifts.Count(shift => shift.ClosedAt == null) == 1
+                && register.CashShifts.Any(shift => shift.Status == "Active" && shift.ClosedAt == null));
+        }
+
         if (restaurantIds is not null)
         {
             source = source.Where(register => restaurantIds.Contains(register.RestaurantId));

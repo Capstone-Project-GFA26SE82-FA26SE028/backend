@@ -42,6 +42,25 @@ public sealed class CashRegisterGrpcService(ICashRegisterService service) : Cash
         return Map(await service.GetById(ParseId(request.CashRegisterId, "quầy thu ngân"), context.CancellationToken));
     }
 
+    public override async Task<CashRegisterPage> GetAvailableForCheckout(CashRegisterListRequest request, ServerCallContext context)
+    {
+        var result = await service.GetAvailableForCheckout(new CashRegisterQueryDTO
+        {
+            RestaurantId = ParseId(request.RestaurantId, "nhà hàng"),
+            Search = request.HasSearch ? request.Search : null,
+            Page = request.Page,
+            PageSize = request.PageSize
+        }, context.CancellationToken);
+        var reply = new CashRegisterPage
+        {
+            TotalCount = result.TotalCount,
+            Page = result.Page,
+            PageSize = result.PageSize
+        };
+        reply.Items.AddRange(result.Items.Select(Map));
+        return reply;
+    }
+
     private static Guid ParseId(string value, string resource)
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
