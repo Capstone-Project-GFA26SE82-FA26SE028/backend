@@ -4,4 +4,5 @@ public sealed class CashRegisterAccessSettings
 {
     public string[] ManagerRoleIds { get; set; } = [];
     public string[] CashierRoleIds { get; set; } = [];
+    public string[] WaiterRoleIds { get; set; } = [];
 }

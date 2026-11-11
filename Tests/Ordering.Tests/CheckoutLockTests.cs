@@ -96,6 +96,11 @@ public sealed class CheckoutLockTests
 
     private sealed class Access : ICheckoutAccess
     {
+        public Task RequireRequesterAsync(Guid sessionId, string guestToken, CancellationToken ct)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task RequireAsync(Guid sessionId, string guestToken, bool write, CancellationToken ct)
         {
             return Task.CompletedTask;

@@ -171,14 +171,59 @@ public sealed class BillCheckoutTests
         Assert.False((await service.GetCurrent(state.TableSessionId, "qr", default)).OrderingReopened);
     }
 
-    private static BillCheckoutService Service(BillServiceTests.BillFixture fixture, Remote remote)
+    [Fact]
+    public async Task CashierCannotCreateBillUntilWaiterHasReviewedAndRetryResumesSameRequest()
+    {
+        await using var fixture = await BillServiceTests.BillFixture.Create();
+        var requests = new TestPaymentRequestClient
+        {
+            Reviewed = false,
+            FailCreate = true
+        };
+        var remote = new Remote(fixture.Source);
+        var service = Service(fixture, remote, requests);
+        var session = fixture.Source.Value.TableSessionId;
+        var id = Guid.NewGuid();
+        await Error(503, () => service.Request(session, id, "qr", default));
+        Assert.Contains(id, remote.HeldCheckouts);
+        Assert.Equal("Preparing", (await fixture.Db.BillCheckouts.SingleAsync()).Status);
+        requests.FailCreate = false;
+        await service.Request(session, id, "qr", default);
+        await Error(409, () => service.Synchronize(session, id, default));
+        Assert.Empty(await fixture.Db.Bills.ToListAsync());
+        requests.Reviewed = true;
+        Assert.Equal("Ready", (await service.Synchronize(session, id, default)).Status);
+        Assert.Single(requests.Requests);
+        Assert.Single(await fixture.Db.Bills.ToListAsync());
+    }
+
+    [Fact]
+    public async Task CancellationReplyFailureCanBeRetriedAfterOrderingHasReopened()
+    {
+        await using var fixture = await BillServiceTests.BillFixture.Create();
+        var requests = new TestPaymentRequestClient
+        {
+            FailCancel = true
+        };
+        var service = Service(fixture, new Remote(fixture.Source), requests);
+        var session = fixture.Source.Value.TableSessionId;
+        var id = Guid.NewGuid();
+        await service.Request(session, id, "qr", default);
+        await Error(503, () => service.Cancel(session, id, default));
+        Assert.Equal("Released", (await fixture.Db.BillCheckouts.SingleAsync()).Status);
+        requests.FailCancel = false;
+        Assert.True((await service.Cancel(session, id, default)).OrderingReopened);
+        Assert.Contains(id, requests.Cancelled);
+    }
+
+    private static BillCheckoutService Service(BillServiceTests.BillFixture fixture, Remote remote, TestPaymentRequestClient? requests = null)
     {
         return new BillCheckoutService(new BillCheckoutRepository(fixture.Db), new BillRepository(fixture.Db),
             new UnitOfWork<BillingDbContext>(fixture.Db), remote, fixture.Source, fixture.Service, fixture.Actor,
             Options.Create(new CashRegisterAccessSettings
             {
                 CashierRoleIds = ["cashier"]
-            }), TimeProvider.System);
+            }), TimeProvider.System, requests ?? new TestPaymentRequestClient());
     }
 
     private static async Task Error(int status, Func<Task> action)

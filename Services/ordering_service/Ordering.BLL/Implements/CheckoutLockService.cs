@@ -18,7 +18,7 @@ public sealed class CheckoutLockService(ICheckoutLockRepository locks, IOrderRep
 
     public async Task<CheckoutLockDTO> Begin(Guid sessionId, Guid id, string guestToken, CancellationToken ct)
     {
-        await access.RequireAsync(sessionId, guestToken, true, ct);
+        await access.RequireRequesterAsync(sessionId, guestToken, ct);
         return await transaction.ExecuteAsync(async () =>
         {
             await locks.LockSessionAsync(sessionId, ct);

@@ -15,7 +15,7 @@ namespace Billing.BLL.Implements;
 public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBillRepository bills,
     IUnitOfWork unitOfWork, ICheckoutSourceClient ordering, IBillSourceClient source,
     IBillService billService, IBillingAccess access, IOptions<CashRegisterAccessSettings> roles,
-    TimeProvider clock) : IBillCheckoutService
+    TimeProvider clock, IPaymentRequestClient paymentRequests) : IBillCheckoutService
 {
     public async Task<BillCheckoutDTO> Request(Guid sessionId, Guid id, string guestToken, CancellationToken ct)
     {
@@ -23,7 +23,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         await ordering.VerifyAsync(sessionId, guestToken, ct);
         if (string.IsNullOrEmpty(guestToken))
         {
-            await RequireCashier(sessionId, ct);
+            await RequireStaff(sessionId, true, ct);
         }
 
         var value = await InSession(sessionId, async () =>
@@ -61,6 +61,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         }
 
         var remote = await ordering.BeginAsync(sessionId, id, guestToken, ct);
+        await paymentRequests.CreateAsync(sessionId, id, guestToken, ct);
         return await InSession(sessionId, async () =>
         {
             var current = await Find(sessionId, id, ct);
@@ -92,7 +93,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
     public async Task<BillCheckoutDTO> Synchronize(Guid sessionId, Guid id, CancellationToken ct)
     {
         ValidateIds(sessionId, id);
-        await RequireCashier(sessionId, ct);
+        await RequireStaff(sessionId, false, ct);
         var state = await Request(sessionId, id, string.Empty, ct);
         if (state.Status is "WaitingConfirmation" or "Paid")
         {
@@ -104,6 +105,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
             throw new BillingException(409, "Yêu cầu thanh toán chưa được khóa nên chưa thể chuẩn bị thanh toán.");
         }
 
+        await paymentRequests.RequireReviewedAsync(sessionId, id, ct);
         var billId = await checkouts.GetBillIdAsync(sessionId, ct);
         BillDTO bill;
         if (billId.HasValue)
@@ -155,7 +157,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
     public async Task<BillCheckoutDTO> Cancel(Guid sessionId, Guid id, CancellationToken ct)
     {
         ValidateIds(sessionId, id);
-        await RequireCashier(sessionId, ct);
+        await RequireStaff(sessionId, false, ct);
         var value = await InSession(sessionId, async () =>
         {
             var current = await Find(sessionId, id, ct);
@@ -173,23 +175,26 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         }, ct);
         if (value.ReleasedAt.HasValue)
         {
+            await paymentRequests.CancelAsync(sessionId, id, ct);
             return Map(value);
         }
 
         await ordering.ReleaseAsync(sessionId, id, ct);
-        return await InSession(sessionId, async () =>
+        var released = await InSession(sessionId, async () =>
         {
             var current = await Find(sessionId, id, ct);
             current.Status = "Released";
             current.ReleasedAt ??= clock.GetUtcNow().UtcDateTime;
             return Map(current);
         }, ct);
+        await paymentRequests.CancelAsync(sessionId, id, ct);
+        return released;
     }
 
     public async Task AuthorizeRelease(Guid sessionId, Guid id, CancellationToken ct)
     {
         ValidateIds(sessionId, id);
-        await RequireCashier(sessionId, ct);
+        await RequireStaff(sessionId, false, ct);
         await InSession(sessionId, async () =>
         {
             var value = await Find(sessionId, id, ct);
@@ -203,12 +208,14 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         }, ct);
     }
 
-    private async Task RequireCashier(Guid sessionId, CancellationToken ct)
+    private async Task RequireStaff(Guid sessionId, bool allowWaiter, CancellationToken ct)
     {
         var snapshot = await source.GetBySessionAsync(sessionId, ct);
         var actor = await access.GetCurrentScopeAsync(snapshot.RestaurantId, ct);
+        var allowed = roles.Value.CashierRoleIds.Contains(actor.RoleId, StringComparer.Ordinal)
+            || (allowWaiter && roles.Value.WaiterRoleIds.Contains(actor.RoleId, StringComparer.Ordinal));
         if (actor.UserId == Guid.Empty || actor.IsAdministrator
-            || !roles.Value.CashierRoleIds.Contains(actor.RoleId, StringComparer.Ordinal)
+            || !allowed
             || !actor.RestaurantIds.Contains(snapshot.RestaurantId))
         {
             throw new BillingException(403, "Chỉ thu ngân được phân công vào nhà hàng này mới có thể quản lý thanh toán.");

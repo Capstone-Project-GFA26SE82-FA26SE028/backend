@@ -10,6 +10,21 @@ builder.Services.AddGrpc(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.Configure<Restaurant.Common.Settings.BillingReadSettings>(builder.Configuration.GetSection("BillingRead"));
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IBillingSessionService, Restaurant.BLL.Implements.BillingSessionService>();
+builder.Services.AddOptions<Restaurant.Common.Settings.ServiceRequestSettings>()
+    .Bind(builder.Configuration.GetSection("ServiceRequests"))
+    .Validate(value => value.WaiterRoleIds.Length > 0 && value.CashierRoleIds.Length > 0
+        && value.DependencyTimeoutSeconds is > 0 and <= 30
+        && value.WaiterRoleIds.Concat(value.CashierRoleIds).All(role => !string.IsNullOrWhiteSpace(role))
+        && !value.WaiterRoleIds.Intersect(value.CashierRoleIds, StringComparer.Ordinal).Any(),
+        "Vui lòng cấu hình vai trò phục vụ và thu ngân riêng biệt cho yêu cầu thanh toán.")
+    .ValidateOnStart();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IServiceRequestService, Restaurant.BLL.Implements.ServiceRequestService>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IPaymentRequestOrderClient, Restaurant.API.Management.PaymentRequestOrderClient>();
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.CheckoutLockGrpc.CheckoutLockGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
+});
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.Configure<Restaurant.Common.Settings.ReservationSettings>(builder.Configuration.GetSection("Reservations"));
 builder.Services.Configure<Restaurant.Common.Settings.RestaurantStaffSettings>(builder.Configuration.GetSection("RestaurantStaff"));
@@ -77,6 +92,7 @@ app.MapGrpcService<Restaurant.API.GrpcServices.ReservationGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantStaffGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantAccessGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.BillingSessionGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.ServiceRequestGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.GuestAccessGrpcService>();
 
 app.MapGet("/health/live", () =>

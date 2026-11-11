@@ -34,6 +34,8 @@ public static class BillingServiceExtensions
             .Validate(value => value.ManagerRoleIds.Length > 0 && value.CashierRoleIds.Length > 0
                 && value.ManagerRoleIds.All(role => !string.IsNullOrWhiteSpace(role))
                 && value.CashierRoleIds.All(role => !string.IsNullOrWhiteSpace(role))
+                && value.WaiterRoleIds.All(role => !string.IsNullOrWhiteSpace(role))
+                && !value.WaiterRoleIds.Intersect(value.ManagerRoleIds.Concat(value.CashierRoleIds), StringComparer.Ordinal).Any()
                 && !value.ManagerRoleIds.Intersect(value.CashierRoleIds, StringComparer.Ordinal).Any(),
                 "Vui lòng cấu hình ID vai trò quản lý và thu ngân riêng biệt để truy cập quầy thu ngân.")
             .ValidateOnStart();
@@ -52,6 +54,11 @@ public static class BillingServiceExtensions
         {
             options.Address = uri;
         });
+        services.AddGrpcClient<ServiceRequestGrpc.ServiceRequestGrpcClient>(options =>
+        {
+            options.Address = uri;
+        });
+        services.AddScoped<IPaymentRequestClient, PaymentRequestClient>();
         services.AddGrpcClient<Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient>(options =>
         {
             var orderingAddress = configuration["GrpcServices:Ordering"];

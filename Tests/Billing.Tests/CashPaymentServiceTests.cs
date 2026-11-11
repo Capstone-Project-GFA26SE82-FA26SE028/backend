@@ -24,7 +24,7 @@ public sealed class CashPaymentServiceTests
             fixture.Core.Actor, Options.Create(new CashRegisterAccessSettings
             {
                 CashierRoleIds = ["cashier"]
-            }), TimeProvider.System);
+            }), TimeProvider.System, new TestPaymentRequestClient());
         var sessionId = fixture.Core.Source.Value.TableSessionId;
         Assert.Equal("Paid", (await checkout.Request(sessionId, fixture.CheckoutId, "guest-session", default)).Status);
         Assert.Equal("Paid", (await checkout.Synchronize(sessionId, fixture.CheckoutId, default)).Status);

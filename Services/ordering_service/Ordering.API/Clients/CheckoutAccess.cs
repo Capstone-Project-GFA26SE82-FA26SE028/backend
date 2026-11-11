@@ -13,6 +13,16 @@ public sealed class CheckoutAccess(IOrderingAccess guests, IBillingSessionClient
 {
     public async Task RequireAsync(Guid sessionId, string guestToken, bool write, CancellationToken ct)
     {
+        await Require(sessionId, guestToken, write, false, ct);
+    }
+
+    public async Task RequireRequesterAsync(Guid sessionId, string guestToken, CancellationToken ct)
+    {
+        await Require(sessionId, guestToken, true, true, ct);
+    }
+
+    private async Task Require(Guid sessionId, string guestToken, bool write, bool allowWaiter, CancellationToken ct)
+    {
         if (!string.IsNullOrEmpty(guestToken))
         {
             await guests.RequireAsync(sessionId, null, guestToken, ct);
@@ -38,7 +48,9 @@ public sealed class CheckoutAccess(IOrderingAccess guests, IBillingSessionClient
             throw new OrderingException(503, "Dịch vụ nhà hàng trả về phạm vi nhân viên không hợp lệ.");
         }
 
-        if (write && (actor.IsAdministrator || !settings.Value.CheckoutCashierRoleIds.Contains(actor.RoleId, StringComparer.Ordinal)
+        var allowed = settings.Value.CheckoutCashierRoleIds.Contains(actor.RoleId, StringComparer.Ordinal)
+            || (allowWaiter && settings.Value.CheckoutWaiterRoleIds.Contains(actor.RoleId, StringComparer.Ordinal));
+        if (write && (actor.IsAdministrator || !allowed
             || !actor.RestaurantIds.Contains(branch.ToString())))
         {
             throw new OrderingException(403, "Chỉ thu ngân được phân công mới có thể quản lý thanh toán.");

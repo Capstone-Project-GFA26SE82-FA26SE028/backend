@@ -54,6 +54,8 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 services.AddSingleton<IQrImageStore>(_qrImages);
                 services.AddScoped<RestaurantDbContext>(_ => new TestDb(_connection));
                 services.AddSingleton<TimeProvider>(_reservationClock);
+                services.RemoveAll<IPaymentRequestOrderClient>();
+                services.AddSingleton<IPaymentRequestOrderClient>(new PaymentRequestOrders(() => _pendingPaymentOrders));
                 services.RemoveAll<IManagementAccess>();
                 services.AddScoped<IManagementAccess, TestAccess>();
                 services.RemoveAll<IStaffIdentity>();
@@ -89,6 +91,8 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 services.AddGrpcClient<ReservationGrpc.ReservationGrpcClient>()
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
                 services.AddGrpcClient<TableSessionGrpc.TableSessionGrpcClient>()
+                    .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
+                services.AddGrpcClient<ServiceRequestGrpc.ServiceRequestGrpcClient>()
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
             });
         });

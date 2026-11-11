@@ -481,3 +481,16 @@ Danh sách file của đợt sửa:
 ### Đồng bộ repo SQL riêng trong Downloads — 2026-10-28
 
 Đã đồng bộ `C:/Users/phucg/Downloads/Database-SQLServer-main/Database-SQLServer/BillingDb.sql`: thêm đúng ba cột PayOS nullable/không default và seed Cash/BankTransfer nếu thiếu, giữ bản ghi đã có kể cả bị tắt. Đây là đưa các thay đổi Billing đã được phép vào bản SQL riêng, không phát sinh schema mới. Chỉ file BillingDb.sql thay đổi trong repo SQL; OrderingDb.sql giữ nguyên. Đã kiểm thử bản sao script trên database SQL Server Docker cô lập CodexBillingSqlSync_* và kiểm tra đúng varchar(100)/varchar(2048)/varchar(max), NULL, default=0 cùng hai seed; đã xóa database thử. Không chạy script reset vào BillingDb đang dùng. File Downloads là script tạo mới có DROP/CREATE; nâng cấp database có dữ liệu dùng docker/sql/upgrades/BillingPayOs.sql trong backend. Repo SQL và backend đều chưa commit/push ở lần đồng bộ này.
+
+## 2026-11-11 — Đợt 1, yêu cầu thanh toán và Waiter kiểm tra
+
+Không có thay đổi schema. Không thêm bảng, cột, DEFAULT, PK, FK hoặc index. Không cần script upgrade hoặc scaffold cho đợt này.
+
+- Tái sử dụng RestaurantDb.ServiceRequest với Type = Payment. ServiceRequestId dùng cùng UUID với BillCheckout.CheckoutId và CheckoutLock.CheckoutId để liên kết một lượt yêu cầu giữa ba service. Đây là quan hệ logic, không có FK xuyên database.
+- RequestedAt lưu lúc yêu cầu; AcknowledgedAt và HandledByRef lưu lúc Waiter tiếp nhận. Status lần lượt là Requested, Acknowledged, Reviewed; Cancelled kết thúc yêu cầu bị hủy. CompletedAt không được điền khi mới kiểm tra xong. Schema hiện chưa lưu riêng thời điểm kiểm tra.
+- RestaurantStaff hiện có xác định phạm vi nhà hàng. Chỉ Waiter được tiếp nhận/kiểm tra; Cashier vẫn giữ quyền đồng bộ bill và hủy checkout. Waiter được khởi tạo checkout giúp khách nhưng không được bind bill hoặc giải phóng khóa Ordering.
+- Khi kiểm tra xong, Restaurant yêu cầu Ordering xác nhận Frozen dưới khóa phiên. Đơn chờ xác nhận phải được xử lý trước. Billing kiểm tra trạng thái Reviewed trước khi đồng bộ bill sang Ready. Nếu mất phản hồi, tiếp tục bằng cùng UUID.
+- Kiểm thử solution đạt 942 ca, bỏ qua 77 ca cần SQL/model thật. Build Release đạt, còn 10 cảnh báo nullable có sẵn tại Identity.Common và Shared.Persistence.
+- Đã thử Gateway Docker với Identity, Restaurant, Catalog, Ordering, Billing và SQL Server thật. Dùng database Billing kiểm thử riêng với VAT 10%, phí 5%. Hai đơn đã xác nhận được đưa đủ vào bill hai dòng, tổng 23.100 VND. Hai Waiter nhận đồng thời cho kết quả 200 và 409. Các ca thiếu quyền, khác nhà hàng, gọi thêm sau checkout và chốt bill trước kiểm tra đều bị chặn. Database, container và dữ liệu thử riêng đã được dọn; chính sách VAT/phí của BillingDb đang dùng không bị thay đổi.
+
+Đợt này chưa triển khai chọn quầy, thu hộ/bàn giao tiền, quyền Waiter xem QR PayOS hoặc đóng/dọn bàn. Các phần đó thuộc các đợt tiếp theo.

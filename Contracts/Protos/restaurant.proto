@@ -44,6 +44,47 @@ message CurrentRestaurantScopeReply {
 }
 option csharp_namespace = "Backend.Contracts.Restaurant";
 package restaurant;
+
+service ServiceRequestGrpc {
+  rpc Create(PaymentServiceRequest) returns (ServiceRequestInfo);
+  rpc GetById(PaymentServiceRequest) returns (ServiceRequestInfo);
+  rpc GetAll(ServiceRequestListRequest) returns (ServiceRequestPage);
+  rpc Acknowledge(PaymentServiceRequest) returns (ServiceRequestInfo);
+  rpc Review(PaymentServiceRequest) returns (ServiceRequestInfo);
+  rpc Cancel(PaymentServiceRequest) returns (ServiceRequestInfo);
+}
+
+message PaymentServiceRequest {
+  string table_session_id = 1;
+  string service_request_id = 2;
+  string guest_token = 3;
+}
+
+message ServiceRequestListRequest {
+  string restaurant_id = 1;
+  optional string status = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message ServiceRequestInfo {
+  string service_request_id = 1;
+  string table_session_id = 2;
+  string restaurant_id = 3;
+  string type = 4;
+  string status = 5;
+  string requested_at = 6;
+  optional string acknowledged_at = 7;
+  optional string completed_at = 8;
+  optional string handled_by_ref = 9;
+}
+
+message ServiceRequestPage {
+  repeated ServiceRequestInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
 import "google/protobuf/empty.proto";
 
 message IdRequest { string id = 1; string version = 2; }

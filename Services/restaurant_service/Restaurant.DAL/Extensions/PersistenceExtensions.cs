@@ -27,6 +27,7 @@ public static class PersistenceExtensions
         services.AddScoped<Interfaces.ITableSessionRepository, Implements.TableSessionRepository>();
         services.AddScoped<Interfaces.IReservationRepository, Implements.ReservationRepository>();
         services.AddScoped<Interfaces.IRestaurantStaffRepository, Implements.RestaurantStaffRepository>();
+        services.AddScoped<Interfaces.IServiceRequestRepository, Implements.ServiceRequestRepository>();
         services.AddScoped<IGenericRepository<RestaurantStaff>>(provider => provider.GetRequiredService<Interfaces.IRestaurantStaffRepository>());
         services.AddScoped<Interfaces.ISessionTableRepository, Implements.SessionTableRepository>();
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.Area>>(provider => provider.GetRequiredService<Interfaces.IAreaRepository>());
@@ -36,7 +37,7 @@ public static class PersistenceExtensions
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.Qr>>(provider => provider.GetRequiredService<Interfaces.IQrRepository>());
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.Reservation>, GenericRepository<global::Restaurant.DAL.Models.Reservation, RestaurantDbContext>>();
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.Restaurant>>(provider => provider.GetRequiredService<Interfaces.IRestaurantRepository>());
-        services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.ServiceRequest>, GenericRepository<global::Restaurant.DAL.Models.ServiceRequest, RestaurantDbContext>>();
+        services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.ServiceRequest>>(provider => provider.GetRequiredService<Interfaces.IServiceRequestRepository>());
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.SessionTable>>(provider => provider.GetRequiredService<Interfaces.ISessionTableRepository>());
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.Table>>(provider => provider.GetRequiredService<Interfaces.ITableRepository>());
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.TableSession>>(provider => provider.GetRequiredService<Interfaces.ITableSessionRepository>());
