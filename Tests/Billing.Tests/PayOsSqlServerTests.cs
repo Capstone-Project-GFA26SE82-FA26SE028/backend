@@ -12,7 +12,7 @@ using Shared.Persistence.UnitOfWorks;
 
 namespace Billing.Tests;
 
-public sealed class PayOsSqlServerTests : IAsyncLifetime
+public sealed partial class PayOsSqlServerTests : IAsyncLifetime
 {
     private const string Prefix = "CodexBillingPayOs_";
     private readonly string _database = Prefix + Guid.NewGuid().ToString("N");
@@ -254,19 +254,23 @@ public sealed class PayOsSqlServerTests : IAsyncLifetime
     }
 
     private static PayOsPaymentService Make(BillingDbContext db, BillServiceTests.BillSource source, ShiftIdentity actor,
-        PayOsPaymentServiceTests.FakeProvider provider)
+        PayOsPaymentServiceTests.FakeProvider provider, Guid? waiterId = null)
     {
         return new PayOsPaymentService(new PaymentRepository(db), new BillRepository(db), new BillCheckoutRepository(db),
             new CashShiftRepository(db), new CashRegisterRepository(db), new PaymentMethodRepository(db),
             new PaymentWebhookRepository(db), new UnitOfWork<BillingDbContext>(db), actor, Service(db, source, actor),
             new CashPaymentServiceTests.CheckoutSource(), provider, Options.Create(new CashRegisterAccessSettings
             {
+                WaiterRoleIds = ["waiter"],
                 CashierRoleIds = ["cashier"],
                 ManagerRoleIds = ["manager"]
             }), Options.Create(new PayOsSettings
             {
                 Enabled = true
-            }), TimeProvider.System);
+            }), TimeProvider.System, new TestPaymentRequestClient
+            {
+                ReviewedWaiterId = waiterId ?? Guid.Empty
+            });
     }
 
     private static ShiftIdentity CashActor(BillServiceTests.BillSource source)
@@ -344,6 +348,7 @@ public sealed class PayOsSqlServerTests : IAsyncLifetime
         return new BillService(new BillRepository(db), new TaxFeePolicyRepository(db),
             new UnitOfWork<BillingDbContext>(db), identity, source, Options.Create(new CashRegisterAccessSettings
             {
+                WaiterRoleIds = ["waiter"],
                 CashierRoleIds = ["cashier"],
                 ManagerRoleIds = ["manager"]
             }), Options.Create(new BillSettings

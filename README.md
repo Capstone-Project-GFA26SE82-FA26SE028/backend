@@ -441,6 +441,25 @@ POST /api/payments/payos/webhook
 
 GET is a cached read: Admin can read system-wide; Manager/Cashier only assigned branches. Reconcile and Cancel require the owning Cashier in the assigned branch. Reconcile reads the provider; Cancel first persists cancellation intent, then asks PayOS and verifies the result. Neither endpoint accepts a body. Bank-specific reads are separate from the existing cash receipt endpoint.
 
+### Waiter presents the Cashier-created PayOS QR
+
+After the responsible Waiter has presented the prepared bill, the owning Cashier creates the PayOS attempt using the endpoint above. The responsible Waiter uses these separate employee Bearer endpoints:
+
+```http
+GET /api/table-sessions/{sessionId}/checkout/{checkoutId}/payments/payos?page=1&pageSize=20
+GET /api/table-sessions/{sessionId}/checkout/{checkoutId}/payments/{paymentId}/payos
+```
+
+Both reads require an active restaurant assignment and the same Waiter recorded as handling the reviewed payment ServiceRequest. They validate the session, checkout, receiving register, presented bill and frozen financial hash. They do not grant Waiter the existing Cashier create/reconcile/cancel operations or the general bill/payment administration APIs.
+
+The paged response contains attempts correlated to this checkout by the stored payment request key and bill, including retired attempts. Do not select a payment by a guessed latest timestamp. Present only an attempt with `canPresentQr = true`; its `qrCode` and `checkoutUrl` are the provider values already stored by Billing. Unknown, cancelled, locally expired, paid, conflicting or incomplete attempts return these fields as null. Local expiry hides the QR without claiming that the bank confirmed cancellation or reopening ordering.
+
+`paymentConfirmed = true` requires a verified full PayOS receipt and the matching Paid bill/checkout. `status` is the attempt state; `billStatus` is separate. `requiresReview = true` signals inconsistent, ambiguous or review-required records; do not display these as a new successful payment. A verified zero-money retired attempt does not itself invalidate a valid replacement.
+
+These GETs serialize with Billing's session updates and return the last persisted verification state with UTC `evaluatedAt`. They do not call PayOS, settle money, create ledger movements, release checkout or close the table session. Existing webhook/reconciliation updates provide subsequent state; this increment adds no push notification transport. The platform-wide merchant configuration remains unchanged. No schema changes are required for these reads.
+
+### Verification and recovery
+
 Webhook is intentionally independent of employee Bearer authorization and requires a valid PayOS HMAC signature. Send exactly the provider JSON envelope; do not call it with a fabricated Paid body. The backend verifies the signature and financial fields, records the existing PaymentWebhook audit with hash/dedupe key (not raw payload), then verifies the provider's signed payment query. Duplicate deliveries do not settle twice. A successful webhook acknowledgement can mean durable receipt awaiting provider reconciliation; inspect payment status.
 
 Normal path: Creating -> Pending -> Paid. Network errors can produce Unknown; requested/local-expiry cancellation can remain CancelRequested. Only provider-confirmed terminal **zero money with explicit totals/empty transactions** produces verified Cancelled/Expired/Failed. Local expiry alone never releases checkout or permits another payment. ProviderAmountPaid/ProviderAmountRemaining are returned only from a fresh successful query, otherwise null; expected Amount is not a claim about received money.
@@ -457,4 +476,4 @@ Paid PayOS payments remain eligible for background reconciliation while their sh
 
 Opening cash must be whole VND: `250000` and `250000.00` are accepted, `250000.50` is rejected without rounding. CashIn and cash Sale validate `OpeningCash + existing SignedAmount total + new amount` under the same register/shift transaction locks against the `decimal(18,2)` limit. A rejected sale records no Payment, Sale or Paid bill/checkout. Existing fractional opening balances and already over-limit balances are not rewritten automatically; review those legacy records separately.
 
-This increment excludes manual transfer confirmation, Waiter collection/handover, refunds, departure/cleaning and any payment-flow schema beyond the three approved nullable columns. [Official PayOS testing guidance](https://payos.vn/docs/moi-truong-test/) states that a separate sandbox is not available. Local mock/HTTP-provider tests do not prove a real bank transfer. Live acceptance still requires real channel credentials, registered public HTTPS webhook and an authorized real test payment; do not claim this based on redirect success or simulated callbacks.
+Manual transfer confirmation, refunds and departure/cleaning remain outside this PayOS increment. Waiter cash collection/handover is implemented separately in the cash payment workflow above. [Official PayOS testing guidance](https://payos.vn/docs/moi-truong-test/) states that a separate sandbox is not available. Local mock/HTTP-provider tests do not prove a real bank transfer. Live acceptance still requires real channel credentials, registered public HTTPS webhook and an authorized real test payment; do not claim this based on redirect success or simulated callbacks.

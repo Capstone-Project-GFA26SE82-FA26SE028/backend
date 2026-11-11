@@ -571,3 +571,35 @@ Dây ERD giữ nguyên: Bill 1–n Payment; CashShift 1–n Payment; PaymentMeth
 - Chưa hỗ trợ hủy/điều chỉnh/refund khoản Waiter đã thu, chưa có timestamp riêng xác nhận Waiter trả tiền thừa (schema không biểu diễn), chưa làm quyền Waiter lấy QR PayOS hoặc xác nhận khách rời bàn/dọn bàn. Không kiểm thử UI/frontend hoặc PayOS/ngân hàng thật trong đợt tiền mặt này. Thanh toán không tự đóng phiên, vô hiệu QR hoặc giải phóng bàn.
 
 - Giới hạn môi trường cuối lượt: hệ thống kiểm duyệt tự động từ chối lệnh gộp khởi động lại hai container chính Billing/Gateway và dọn SQL forwarding helper, chỉ trả "blocked by policy". Lệnh đó không thực thi. Vì vậy backend-billing-1/backend-gateway-1 vẫn chạy image đợt trước; kết quả Gateway đợt 3 là trên hai container kiểm thử từ image mới đã xác minh image ID, sau đó đã dọn. Container helper billing-phase3-sql-forward còn chạy; đây chỉ là cổng chuyển tiếp SQL dùng cho test, không chứa database riêng. Chưa tuyên bố môi trường chính đã nạp bản đợt 3. Không push.
+
+## 2026-11-11 — Đợt 4, Waiter lấy QR PayOS và xem kết quả đã xác minh
+
+### Các thay đổi cần cập nhật trên SQL/ERD
+
+**Không có thay đổi schema.** Không thêm/sửa/xóa bảng, cột, kiểu dữ liệu, NULL/DEFAULT, PK, FK, UNIQUE, CHECK hoặc index. Không có script upgrade, scaffold hoặc thay đổi repository SQL riêng trong Downloads. Không thay đổi cấu trúc database của service khác.
+
+| Dữ liệu có sẵn | Cách sử dụng trong đợt này | Quan hệ trên ERD |
+| --- | --- | --- |
+| BillingDb.Payment: BillId, CashShiftId, IdempotencyKey, MethodCode, Status, Amount, ProviderOrderCode, ProviderPaymentLinkId, ProviderCheckoutUrl, ProviderQrCode, ExpiredAt, PaidAt, VerificationSource, ProviderTransactionId | Đọc lượt PayOS đúng bill/checkout qua key đã lưu; không suy ra lượt hiện hành từ thời gian mới nhất. Trả QR/link gốc chỉ khi còn đủ điều kiện; đọc biên lai đã được provider xác minh. | Giữ Bill 1–n Payment, CashShift 1–n Payment và PaymentMethod 1–n Payment; không thêm FK tới checkout. |
+| BillingDb.BillCheckout và Bill: TableSessionRef, BillId, CashRegisterId, SourceHash, Status, ReleasedAt, SubmittedAt, PreparedByRef, PreparedAt, PresentedAt; RestaurantId, TotalAmount, Currency, PaidAt | Kiểm tra đúng phiên/quầy/nhà hàng, bill đã đưa khách, hash tài chính và trạng thái đã thanh toán. | Các quan hệ có sẵn giữ nguyên; TableSessionRef và RestaurantId vẫn là tham chiếu logic sang Restaurant. |
+| RestaurantDb.ServiceRequest.HandledByRef và RestaurantStaff | Tái sử dụng RPC hiện có để xác minh Waiter phụ trách yêu cầu Reviewed và phân công nhà hàng hiện hành. | Không sửa bảng hoặc hợp đồng Restaurant; UserId vẫn tham chiếu logic Identity, không FK xuyên database. |
+
+### Code và quyền
+
+- Thêm hai RPC chỉ đọc vào PayOsPaymentGrpc hiện có và hai GET tại Gateway: `/api/table-sessions/{sessionId}/checkout/{checkoutId}/payments/payos` (phân trang), `/api/table-sessions/{sessionId}/checkout/{checkoutId}/payments/{paymentId}/payos` (chi tiết).
+- BLL PayOsPaymentService.Waiter kiểm tra tài khoản/vai trò, phạm vi nhà hàng, người phụ trách, phiên/checkout và hash bill. DAL PaymentRepository truy vấn lượt đúng checkout và các payment đang chặn. API/gRPC chỉ ánh xạ dữ liệu. Không cấp Waiter quyền Create/Reconcile/Cancel hoặc quyền xem bill/payment quản trị.
+- Đọc dùng cùng khóa phiên của Billing trong transaction để không ghép QR cũ với trạng thái vừa hủy/thanh toán. GET không gọi provider, không ghi Payment/CashMovement, không đóng phiên hoặc mở lại Ordering.
+- `CanPresentQr` chỉ đúng với Pending nhất quán, còn hạn, đủ link/QR gốc và không có payment khác đang chặn. Các trường QR/link trả NULL nếu không đủ điều kiện. Hết hạn cục bộ không tự đổi trạng thái thành thất bại.
+- `PaymentConfirmed` chỉ đúng với biên lai PayOS đã xác minh, bill và checkout Paid, không có payment xung đột. `RequiresReview` biểu thị dữ liệu không nhất quán hoặc cần kiểm tra. `EvaluatedAt` là thời điểm đọc UTC; không tuyên bố đây là truy vấn ngân hàng trực tiếp hoặc push realtime.
+- Giữ nguyên cấu hình merchant PayOS chung của nền tảng và cơ chế create/webhook/reconcile/cancel/worker hiện có. Chưa làm rời bàn, đóng phiên, dọn bàn hoặc refund.
+
+### Kiểm chứng thực tế
+
+- `dotnet test Backend.sln --no-restore -m:1 --verbosity quiet`: **986 đạt, 82 bỏ qua có điều kiện, 0 lỗi**, đủ chín assembly. Billing ở lượt này 362 đạt/45 bỏ qua; không coi test bỏ qua là đạt.
+- Chạy riêng `dotnet test Tests/Billing.Tests/Billing.Tests.csproj --no-build --no-restore -m:1 --verbosity normal` với BILLING_SQL_TEST_CONNECTION tới SQL Server Docker: **407 đạt, 0 bỏ qua, 0 lỗi**. Bao gồm lọc đúng checkout trên SQL và reader chờ khóa writer rồi nhận Cancelled với QR/link NULL. Các test BLL/SQL dùng quyền, nguồn đơn và provider giả lập; test Gateway tự động dùng gRPC giả lập.
+- `dotnet build Backend.sln --no-restore -c Release -m:1 --verbosity quiet`: đạt, 0 lỗi/0 cảnh báo ở lượt incremental cuối. Build image Billing/Gateway đạt. `git diff --check` đạt.
+- Gateway Docker từ image mới đã đối chiếu image ID, với Identity/Restaurant/Catalog/Ordering/Billing và SQL Server thật: **87 request kiểm tra đạt**, gồm cả đăng nhập/thiết lập fixture, không phải 87 nghiệp vụ khác nhau. PayOS là **HTTP test double có HMAC**, không phải ngân hàng thật. Luồng khách QR → Waiter kiểm tra/chuyển quầy → Cashier chuẩn bị → Waiter đưa bill → Cashier tạo QR → Waiter đọc → webhook xác minh → Waiter đọc Paid đạt.
+- Hai request cùng key trả 201/200 và cùng payment, provider tạo một lần. Khách 401, Waiter khác 403; Waiter không được gọi create/cancel/reconcile. Ba lần đọc danh sách không tăng số lượt gọi provider. Hủy có xác minh trả QR NULL; tạo lượt thay thế không bị lượt zero cũ đánh dấu review sai. Chữ ký webhook sai trả 400; webhook hợp lệ lặp trả 200, không Paid lần hai.
+- Đọc SQL của lượt cuối: hai Payment (Cancelled/PayOSZero và Paid/PayOSQuery) cùng Amount 23.100 VND; một PaymentWebhook Applied/SignatureValid; không CashMovement/CashHandover; checkout Paid chưa Released; TableSession Open, ClosedAt NULL. Đã dọn đúng fixture, database Billing cô lập và ba container kiểm thử của đợt này. Log/kết quả giữ ngoài repository trong thư mục tạm của Windows.
+- **Chưa kiểm chứng PayOS/ngân hàng thật, HTTPS webhook công khai hoặc UI.** GET trả trạng thái xác minh đã lưu; kết quả mới đến từ webhook/worker hoặc Cashier reconcile. Không sửa frontend và không thêm cơ chế thông báo push.
+- Backend Billing/Gateway chính vẫn chạy image đợt 2 như giới hạn môi trường đã ghi ở đợt 3; chưa recreate chúng trong đợt này. Helper SQL `billing-phase3-sql-forward` vẫn còn chạy, không bị xóa. Vì vậy kết quả trên không được diễn giải thành môi trường chính đã nạp bản mới. Source được commit riêng theo yêu cầu từng đợt; không push hoặc sửa lịch sử Git.

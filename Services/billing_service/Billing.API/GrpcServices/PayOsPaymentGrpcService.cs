@@ -38,6 +38,65 @@ public sealed class PayOsPaymentGrpcService(IPayOsPaymentService service) : PayO
         return Map(await service.Cancel(Id(request.PaymentId), context.CancellationToken));
     }
 
+    public override async Task<WaiterPayOsPage> GetForCheckout(WaiterPayOsRequest request, ServerCallContext context)
+    {
+        var values = await service.GetForCheckout(Id(request.TableSessionId), Id(request.CheckoutId),
+            request.Page, request.PageSize, context.CancellationToken);
+        var result = new WaiterPayOsPage
+        {
+            TotalCount = values.TotalCount,
+            Page = values.Page,
+            PageSize = values.PageSize
+        };
+        result.Items.AddRange(values.Items.Select(MapForWaiter));
+        return result;
+    }
+
+    public override async Task<WaiterPayOsInfo> GetForWaiter(WaiterPayOsRequest request, ServerCallContext context)
+    {
+        return MapForWaiter(await service.GetForWaiter(Id(request.TableSessionId), Id(request.CheckoutId),
+            Id(request.PaymentId), context.CancellationToken));
+    }
+
+    private static WaiterPayOsInfo MapForWaiter(WaiterPayOsPaymentDTO value)
+    {
+        var result = new WaiterPayOsInfo
+        {
+            PaymentId = value.PaymentId.ToString(),
+            BillId = value.BillId.ToString(),
+            TableSessionId = value.TableSessionId.ToString(),
+            CheckoutId = value.CheckoutId.ToString(),
+            Status = value.Status,
+            BillStatus = value.BillStatus,
+            Amount = value.Amount.ToString(CultureInfo.InvariantCulture),
+            CanPresentQr = value.CanPresentQr,
+            PaymentConfirmed = value.PaymentConfirmed,
+            RequiresReview = value.RequiresReview,
+            EvaluatedAt = value.EvaluatedAt.ToString("O", CultureInfo.InvariantCulture)
+        };
+        if (value.CheckoutUrl is not null)
+        {
+            result.CheckoutUrl = value.CheckoutUrl;
+        }
+
+        if (value.QrCode is not null)
+        {
+            result.QrCode = value.QrCode;
+        }
+
+        if (value.ExpiresAt.HasValue)
+        {
+            result.ExpiresAt = value.ExpiresAt.Value.ToString("O", CultureInfo.InvariantCulture);
+        }
+
+        if (value.PaidAt.HasValue)
+        {
+            result.PaidAt = value.PaidAt.Value.ToString("O", CultureInfo.InvariantCulture);
+        }
+
+        return result;
+    }
+
     private static Guid Id(string value)
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)

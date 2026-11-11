@@ -96,6 +96,68 @@ public sealed class PayOsGatewayTests
         Assert.DoesNotContain("private-provider-error", await response.Content.ReadAsStringAsync());
     }
 
+    [Fact]
+    public async Task WaiterQrEndpointsForwardExactSessionCheckoutPaymentAndEmployeeToken()
+    {
+        var session = Guid.NewGuid();
+        var checkout = Guid.NewGuid();
+        var payment = Guid.NewGuid();
+        var calls = 0;
+        await using var app = await Start(new BillingUnaryInvoker((method, body, options) =>
+        {
+            calls++;
+            var request = Assert.IsType<Wire.WaiterPayOsRequest>(body);
+            Assert.Equal(session.ToString(), request.TableSessionId);
+            Assert.Equal(checkout.ToString(), request.CheckoutId);
+            Assert.Equal("Bearer waiter", Assert.Single(options.Headers!).Value);
+            var value = new Wire.WaiterPayOsInfo
+            {
+                PaymentId = payment.ToString(),
+                BillId = Guid.NewGuid().ToString(),
+                TableSessionId = session.ToString(),
+                CheckoutId = checkout.ToString(),
+                Status = "Pending",
+                BillStatus = "Unpaid",
+                Amount = "232",
+                CanPresentQr = false,
+                EvaluatedAt = DateTimeOffset.UtcNow.ToString("O")
+            };
+            if (method.EndsWith("/GetForCheckout", StringComparison.Ordinal))
+            {
+                Assert.Equal(2, request.Page);
+                Assert.Equal(1, request.PageSize);
+                var page = new Wire.WaiterPayOsPage
+                {
+                    TotalCount = 2,
+                    Page = 2,
+                    PageSize = 1
+                };
+                page.Items.Add(value);
+                return page;
+            }
+
+            Assert.EndsWith("/GetForWaiter", method);
+            Assert.Equal(payment.ToString(), request.PaymentId);
+            return value;
+        }));
+        using var client = app.GetTestClient();
+        var route = $"/api/table-sessions/{session}/checkout/{checkout}/payments";
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(route + "/payos")).StatusCode);
+        Assert.Equal(0, calls);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "waiter");
+        using var response = await client.GetAsync(route + $"/{payment}/payos");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var result = json.RootElement.GetProperty("result");
+        Assert.Equal(232, result.GetProperty("amount").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("qrCode").ValueKind);
+        Assert.False(result.GetProperty("paymentConfirmed").GetBoolean());
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        using var pageResponse = await client.GetAsync(route + "/payos?page=2&pageSize=1");
+        Assert.Equal(HttpStatusCode.OK, pageResponse.StatusCode);
+        Assert.Equal(2, calls);
+    }
+
     private static Wire.PayOsPaymentInfo Payment(Guid bill)
     {
         return new Wire.PayOsPaymentInfo

@@ -301,9 +301,13 @@ public sealed class PayOsPaymentServiceTests
                 new PaymentMethodRepository(db), webhooks, uow, core.Core.Actor, core.Core.Service, core.Remote,
                 Provider, Options.Create(new CashRegisterAccessSettings
                 {
+                    WaiterRoleIds = ["waiter"],
                     CashierRoleIds = ["cashier"],
                     ManagerRoleIds = ["manager"]
-                }), Options.Create(Settings), TimeProvider.System);
+                }), Options.Create(Settings), TimeProvider.System, new TestPaymentRequestClient
+                {
+                    ReviewedWaiterId = core.WaiterId
+                });
             Webhooks = new PaymentWebhookService(payments, webhooks, bills, registers, shifts, uow, Provider, Service, TimeProvider.System);
         }
 
@@ -345,6 +349,7 @@ public sealed class PayOsPaymentServiceTests
         public bool Offline { get; set; }
         public bool CancelTimeout { get; set; }
         public int CreateCalls { get; private set; }
+        public int GetCalls { get; private set; }
         public int CancelCalls { get; private set; }
         public PayOsProviderResult? Value { get; set; }
         public PayOsWebhookDTO? Webhook { get; set; }
@@ -372,6 +377,7 @@ public sealed class PayOsPaymentServiceTests
 
         public Task<PayOsProviderResult> GetAsync(long orderCode, CancellationToken ct)
         {
+            GetCalls++;
             if (Offline || Value is null)
             {
                 throw new PayOsClientException("OutcomeUnknown");

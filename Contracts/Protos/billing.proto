@@ -336,6 +336,8 @@ message ShiftReconciliationInfo {
 }
 
 service PayOsPaymentGrpc {
+  rpc GetForCheckout(WaiterPayOsRequest) returns (WaiterPayOsPage);
+  rpc GetForWaiter(WaiterPayOsRequest) returns (WaiterPayOsInfo);
   rpc Create(CreatePayOsPaymentRequest) returns (PayOsPaymentReply);
   rpc GetById(PaymentIdRequest) returns (PayOsPaymentInfo);
   rpc Reconcile(PaymentIdRequest) returns (PayOsPaymentInfo);
@@ -415,6 +417,37 @@ message CashHandoverInfo {
 message CashHandoverReply { CashHandoverInfo handover = 1; bool created = 2; }
 message CashHandoverPage {
   repeated CashHandoverInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message WaiterPayOsRequest {
+  string table_session_id = 1;
+  string checkout_id = 2;
+  string payment_id = 3;
+  int32 page = 4;
+  int32 page_size = 5;
+}
+message WaiterPayOsInfo {
+  string payment_id = 1;
+  string bill_id = 2;
+  string table_session_id = 3;
+  string checkout_id = 4;
+  string status = 5;
+  string bill_status = 6;
+  string amount = 7;
+  optional string checkout_url = 8;
+  optional string qr_code = 9;
+  optional string expires_at = 10;
+  optional string paid_at = 11;
+  bool can_present_qr = 12;
+  bool payment_confirmed = 13;
+  bool requires_review = 14;
+  string evaluated_at = 15;
+}
+message WaiterPayOsPage {
+  repeated WaiterPayOsInfo items = 1;
   int32 total_count = 2;
   int32 page = 3;
   int32 page_size = 4;

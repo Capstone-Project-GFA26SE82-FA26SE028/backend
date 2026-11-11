@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Shared.Common.Pagination;
 using Billing.DAL.Models;
 using Shared.Persistence.Interfaces;
 
@@ -20,5 +21,7 @@ public interface IPaymentRepository : IGenericRepository<Payment>
     Task<IReadOnlyList<Payment>> GetByPayOsRequestKeyAsync(string key, CancellationToken ct);
     Task<Payment?> GetForCashConfirmationAsync(Guid id, CancellationToken ct);
     Task<Payment?> GetByKeyAsync(string key, CancellationToken ct);
+    Task<PagedResult<Payment>> GetPayOsPageAsync(Guid billId, Guid checkoutId, int page, int pageSize, CancellationToken ct);
+    Task<IReadOnlyList<Guid>> GetBlockingIdsAsync(Guid billId, Expression<Func<Payment, bool>> predicate, CancellationToken ct);
     Task<Payment?> GetDetailsAsync(Guid id, CancellationToken ct);
 }
