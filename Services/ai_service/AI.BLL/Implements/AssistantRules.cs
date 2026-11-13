@@ -10,7 +10,7 @@ public static class AssistantRules
     public const string MissingFoodInformation = "Verified dietary, ingredient, allergen and spice information is not available. Please ask a staff member for clarification before ordering.";
     public const string MissingRestaurantInformation = "Verified restaurant contact, opening-hour and service-policy information is not available to this assistant. Please ask a staff member for clarification.";
     private static readonly Regex FoodInformation = new(
-        @"\b(allerg\w*|vegan|vegetarian|halal|kosher|gluten|spicy|spice|mild|ingredient\w*|peanuts?|cashews?|contains? shellfish|nut.free|dairy.free|dị ứng|đậu phộng|lạc|hạt điều|có hải sản không|ăn chay|món chay|thuần chay|thành phần|nguyên liệu|độ cay|ít cay|không cay)\b",
+        @"\b(allerg\w*|vegan|vegetarian|halal|kosher|gluten|spicy|spice|mild|ingredient\w*|peanuts?|cashews?|contains? shellfish|nut.free|dairy.free|dị ứng|đậu phộng|lạc|hạt điều|có hải sản không|ăn chay|món chay|thuần chay|thành phần|nguyên liệu|độ cay|ít cay|không cay|di\s+ung|an\s+chay|thuan\s+chay|thanh\s+phan|nguyen\s+lieu|it\s+cay|khong\s+cay)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
     private static readonly Regex PriceQuestion = new(
         @"\b(price|costs?|how much|giá|bao nhiêu tiền)\b",

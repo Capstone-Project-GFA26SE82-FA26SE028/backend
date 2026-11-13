@@ -7,6 +7,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
       Gemini__ApiKey: ${GEMINI_API_KEY:-}
+      Gemini__Model: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
     healthcheck:
       test: ['CMD', 'dotnet', 'AI.API.dll', '--check-ready']
       interval: 30s

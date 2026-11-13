@@ -51,10 +51,17 @@ public sealed class ModelSuggestionDTO
 
 public static class RecommendationReasons
 {
-    public static IReadOnlyList<string> Allowed { get; } = Array.AsReadOnly(new[]
+    private static readonly IReadOnlyDictionary<string, string> VietnameseReasons = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        "A suggested accompaniment to your current selection.",
-        "An additional menu choice to consider with your meal.",
-        "A suggestion based on the dishes in your cart."
-    });
+        ["A suggested accompaniment to your current selection."] = "Món ăn kèm được gợi ý cho các món bạn đã chọn.",
+        ["An additional menu choice to consider with your meal."] = "Một lựa chọn thêm cho bữa ăn của bạn.",
+        ["A suggestion based on the dishes in your cart."] = "Gợi ý dựa trên các món trong giỏ hàng của bạn."
+    };
+
+    public static IReadOnlyList<string> Allowed { get; } = Array.AsReadOnly(VietnameseReasons.Keys.ToArray());
+
+    public static string ToVietnamese(string reason)
+    {
+        return VietnameseReasons[reason];
+    }
 }

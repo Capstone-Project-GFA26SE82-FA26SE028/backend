@@ -1,6 +1,6 @@
 ## Secrets and Docker startup
 
-Keep passwords and tokens in `.env`, in the repository root, ignored by Git. On a new machine, copy `.env.example` there and fill in the empty values. Tracked appsettings contain non-secret settings only.
+Keep passwords and tokens in `.env`, in the repository root, ignored by Git. On a new machine, create that ignored file and fill in the credentials required by the existing Compose configuration. Tracked appsettings contain non-secret settings only.
 
 Run Docker (Compose automatically reads the ignored root `.env`):
 
@@ -21,7 +21,7 @@ Cart recommendations and menu chat use the Gemini API for inference. Menu chat u
 Docker: add `GEMINI_API_KEY=<your key>` to the ignored root `.env`, retaining the existing backend credentials. Then run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-AI.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-AI.ps1 -Mode Docker
 ```
 
 The normal `docker compose up -d --build` also includes AI. Gateway is at `http://localhost:5000/swagger` unless its port is overridden. To start just the core backend, use `docker compose -f compose.yaml up -d --build`.
@@ -32,7 +32,9 @@ Local: copy `Services/ai_service/AI.API/appsettings.Local.json.example` to ignor
 dotnet run --project Services/ai_service/AI.API/AI.API.csproj
 ```
 
-Configuration priority, last wins: shared/environment appsettings, Development user secrets, appsettings.Local.json, environment variables, command line. Local runtime environment variable: `Gemini__ApiKey`. Root `.env` is loaded by Compose, not by native dotnet run. Keys are server-side and must not be committed or sent by the browser.
+The launcher also supports `-Mode Local`, which starts AI using the existing .NET 9 workflow. In Local mode it loads only Gemini key/model entries from the ignored root `.env`, preserving environment overrides; direct `dotnet run` does not read this file. Add `-SetupOnly` in either mode to verify prerequisites and configured Gemini model metadata without starting the AI server. The launcher does not install a model or start a separate inference runtime.
+
+Configuration priority, last wins: shared/environment appsettings, Development user secrets, appsettings.Local.json, environment variables, command line. Local runtime environment variable: `Gemini__ApiKey`. Root `.env` is loaded by Compose and the Local launcher, not by direct native dotnet run. `GEMINI_API_KEY` is also accepted if `Gemini:ApiKey` is empty; `Gemini__ApiKey` has priority. `GEMINI_MODEL` can override the Compose model. Keys are server-side and must not be committed or sent by the browser.
 
 Gemini endpoint, model (`gemini-3.1-flash-lite`), output-token limit, temperature, minimal thinking level and prompt-size limit are configurable in AI appsettings.
 
@@ -60,17 +62,17 @@ AI sends only the bounded conversation and public menu/cart projection to Gemini
 
 The total request limit remains 90 seconds, including dependency reads and all Gemini calls. One active inference per AI process; busy requests return 429 immediately. Cancellation propagates to the HTTP request. There is no provider polling, automatic retry, alternate-model fallback or local model setup.
 
-UC2 asks Gemini only for bounded language/intent/topic codes and known candidate keys, never customer-facing prose. Backend renders prices, orderability, required-option guidance and notices from controlled Vietnamese/English templates. Generated answer/usedKeys fields from legacy or malicious provider responses are ignored. Unsupported language returns 400 without an assistant answer; invalid/missing language or topic codes return 502. Language/intent recognition still depends on Gemini and must be evaluated; no claim is made that every language or question is classified correctly.
+UC2 asks Gemini only for bounded language/intent/topic codes and known candidate keys, never customer-facing prose. Backend renders prices, orderability, required-option guidance and notices from controlled Vietnamese/English templates. Legacy answer/usedKeys fields cannot replace backend-rendered text; unknown structured fields are rejected. Unsupported language returns 400 without an assistant answer; invalid/missing language or topic codes return 502. Language/intent recognition still depends on Gemini and must be evaluated; no claim is made that every language or question is classified correctly.
 
-QR rechecks, candidate validation, current Catalog reads, budget checks and 409 on changed menu facts remain in place. Explicit dietary questions use a classification-only request without reading menu facts, followed by the backend safety notice; no model translation can replace it. Detailed option choices/surcharges are not in the current AI projection, so the assistant does not invent them. Orderability is not a verified ingredient-stock guarantee. UC1 and the public HTTP/gRPC contracts are unchanged.
+QR rechecks, candidate validation, current Catalog reads, budget checks and 409 on changed menu facts remain in place. Explicit dietary questions use a classification-only request without reading menu facts, followed by the backend safety notice; no model translation can replace it. Detailed option choices/surcharges are not in the current AI projection, so the assistant does not invent them. Orderability is not a verified ingredient-stock guarantee. The public HTTP/gRPC contracts are unchanged.
 
 A normal chat makes one Gemini call within the 90-second Gateway budget. Prices in response templates use VND and the current verified Catalog amount; changing language does not convert currency. No second-model semantic verifier is used. Provider duration logging, cancellation, HTTP/2 fallback, bounded history, quota behavior and the lack of automatic retries remain unchanged.
 
-Recommendations exclude all cart variants by ItemId and require CanOrder. Ingredient/allergy/diet/spice facts are not inferred; missing facts direct customers to staff without contacting staff. Public restaurant-information contracts remain unavailable, so those questions use the existing fallback.
+Cart recommendation messages, controlled reasons and Gateway validation/error responses are always Vietnamese. Dish names, prices and status values remain exactly as verified from Catalog. Recommendations exclude all cart variants by ItemId and require CanOrder. Ingredient/allergy/diet/spice facts are not inferred; missing facts direct customers to staff without contacting staff. Public restaurant-information contracts remain unavailable, so those questions use the existing fallback.
 
 ## Health and verification
 
-AI uses gRPC port 5008 and HTTP health port 5009. `/health/live` reports process liveness. `/health/ready` checks that an API key is configured and returns `ConfiguredNotProviderVerified` or 503 `ApiKeyMissing`. It does not spend credits probing Gemini and does not establish that the key, balance or provider is working.
+AI uses gRPC port 5008 and HTTP health port 5009. `/health/live` reports process liveness. `/health/ready` checks the configured Gemini model metadata and access using a bounded GET request; it returns 503 when the key/model/provider is unavailable. This does not generate content or establish generation quota, latency or future availability. `--check-provider` runs the same metadata check for setup. Requests use the official HTTPS v1beta endpoint, reject redirects and redact the API-key header from HTTP logs.
 
 Missing key/provider authorization or network failure returns controlled 503, rate limiting 429, invalid output 502 and deadline 504. No local fallback is selected.
 

@@ -23,10 +23,19 @@ public static class AIServiceExtensions
                 && value.MaximumMessageLength is > 0 and <= 1000 && value.MaximumHistoryTurns is >= 0 and <= 6, "Invalid assistant limits.")
             .ValidateOnStart();
         services.AddOptions<GeminiSettings>().Bind(configuration.GetSection("Gemini"))
+            .PostConfigure(value =>
+            {
+                if (string.IsNullOrWhiteSpace(value.ApiKey))
+                {
+                    value.ApiKey = configuration["GEMINI_API_KEY"] ?? string.Empty;
+                }
+            })
             .Validate(value => Uri.TryCreate(value.Endpoint, UriKind.Absolute, out var address)
                 && address.Scheme == "https" && string.IsNullOrEmpty(address.UserInfo)
+                && address.Host == "generativelanguage.googleapis.com" && address.IsDefaultPort
+                && address.AbsolutePath.TrimEnd('/') == "/v1beta"
                 && string.IsNullOrEmpty(address.Query) && string.IsNullOrEmpty(address.Fragment),
-                "Configure Gemini:Endpoint with an HTTPS address.")
+                "Configure Gemini:Endpoint with the official HTTPS v1beta address.")
             .Validate(value => !string.IsNullOrWhiteSpace(value.Model)
                 && value.Model.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.')
                 && value.MaximumOutputTokens is >= 256 and <= 4096
@@ -54,7 +63,12 @@ public static class AIServiceExtensions
             client.BaseAddress = new Uri(settings.Endpoint.TrimEnd('/') + "/");
             client.Timeout = Timeout.InfiniteTimeSpan;
             client.MaxResponseContentBufferSize = 1024 * 1024;
-        });
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+        {
+            AllowAutoRedirect = false
+        })
+        .RedactLoggedHeaders(["x-goog-api-key"]);
         services.AddScoped<IAssistantModelClient>(provider => provider.GetRequiredService<GeminiModelClient>());
         services.AddGrpcClient<GuestAccessGrpc.GuestAccessGrpcClient>(options =>
         {

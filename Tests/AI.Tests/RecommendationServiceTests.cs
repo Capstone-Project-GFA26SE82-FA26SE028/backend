@@ -5,6 +5,39 @@ namespace AI.Tests;
 
 public sealed class RecommendationServiceTests
 {
+    [Theory]
+    [InlineData("A suggested accompaniment to your current selection.", "Món ăn kèm được gợi ý cho các món bạn đã chọn.")]
+    [InlineData("An additional menu choice to consider with your meal.", "Một lựa chọn thêm cho bữa ăn của bạn.")]
+    [InlineData("A suggestion based on the dishes in your cart.", "Gợi ý dựa trên các món trong giỏ hàng của bạn.")]
+    public async Task ControlledModelReasonsAreRenderedInVietnamese(string modelReason, string vietnameseReason)
+    {
+        var context = new AssistantTestContext
+        {
+            ForcedSuggestions = [new ModelSuggestionDTO { Key = "m0", Reason = modelReason }]
+        };
+
+        var result = await context.Recommendations().Recommend(context.Request(), default);
+
+        Assert.Equal("Đã có gợi ý cho bạn. Vui lòng chọn các tùy chọn bắt buộc trước khi thêm món vào giỏ hàng.", result.Message);
+        Assert.Equal(vietnameseReason, Assert.Single(result.Items).Reason);
+        Assert.Equal(1, context.ModelCalls);
+        Assert.Equal(2, context.CartReads);
+    }
+
+    [Fact]
+    public async Task NoOrderableCandidatesReturnsVietnameseWithoutCallingModel()
+    {
+        var context = new AssistantTestContext();
+        context.Menu[1].CanOrder = false;
+        context.Menu[2].CanOrder = false;
+
+        var result = await context.Recommendations().Recommend(context.Request(), default);
+
+        Assert.Equal("Hiện chưa có món phù hợp có thể đặt thêm trong phạm vi thực đơn đã tìm kiếm.", result.Message);
+        Assert.Empty(result.Items);
+        Assert.Equal(0, context.ModelCalls);
+    }
+
     [Fact]
     public async Task RealCartExcludesEveryVariantOfSameItemAndRechecksPrice()
     {
@@ -39,6 +72,7 @@ public sealed class RecommendationServiceTests
         var result = await context.Recommendations().Recommend(context.Request(), default);
         Assert.Single(context.ModelRequest!.Candidates);
         Assert.Empty(result.Items);
+        Assert.Equal("Các món được gợi ý hiện không còn nhận đặt. Vui lòng tải lại và thử lại.", result.Message);
     }
 
     [Theory]
@@ -81,6 +115,7 @@ public sealed class RecommendationServiceTests
         var result = await context.Recommendations().Recommend(context.Request(), default);
         Assert.Empty(result.Items);
         Assert.Equal(0, context.ModelCalls);
+        Assert.Equal("Hãy thêm món vào giỏ hàng trước khi yêu cầu gợi ý.", result.Message);
     }
 
     [Fact]

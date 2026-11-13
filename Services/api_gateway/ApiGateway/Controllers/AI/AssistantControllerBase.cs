@@ -20,7 +20,8 @@ public abstract class AssistantControllerBase(IOptions<AIClientSettings> setting
         };
     }
 
-    protected async Task<IActionResult> Execute(Func<CallOptions, Task<object>> action, CancellationToken ct)
+    protected async Task<IActionResult> Execute(Func<CallOptions, Task<object>> action, CancellationToken ct,
+        string successMessage = "Success.", Func<int, string>? errorMessage = null)
     {
         Response.Headers.CacheControl = "no-store";
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -28,7 +29,7 @@ public abstract class AssistantControllerBase(IOptions<AIClientSettings> setting
         try
         {
             var value = await action(new CallOptions(deadline: DateTime.UtcNow.AddSeconds(settings.Value.TimeoutSeconds), cancellationToken: timeout.Token));
-            return Ok(new ResponseDTO("Success.", 200, true, value));
+            return Ok(new ResponseDTO(successMessage, 200, true, value));
         }
         catch (RpcException error) when (!ct.IsCancellationRequested)
         {
@@ -53,11 +54,11 @@ public abstract class AssistantControllerBase(IOptions<AIClientSettings> setting
                 502 => "The assistant could not produce a verified response.",
                 _ => error.Status.Detail
             };
-            return StatusCode(status, new ResponseDTO(message, status));
+            return StatusCode(status, new ResponseDTO(errorMessage?.Invoke(status) ?? message, status));
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return StatusCode(504, new ResponseDTO("The assistant request exceeded its time limit.", 504));
+            return StatusCode(504, new ResponseDTO(errorMessage?.Invoke(504) ?? "The assistant request exceeded its time limit.", 504));
         }
     }
 

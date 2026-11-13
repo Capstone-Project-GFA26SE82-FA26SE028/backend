@@ -13,7 +13,8 @@ public static class VietnameseValidationExtensions
             options.InvalidModelStateResponseFactory = context =>
             {
                 var controller = context.ActionDescriptor as ControllerActionDescriptor;
-                if (controller?.ControllerTypeInfo.Namespace == "ApiGateway.Controllers.AI")
+                if (controller?.ControllerTypeInfo.Namespace == "ApiGateway.Controllers.AI"
+                    && controller.ControllerTypeInfo.AsType() != typeof(Controllers.AI.RecommendationController))
                 {
                     return defaultFactory(context);
                 }

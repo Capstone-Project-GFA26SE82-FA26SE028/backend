@@ -33,7 +33,7 @@ public sealed class RecommendationService(
         AssistantRules.ValidateCart(cart, request, clock.GetUtcNow());
         if (cart.Items.Count == 0)
         {
-            return Result(cart, "Add a dish to your cart before requesting suggestions.", [], false);
+            return Result(cart, "Hãy thêm món vào giỏ hàng trước khi yêu cầu gợi ý.", [], false);
         }
 
         var source = await menu.Read(request.Guest, ct);
@@ -56,7 +56,7 @@ public sealed class RecommendationService(
         var limited = source.TotalCount > source.Items.Count || eligible.Length > candidates.Count;
         if (candidates.Count == 0)
         {
-            return Result(cart, "No additional orderable suggestions are available in the current menu search.", [], limited);
+            return Result(cart, "Hiện chưa có món phù hợp có thể đặt thêm trong phạm vi thực đơn đã tìm kiếm.", [], limited);
         }
 
         var keyed = AssistantRules.Keyed(candidates);
@@ -83,13 +83,13 @@ public sealed class RecommendationService(
             if (item is not null && AssistantRules.CanRecommend(item) && !excluded.Contains(item.ItemId)
                 && selected.All(choice => choice.Item.ItemId != item.ItemId))
             {
-                selected.Add(new SuggestedItemDTO(item, suggestion.Reason));
+                selected.Add(new SuggestedItemDTO(item, RecommendationReasons.ToVietnamese(suggestion.Reason)));
             }
         }
 
         return Result(refreshedCart, selected.Count == 0
-            ? "The suggested dishes are no longer orderable. Please refresh and try again."
-            : "Suggestions are ready. Choose any required options before adding a dish through your cart.", selected, limited);
+            ? "Các món được gợi ý hiện không còn nhận đặt. Vui lòng tải lại và thử lại."
+            : "Đã có gợi ý cho bạn. Vui lòng chọn các tùy chọn bắt buộc trước khi thêm món vào giỏ hàng.", selected, limited);
     }
 
     private static bool SameItems(IReadOnlyList<CartLineDTO> first, IReadOnlyList<CartLineDTO> second)

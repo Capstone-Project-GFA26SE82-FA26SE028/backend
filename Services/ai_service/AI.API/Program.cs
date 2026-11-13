@@ -36,17 +36,43 @@ if (args.Contains("--check-ready", StringComparer.Ordinal))
 }
 
 var app = builder.Build();
+if (args.Contains("--check-provider", StringComparer.Ordinal))
+{
+    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    try
+    {
+        var status = await app.Services.GetRequiredService<AI.API.Clients.GeminiModelClient>().GetStatusAsync(timeout.Token);
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(status));
+        Environment.ExitCode = status.Ready ? 0 : 1;
+    }
+    catch (OperationCanceledException)
+    {
+        Console.Error.WriteLine("The Gemini readiness check timed out.");
+        Environment.ExitCode = 1;
+    }
+    finally
+    {
+        await app.DisposeAsync();
+    }
+
+    return;
+}
+
 app.MapGrpcService<ChatGrpcService>();
 app.MapGrpcService<RecommendationGrpcService>();
 app.MapGet("/health/live", () => Results.Ok(new { status = "alive" }));
-app.MapGet("/health/ready", (IOptions<GeminiSettings> settings) =>
+app.MapGet("/health/ready", async (AI.API.Clients.GeminiModelClient model, IOptions<AISettings> settings, CancellationToken ct) =>
 {
-    var configured = !string.IsNullOrWhiteSpace(settings.Value.ApiKey);
-    return Results.Json(new
+    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+    timeout.CancelAfter(TimeSpan.FromSeconds(settings.Value.DependencyTimeoutSeconds));
+    try
     {
-        configured,
-        provider = "Gemini",
-        status = configured ? "ConfiguredNotProviderVerified" : "ApiKeyMissing"
-    }, statusCode: configured ? 200 : 503);
+        var status = await model.GetStatusAsync(timeout.Token);
+        return Results.Json(status, statusCode: status.Ready ? 200 : 503);
+    }
+    catch (OperationCanceledException)
+    {
+        return Results.StatusCode(503);
+    }
 });
 app.Run();
