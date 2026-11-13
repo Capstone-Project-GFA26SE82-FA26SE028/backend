@@ -1,6 +1,8 @@
+using Shared.Common.Billing;
+
 namespace Restaurant.BLL.Interfaces;
 
 public interface ISessionPaymentClient
 {
-    Task RequirePaidAsync(Guid sessionId, Guid restaurantId, CancellationToken ct);
+    Task<PaidSessionSettlement?> GetPaidAsync(Guid sessionId, Guid restaurantId, CancellationToken ct);
 }

@@ -4,7 +4,9 @@ namespace Restaurant.BLL.Interfaces;
 
 public interface ITableSessionService
 {
-    Task<TableSessionDepartureDto> Depart(Guid sessionId, CancellationToken ct);
+    Task<TableSessionClosureDto> ClosePaidSession(Shared.Common.Billing.PaidSessionSettlement payment, CancellationToken ct);
+
+    Task<bool> TryClosePaidSession(Guid sessionId, CancellationToken ct);
 
     Task<TableSessionScanDto> OpenForWaiter(Guid tableId, CancellationToken ct);
 

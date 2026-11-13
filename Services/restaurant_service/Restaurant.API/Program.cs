@@ -8,6 +8,12 @@ builder.Services.AddGrpc(options =>
     options.Interceptors.Add<Restaurant.API.Management.ManagementInterceptor>();
 });
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddOptions<Shared.Common.Billing.PaymentSettlementSettings>()
+    .Bind(builder.Configuration.GetSection("PaymentSettlement"))
+    .Validate(value => value.TimeoutSeconds is > 0 and <= 15 && value.RetryIntervalSeconds is >= 1 and <= 3600
+        && value.BatchSize is >= 1 and <= 100, "Cấu hình PaymentSettlement không hợp lệ.")
+    .ValidateOnStart();
+builder.Services.AddHostedService<Restaurant.API.Workers.PaidSessionClosureWorker>();
 builder.Services.Configure<Restaurant.Common.Settings.BillingReadSettings>(builder.Configuration.GetSection("BillingRead"));
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IBillingSessionService, Restaurant.BLL.Implements.BillingSessionService>();
 builder.Services.AddOptions<Restaurant.Common.Settings.ServiceRequestSettings>()
@@ -21,11 +27,11 @@ builder.Services.AddOptions<Restaurant.Common.Settings.ServiceRequestSettings>()
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IServiceRequestService, Restaurant.BLL.Implements.ServiceRequestService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IPaymentRequestOrderClient, Restaurant.API.Management.PaymentRequestOrderClient>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ISessionPaymentClient, Restaurant.API.Management.SessionPaymentClient>();
-builder.Services.AddGrpcClient<Backend.Contracts.Billing.PaymentGrpc.PaymentGrpcClient>(options =>
+builder.Services.AddGrpcClient<Backend.Contracts.Billing.PaymentSettlementGrpc.PaymentSettlementGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Billing"]
         ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Billing."));
-});
+}).RedactLoggedHeaders(_ => true);
 builder.Services.AddGrpcClient<Backend.Contracts.Ordering.CheckoutLockGrpc.CheckoutLockGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
@@ -94,6 +100,7 @@ app.MapGrpcService<Restaurant.API.GrpcServices.AreaGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.TableGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.QrGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.TableSessionGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.SessionSettlementGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.ReservationGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantStaffGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantAccessGrpcService>();

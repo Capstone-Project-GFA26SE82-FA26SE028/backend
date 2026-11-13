@@ -166,6 +166,11 @@ public sealed class PayOsPaymentGrpcService(IPayOsPaymentService service) : PayO
             result.ProviderAmountRemaining = value.ProviderAmountRemaining.Value;
         }
 
+        if (value.SessionClosureConfirmed.HasValue)
+        {
+            result.SessionClosureConfirmed = value.SessionClosureConfirmed.Value;
+        }
+
         return result;
     }
 }

@@ -10,16 +10,6 @@ namespace ApiGateway.Controllers.RestaurantManagement;
 [RequireBearerToken]
 public sealed class TableController(TableGrpc.TableGrpcClient client) : ManagementControllerBase
 {
-    [HttpPost("{id:guid}/confirm-clean")]
-    public Task<IActionResult> ConfirmClean(Guid id, ConfirmTableCleanDto body, CancellationToken ct)
-    {
-        return Execute(async () => ManagementMapping.ToDto(await client.ConfirmCleanAsync(new IdRequest
-        {
-            Id = id.ToString(),
-            Version = body.Version ?? string.Empty
-        }, Options(ct))), ct);
-    }
-
     [HttpGet("service")]
     public Task<IActionResult> GetServiceTables([FromQuery] ListQuery query, CancellationToken ct)
     {

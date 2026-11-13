@@ -9,27 +9,6 @@ namespace ApiGateway.Controllers.RestaurantManagement;
 [Route("api/table-sessions")]
 public sealed class TableSessionController(TableSessionGrpc.TableSessionGrpcClient client) : ManagementControllerBase
 {
-    [HttpPost("{sessionId:guid}/depart")]
-    [ApiGateway.Swagger.RequireBearerToken]
-    public Task<IActionResult> Depart(Guid sessionId, CancellationToken ct)
-    {
-        return Execute(async () =>
-        {
-            var reply = await client.DepartAsync(new IdRequest
-            {
-                Id = sessionId.ToString()
-            }, Options(ct));
-            return new TableSessionDepartureDto
-            {
-                TableSessionId = Guid.Parse(reply.TableSessionId),
-                RestaurantId = Guid.Parse(reply.RestaurantId),
-                Status = reply.Status,
-                ClosedAt = DateTimeOffset.Parse(reply.ClosedAt, CultureInfo.InvariantCulture),
-                TableIds = reply.TableIds.Select(Guid.Parse).ToArray()
-            };
-        }, ct);
-    }
-
     [HttpPost("tables/{tableId:guid}/open")]
     [ApiGateway.Swagger.RequireBearerToken]
     public Task<IActionResult> OpenForWaiter(Guid tableId, CancellationToken ct)

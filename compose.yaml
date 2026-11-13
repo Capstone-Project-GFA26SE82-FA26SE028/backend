@@ -71,6 +71,7 @@ services:
       dockerfile: Services/restaurant_service/Restaurant.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      PaymentSettlement__SharedKey: ${PAYMENT_SETTLEMENT_SHARED_KEY:?Set the shared Billing/Restaurant settlement key in external .env}
       Cloudinary__CloudName: ${CLOUDINARY_CLOUD_NAME:-dworxzse0}
       Cloudinary__ApiKey: ${CLOUDINARY_API_KEY:?Set Cloudinary API key in external .env}
       Cloudinary__ApiSecret: ${CLOUDINARY_API_SECRET:?Set Cloudinary API secret in external .env}
@@ -157,6 +158,7 @@ services:
       dockerfile: Services/billing_service/Billing.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      PaymentSettlement__SharedKey: ${PAYMENT_SETTLEMENT_SHARED_KEY:?Set the shared Billing/Restaurant settlement key in external .env}
       PayOs__Enabled: ${PAYOS_ENABLED:-false}
       PayOs__ClientId: ${PAYOS_CLIENT_ID:-}
       PayOs__ApiKey: ${PAYOS_API_KEY:-}

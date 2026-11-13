@@ -2,6 +2,7 @@ namespace Billing.Common.DTOs;
 
 public sealed class PaymentDTO
 {
+    public bool? SessionClosureConfirmed { get; set; }
     public Guid PaymentId { get; set; }
     public Guid BillId { get; set; }
     public string BillNumber { get; set; } = string.Empty;

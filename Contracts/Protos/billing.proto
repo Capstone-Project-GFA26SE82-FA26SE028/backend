@@ -9,6 +9,19 @@ service PaymentGrpc {
   rpc GetById(PaymentIdRequest) returns (PaymentInfo);
 }
 message DeparturePaymentRequest { string table_session_id = 1; string restaurant_id = 2; }
+service PaymentSettlementGrpc {
+  rpc GetPaid(SettlementScopeRequest) returns (PaidSettlementReply);
+}
+message SettlementScopeRequest { string table_session_id = 1; string restaurant_id = 2; }
+message PaidSettlementReply {
+  string table_session_id = 1;
+  string restaurant_id = 2;
+  string bill_id = 3;
+  string checkout_id = 4;
+  string paid_at = 5;
+  int64 signature_time = 6;
+  string signature = 7;
+}
 message PayCashRequest {
   string bill_id = 1;
   string checkout_id = 2;
@@ -35,6 +48,7 @@ message PaymentInfo {
   string confirmed_by_ref = 14;
   string paid_at = 15;
   string cash_movement_id = 16;
+  optional bool session_closure_confirmed = 17;
 }
 service BillCheckoutGrpc {
   rpc Request(BillCheckoutRequest) returns (BillCheckoutInfo);
@@ -376,6 +390,7 @@ message PayOsPaymentInfo {
   bool is_verified_zero = 16;
   bool requires_review = 17;
   bool link_details_available = 18;
+  optional bool session_closure_confirmed = 19;
 }
 
 service CashHandoverGrpc {
@@ -415,6 +430,7 @@ message CashHandoverInfo {
   string payment_status = 13;
   string collected_at = 14;
   optional string confirmed_at = 15;
+  optional bool session_closure_confirmed = 16;
 }
 message CashHandoverReply { CashHandoverInfo handover = 1; bool created = 2; }
 message CashHandoverPage {

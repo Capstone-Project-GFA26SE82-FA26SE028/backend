@@ -264,7 +264,7 @@ public sealed class CashPaymentServiceTests
             Service = MakeService(core.Db, core.Actor, core.Service, Remote);
         }
 
-        public static PaymentService MakeService(BillingDbContext db, IBillingAccess actor, IBillService billService, ICheckoutSourceClient remote)
+        public static PaymentService MakeService(BillingDbContext db, IBillingAccess actor, IBillService billService, ICheckoutSourceClient remote, ISessionSettlementClient? closure = null)
         {
             return new PaymentService(new PaymentRepository(db), new BillRepository(db), new BillCheckoutRepository(db),
                 new CashShiftRepository(db), new CashRegisterRepository(db), new PaymentMethodRepository(db),
@@ -277,7 +277,7 @@ public sealed class CashPaymentServiceTests
                 }), Options.Create(new CashPaymentSettings
                 {
                     MethodCode = "Cash"
-                }), TimeProvider.System);
+                }), TimeProvider.System, TestPaymentSettlement.Create(db, closure));
         }
 
         public static async Task<Fixture> Create()

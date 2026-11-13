@@ -52,7 +52,19 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
     public async Task<ServiceRequestDto> GetById(Guid sessionId, Guid id, string guestToken, CancellationToken ct)
     {
         ValidateIds(sessionId, id);
-        var restaurantId = await RequireSession(sessionId, guestToken, ct);
+        Guid restaurantId;
+        if (string.IsNullOrEmpty(guestToken))
+        {
+            var session = await sessions.GetForBillingAsync(sessionId, ct)
+                ?? throw new ManagementException(404, "Không tìm thấy phiên bàn.");
+            restaurantId = RestaurantId(session);
+            await RequireStaff(restaurantId, settings.Value.WaiterRoleIds.Concat(settings.Value.CashierRoleIds), ct);
+        }
+        else
+        {
+            restaurantId = await RequireSession(sessionId, guestToken, ct);
+        }
+
         var request = await requests.GetPaymentRequestAsync(id, ct)
             ?? throw new ManagementException(404, "Không tìm thấy yêu cầu thanh toán.");
         CheckIdentity(request, sessionId);

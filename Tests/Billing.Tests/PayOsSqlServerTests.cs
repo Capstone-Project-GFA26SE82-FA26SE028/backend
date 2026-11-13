@@ -270,7 +270,7 @@ public sealed partial class PayOsSqlServerTests : IAsyncLifetime
             }), TimeProvider.System, new TestPaymentRequestClient
             {
                 ReviewedWaiterId = waiterId ?? Guid.Empty
-            });
+            }, TestPaymentSettlement.Create(db));
     }
 
     private static ShiftIdentity CashActor(BillServiceTests.BillSource source)

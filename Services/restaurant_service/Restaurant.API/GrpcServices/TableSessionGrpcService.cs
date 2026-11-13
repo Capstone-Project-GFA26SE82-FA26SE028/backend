@@ -7,20 +7,6 @@ namespace Restaurant.API.GrpcServices;
 
 public sealed class TableSessionGrpcService(ITableSessionService service) : TableSessionGrpc.TableSessionGrpcBase
 {
-    public override async Task<TableSessionDepartureReply> Depart(IdRequest request, ServerCallContext context)
-    {
-        var value = await service.Depart(ManagementMapping.Id(request.Id), context.CancellationToken);
-        var reply = new TableSessionDepartureReply
-        {
-            TableSessionId = value.TableSessionId.ToString(),
-            RestaurantId = value.RestaurantId.ToString(),
-            Status = value.Status,
-            ClosedAt = value.ClosedAt.ToString("O")
-        };
-        reply.TableIds.AddRange(value.TableIds.Select(id => id.ToString()));
-        return reply;
-    }
-
     public override async Task<TableSessionScanReply> OpenForWaiter(IdRequest request, ServerCallContext context)
     {
         var result = await service.OpenForWaiter(ManagementMapping.Id(request.Id), context.CancellationToken);

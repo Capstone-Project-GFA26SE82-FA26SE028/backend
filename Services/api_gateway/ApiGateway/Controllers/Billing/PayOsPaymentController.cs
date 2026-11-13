@@ -129,6 +129,7 @@ public sealed class PayOsPaymentController(PayOsPaymentGrpc.PayOsPaymentGrpcClie
     {
         return new PayOsPaymentDTO
         {
+            SessionClosureConfirmed = value.HasSessionClosureConfirmed ? value.SessionClosureConfirmed : null,
             PaymentId = Guid.Parse(value.PaymentId),
             BillId = Guid.Parse(value.BillId),
             CashShiftId = Guid.Parse(value.CashShiftId),

@@ -20,7 +20,8 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
     IBillCheckoutRepository checkouts, ICashShiftRepository shifts, ICashRegisterRepository registers,
     IPaymentMethodRepository methods, IPaymentWebhookRepository webhooks, IUnitOfWork unitOfWork,
     IBillingAccess access, IBillService billService, ICheckoutSourceClient ordering, IPayOsClient provider,
-    IOptions<CashRegisterAccessSettings> roles, IOptions<PayOsSettings> settings, TimeProvider clock, IPaymentRequestClient requests) : IPayOsPaymentService
+    IOptions<CashRegisterAccessSettings> roles, IOptions<PayOsSettings> settings, TimeProvider clock, IPaymentRequestClient requests,
+    IPaymentSettlementService settlement) : IPayOsPaymentService
 {
     public async Task<(PayOsPaymentDTO Payment, bool Created)> Create(Guid billId, string key, CreatePayOsPaymentDTO request, CancellationToken ct)
     {

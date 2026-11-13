@@ -8,6 +8,7 @@ public sealed class CreatePayOsPaymentDTO
 
 public sealed class PayOsPaymentDTO
 {
+    public bool? SessionClosureConfirmed { get; set; }
     public Guid PaymentId { get; set; }
     public Guid BillId { get; set; }
     public Guid CashShiftId { get; set; }

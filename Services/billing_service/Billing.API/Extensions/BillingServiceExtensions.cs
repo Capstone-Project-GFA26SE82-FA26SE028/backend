@@ -6,6 +6,7 @@ using Billing.API.Settings;
 using Billing.BLL.Interfaces;
 using Billing.BLL.Implements;
 using Billing.Common.Settings;
+using Shared.Common.Billing;
 
 namespace Billing.API.Extensions;
 
@@ -18,6 +19,12 @@ public static class BillingServiceExtensions
             options.Interceptors.Add<BillingInterceptor>();
         });
         services.AddHttpContextAccessor();
+        services.AddOptions<PaymentSettlementSettings>()
+            .Bind(configuration.GetSection("PaymentSettlement"))
+            .Validate(value => value.TimeoutSeconds is > 0 and <= 15, "PaymentSettlement:TimeoutSeconds phải từ 1 đến 15.")
+            .ValidateOnStart();
+        services.AddScoped<IPaymentSettlementService, PaymentSettlementService>();
+        services.AddScoped<ISessionSettlementClient, SessionSettlementClient>();
         services.Configure<PayOsSettings>(configuration.GetSection("PayOs"));
         services.AddHttpClient<IPayOsClient, PayOsClient>(http =>
         {
@@ -58,6 +65,10 @@ public static class BillingServiceExtensions
         {
             options.Address = uri;
         });
+        services.AddGrpcClient<SessionSettlementGrpc.SessionSettlementGrpcClient>(options =>
+        {
+            options.Address = uri;
+        }).RedactLoggedHeaders(_ => true);
         services.AddScoped<IPaymentRequestClient, PaymentRequestClient>();
         services.AddGrpcClient<Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient>(options =>
         {

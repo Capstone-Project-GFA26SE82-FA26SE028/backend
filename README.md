@@ -209,9 +209,9 @@ After the assigned Waiter acknowledges and reviews the Payment ServiceRequest:
 - Responsible Waiter submits: `POST /api/table-sessions/{sessionId}/checkout/{checkoutId}/submit` with `{ "cashRegisterId": "<register UUID>" }`. Same target is idempotent; another target returns 409. Registers must belong to the session's restaurant and have exactly one unclosed Active shift.
 - Owning Cashier reads `GET /api/cash-registers/{cashRegisterId}/checkouts?page=1&pageSize=20`, then calls the existing `/synchronize`. Ready records PreparedByRef/PreparedAt; no money is collected.
 - Responsible Waiter reads `GET /api/table-sessions/{sessionId}/checkout/{checkoutId}/prebill`, gives the bill to the customer, then calls `POST /api/table-sessions/{sessionId}/checkout/{checkoutId}/present` without a body. PresentedAt is stored once. Other Waiters cannot read/present it; general bill readers retain existing permissions.
-- New cash/PayOS collection requires the receiving register and presentation milestone. Existing payment replay and PayOS settlement recovery remain available. Cash handover through Waiter uses the Cash payment endpoints below. Customer departure and cleaning are explicit staff actions described below.
+- New cash/PayOS collection requires the receiving register and presentation milestone. Existing payment replay and PayOS settlement recovery remain available. Cash handover through Waiter uses the Cash payment endpoints below. Verified payment now automatically closes the session as described below.
 
-Checkout prepares the bill before collection. Cash collection is described below. Neither operation closes the table session, revokes guest access or marks the table for cleaning.
+Checkout prepares the bill before collection. Recording cash held by Waiter does not settle the bill or close the session. Only Cashier confirmation or verified PayOS settlement triggers automatic session closure.
 
 Update an existing Docker environment without deleting its databases:
 
@@ -237,37 +237,34 @@ For PowerShell testing, use `Invoke-RestMethod -WebSession $guestSession` for QR
 
 `Preparing` or `ReleasePending`, HTTP 503, or a client timeout must not be treated as permission to order again. Retrieve the checkout and retry its original operation with the same ID. There is no automatic expiry/unlock. Cooking, Ready and Served progress does not change the financial hash; creating more orders or cancelling frozen items is blocked for the whole session. Cart editing alone does not submit an order.
 
-Cash payment now consumes the matching Ready checkout through Billing's session lock and keeps Ordering blocked after success. Unknown outcomes must not release checkout. Customer departure, QR invalidation and cleaning confirmation remain separate staff workflows.
+Cash payment consumes the matching Ready checkout through Billing's session lock and keeps Ordering blocked after success. Unknown outcomes must not release checkout. The automatic closure below revokes guest access without releasing the historical checkout lock.
 
 
-## Customer departure and table cleaning
+## Automatic table-session closure after verified payment
 
-Payment success does not mean the customer has left. Any currently assigned **Waiter** at the session's restaurant may confirm departure; this is not limited to the Waiter who handled checkout. Admin, Manager, Cashier and QR guests cannot perform departure or cleaning confirmation through these APIs.
+The staff workflow stays: customer requests payment, Waiter reviews items and submits to an active register, Cashier prepares the bill, and the responsible Waiter presents it. For cash, Waiter records the entire customer tender and delivers it to Cashier. Only the receiving Cashier's confirmation makes the payment Paid; Cashier gives change to Waiter to return. For PayOS, the verified webhook/provider reconciliation makes it Paid. A redirect or recording a pending handover does not close the session.
 
-```http
-POST /api/table-sessions/{sessionId}/depart
-Authorization: Bearer {waiter-access-token}
+After the financial transaction commits, Billing sends a signed internal `SessionSettlementGrpc.ClosePaidSession` request. Restaurant verifies the signature, restaurant, reviewed checkout and current table ownership. Under the existing table/session locks and UnitOfWork, it writes `TableSession.Status = Closed`, UTC `ClosedAt`, active `SessionTable.ReleasedAt` and unrevoked `GuestAccess.RevokedAt` together. It does not write a human closer, overwrite `ChangedByRef`, or change `CleaningStatus`. **No schema change is required.**
+
+The former public `/api/table-sessions/{sessionId}/depart` and `/api/tables/{tableId}/confirm-clean` actions are removed. There is no Dirty/clean-confirmation step. The original QR scan/create-or-reuse and staff-open flows can immediately open a new session. Old guest access cannot be reused; repeating settlement for the old session cannot close a new session or revoke its guests. Checkout/Ordering locks remain held for the paid session. Existing session-bound order APIs require an open session and therefore reject requests after closure; no new Ordering/kitchen behavior is introduced here.
+
+Billing and Restaurant commit independently. If Restaurant is unavailable or an acknowledgement is lost, Billing keeps the verified Paid receipt and its single Sale; it does not ask for payment again or undo money already received. Payment/PayOS/handover operation responses expose nullable `sessionClosureConfirmed`: `true` means a signed closure acknowledgement was verified; `false` means closure was not confirmed by that operation, including a timeout after remote commit; `null` means this response did not check closure. A normal read does not promise the flag was refreshed.
+
+Restaurant's `PaidSessionClosureWorker` scans persisted open sessions with reviewed Payment requests in bounded batches. It asks Billing's signed, read-only `PaymentSettlementGrpc.GetPaid` RPC to verify the matching Paid bill/checkout, financial hash and consistent Cash receipt/Sale or verified PayOS receipt. Unpaid, ambiguous or inconsistent receipts cannot close sessions. It retries after dependency failure or process restart without employee tokens or new bank queries. Repeating Cashier confirmation or PayOS reconciliation also retries closure. No dedicated queue/table is added; closing an old inconsistent session may require investigation of its actual records.
+
+### Required internal configuration
+
+Set the **same private random Base64 key of at least 32 bytes** for both Billing and Restaurant. Generate one locally:
+
+```powershell
+[Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 ```
 
-There is no request body. Restaurant first asks Billing to verify the session's completed payment through the read-only `PaymentGrpc.RequirePaid` RPC, forwarding the employee identity. Billing requires a matching Paid bill/checkout, frozen financial hash and exactly one consistent settled Cash receipt/Sale or verified PayOS receipt; unresolved/review attempts block departure. A closed Cashier shift does not invalidate an already settled receipt. This is a read of persisted verification, not a new bank query or a client-supplied paid flag. Restaurant configuration includes `GrpcServices:Billing` for native/Docker operation; Billing unavailability prevents departure without changing the session. No startup dependency cycle or database upgrade is added.
+For Docker, put it in the ignored root `.env` as `PAYMENT_SETTLEMENT_SHARED_KEY=<generated value>`; Compose passes it to both services. For native launches, set `PaymentSettlement__SharedKey` in the environment inherited by both processes. Do not commit the value. Tracked appsettings contain only an empty key and operational defaults: `TimeoutSeconds = 5`, `RetryIntervalSeconds = 5`, `BatchSize = 20`. Environment variables override these defaults. Signatures bind operation, scope and receipt, with a 60-second clock-skew limit; keep both service clocks synchronized. Missing/invalid keys cannot authorize closure: payment remains recorded, closure is unconfirmed, and the worker logs the missing configuration and stays disabled until restart with valid configuration.
 
-After verification, Restaurant locks the session's current tables in stable order and then the session, rechecks staff scope and table assignments, and commits `TableSession.Status = Closed`, UTC `ClosedAt`, current `SessionTable.ReleasedAt/ChangedByRef`, guest `RevokedAt` and `Table.CleaningStatus = Dirty` together. Previous table-assignment history stays unchanged. A replay returns the original close time and cannot affect a later session or its guests. Billing's checkout/Ordering lock remains held as historical payment state; closing the session does not reopen ordering for it.
+After setting the key, rebuild and recreate Billing, Restaurant and Gateway using the normal development startup. No SQL reset, upgrade or scaffold is needed for this change.
 
-The table QR remains reusable. Its old **guest session access** is revoked. Both anonymous QR scan and staff open refuse to create a new session for a table whose cleaning status is not `Clean`; scanning a clean table retains the original create-or-reuse behavior.
-
-Read the latest table `version` from `GET /api/tables/service?restaurantId={restaurantId}` and, after physically cleaning it, send:
-
-```http
-POST /api/tables/{tableId}/confirm-clean
-Authorization: Bearer {waiter-access-token}
-Content-Type: application/json
-
-{ "version": "<latest Base64 rowversion>" }
-```
-
-Cleaning uses the same table lock as opening/scanning, rejects occupied tables and stale versions, and returns the current table DTO/version. Confirm each table separately for a multi-table session. Reload after 409; do not reuse an old cleaning confirmation for a subsequent party. Schema is unchanged: there is no dedicated historical cleaner/time or session ClosedBy field; release attribution uses the existing SessionTable.ChangedByRef.
-
-Tests: run `dotnet test Tests/Restaurant.Tests/Restaurant.Tests.csproj` and `dotnet test Tests/Billing.Tests/Billing.Tests.csproj`. To enable the isolated SQL Server tests, set `RESTAURANT_DEPARTURE_SQL_CONNECTION` and `BILLING_SQL_TEST_CONNECTION` to a private dev SQL Server connection with permission to create/drop owned test databases. These tests create uniquely named databases; never put credentials in Git. Gateway/Restaurant tests use fake upstream identity/payment verification; Docker workflow checks and real-bank acceptance are reported separately in the existing database change log.
+Tests: run `dotnet test Tests/Restaurant.Tests/Restaurant.Tests.csproj`, `dotnet test Tests/Billing.Tests/Billing.Tests.csproj` and `dotnet test Tests/Foundation.Tests/Foundation.Tests.csproj`. To enable isolated SQL Server tests, set `RESTAURANT_DEPARTURE_SQL_CONNECTION` (retained test variable name) and `BILLING_SQL_TEST_CONNECTION` to a private dev SQL Server connection with permission to create/drop owned test databases. Gateway/Restaurant automated tests use fake upstream identity/payment verification. Docker workflow and restart checks use real services and SQL Server; PayOS provider simulation is explicitly separate from real bank acceptance in the existing database change log.
 
 ## Cash payment
 
@@ -322,7 +319,7 @@ Retry creation with the same key/payload and retry confirmation by the same Paym
 
 The legacy `POST /api/bills/{billId}/payments/cash` no longer creates an immediate payment without a Waiter collection. It can confirm an existing matching pending handover using its original key, or replay a legacy completed receipt. New integrations should use the handover routes above.
 
-Checkout remains unreleased and Ordering frozen after payment. Payment does not close TableSession, revoke QR, stop cooking/serving or mark tables for cleaning. Departure and cleaning are later staff workflows.
+Checkout remains unreleased and Ordering frozen after payment. Confirmed payment now triggers automatic session closure and revokes old guest access, without a cleaning step. See the automatic closure section for dependency failures and retry semantics.
 
 
 ## Outside-bill cash movements
@@ -485,7 +482,7 @@ The paged response contains attempts correlated to this checkout by the stored p
 
 `paymentConfirmed = true` requires a verified full PayOS receipt and the matching Paid bill/checkout. `status` is the attempt state; `billStatus` is separate. `requiresReview = true` signals inconsistent, ambiguous or review-required records; do not display these as a new successful payment. A verified zero-money retired attempt does not itself invalidate a valid replacement.
 
-These GETs serialize with Billing's session updates and return the last persisted verification state with UTC `evaluatedAt`. They do not call PayOS, settle money, create ledger movements, release checkout or close the table session. Existing webhook/reconciliation updates provide subsequent state; this increment adds no push notification transport. The platform-wide merchant configuration remains unchanged. No schema changes are required for these reads.
+These GETs serialize with Billing's session updates and return the last persisted verification state with UTC `evaluatedAt`. They do not call PayOS, settle money, create ledger movements, release checkout or close the table session. The responsible Waiter may still read the payment result after automatic closure, with the existing account/role/restaurant checks. Existing webhook/reconciliation updates provide subsequent state; this increment adds no push notification transport. The platform-wide merchant configuration remains unchanged. No schema changes are required for these reads.
 
 ### Verification and recovery
 
@@ -505,4 +502,4 @@ Paid PayOS payments remain eligible for background reconciliation while their sh
 
 Opening cash must be whole VND: `250000` and `250000.00` are accepted, `250000.50` is rejected without rounding. CashIn and cash Sale validate `OpeningCash + existing SignedAmount total + new amount` under the same register/shift transaction locks against the `decimal(18,2)` limit. A rejected sale records no Payment, Sale or Paid bill/checkout. Existing fractional opening balances and already over-limit balances are not rewritten automatically; review those legacy records separately.
 
-Manual transfer confirmation and refunds remain outside this PayOS increment. Waiter cash collection/handover and departure/cleaning are implemented separately in the staff workflows above. [Official PayOS testing guidance](https://payos.vn/docs/moi-truong-test/) states that a separate sandbox is not available. Local mock/HTTP-provider tests do not prove a real bank transfer. Live acceptance still requires real channel credentials, registered public HTTPS webhook and an authorized real test payment; do not claim this based on redirect success or simulated callbacks.
+Manual transfer confirmation and refunds remain outside this PayOS increment. Waiter cash collection/handover and automatic session closure are described above. [Official PayOS testing guidance](https://payos.vn/docs/moi-truong-test/) states that a separate sandbox is not available. Local mock/HTTP-provider tests do not prove a real bank transfer. Live acceptance still requires real channel credentials, registered public HTTPS webhook and an authorized real test payment; do not claim this based on redirect success or simulated callbacks.

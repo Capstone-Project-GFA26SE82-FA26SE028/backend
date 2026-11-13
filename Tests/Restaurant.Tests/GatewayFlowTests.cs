@@ -44,7 +44,8 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Qr:MenuBaseUrl"] = "https://menu.example.test/menu",
-                    ["Reservations:ExpirationEnabled"] = "false"
+                    ["Reservations:ExpirationEnabled"] = "false",
+                    ["PaymentSettlement:SharedKey"] = SettlementTestKey
                 });
             });
             builder.ConfigureTestServices(services =>
@@ -57,7 +58,11 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 services.RemoveAll<IPaymentRequestOrderClient>();
                 services.AddSingleton<IPaymentRequestOrderClient>(new PaymentRequestOrders(() => _pendingPaymentOrders));
                 services.RemoveAll<ISessionPaymentClient>();
-                services.AddSingleton<ISessionPaymentClient>(_departurePayment);
+                services.AddSingleton<ISessionPaymentClient>(_sessionPaymentReader);
+                foreach (var descriptor in services.Where(value => value.ImplementationType == typeof(restaurantapi::Restaurant.API.Workers.PaidSessionClosureWorker)).ToArray())
+                {
+                    services.Remove(descriptor);
+                }
                 services.RemoveAll<IManagementAccess>();
                 services.AddScoped<IManagementAccess, TestAccess>();
                 services.RemoveAll<IStaffIdentity>();

@@ -227,13 +227,15 @@ public sealed class CashHandoverService(ICashHandoverRepository handovers, IPaym
             throw new BillingException(409, "Không xác định được checkout đang giữ hóa đơn.");
         }
 
-        await paymentService.PayCash(bill.BillId, value.Payment.IdempotencyKey, new CreateCashPaymentDTO
+        var confirmed = await paymentService.PayCash(bill.BillId, value.Payment.IdempotencyKey, new CreateCashPaymentDTO
         {
             CheckoutId = checkout.CheckoutId,
             CashShiftId = value.Payment.CashShiftId,
             CashReceived = confirmedAmount
         }, ct);
-        return await GetById(paymentId, ct);
+        var result = await GetById(paymentId, ct);
+        result.SessionClosureConfirmed = confirmed.Payment.SessionClosureConfirmed;
+        return result;
     }
 
     private async Task<CashHandover> Find(Guid id, CancellationToken ct)

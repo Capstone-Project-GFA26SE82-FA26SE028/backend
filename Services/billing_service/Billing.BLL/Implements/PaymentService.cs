@@ -18,7 +18,8 @@ public sealed partial class PaymentService(IPaymentRepository payments, IBillRep
     IBillCheckoutRepository checkouts, ICashShiftRepository shifts, ICashRegisterRepository registers,
     IPaymentMethodRepository methods, ICashMovementRepository movements, IUnitOfWork unitOfWork,
     IBillingAccess access, IBillService billService, ICheckoutSourceClient ordering,
-    IOptions<CashRegisterAccessSettings> roles, IOptions<CashPaymentSettings> settings, TimeProvider clock) : IPaymentService
+    IOptions<CashRegisterAccessSettings> roles, IOptions<CashPaymentSettings> settings, TimeProvider clock,
+    IPaymentSettlementService settlement) : IPaymentService
 {
     private const decimal MaximumMoney = 9999999999999999.99m;
 
@@ -46,7 +47,7 @@ public sealed partial class PaymentService(IPaymentRepository payments, IBillRep
 
         try
         {
-            return await unitOfWork.ExecuteInTransactionAsync(async () =>
+            var result = await unitOfWork.ExecuteInTransactionAsync(async () =>
             {
                 if (!await payments.LockIdempotencyKeyAsync(key, ct) || !await bills.LockSessionAsync(sessions[0], ct))
                 {
@@ -223,6 +224,8 @@ public sealed partial class PaymentService(IPaymentRepository payments, IBillRep
                 checkout.Status = PaymentStatuses.Paid;
                 return (Map(payment, checkout.CheckoutId), true);
             }, ct);
+            result.Item1.SessionClosureConfirmed = await settlement.TryClose(sessions[0], initial.RestaurantId, ct);
+            return result;
         }
         catch (DbUpdateConcurrencyException)
         {

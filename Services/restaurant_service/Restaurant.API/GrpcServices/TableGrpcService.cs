@@ -9,11 +9,6 @@ namespace Restaurant.API.GrpcServices;
 
 public sealed class TableGrpcService(ITableService service) : TableGrpc.TableGrpcBase
 {
-    public override async Task<TableInfo> ConfirmClean(IdRequest request, ServerCallContext context)
-    {
-        return ManagementMapping.ToWire(await service.ConfirmClean(ManagementMapping.Id(request.Id), request.Version, context.CancellationToken));
-    }
-
     public override async Task<ServiceTablePage> GetServiceTables(ListRequest request, ServerCallContext context)
     {
         var page = await service.GetServiceTables(ManagementMapping.ToDto(request), context.CancellationToken);

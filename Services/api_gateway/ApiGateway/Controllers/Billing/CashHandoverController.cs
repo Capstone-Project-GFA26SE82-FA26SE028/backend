@@ -89,6 +89,7 @@ public sealed class CashHandoverController(CashHandoverGrpc.CashHandoverGrpcClie
     {
         return new CashHandoverDTO
         {
+            SessionClosureConfirmed = value.HasSessionClosureConfirmed ? value.SessionClosureConfirmed : null,
             PaymentId = Guid.Parse(value.PaymentId),
             BillId = Guid.Parse(value.BillId),
             RestaurantId = Guid.Parse(value.RestaurantId),

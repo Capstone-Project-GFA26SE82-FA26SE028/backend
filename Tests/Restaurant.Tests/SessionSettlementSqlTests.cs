@@ -10,6 +10,7 @@ using Restaurant.Common.Settings;
 using Restaurant.DAL.Implements;
 using Restaurant.DAL.Models;
 using Shared.Persistence.UnitOfWorks;
+using Shared.Common.Billing;
 using Xunit;
 
 namespace Restaurant.Tests;
@@ -25,14 +26,15 @@ public sealed class DepartureSqlFactAttribute : FactAttribute
     }
 }
 
-public sealed class TableDepartureSqlTests : IAsyncLifetime
+public sealed class SessionSettlementSqlTests : IAsyncLifetime
 {
     private readonly string _database = "CodexDeparture_" + Guid.NewGuid().ToString("N");
     private readonly Guid _restaurantId = Guid.NewGuid();
     private readonly Guid _sessionId = Guid.NewGuid();
     private readonly Guid _tableId = Guid.NewGuid();
     private readonly Guid _otherTableId = Guid.NewGuid();
-    private readonly PaidClient _paid = new();
+    private readonly Guid _checkoutId = Guid.NewGuid();
+    private readonly Guid _billId = Guid.NewGuid();
     private string _master = string.Empty;
     private string _connection = string.Empty;
     private bool _created;
@@ -102,6 +104,17 @@ public sealed class TableDepartureSqlTests : IAsyncLifetime
                     CleaningStatus = "Clean"
                 }
             }).ToList(),
+            ServiceRequests =
+            [
+                new ServiceRequest
+                {
+                    ServiceRequestId = _checkoutId,
+                    Type = "Payment",
+                    Status = "Reviewed",
+                    RequestedAt = now,
+                    AcknowledgedAt = now
+                }
+            ],
             GuestAccesses =
             [
                 new GuestAccess
@@ -121,38 +134,37 @@ public sealed class TableDepartureSqlTests : IAsyncLifetime
     {
         await using var first = Context();
         await using var second = Context();
-        var results = await Task.WhenAll(Sessions(first).Depart(_sessionId, default), Sessions(second).Depart(_sessionId, default));
+        var results = await Task.WhenAll(Sessions(first).ClosePaidSession(Payment(), default), Sessions(second).ClosePaidSession(Payment(), default));
         Assert.Equal(results[0].ClosedAt, results[1].ClosedAt);
         await using var check = Context();
         var session = await check.TableSessions.SingleAsync();
         Assert.Equal("Closed", session.Status);
         Assert.All(await check.SessionTables.ToListAsync(), link => Assert.Equal(session.ClosedAt, link.ReleasedAt));
-        Assert.All(await check.Tables.ToListAsync(), table => Assert.Equal("Dirty", table.CleaningStatus));
+        Assert.All(await check.Tables.ToListAsync(), table => Assert.Equal("Clean", table.CleaningStatus));
         Assert.Equal(session.ClosedAt, (await check.GuestAccesses.SingleAsync()).RevokedAt);
         Assert.Equal(2, results[0].TableIds.Length);
     }
 
     [DepartureSqlFact]
-    public async Task DirtyTableCannotOpenAndConcurrentCleaningRejectsStaleVersion()
+    public async Task ClosedSessionNeedsNoCleaningAndConcurrentOpeningCreatesOnlyOneNewSession()
     {
         await using (var setup = Context())
         {
-            await Sessions(setup).Depart(_sessionId, default);
+            await Sessions(setup).ClosePaidSession(Payment(), default);
         }
 
         await using var first = Context();
         await using var second = Context();
-        Assert.Equal(409, (await Assert.ThrowsAsync<ManagementException>(() => Sessions(first).OpenForWaiter(_tableId, default))).StatusCode);
-        var version = Convert.ToBase64String((await first.Tables.AsNoTracking().SingleAsync(table => table.TableId == _tableId)).Version);
-        var codes = await Task.WhenAll(Clean(first, version), Clean(second, version));
-        Assert.Equal(new[] { 200, 409 }, codes.Order().ToArray());
-        await using var next = Context();
-        var opened = await Sessions(next).OpenForWaiter(_tableId, default);
-        Assert.NotEqual(_sessionId, opened.TableSessionId);
-        await Sessions(next).Depart(_sessionId, default);
+        var opened = await Task.WhenAll(Sessions(first).OpenForWaiter(_tableId, default), Sessions(second).OpenForWaiter(_tableId, default));
+        Assert.Equal(opened[0].TableSessionId, opened[1].TableSessionId);
+        Assert.NotEqual(_sessionId, opened[0].TableSessionId);
+        Assert.Equal(1, opened.Count(value => value.IsNewSession));
+        await using var replay = Context();
+        await Sessions(replay).ClosePaidSession(Payment(), default);
         await using var check = Context();
         Assert.Equal("Clean", (await check.Tables.SingleAsync(table => table.TableId == _tableId)).CleaningStatus);
         Assert.Equal(1, await check.TableSessions.CountAsync(session => session.ClosedAt == null));
+        Assert.Empty((await new TableSessionRepository(check).GetSettlementCandidatesAsync(0, 20, default)).Ids);
     }
 
     [DepartureSqlFact]
@@ -160,7 +172,7 @@ public sealed class TableDepartureSqlTests : IAsyncLifetime
     {
         await Execute(_connection, "CREATE TRIGGER dbo.FailDeparture ON dbo.GuestAccess AFTER UPDATE AS THROW 51000, 'Test write failure', 1;");
         await using var db = Context();
-        await Assert.ThrowsAsync<DbUpdateException>(() => Sessions(db).Depart(_sessionId, default));
+        await Assert.ThrowsAsync<DbUpdateException>(() => Sessions(db).ClosePaidSession(Payment(), default));
         await using var check = Context();
         Assert.Null((await check.TableSessions.SingleAsync()).ClosedAt);
         Assert.All(await check.SessionTables.ToListAsync(), link => Assert.Null(link.ReleasedAt));
@@ -172,31 +184,12 @@ public sealed class TableDepartureSqlTests : IAsyncLifetime
     {
         return new TableSessionService(null!, new TableRepository(db), new TableSessionRepository(db),
             new SessionTableRepository(db), new ManagementTransaction(new UnitOfWork<RestaurantDbContext>(db)), null!,
-            new StaffAccess(), new Scope(_restaurantId), _paid, new GuestAccessRepository(db), Options.Create(Settings()), TimeProvider.System);
+            new StaffAccess(), new PaidClient(Payment()), new GuestAccessRepository(db), new ServiceRequestRepository(db), TimeProvider.System);
     }
 
-    private async Task<int> Clean(RestaurantDbContext db, string version)
+    private PaidSessionSettlement Payment()
     {
-        var service = new TableService(new TableRepository(db), new AreaRepository(db),
-            new ManagementTransaction(new UnitOfWork<RestaurantDbContext>(db)), null!, new StaffAccess(), new Scope(_restaurantId), Options.Create(Settings()));
-        try
-        {
-            await service.ConfirmClean(_tableId, version, default);
-            return 200;
-        }
-        catch (ManagementException error)
-        {
-            return error.StatusCode;
-        }
-    }
-
-    private static ServiceRequestSettings Settings()
-    {
-        return new ServiceRequestSettings
-        {
-            WaiterRoleIds = ["waiter"],
-            CashierRoleIds = ["cashier"]
-        };
+        return new PaidSessionSettlement(_sessionId, _restaurantId, _billId, _checkoutId, DateTimeOffset.UtcNow.AddMinutes(-1));
     }
 
     private RestaurantDbContext Context()
@@ -221,25 +214,11 @@ public sealed class TableDepartureSqlTests : IAsyncLifetime
         }
     }
 
-    private sealed class Scope(Guid restaurantId) : ICurrentRestaurantScopeService
+    private sealed class PaidClient(PaidSessionSettlement payment) : ISessionPaymentClient
     {
-        public Task<CurrentRestaurantScopeDto> GetCurrentScope(Guid? id, CancellationToken ct)
+        public Task<PaidSessionSettlement?> GetPaidAsync(Guid sessionId, Guid restaurantId, CancellationToken ct)
         {
-            Assert.True(id is null || id == restaurantId);
-            return Task.FromResult(new CurrentRestaurantScopeDto
-            {
-                UserId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                RoleId = "waiter",
-                RestaurantIds = [restaurantId]
-            });
-        }
-    }
-
-    private sealed class PaidClient : ISessionPaymentClient
-    {
-        public Task RequirePaidAsync(Guid sessionId, Guid restaurantId, CancellationToken ct)
-        {
-            return Task.CompletedTask;
+            return Task.FromResult<PaidSessionSettlement?>(payment);
         }
     }
 

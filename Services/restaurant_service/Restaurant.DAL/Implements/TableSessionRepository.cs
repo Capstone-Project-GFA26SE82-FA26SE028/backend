@@ -8,6 +8,16 @@ namespace Restaurant.DAL.Implements;
 public sealed class TableSessionRepository(RestaurantDbContext db)
     : GenericRepository<TableSession, RestaurantDbContext>(db), ITableSessionRepository
 {
+    public async Task<(IReadOnlyList<Guid> Ids, int Total)> GetSettlementCandidatesAsync(int skip, int take, CancellationToken ct)
+    {
+        var query = _context.TableSessions.AsNoTracking().Where(session => session.Status == "Open" && session.ClosedAt == null
+            && session.ServiceRequests.Any(request => request.Type == "Payment" && request.Status == "Reviewed"));
+        var total = await query.CountAsync(ct);
+        var ids = await query.OrderBy(session => session.TableSessionId).Skip(skip).Take(take)
+            .Select(session => session.TableSessionId).ToListAsync(ct);
+        return (ids, total);
+    }
+
     public Task<TableSession?> GetForDepartureAsync(Guid id, CancellationToken ct)
     {
         return _context.TableSessions.Include(session => session.SessionTables)

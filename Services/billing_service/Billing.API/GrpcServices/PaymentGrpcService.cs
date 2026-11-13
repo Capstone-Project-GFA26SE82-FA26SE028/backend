@@ -53,7 +53,7 @@ public sealed class PaymentGrpcService(IPaymentService service) : PaymentGrpc.Pa
 
     private static PaymentInfo Map(PaymentDTO value)
     {
-        return new PaymentInfo
+        var result = new PaymentInfo
         {
             PaymentId = value.PaymentId.ToString(),
             BillId = value.BillId.ToString(),
@@ -72,5 +72,11 @@ public sealed class PaymentGrpcService(IPaymentService service) : PaymentGrpc.Pa
             PaidAt = value.PaidAt.ToString("O", CultureInfo.InvariantCulture),
             CashMovementId = value.CashMovementId.ToString()
         };
+        if (value.SessionClosureConfirmed.HasValue)
+        {
+            result.SessionClosureConfirmed = value.SessionClosureConfirmed.Value;
+        }
+
+        return result;
     }
 }

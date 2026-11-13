@@ -12,7 +12,7 @@ public sealed partial class PayOsPaymentService
     {
         provider.EnsureConfigured();
         payments.ResetProviderTracking();
-        return await Controlled(async () => await unitOfWork.ExecuteInTransactionAsync(async () =>
+        var result = await Controlled(async () => await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             var initial = await payments.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy khoản thanh toán.");
             if (!PayOsPaymentRules.IsPayOs(initial))
@@ -111,6 +111,13 @@ public sealed partial class PayOsPaymentService
             result.ProviderAmountRemaining = bank?.AmountRemaining;
             return result;
         }, ct));
+        if (result.Status == PaymentStatuses.Paid)
+        {
+            var bill = await bills.GetDetailsAsync(result.BillId, ct) ?? throw new BillingException(409, "Không tìm thấy hóa đơn đã thanh toán.");
+            result.SessionClosureConfirmed = await settlement.TryClose(Session(bill), bill.RestaurantId, ct);
+        }
+
+        return result;
     }
 
     private async Task Apply(Payment payment, PayOsProviderResult? bank, Guid sessionId, bool cancellationAttempted, CancellationToken ct)

@@ -6,10 +6,8 @@ using Entity = Restaurant.DAL.Models.Table;
 
 namespace Restaurant.BLL.Implements;
 
-public sealed partial class TableService(ITableRepository repository, IAreaRepository areas,
-    IManagementTransaction transaction, IManagementAccess access, ITableSessionOrderAccess waiterAccess,
-    ICurrentRestaurantScopeService scope,
-    Microsoft.Extensions.Options.IOptions<Restaurant.Common.Settings.ServiceRequestSettings> settings) : ITableService
+public sealed class TableService(ITableRepository repository, IAreaRepository areas,
+    IManagementTransaction transaction, IManagementAccess access, ITableSessionOrderAccess waiterAccess) : ITableService
 {
     public async Task<PageResult<ServiceTableDto>> GetServiceTables(ListQuery query, CancellationToken ct)
     {

@@ -99,6 +99,11 @@ public sealed class CashHandoverGrpcService(ICashHandoverService service) : Cash
             result.ConfirmedAt = value.ConfirmedAt.Value.ToString("O");
         }
 
+        if (value.SessionClosureConfirmed.HasValue)
+        {
+            result.SessionClosureConfirmed = value.SessionClosureConfirmed.Value;
+        }
+
         return result;
     }
 }

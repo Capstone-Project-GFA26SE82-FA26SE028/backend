@@ -1,63 +1,95 @@
 extern alias restaurantapi;
 
-using Google.Protobuf.WellKnownTypes;
+using System.Globalization;
 using Grpc.Core;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Restaurant.Common.Exceptions;
-using Restaurant.Common.Settings;
+using Shared.Common.Billing;
 using Xunit;
-using PaymentClient = restaurantapi::Backend.Contracts.Billing.PaymentGrpc.PaymentGrpcClient;
-using PaymentRequest = restaurantapi::Backend.Contracts.Billing.DeparturePaymentRequest;
+using PaymentClient = restaurantapi::Backend.Contracts.Billing.PaymentSettlementGrpc.PaymentSettlementGrpcClient;
+using PaymentRequest = restaurantapi::Backend.Contracts.Billing.SettlementScopeRequest;
+using PaymentReply = restaurantapi::Backend.Contracts.Billing.PaidSettlementReply;
 using Adapter = restaurantapi::Restaurant.API.Management.SessionPaymentClient;
 
 namespace Restaurant.Tests;
 
 public sealed class SessionPaymentClientTests
 {
+    private const string Key = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=";
+
     [Theory]
-    [InlineData(StatusCode.AlreadyExists, 409)]
-    [InlineData(StatusCode.FailedPrecondition, 409)]
-    [InlineData(StatusCode.Aborted, 409)]
-    [InlineData(StatusCode.NotFound, 409)]
-    [InlineData(StatusCode.Unauthenticated, 401)]
-    [InlineData(StatusCode.PermissionDenied, 403)]
-    [InlineData(StatusCode.InvalidArgument, 400)]
-    [InlineData(StatusCode.Unavailable, 503)]
-    [InlineData(StatusCode.DeadlineExceeded, 503)]
-    public async Task BillingErrorsRemainControlledAndExactScopeAndEmployeeTokenAreForwarded(StatusCode status, int expected)
+    [InlineData(StatusCode.AlreadyExists)]
+    [InlineData(StatusCode.FailedPrecondition)]
+    [InlineData(StatusCode.NotFound)]
+    public async Task UnpaidSessionIsNotClosed(StatusCode status)
     {
-        var session = Guid.NewGuid();
-        var restaurant = Guid.NewGuid();
-        var context = new DefaultHttpContext();
-        context.Request.Headers.Authorization = "Bearer test-waiter";
-        var client = new FailingClient(session, restaurant, status);
-        var service = new Adapter(client, new HttpContextAccessor
-        {
-            HttpContext = context
-        }, Options.Create(new ServiceRequestSettings()));
-        var error = await Assert.ThrowsAsync<ManagementException>(() => service.RequirePaidAsync(session, restaurant, default));
-        Assert.Equal(expected, error.StatusCode);
-        Assert.DoesNotContain("private-bank-error", error.Message);
-        Assert.Equal(1, client.Calls);
+        var service = new Adapter(new Client(status), Options.Create(new PaymentSettlementSettings { SharedKey = Key }), TimeProvider.System);
+        Assert.Null(await service.GetPaidAsync(Guid.NewGuid(), Guid.NewGuid(), default));
     }
 
-    private sealed class FailingClient(Guid session, Guid restaurant, StatusCode status) : PaymentClient
+    [Theory]
+    [InlineData(StatusCode.Unauthenticated)]
+    [InlineData(StatusCode.PermissionDenied)]
+    [InlineData(StatusCode.Unavailable)]
+    [InlineData(StatusCode.DeadlineExceeded)]
+    public async Task DependencyErrorsCannotBecomePaidProof(StatusCode status)
     {
-        public int Calls { get; private set; }
+        var service = new Adapter(new Client(status), Options.Create(new PaymentSettlementSettings { SharedKey = Key }), TimeProvider.System);
+        Assert.Equal(503, (await Assert.ThrowsAsync<ManagementException>(() => service.GetPaidAsync(Guid.NewGuid(), Guid.NewGuid(), default))).StatusCode);
+    }
 
-        public override AsyncUnaryCall<Empty> RequirePaidAsync(PaymentRequest request, Metadata? headers = null,
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnlySignedResponseMatchingRequestedScopeIsAccepted(bool tampered)
+    {
+        var service = new Adapter(new Client(null, tampered), Options.Create(new PaymentSettlementSettings { SharedKey = Key }), TimeProvider.System);
+        if (tampered)
+        {
+            await Assert.ThrowsAsync<ManagementException>(() => service.GetPaidAsync(Guid.NewGuid(), Guid.NewGuid(), default));
+        }
+        else
+        {
+            Assert.NotNull(await service.GetPaidAsync(Guid.NewGuid(), Guid.NewGuid(), default));
+        }
+    }
+
+    private sealed class Client(StatusCode? error, bool tampered = false) : PaymentClient
+    {
+        public override AsyncUnaryCall<PaymentReply> GetPaidAsync(PaymentRequest request, Metadata? headers = null,
             DateTime? deadline = null, CancellationToken cancellationToken = default)
         {
-            Calls++;
-            Assert.Equal(session.ToString(), request.TableSessionId);
-            Assert.Equal(restaurant.ToString(), request.RestaurantId);
-            Assert.Equal("Bearer test-waiter", headers?.GetValue("authorization"));
+            var session = Guid.Parse(request.TableSessionId);
+            var restaurant = Guid.Parse(request.RestaurantId);
             Assert.NotNull(deadline);
-            return new AsyncUnaryCall<Empty>(Task.FromException<Empty>(new RpcException(new Status(status, "private-bank-error"))),
-                Task.FromResult(new Metadata()), () => new Status(status, string.Empty), () => new Metadata(), () =>
+            Assert.Null(headers?.GetValue("authorization"));
+            Assert.True(PaymentSettlementSignature.Verify(PaymentSettlementSignature.ReadPurpose,
+                PaymentSettlementSignature.Scope(session, restaurant), long.Parse(headers!.GetValue(PaymentSettlementSignature.TimestampHeader)!, CultureInfo.InvariantCulture),
+                headers.GetValue(PaymentSettlementSignature.SignatureHeader)!, Key, DateTimeOffset.UtcNow));
+            Task<PaymentReply> task;
+            if (error.HasValue)
+            {
+                task = Task.FromException<PaymentReply>(new RpcException(new Status(error.Value, "private-provider-error")));
+            }
+            else
+            {
+                var paid = new PaidSessionSettlement(session, restaurant, Guid.NewGuid(), Guid.NewGuid(), DateTimeOffset.UtcNow.AddMinutes(-1));
+                var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                task = Task.FromResult(new PaymentReply
                 {
+                    TableSessionId = session.ToString(),
+                    RestaurantId = restaurant.ToString(),
+                    BillId = tampered ? Guid.NewGuid().ToString() : paid.BillId.ToString(),
+                    CheckoutId = paid.CheckoutId.ToString(),
+                    PaidAt = paid.PaidAt.ToString("O", CultureInfo.InvariantCulture),
+                    SignatureTime = now,
+                    Signature = PaymentSettlementSignature.Sign(PaymentSettlementSignature.ProofPurpose, PaymentSettlementSignature.Proof(paid), now, Key)
                 });
+            }
+
+            return new AsyncUnaryCall<PaymentReply>(task, Task.FromResult(new Metadata()), () => Status.DefaultSuccess, () => new Metadata(), () =>
+            {
+            });
         }
     }
 }

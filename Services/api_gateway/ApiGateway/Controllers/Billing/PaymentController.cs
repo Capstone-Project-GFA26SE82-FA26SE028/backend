@@ -59,6 +59,7 @@ public sealed class PaymentController(PaymentGrpc.PaymentGrpcClient client, IOpt
     {
         return new PaymentDTO
         {
+            SessionClosureConfirmed = value.HasSessionClosureConfirmed ? value.SessionClosureConfirmed : null,
             PaymentId = Guid.Parse(value.PaymentId),
             BillId = Guid.Parse(value.BillId),
             BillNumber = value.BillNumber,

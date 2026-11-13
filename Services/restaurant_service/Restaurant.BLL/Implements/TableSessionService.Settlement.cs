@@ -6,20 +6,25 @@ namespace Restaurant.BLL.Implements;
 
 public sealed partial class TableSessionService
 {
-    public async Task<TableSessionDepartureDto> Depart(Guid sessionId, CancellationToken ct)
+    public async Task<TableSessionClosureDto> ClosePaidSession(Shared.Common.Billing.PaidSessionSettlement payment, CancellationToken ct)
     {
-        if (sessionId == Guid.Empty)
+        var sessionId = payment.TableSessionId;
+        if (sessionId == Guid.Empty || payment.RestaurantId == Guid.Empty || payment.BillId == Guid.Empty || payment.CheckoutId == Guid.Empty)
         {
-            throw new ManagementException(400, "Yêu cầu mã phiên bàn hợp lệ.");
+            throw new ManagementException(400, "Yêu cầu chứng từ thanh toán hợp lệ.");
         }
 
         var initial = await sessions.GetForBillingAsync(sessionId, ct)
             ?? throw new ManagementException(404, "Không tìm thấy phiên bàn.");
-        var restaurantId = DepartureRestaurant(initial);
-        var actor = await RequireDepartureWaiter(restaurantId, ct);
+        var restaurantId = SessionRestaurant(initial);
+        if (restaurantId != payment.RestaurantId)
+        {
+            throw new ManagementException(409, "Chứng từ thanh toán không thuộc nhà hàng của phiên bàn.");
+        }
+
         if (initial.Status == "Closed" && initial.ClosedAt.HasValue)
         {
-            return DepartureMap(initial, restaurantId);
+            return ClosureMap(initial, restaurantId);
         }
 
         if (initial.Status != "Open" || initial.ClosedAt.HasValue)
@@ -27,8 +32,6 @@ public sealed partial class TableSessionService
             throw new ManagementException(409, "Trạng thái phiên bàn không cho phép kết thúc.");
         }
 
-        // Finish the remote read before taking Restaurant locks; Billing checks Restaurant scope itself.
-        await payments.RequirePaidAsync(sessionId, restaurantId, ct);
         var tableIds = initial.SessionTables.Where(link => !link.ReleasedAt.HasValue)
             .Select(link => link.TableId).Distinct().OrderBy(id => id).ToArray();
         if (tableIds.Length == 0)
@@ -48,14 +51,20 @@ public sealed partial class TableSessionService
                 ?? throw new ManagementException(404, "Không tìm thấy phiên bàn.");
             var current = await sessions.GetForDepartureAsync(sessionId, ct)
                 ?? throw new ManagementException(404, "Không tìm thấy phiên bàn.");
-            if (await RequireDepartureWaiter(restaurantId, ct) != actor || DepartureRestaurant(current) != restaurantId)
+            if (SessionRestaurant(current) != restaurantId)
             {
-                throw new ManagementException(403, "Quyền nhân viên hoặc nhà hàng của phiên bàn đã thay đổi.");
+                throw new ManagementException(403, "Nhà hàng của phiên bàn đã thay đổi.");
             }
 
             if (current.Status == "Closed" && current.ClosedAt.HasValue)
             {
-                return DepartureMap(current, restaurantId);
+                return ClosureMap(current, restaurantId);
+            }
+
+            var reviewed = await paymentRequests.GetPaymentRequestAsync(payment.CheckoutId, ct);
+            if (reviewed is null || reviewed.TableSessionId != sessionId || reviewed.Status != "Reviewed")
+            {
+                throw new ManagementException(409, "Yêu cầu thanh toán đã thay đổi.");
             }
 
             var links = current.SessionTables.Where(link => !link.ReleasedAt.HasValue).ToArray();
@@ -80,8 +89,6 @@ public sealed partial class TableSessionService
             foreach (var link in links)
             {
                 link.ReleasedAt = now;
-                link.ChangedByRef = actor;
-                link.Table.CleaningStatus = "Dirty";
             }
 
             foreach (var guest in await guests.GetUnrevokedForSessionAsync(sessionId, ct))
@@ -89,24 +96,30 @@ public sealed partial class TableSessionService
                 guest.RevokedAt = now;
             }
 
-            return DepartureMap(current, restaurantId);
+            return ClosureMap(current, restaurantId);
         }, ct);
     }
 
-    private async Task<Guid> RequireDepartureWaiter(Guid restaurantId, CancellationToken ct)
+    public async Task<bool> TryClosePaidSession(Guid sessionId, CancellationToken ct)
     {
-        var actor = await scope.GetCurrentScope(restaurantId, ct);
-        if (actor.UserId == Guid.Empty || actor.IsAdministrator
-            || !settings.Value.WaiterRoleIds.Contains(actor.RoleId, StringComparer.Ordinal)
-            || !actor.RestaurantIds.Contains(restaurantId))
+        var session = await sessions.GetForBillingAsync(sessionId, ct);
+        if (session is null || session.ClosedAt.HasValue || session.Status != "Open")
         {
-            throw new ManagementException(403, "Chỉ phục vụ được phân công tại nhà hàng mới được xác nhận khách rời bàn.");
+            return false;
         }
 
-        return actor.UserId;
+        var restaurantId = SessionRestaurant(session);
+        var payment = await payments.GetPaidAsync(sessionId, restaurantId, ct);
+        if (payment is null)
+        {
+            return false;
+        }
+
+        await ClosePaidSession(payment, ct);
+        return true;
     }
 
-    private static Guid DepartureRestaurant(TableSession session)
+    private static Guid SessionRestaurant(TableSession session)
     {
         var ids = session.SessionTables.Select(link => link.Table.Area.RestaurantId).Distinct().ToArray();
         if (ids.Length != 1 || ids[0] == Guid.Empty)
@@ -117,9 +130,9 @@ public sealed partial class TableSessionService
         return ids[0];
     }
 
-    private static TableSessionDepartureDto DepartureMap(TableSession session, Guid restaurantId)
+    private static TableSessionClosureDto ClosureMap(TableSession session, Guid restaurantId)
     {
-        return new TableSessionDepartureDto
+        return new TableSessionClosureDto
         {
             TableSessionId = session.TableSessionId,
             RestaurantId = restaurantId,
@@ -130,11 +143,4 @@ public sealed partial class TableSessionService
         };
     }
 
-    private static void RequireClean(Table table)
-    {
-        if (table.CleaningStatus != "Clean")
-        {
-            throw new ManagementException(409, "Bàn chưa được xác nhận dọn xong. Chưa thể đón khách mới.");
-        }
-    }
 }

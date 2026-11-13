@@ -307,7 +307,7 @@ public sealed class PayOsPaymentServiceTests
                 }), Options.Create(Settings), TimeProvider.System, new TestPaymentRequestClient
                 {
                     ReviewedWaiterId = core.WaiterId
-                });
+                }, TestPaymentSettlement.Create(db));
             Webhooks = new PaymentWebhookService(payments, webhooks, bills, registers, shifts, uow, Provider, Service, TimeProvider.System);
         }
 

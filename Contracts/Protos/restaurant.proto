@@ -161,7 +161,6 @@ message ServiceTableInfo {
 }
 message ServiceTablePage { repeated ServiceTableInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
 service TableGrpc {
-  rpc ConfirmClean(IdRequest) returns (TableInfo);
   rpc GetServiceTables(ListRequest) returns (ServiceTablePage);
   rpc GetAll(ListRequest) returns (TablePage);
   rpc GetById(IdRequest) returns (TableInfo);
@@ -207,19 +206,32 @@ message TableSessionScanReply {
   bool is_new_session = 8;
 }
 service TableSessionGrpc {
-  rpc Depart(IdRequest) returns (TableSessionDepartureReply);
   rpc OpenForWaiter(IdRequest) returns (TableSessionScanReply);
   rpc Scan(QrTokenRequest) returns (TableSessionScanReply);
   rpc GetForOrdering(OrderSessionRequest) returns (OrderSessionReply);
 }
 
-message TableSessionDepartureReply {
+service SessionSettlementGrpc {
+  rpc ClosePaidSession(SessionPaymentCloseRequest) returns (SessionPaymentCloseReply);
+}
+message SessionPaymentCloseRequest {
   string table_session_id = 1;
   string restaurant_id = 2;
-  string status = 3;
-  string closed_at = 4;
-  repeated string table_ids = 5;
+  string bill_id = 3;
+  string checkout_id = 4;
+  string paid_at = 5;
+  int64 signature_time = 6;
+  string signature = 7;
 }
+message SessionPaymentCloseReply {
+  string table_session_id = 1;
+  string restaurant_id = 2;
+  string closed_at = 3;
+  int64 signature_time = 4;
+  string signature = 5;
+}
+
+
 
 message OrderSessionRequest {
   string table_session_id = 1;
