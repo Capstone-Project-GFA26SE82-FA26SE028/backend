@@ -64,6 +64,7 @@ internal sealed class ItemTestApplication : IDisposable
             ["ItemManagement:InitialAvailability"] = initialAvailability,
             ["Pricing:AllChannelsCode"] = "AllChannels",
             ["Pricing:Channels:0"] = "DineIn",
+            ["Pricing:Channels:1"] = "Takeaway",
             ["Pricing:BusinessTimeZone"] = "Asia/Ho_Chi_Minh"
         }).Build();
 
@@ -273,6 +274,7 @@ internal sealed class ItemTestApplication : IDisposable
                     UserId = "00000000-0000-0000-0000-000000000001",
                     RoleId = token switch
                     {
+                        "Bearer customer" => "customer",
                         "Bearer manager" => "test-menu-manager",
                         "Bearer kitchen" => "test-kitchen",
                         "Bearer waiter" => "test-waiter",

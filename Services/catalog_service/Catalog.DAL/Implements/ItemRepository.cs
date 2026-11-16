@@ -24,6 +24,10 @@ public sealed class ItemRepository(
     public async Task<PagedResult<Item>> GetMenuPageAsync(MenuQueryDTO query, DateTime at, CancellationToken cancellationToken)
     {
         var source = MenuSource(at);
+        if (query.RestaurantId.HasValue)
+        {
+            source = source.Where(item => item.RestaurantRef == query.RestaurantId);
+        }
         if (query.CategoryId.HasValue)
         {
             source = source.Where(item => item.CategoryId == query.CategoryId.Value);

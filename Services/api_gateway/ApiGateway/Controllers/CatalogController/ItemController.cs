@@ -16,6 +16,21 @@ public sealed class ItemController(
     ItemGrpc.ItemGrpcClient client,
     IOptions<CatalogClientSettings> settings) : CatalogControllerBase(settings)
 {
+    [HttpPatch("{id:guid}/restaurant/{restaurantId:guid}")]
+    public Task<IActionResult> SetRestaurant(Guid id, Guid restaurantId, [FromQuery] string version, CancellationToken ct)
+    {
+        return Execute(async () =>
+        {
+            var reply = await client.SetRestaurantAsync(new SetItemRestaurantRequest
+            {
+                ItemId = id.ToString(),
+                RestaurantId = restaurantId.ToString(),
+                Version = version
+            }, Options(ct));
+            return StatusCode(reply.StatusCode, new ResponseDTO(reply.Message, reply.StatusCode, reply.IsSuccess));
+        }, ct);
+    }
+
     [HttpPost]
     public Task<IActionResult> Create(CreateItemDTO body, CancellationToken cancellationToken)
     {

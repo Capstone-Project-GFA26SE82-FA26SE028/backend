@@ -5,6 +5,7 @@ namespace Catalog.Common.DTOs;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed class ValidateOrderItemsDTO
 {
+    public Guid? RestaurantId { get; set; }
     public string Channel { get; set; } = "DineIn";
     public List<OrderSelectionDTO> Items { get; set; } = [];
 }

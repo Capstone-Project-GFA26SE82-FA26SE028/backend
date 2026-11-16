@@ -14,6 +14,11 @@ public static class CatalogServiceExtensions
         IConfiguration configuration)
     {
         services.AddHttpContextAccessor();
+        services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantAccessGrpc.RestaurantAccessGrpcClient>(options =>
+        {
+            options.Address = new Uri(configuration["GrpcServices:Restaurant"] ?? "http://restaurant:8080");
+        });
+        services.AddScoped<IRestaurantMenuAccess, RestaurantMenuAccess>();
         services.AddSingleton(configuration.GetSection("Cloudinary")
             .Get<Shared.Common.Images.CloudinarySettings>() ?? new Shared.Common.Images.CloudinarySettings());
         services.AddHttpClient<Shared.Common.Images.IImageStorage, Shared.Common.Images.CloudinaryImageStorage>()

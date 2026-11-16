@@ -7,6 +7,8 @@ namespace Catalog.DAL.Models;
 
 public partial class Item
 {
+    public Guid? RestaurantRef { get; set; }
+
     public Guid ItemId { get; set; }
 
     public Guid CategoryId { get; set; }

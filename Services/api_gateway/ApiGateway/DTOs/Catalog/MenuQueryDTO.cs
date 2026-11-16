@@ -2,6 +2,7 @@ namespace ApiGateway.DTOs.Catalog;
 
 public sealed class MenuQueryDTO
 {
+    public Guid? RestaurantId { get; set; }
     public Guid? CategoryId { get; set; }
     public string? Search { get; set; }
     public string Channel { get; set; } = "DineIn";

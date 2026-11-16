@@ -291,6 +291,53 @@ public sealed class OrderValidationFlowTests
         Assert.Equal(120000m, updated.GetProperty("totalAmount").GetDecimal());
     }
 
+    [Fact]
+    public async Task TakeawayUsesOwnPriceAndFallsBackToAllChannels()
+    {
+        using var app = await ItemTestApplication.Create();
+        var data = await Seed(app);
+        var request = Request(data);
+        request.Channel = "Takeaway";
+        var fallback = await Result(await app.Client.PostAsJsonAsync(Endpoint, request), HttpStatusCode.OK);
+        await using (var db = app.OpenDatabase())
+        {
+            var special = Price(data.ItemId, 42000m);
+            special.Channel = "Takeaway";
+            db.Prices.Add(special);
+            await db.SaveChangesAsync();
+        }
+
+        var takeaway = await Result(await app.Client.PostAsJsonAsync(Endpoint, request), HttpStatusCode.OK);
+        Assert.Equal(42000m, takeaway.GetProperty("items")[0].GetProperty("unitPriceSnapshot").GetDecimal());
+        var dineIn = await Result(await app.Client.PostAsJsonAsync(Endpoint, Request(data)), HttpStatusCode.OK);
+        Assert.Equal(fallback.GetProperty("items")[0].GetProperty("unitPriceSnapshot").GetDecimal(),
+            dineIn.GetProperty("items")[0].GetProperty("unitPriceSnapshot").GetDecimal());
+    }
+
+    [Fact]
+    public async Task OnlineQuoteRejectsOtherRestaurantAndUnassignedItems()
+    {
+        using var app = await ItemTestApplication.Create();
+        var data = await Seed(app);
+        app.Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "customer");
+        var restaurant = Guid.NewGuid();
+        var request = Request(data);
+        request.Channel = "Takeaway";
+        request.RestaurantId = restaurant;
+        await Result(await app.Client.PostAsJsonAsync(Endpoint, request), HttpStatusCode.Conflict);
+        await using (var db = app.OpenDatabase())
+        {
+            (await db.Items.SingleAsync(item => item.ItemId == data.ItemId)).RestaurantRef = restaurant;
+            await db.SaveChangesAsync();
+        }
+
+        await Result(await app.Client.PostAsJsonAsync(Endpoint, request), HttpStatusCode.OK);
+        request.RestaurantId = Guid.NewGuid();
+        await Result(await app.Client.PostAsJsonAsync(Endpoint, request), HttpStatusCode.Conflict);
+        var menu = await Result(await app.Client.GetAsync($"/api/menu?restaurantId={request.RestaurantId}&channel=Takeaway"), HttpStatusCode.OK);
+        Assert.Empty(menu.GetProperty("items").EnumerateArray());
+    }
+
     private static async Task<JsonElement> Result(HttpResponseMessage response, HttpStatusCode expected)
     {
         Assert.Equal(expected, response.StatusCode);

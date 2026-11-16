@@ -5,6 +5,8 @@ namespace Catalog.BLL.Interfaces;
 
 public interface IItemService
 {
+    Task<ResponseDTO> SetRestaurant(Guid id, Guid restaurantId, string version, CancellationToken ct);
+
     Task<ResponseDTO> SetKitchenStation(Guid id, SetItemKitchenStationDTO request, CancellationToken cancellationToken);
 
     Task<ResponseDTO> GetAll(ItemQueryDTO query, CancellationToken cancellationToken);

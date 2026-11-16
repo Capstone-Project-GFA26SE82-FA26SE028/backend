@@ -54,6 +54,7 @@ public partial class CatalogDbContext : DbContext
 
         modelBuilder.Entity<Item>(entity =>
         {
+            entity.HasIndex(value => value.RestaurantRef);
             entity.ToTable("Item");
 
             entity.Property(e => e.ItemId).ValueGeneratedNever();

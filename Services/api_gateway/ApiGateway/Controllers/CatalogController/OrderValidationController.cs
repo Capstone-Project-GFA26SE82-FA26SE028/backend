@@ -33,6 +33,11 @@ public sealed class OrderValidationController(
                 Access = new MenuAccessRequest(),
                 Channel = body.Channel ?? string.Empty
             };
+            if (body.RestaurantId.HasValue)
+            {
+                request.RestaurantId = body.RestaurantId.Value.ToString();
+            }
+
             if (tableSessionId.HasValue)
             {
                 request.Access.TableSessionId = tableSessionId.Value.ToString();
