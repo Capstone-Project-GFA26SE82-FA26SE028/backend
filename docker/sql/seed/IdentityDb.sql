@@ -11,3 +11,5 @@ INSERT dbo.Role (RoleId, RoleName) VALUES ('kitchen', N'Bếp');
 INSERT dbo.[User] (UserId, RoleId, UserName, Email, FullName, PasswordHash, IsActive, CreatedAt) VALUES ('10000000-0000-0000-0000-000000000005', 'kitchen', 'kitchen', 'kitchen@gmail.com', N'Nhân viên bếp', '$2a$11$36mwcLNIUUJz6qqA5XoxMe9TXyIYr5fKU6qy1a9GDbbNhpxVijQEa', 1, GETUTCDATE());
 INSERT dbo.Role (RoleId, RoleName) VALUES ('inventory', N'Thủ kho');
 INSERT dbo.[User] (UserId, RoleId, UserName, Email, FullName, PasswordHash, IsActive, CreatedAt) VALUES ('10000000-0000-0000-0000-000000000006', 'inventory', 'inventory', 'inventory@gmail.com', N'Thủ kho', '$2a$11$36mwcLNIUUJz6qqA5XoxMe9TXyIYr5fKU6qy1a9GDbbNhpxVijQEa', 1, GETUTCDATE());
+
+INSERT dbo.Role (RoleId, RoleName) VALUES ('customer', N'Customer');

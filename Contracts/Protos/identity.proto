@@ -11,7 +11,9 @@ message AdminAccessReply { string user_id = 1; }
 
 import "google/protobuf/timestamp.proto";
 
+message RegisterCustomerRequest { string email = 1; string password = 2; string full_name = 3; string phone_number = 4; }
 service IdentityGrpc {
+  rpc Register(RegisterCustomerRequest) returns (LoginReply);
   rpc ChangePassword (ChangePasswordRequest) returns (LogoutReply);
   rpc Ping (PingRequest) returns (PingReply);
   rpc Login (LoginRequest) returns (LoginReply);

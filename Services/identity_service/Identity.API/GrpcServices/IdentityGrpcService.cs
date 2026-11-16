@@ -30,6 +30,17 @@ public sealed class IdentityGrpcService(IAuthService authService) : IdentityGrpc
         };
     }
 
+    public override async Task<LoginReply> Register(RegisterCustomerRequest request, ServerCallContext context)
+    {
+        return ToReply(await authService.Register(new Identity.Common.DTOs.RegisterCustomerDTO
+        {
+            Email = request.Email,
+            Password = request.Password,
+            FullName = request.FullName,
+            PhoneNumber = request.PhoneNumber
+        }, context.CancellationToken));
+    }
+
     public override async Task<LoginReply> Login(LoginRequest request, ServerCallContext context)
     {
         GrpcAuthentication.SetAuditContext(context);

@@ -11,6 +11,18 @@ namespace ApiGateway.Controllers.IdentityController;
 [Route("api/auth")]
 public sealed class AuthController(IdentityGrpc.IdentityGrpcClient client) : ControllerBase
 {
+    [HttpPost("register")]
+    public Task<IActionResult> Register(RegisterCustomerDTO body, CancellationToken ct)
+    {
+        return ExecuteAuth(async () => await client.RegisterAsync(new RegisterCustomerRequest
+        {
+            Email = body.Email ?? "",
+            Password = body.Password ?? "",
+            FullName = body.FullName ?? "",
+            PhoneNumber = body.PhoneNumber ?? ""
+        }, deadline: DateTime.UtcNow.AddSeconds(10), cancellationToken: ct), ct);
+    }
+
     [HttpPost("login")]
     public Task<IActionResult> Login(LoginDTO body, CancellationToken cancellationToken)
     {

@@ -10,6 +10,8 @@ namespace Identity.DAL.Interfaces
 {
     public interface IUserRepository : IGenericRepository<User>
     {
+        Task<bool> CreateCustomerAsync(User user, CancellationToken ct);
+
         Task<bool> LoginExistsAsync(Guid exceptId, string name, string email, CancellationToken ct);
         Task<bool> ChangePasswordAsync(Guid userId, string oldHash, string newHash, CancellationToken ct);
         Task<User?> FindByEmailAsync(string email);

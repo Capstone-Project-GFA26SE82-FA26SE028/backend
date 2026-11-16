@@ -16,6 +16,24 @@ namespace Identity.DAL.Implements
         {
         }
 
+        public async Task<bool> CreateCustomerAsync(User user, CancellationToken ct)
+        {
+            if (!await _context.Roles.AnyAsync(role => role.RoleId == "customer", ct))
+            {
+                throw new InvalidOperationException("Configure the customer role before registration.");
+            }
+
+            if (await LoginExistsAsync(user.UserId, user.UserName, user.Email, ct))
+            {
+                return false;
+            }
+
+            user.RoleId = "customer";
+            _context.Users.Add(user);
+            _context.RecordAudit(user.UserId, "REGISTER_CUSTOMER", "User", user.UserId.ToString());
+            return true;
+        }
+
         public Task<bool> LoginExistsAsync(Guid exceptId, string name, string email, CancellationToken ct)
         {
             name = name.ToLowerInvariant();
