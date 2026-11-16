@@ -9,6 +9,19 @@ namespace Restaurant.BLL.Implements;
 
 public sealed class RestaurantService(IRestaurantRepository repository, IManagementTransaction transaction, IManagementAccess access) : IRestaurantService
 {
+    public async Task<PageResult<RestaurantDto>> Browse(ListQuery query, CancellationToken ct)
+    {
+        ManagementValidation.Query(query);
+        var page = await repository.GetPageAsync(query, ct);
+        return new PageResult<RestaurantDto>
+        {
+            Items = page.Items.Select(Map).ToList(),
+            TotalCount = page.TotalCount,
+            Page = query.Page,
+            PageSize = query.PageSize
+        };
+    }
+
     public async Task<PageResult<RestaurantDto>> GetAll(ListQuery query, CancellationToken ct)
     {
         await access.RequireAdmin(ct);

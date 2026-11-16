@@ -8,6 +8,21 @@ namespace Ordering.API.GrpcServices;
 
 public sealed class CartGrpcService(ICartService service) : CartGrpc.CartGrpcBase
 {
+    public override async Task<CartInfo> Takeaway(TakeawayCartRequest request, ServerCallContext context)
+    {
+        if (request.Operation is not ("Create" or "Get" or "Update" or "Delete"))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Thao tác giỏ hàng không hợp lệ."));
+        }
+
+        return OrderingMapping.Map(await service.Takeaway(Guid.Parse(request.RestaurantId),
+            request.HasCartId ? Guid.Parse(request.CartId) : null, request.Operation, new CartWriteDTO
+            {
+                Version = request.Version,
+                Items = request.Items.Select(OrderingMapping.ReadSelection).ToList()
+            }, context.CancellationToken));
+    }
+
     public override async Task<CartInfo> Create(CartCreateRequest request, ServerCallContext context)
     {
         var access = request.Access ?? new OrderingAccess();

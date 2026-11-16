@@ -16,9 +16,14 @@ public sealed class CatalogOrderClient(OrderValidationGrpc.OrderValidationGrpcCl
     {
         var request = new ValidateOrderItemsRequest
         {
-            Channel = "DineIn",
+            Channel = actor.Channel,
             Access = new MenuAccessRequest()
         };
+        if (actor.RestaurantId.HasValue)
+        {
+            request.RestaurantId = actor.RestaurantId.Value.ToString();
+        }
+
         if (actor.IsGuest)
         {
             request.Access.TableSessionId = actor.SessionId.ToString();
@@ -41,6 +46,11 @@ public sealed class CatalogOrderClient(OrderValidationGrpc.OrderValidationGrpcCl
         }
 
         var headers = new Metadata();
+        var restaurantHeader = http.HttpContext?.Request.Headers["x-restaurant-id"].ToString();
+        if (!string.IsNullOrWhiteSpace(restaurantHeader))
+        {
+            headers.Add("x-restaurant-id", restaurantHeader);
+        }
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
         if (!string.IsNullOrEmpty(authorization))
         {

@@ -180,6 +180,15 @@ public partial class OrderingDbContext : DbContext
 
         modelBuilder.Entity<Order>(entity =>
         {
+            entity.HasIndex(e => new { e.RestaurantRef, e.Channel, e.CreatedAt });
+
+            entity.Property(e => e.PickupName).HasMaxLength(100).IsRequired(false);
+            entity.Property(e => e.PickupPhone).HasMaxLength(20).IsRequired(false);
+            entity.Property(e => e.PickupCode).HasMaxLength(64).IsRequired(false);
+            entity.Property(e => e.PaymentStatus).HasMaxLength(30).IsRequired(false);
+            entity.Property(e => e.CheckoutUrl).HasMaxLength(2048).IsRequired(false);
+            entity.Property(e => e.CancellationReason).HasMaxLength(1000).IsRequired(false);
+            entity.Property(e => e.RefundReference).HasMaxLength(255).IsRequired(false);
             entity.ToTable("Order");
 
             entity.Property(e => e.OrderId).ValueGeneratedNever();

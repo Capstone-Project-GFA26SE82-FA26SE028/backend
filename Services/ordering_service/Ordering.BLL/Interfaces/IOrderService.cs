@@ -12,5 +12,23 @@ public interface IOrderService
 
     Task<OrderDTO> Confirm(Guid sessionId, Guid id, string version, CancellationToken ct);
 
+    Task<(OrderDTO Order, bool Created)> CreateTakeaway(Guid restaurantId, string key, SubmitTakeawayDTO request, CancellationToken ct);
+
+    Task<OrderDTO> GetTakeawayById(Guid restaurantId, Guid id, CancellationToken ct);
+
+    Task<List<OrderDTO>> GetAllTakeaway(Guid restaurantId, string? status, int page, int pageSize, CancellationToken ct);
+
+    Task<OrderDTO> CollectTakeaway(Guid restaurantId, Guid id, string version, string pickupCode, bool handoverConfirmed, CancellationToken ct);
+
+    Task<OrderDTO> CancelTakeaway(Guid restaurantId, Guid id, string version, CancellationToken ct);
+
+    Task<OrderDTO> AcceptTakeaway(Guid restaurantId, Guid id, string version, CancellationToken ct);
+
+    Task<OrderDTO> RejectTakeaway(Guid restaurantId, Guid id, string version, string reason, CancellationToken ct);
+
+    Task ReconcileTakeaway(CancellationToken ct);
+
+    Task<OrderDTO> VerifyTakeawayRefund(Guid restaurantId, Guid id, string reference, string evidence, CancellationToken ct);
+
     Task<OrderDTO> ServeItem(Guid sessionId, Guid id, Guid orderItemId, string? version, CancellationToken ct);
 }

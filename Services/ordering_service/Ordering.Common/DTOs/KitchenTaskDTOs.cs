@@ -9,6 +9,7 @@ public sealed class KitchenTaskOptionDTO
 
 public sealed class KitchenTaskDTO
 {
+    public string Channel { get; set; } = "DineIn";
     public Guid KitchenTaskId { get; set; }
     public Guid KitchenStationId { get; set; }
     public string KitchenStationCode { get; set; } = string.Empty;
@@ -16,7 +17,7 @@ public sealed class KitchenTaskDTO
     public Guid OrderItemId { get; set; }
     public Guid OrderId { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
-    public Guid TableSessionId { get; set; }
+    public Guid? TableSessionId { get; set; }
     public Guid? OriginalTableId { get; set; }
     public Guid ItemId { get; set; }
     public string NameSnapshot { get; set; } = string.Empty;

@@ -27,6 +27,7 @@ public static class BillingServiceExtensions
             AllowAutoRedirect = false
         }).RedactLoggedHeaders(_ => true);
         services.AddScoped<IPayOsPaymentService, PayOsPaymentService>();
+        services.AddScoped<IOnlinePaymentService, OnlinePaymentService>();
         services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();
         services.AddHostedService<PayOsReconciliationWorker>();
         services.AddOptions<CashRegisterAccessSettings>()

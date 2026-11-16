@@ -71,6 +71,7 @@ message RestaurantInfo {
 }
 message RestaurantPage { repeated RestaurantInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
 service RestaurantGrpc {
+  rpc Browse(ListRequest) returns (RestaurantPage);
   rpc GetAll(ListRequest) returns (RestaurantPage);
   rpc GetById(IdRequest) returns (RestaurantInfo);
   rpc Create(RestaurantInfo) returns (RestaurantInfo);

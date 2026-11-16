@@ -15,6 +15,7 @@ public static class PersistenceExtensions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<Shared.Persistence.RestaurantIsolation.RestaurantDataScope>(services);
         services.AddDbContext<OrderingDbContext>(options =>
         {
             options.UseSqlServer(connectionString);

@@ -15,6 +15,7 @@ public static class PersistenceExtensions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<Shared.Persistence.RestaurantIsolation.RestaurantDataScope>(services);
         services.AddDbContext<BillingDbContext>(options =>
         {
             options.UseSqlServer(connectionString);
@@ -24,6 +25,8 @@ public static class PersistenceExtensions
         services.AddScoped<ICashRegisterRepository, CashRegisterRepository>();
         services.AddScoped<IBillRepository, BillRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<IOnlinePaymentRepository, OnlinePaymentRepository>();
+        services.AddScoped<IGenericRepository<OnlinePayment>, GenericRepository<OnlinePayment, BillingDbContext>>();
         services.AddScoped<IPaymentWebhookRepository, PaymentWebhookRepository>();
         services.AddScoped<IPaymentMethodRepository, PaymentMethodRepository>();
         services.AddScoped<ICashMovementRepository, CashMovementRepository>();

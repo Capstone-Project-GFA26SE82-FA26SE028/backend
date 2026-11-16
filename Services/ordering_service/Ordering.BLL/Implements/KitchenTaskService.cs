@@ -24,6 +24,7 @@ public sealed class KitchenTaskService(
         CancellationToken ct)
     {
         await access.RequireKitchenTaskAccessAsync(ct);
+        repository.SetOnlineRestaurantScope(await access.GetOnlineRestaurantIdsAsync(ct));
 
         if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue)
         {
@@ -51,6 +52,7 @@ public sealed class KitchenTaskService(
     public async Task<KitchenTaskDTO> GetById(Guid id, CancellationToken ct)
     {
         await access.RequireKitchenTaskAccessAsync(ct);
+        repository.SetOnlineRestaurantScope(await access.GetOnlineRestaurantIdsAsync(ct));
 
         if (id == Guid.Empty)
         {
@@ -66,6 +68,7 @@ public sealed class KitchenTaskService(
     public async Task<KitchenTaskDTO> SetStatus(Guid id, string status, string? version, CancellationToken ct)
     {
         var actorId = await access.RequireKitchenTaskAccessAsync(ct);
+        repository.SetOnlineRestaurantScope(await access.GetOnlineRestaurantIdsAsync(ct));
 
         if (id == Guid.Empty)
         {
@@ -112,7 +115,12 @@ public sealed class KitchenTaskService(
                     throw new OrderingException(400, $"Không thể bắt đầu chế biến nhiệm vụ đang ở trạng thái '{task.Status}'. Phải ở trạng thái 'Pending'.");
                 }
 
+                RequireOnlineKitchen(task, "Cooking");
                 await cookingClient.DeductCookingIngredientsAsync(eventId, [task], ct);
+                if (IsOnline(task))
+                {
+                    task.OrderItem!.Order.Status = "Cooking";
+                }
 
                 task.Status = "Cooking";
                 task.CookingAt = now;
@@ -129,6 +137,7 @@ public sealed class KitchenTaskService(
                     throw new OrderingException(400, $"Không thể đánh dấu sẵn sàng cho nhiệm vụ đang ở trạng thái '{task.Status}'.");
                 }
 
+                RequireOnlineKitchen(task, "Ready");
                 task.Status = "Ready";
                 task.ReadyAt = now;
                 if (task.CookingAt is null)
@@ -147,13 +156,22 @@ public sealed class KitchenTaskService(
 
                         if (allReady)
                         {
-                            task.OrderItem.Order.Status = "Ready";
+                            task.OrderItem.Order.Status = IsOnline(task) ? "ReadyForPickup" : "Ready";
+                            if (IsOnline(task))
+                            {
+                                task.OrderItem.Order.ReadyForPickupAt = now;
+                            }
                         }
                     }
                 }
             }
             else if (string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase))
             {
+                if (IsOnline(task))
+                {
+                    throw new OrderingException(409, "Không thể hủy đơn hàng trực tuyến đã được chấp nhận thông qua tác vụ bếp.");
+                }
+
                 if (!string.Equals(task.Status, "Pending", StringComparison.OrdinalIgnoreCase))
                 {
                     throw new OrderingException(400, $"Không thể hủy nhiệm vụ bếp ở trạng thái '{task.Status}'. Chỉ có thể hủy nhiệm vụ đang ở trạng thái 'Pending'.");
@@ -187,6 +205,7 @@ public sealed class KitchenTaskService(
     public async Task<KitchenTaskDTO> SetPriority(Guid id, int priority, string? version, CancellationToken ct)
     {
         await access.RequireKitchenTaskAccessAsync(ct);
+        repository.SetOnlineRestaurantScope(await access.GetOnlineRestaurantIdsAsync(ct));
 
         if (id == Guid.Empty)
         {
@@ -220,6 +239,7 @@ public sealed class KitchenTaskService(
     public async Task<KitchenSummaryDTO> GetSummary(Guid? stationId, CancellationToken ct)
     {
         await access.RequireKitchenTaskAccessAsync(ct);
+        repository.SetOnlineRestaurantScope(await access.GetOnlineRestaurantIdsAsync(ct));
 
         var (pending, cooking, ready, avgMinutes) = await repository.GetSummaryAsync(stationId, ct);
 
@@ -235,6 +255,7 @@ public sealed class KitchenTaskService(
     public async Task<List<KitchenBatchGroupDTO>> GetBatches(Guid? stationId, CancellationToken ct)
     {
         await access.RequireKitchenTaskAccessAsync(ct);
+        repository.SetOnlineRestaurantScope(await access.GetOnlineRestaurantIdsAsync(ct));
         var tasks = await repository.GetPendingForBatchesAsync(stationId, ct);
 
         var groups = tasks
@@ -272,6 +293,7 @@ public sealed class KitchenTaskService(
     public async Task<(int AffectedCount, string Status)> StartBatch(List<Guid> taskIds, CancellationToken ct)
     {
         var actorId = await access.RequireKitchenTaskAccessAsync(ct);
+        repository.SetOnlineRestaurantScope(await access.GetOnlineRestaurantIdsAsync(ct));
         if (taskIds is null || taskIds.Count == 0)
         {
             throw new OrderingException(400, "Cung cấp ít nhất một mã nhiệm vụ bếp để bắt đầu chế biến.");
@@ -289,6 +311,11 @@ public sealed class KitchenTaskService(
                 return (0, "Cooking");
             }
 
+            foreach (var task in pendingTasks)
+            {
+                RequireOnlineKitchen(task, "Cooking");
+            }
+
             var batchEventId = Guid.NewGuid();
             await cookingClient.DeductCookingIngredientsAsync(batchEventId, pendingTasks, ct);
 
@@ -297,6 +324,11 @@ public sealed class KitchenTaskService(
 
             foreach (var task in pendingTasks)
             {
+                if (IsOnline(task))
+                {
+                    task.OrderItem!.Order.Status = "Cooking";
+                }
+
                 task.Status = "Cooking";
                 task.CookingAt = now;
                 if (task.OrderItem is not null)
@@ -323,6 +355,7 @@ public sealed class KitchenTaskService(
     public async Task<(int AffectedCount, string Status)> CompleteBatch(List<Guid> taskIds, CancellationToken ct)
     {
         var actorId = await access.RequireKitchenTaskAccessAsync(ct);
+        repository.SetOnlineRestaurantScope(await access.GetOnlineRestaurantIdsAsync(ct));
         if (taskIds is null || taskIds.Count == 0)
         {
             throw new OrderingException(400, "Cung cấp ít nhất một mã nhiệm vụ bếp để hoàn thành.");
@@ -339,6 +372,7 @@ public sealed class KitchenTaskService(
                 if (string.Equals(task.Status, "Cooking", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(task.Status, "Pending", StringComparison.OrdinalIgnoreCase))
                 {
+                    RequireOnlineKitchen(task, "Ready");
                     var fromStatus = task.Status;
                     task.Status = "Ready";
                     task.ReadyAt = now;
@@ -356,7 +390,11 @@ public sealed class KitchenTaskService(
                                 i => i.Status == "Ready" || i.Status == "Served" || i.Status == "Cancelled");
                             if (allReady)
                             {
-                                task.OrderItem.Order.Status = "Ready";
+                                task.OrderItem.Order.Status = IsOnline(task) ? "ReadyForPickup" : "Ready";
+                                if (IsOnline(task))
+                                {
+                                    task.OrderItem.Order.ReadyForPickupAt = now;
+                                }
                             }
                         }
                     }
@@ -381,6 +419,7 @@ public sealed class KitchenTaskService(
     public async Task<KitchenTaskDTO> RemakeTask(Guid id, string reason, CancellationToken ct)
     {
         var actorId = await access.RequireKitchenTaskAccessAsync(ct);
+        repository.SetOnlineRestaurantScope(await access.GetOnlineRestaurantIdsAsync(ct));
         if (id == Guid.Empty)
         {
             throw new OrderingException(400, "Mã nhiệm vụ bếp không hợp lệ.");
@@ -390,6 +429,11 @@ public sealed class KitchenTaskService(
         {
             var task = await repository.GetByIdForUpdateAsync(id, ct)
                 ?? throw new OrderingException(404, "Không tìm thấy nhiệm vụ bếp.");
+
+            if (IsOnline(task))
+            {
+                throw new OrderingException(409, "Luồng đặt mang đi online chưa hỗ trợ thao tác làm lại món.");
+            }
 
             if (task.OrderItem?.Status == "Cancelled" && task.OrderItem.Order?.TableSessionRef is Guid sessionId)
             {
@@ -454,6 +498,7 @@ public sealed class KitchenTaskService(
     public async Task<FireCourseResultDTO> FireCourse(Guid sessionId, Guid? orderId, string course, CancellationToken ct)
     {
         var actorId = await access.RequireKitchenTaskAccessAsync(ct);
+        repository.SetOnlineRestaurantScope(await access.GetOnlineRestaurantIdsAsync(ct));
         if (sessionId == Guid.Empty)
         {
             throw new OrderingException(400, "Mã phiên bàn không hợp lệ.");
@@ -497,6 +542,22 @@ public sealed class KitchenTaskService(
         }, ct);
     }
 
+    private static bool IsOnline(KitchenTask task)
+    {
+        return task.OrderItem?.Order is { Channel: "Takeaway", CustomerUserRef: not null, TableSessionRef: null };
+    }
+
+    private static void RequireOnlineKitchen(KitchenTask task, string target)
+    {
+        if (IsOnline(task) && (task.OrderItem!.Order.PaymentStatus != "Paid"
+            || task.OrderItem.Order.CancellationRequested
+            || task.OrderItem.Order.Status is not ("Accepted" or "Cooking" or "ReadyForPickup")
+            || (target == "Ready" && task.Status != "Cooking")))
+        {
+            throw new OrderingException(409, "Đơn hàng trực tuyến phải được chấp nhận và xác nhận thanh toán; trạng thái chế biến phải theo thứ tự chờ chế biến → đang chế biến → sẵn sàng.");
+        }
+    }
+
     private KitchenTaskDTO Map(KitchenTask task)
     {
         var effectiveStatus = string.Equals(task.OrderItem?.Status, "Served", StringComparison.OrdinalIgnoreCase)
@@ -505,6 +566,7 @@ public sealed class KitchenTaskService(
 
         return new KitchenTaskDTO
         {
+            Channel = task.OrderItem?.Order?.Channel ?? "DineIn",
             KitchenTaskId = task.KitchenTaskId,
             KitchenStationId = task.KitchenStationId,
             KitchenStationCode = task.KitchenStation?.KitchenStationCode ?? string.Empty,
@@ -512,7 +574,7 @@ public sealed class KitchenTaskService(
             OrderItemId = task.OrderItemId,
             OrderId = task.OrderItem?.OrderId ?? Guid.Empty,
             OrderNumber = task.OrderItem?.Order?.OrderNumber ?? string.Empty,
-            TableSessionId = task.OrderItem?.Order?.TableSessionRef ?? Guid.Empty,
+            TableSessionId = task.OrderItem?.Order?.TableSessionRef,
             OriginalTableId = task.OrderItem?.OriginalTableRef,
             ItemId = task.OrderItem?.ItemRef ?? Guid.Empty,
             NameSnapshot = task.OrderItem?.NameSnapshot ?? string.Empty,

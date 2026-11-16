@@ -78,8 +78,9 @@ internal static class OrderingMapping
     {
         return new CartDTO
         {
+            RestaurantId = string.IsNullOrEmpty(value.RestaurantId) ? null : Guid.Parse(value.RestaurantId),
             CartId = Guid.Parse(value.CartId),
-            TableSessionId = Guid.Parse(value.TableSessionId),
+            TableSessionId = string.IsNullOrEmpty(value.TableSessionId) ? null : (Guid?)Guid.Parse(value.TableSessionId),
             ExpiresAt = DateTimeOffset.Parse(value.ExpiresAt, CultureInfo.InvariantCulture),
             Version = value.Version,
             Items = value.Items.Select(Map).ToList(),
@@ -110,7 +111,18 @@ internal static class OrderingMapping
         {
             OrderId = Guid.Parse(value.OrderId),
             OrderNumber = value.OrderNumber,
-            TableSessionId = Guid.Parse(value.TableSessionId),
+            PickupName = string.IsNullOrEmpty(value.PickupName) ? null : value.PickupName,
+            PickupPhone = string.IsNullOrEmpty(value.PickupPhone) ? null : value.PickupPhone,
+            PickupCode = string.IsNullOrEmpty(value.PickupCode) ? null : value.PickupCode,
+            PaymentStatus = string.IsNullOrEmpty(value.PaymentStatus) ? null : value.PaymentStatus,
+            CheckoutUrl = string.IsNullOrEmpty(value.CheckoutUrl) ? null : value.CheckoutUrl,
+            CancellationReason = string.IsNullOrEmpty(value.CancellationReason) ? null : value.CancellationReason,
+            RefundReference = string.IsNullOrEmpty(value.RefundReference) ? null : value.RefundReference,
+            ReadyForPickupAt = string.IsNullOrEmpty(value.ReadyForPickupAt) ? null : DateTimeOffset.Parse(value.ReadyForPickupAt, CultureInfo.InvariantCulture),
+            RefundedAt = string.IsNullOrEmpty(value.RefundedAt) ? null : DateTimeOffset.Parse(value.RefundedAt, CultureInfo.InvariantCulture),
+            CancellationRequested = value.CancellationRequested,
+            RestaurantId = string.IsNullOrEmpty(value.RestaurantId) ? null : Guid.Parse(value.RestaurantId),
+            TableSessionId = string.IsNullOrEmpty(value.TableSessionId) ? null : Guid.Parse(value.TableSessionId),
             Channel = value.HasChannel ? value.Channel : "DineIn",
             Source = value.Source,
             Status = value.Status,
@@ -148,6 +160,7 @@ internal static class OrderingMapping
     {
         return new
         {
+            value.Channel,
             KitchenTaskId = Guid.Parse(value.KitchenTaskId),
             KitchenStationId = Guid.Parse(value.KitchenStationId),
             value.KitchenStationCode,
@@ -155,7 +168,7 @@ internal static class OrderingMapping
             OrderItemId = Guid.Parse(value.OrderItemId),
             OrderId = Guid.Parse(value.OrderId),
             value.OrderNumber,
-            TableSessionId = Guid.Parse(value.TableSessionId),
+            TableSessionId = string.IsNullOrEmpty(value.TableSessionId) ? null : (Guid?)Guid.Parse(value.TableSessionId),
             OriginalTableId = value.HasOriginalTableId ? Guid.Parse(value.OriginalTableId) : (Guid?)null,
             ItemId = Guid.Parse(value.ItemId),
             value.NameSnapshot,

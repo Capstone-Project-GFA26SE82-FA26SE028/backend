@@ -347,3 +347,14 @@ message PayOsPaymentInfo {
   bool requires_review = 17;
   bool link_details_available = 18;
 }
+
+// Server-to-server only. Never expose amount/customer/action as a public payment API.
+service OnlinePaymentGrpc { rpc Execute(OnlinePaymentRequest) returns (OnlinePaymentReply); }
+message OnlinePaymentRequest {
+  string order_id = 1; string restaurant_id = 2; string customer_user_id = 3;
+  string amount = 4; string action = 5; string reason = 6; string reference = 7; string evidence = 8;
+}
+message OnlinePaymentReply {
+  string status = 1; string checkout_url = 2; string amount = 3;
+  string paid_at = 4; string refunded_at = 5; string refund_reference = 6;
+}

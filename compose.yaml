@@ -115,6 +115,7 @@ services:
       dockerfile: Services/ordering_service/Ordering.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      Takeaway__ServiceKey: ${TAKEAWAY_SERVICE_KEY:-}
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=OrderingDb;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env};Encrypt=True;TrustServerCertificate=True"
     depends_on:
       db-init:
@@ -157,6 +158,7 @@ services:
       dockerfile: Services/billing_service/Billing.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      Takeaway__ServiceKey: ${TAKEAWAY_SERVICE_KEY:-}
       PayOs__Enabled: ${PAYOS_ENABLED:-false}
       PayOs__ClientId: ${PAYOS_CLIENT_ID:-}
       PayOs__ApiKey: ${PAYOS_API_KEY:-}

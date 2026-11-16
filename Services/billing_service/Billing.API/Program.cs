@@ -25,6 +25,7 @@ app.MapGrpcService<BillGrpcService>();
 app.MapGrpcService<ShiftReportGrpcService>();
 app.MapGrpcService<PaymentGrpcService>();
 app.MapGrpcService<PayOsPaymentGrpcService>();
+app.MapGrpcService<OnlinePaymentGrpcService>();
 app.MapGrpcService<PaymentWebhookGrpcService>();
 app.MapGrpcService<CashMovementGrpcService>();
 app.MapGrpcService<BillCheckoutGrpcService>();

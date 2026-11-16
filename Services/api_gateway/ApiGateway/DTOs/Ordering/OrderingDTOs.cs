@@ -43,8 +43,9 @@ public sealed class ConfirmOrderDTO
 
 public sealed class CartDTO
 {
+    public Guid? RestaurantId { get; set; }
     public Guid CartId { get; set; }
-    public Guid TableSessionId { get; set; }
+    public Guid? TableSessionId { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
     public string Version { get; set; } = string.Empty;
     public List<SelectionDTO> Items { get; set; } = [];
@@ -89,9 +90,20 @@ public sealed class QuotedOptionDTO
 
 public sealed class OrderDTO
 {
+    public string? PickupName { get; set; }
+    public string? PickupPhone { get; set; }
+    public string? PickupCode { get; set; }
+    public string? PaymentStatus { get; set; }
+    public string? CheckoutUrl { get; set; }
+    public string? CancellationReason { get; set; }
+    public DateTimeOffset? ReadyForPickupAt { get; set; }
+    public DateTimeOffset? RefundedAt { get; set; }
+    public string? RefundReference { get; set; }
+    public bool CancellationRequested { get; set; }
+    public Guid? RestaurantId { get; set; }
     public Guid OrderId { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
-    public Guid TableSessionId { get; set; }
+    public Guid? TableSessionId { get; set; }
     public string Channel { get; set; } = "DineIn";
     public string Source { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;

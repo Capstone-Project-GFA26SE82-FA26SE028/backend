@@ -101,8 +101,9 @@ internal static class OrderingMapping
     {
         var result = new CartInfo
         {
+            RestaurantId = value.RestaurantId?.ToString() ?? string.Empty,
             CartId = value.CartId.ToString(),
-            TableSessionId = value.TableSessionId.ToString(),
+            TableSessionId = value.TableSessionId.ToString() ?? string.Empty,
             ExpiresAt = value.ExpiresAt.ToString("O", CultureInfo.InvariantCulture),
             Version = value.Version
         };
@@ -143,7 +144,18 @@ internal static class OrderingMapping
         {
             OrderId = value.OrderId.ToString(),
             OrderNumber = value.OrderNumber,
-            TableSessionId = value.TableSessionId.ToString(),
+            PickupName = value.PickupName ?? string.Empty,
+            PickupPhone = value.PickupPhone ?? string.Empty,
+            PickupCode = value.PickupCode ?? string.Empty,
+            PaymentStatus = value.PaymentStatus ?? string.Empty,
+            CheckoutUrl = value.CheckoutUrl ?? string.Empty,
+            CancellationReason = value.CancellationReason ?? string.Empty,
+            RefundReference = value.RefundReference ?? string.Empty,
+            ReadyForPickupAt = value.ReadyForPickupAt?.ToString("O") ?? string.Empty,
+            RefundedAt = value.RefundedAt?.ToString("O") ?? string.Empty,
+            CancellationRequested = value.CancellationRequested,
+            RestaurantId = value.RestaurantId?.ToString() ?? string.Empty,
+            TableSessionId = value.TableSessionId.ToString() ?? string.Empty,
             Source = value.Source,
             Status = value.Status,
             Version = value.Version,
@@ -199,6 +211,7 @@ internal static class OrderingMapping
     {
         var result = new KitchenTaskInfo
         {
+            Channel = value.Channel,
             KitchenTaskId = value.KitchenTaskId.ToString(),
             KitchenStationId = value.KitchenStationId.ToString(),
             KitchenStationCode = value.KitchenStationCode,
@@ -206,7 +219,7 @@ internal static class OrderingMapping
             OrderItemId = value.OrderItemId.ToString(),
             OrderId = value.OrderId.ToString(),
             OrderNumber = value.OrderNumber,
-            TableSessionId = value.TableSessionId.ToString(),
+            TableSessionId = value.TableSessionId.ToString() ?? string.Empty,
             ItemId = value.ItemId.ToString(),
             NameSnapshot = value.NameSnapshot,
             Quantity = value.Quantity,
