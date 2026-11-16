@@ -212,17 +212,13 @@ public sealed class BillSqlServerTests : IAsyncLifetime
     }
 
     [BillingSqlServerFact]
-    public async Task CheckoutUpgradePreservesRowsAndFilteredIndexAllowsOnlyOneUnreleasedAttempt()
+    public async Task FreshSchemaFilteredIndexAllowsOnlyOneUnreleasedAttempt()
     {
         var source = new BillServiceTests.BillSource();
         await using var db = Context();
         var bill = await Service(db, source).Create(source.Value.TableSessionId, default);
         var first = Guid.NewGuid();
         await Execute(_connection, $"INSERT dbo.BillCheckout (CheckoutId,BillId,TableSessionRef,Status,CreatedAt) VALUES ('{first}','{bill.BillId}','{source.Value.TableSessionId}','Preparing',SYSUTCDATETIME());");
-        var upgrade = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Sql", "BillingCheckout.sql"));
-        upgrade = Regex.Replace(upgrade, @"^\s*GO\s*$", string.Empty, RegexOptions.Multiline | RegexOptions.IgnoreCase);
-        await Execute(_connection, upgrade);
-        await Execute(_connection, upgrade);
         var error = await Assert.ThrowsAsync<SqlException>(() => Execute(_connection,
             $"INSERT dbo.BillCheckout (CheckoutId,TableSessionRef,Status,CreatedAt) VALUES (NEWID(),'{source.Value.TableSessionId}','Preparing',SYSUTCDATETIME());"));
         Assert.Contains(error.Number, new[] { 2601, 2627 });

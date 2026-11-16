@@ -1,3 +1,7 @@
-INSERT dbo.[Ingredient] (IngredientId, IngredientCode, IngredientName, BaseUnit, StockQuantity, LowStockThreshold, IsActive) VALUES
-('20000000-0000-0000-0000-000000000031', 'RICE', N'Gạo', 'g', 100000, 1000, 1),
-('20000000-0000-0000-0000-000000000032', 'TEA', N'Trà', 'g', 10000, 100, 1);
+INSERT dbo.[Ingredient] (RestaurantId, IngredientId, IngredientCode, IngredientName, BaseUnit, StockQuantity, LowStockThreshold, IsActive) VALUES
+('20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000031', 'RICE', N'Gạo', 'g', 100000, 1000, 1),
+('20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000032', 'TEA', N'Trà', 'g', 10000, 100, 1);
+
+INSERT dbo.Unit (UnitId, Code, Name, RestaurantId) VALUES
+('20000000-0000-0000-0000-000000000100', 'g', N'Gram', '20000000-0000-0000-0000-000000000001'),
+('20000000-0000-0000-0000-000000000101', 'kg', N'Kilogram', '20000000-0000-0000-0000-000000000001');
