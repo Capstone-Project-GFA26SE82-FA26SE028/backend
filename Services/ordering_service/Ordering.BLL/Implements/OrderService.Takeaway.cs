@@ -309,6 +309,11 @@ public sealed partial class OrderService
             throw new OrderingException(409, "Chỉ được hoàn tiền cho đơn hàng đã hủy hoặc bị từ chối.");
         }
 
+        if (string.IsNullOrEmpty(found.RefundAccountNumber))
+        {
+            throw new OrderingException(409, "Khách hàng chưa cung cấp tài khoản nhận hoàn tiền.");
+        }
+
         await takeawayPayments.ExecuteAsync(found, "VerifyRefund", "", reference, evidence, ct);
         return MapTakeaway(await SynchronizeTakeaway(restaurantId, id, actor, "Refresh", ct), actor);
     }

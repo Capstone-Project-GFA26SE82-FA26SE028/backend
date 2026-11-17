@@ -7,6 +7,32 @@ namespace Ordering.API.GrpcServices;
 
 public sealed class OrderGrpcService(IOrderService service) : OrderGrpc.OrderGrpcBase
 {
+    public override async Task<RefundAccountInfo> GetRefundAccount(TakeawayIdRequest request, ServerCallContext context)
+    {
+        return MapRefund(await service.GetRefundAccount(Guid.Parse(request.RestaurantId), Guid.Parse(request.OrderId), context.CancellationToken));
+    }
+
+    public override async Task<RefundAccountInfo> SaveRefundAccount(RefundAccountRequest request, ServerCallContext context)
+    {
+        return MapRefund(await service.SaveRefundAccount(Guid.Parse(request.RestaurantId), Guid.Parse(request.OrderId), new RefundAccountDTO
+        {
+            BankName = request.BankName,
+            AccountNumber = request.AccountNumber,
+            AccountHolder = request.AccountHolder
+        }, context.CancellationToken));
+    }
+
+    private static RefundAccountInfo MapRefund(RefundAccountDTO value)
+    {
+        return new RefundAccountInfo
+        {
+            Submitted = value.Submitted,
+            BankName = value.BankName,
+            AccountNumber = value.AccountNumber,
+            AccountHolder = value.AccountHolder
+        };
+    }
+
     public override async Task<CreateOrderReply> CreateTakeaway(TakeawayCreateRequest request, ServerCallContext context)
     {
         if (request.Items.Count > 0)

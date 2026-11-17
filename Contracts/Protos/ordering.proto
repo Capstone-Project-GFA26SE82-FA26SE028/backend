@@ -92,6 +92,8 @@ message TakeawayListRequest { string restaurant_id = 1; int32 page = 2; int32 pa
 service OrderGrpc {
   rpc AcceptTakeaway(TakeawayIdRequest) returns (OrderInfo);
   rpc RejectTakeaway(TakeawayIdRequest) returns (OrderInfo);
+  rpc GetRefundAccount(TakeawayIdRequest) returns (RefundAccountInfo);
+  rpc SaveRefundAccount(RefundAccountRequest) returns (RefundAccountInfo);
   rpc VerifyTakeawayRefund(TakeawayIdRequest) returns (OrderInfo);
   rpc CreateTakeaway(TakeawayCreateRequest) returns (CreateOrderReply);
   rpc GetTakeawayById(TakeawayIdRequest) returns (OrderInfo);
@@ -228,4 +230,18 @@ service KitchenTaskGrpc {
   rpc CompleteBatch(KitchenBatchActionRequest) returns (KitchenBatchActionReply);
   rpc RemakeTask(KitchenTaskRemakeRequest) returns (KitchenTaskInfo);
   rpc FireCourse(FireCourseRequest) returns (FireCourseReply);
+}
+
+message RefundAccountRequest {
+  string restaurant_id = 1;
+  string order_id = 2;
+  string bank_name = 3;
+  string account_number = 4;
+  string account_holder = 5;
+}
+message RefundAccountInfo {
+  bool submitted = 1;
+  string bank_name = 2;
+  string account_number = 3;
+  string account_holder = 4;
 }

@@ -193,6 +193,9 @@ public partial class OrderingDbContext : Shared.Persistence.RestaurantIsolation.
             entity.Property(e => e.PaymentStatus).HasMaxLength(30).IsRequired(false);
             entity.Property(e => e.CheckoutUrl).HasMaxLength(2048).IsRequired(false);
             entity.Property(e => e.CancellationReason).HasMaxLength(1000).IsRequired(false);
+            entity.Property(e => e.RefundBankName).HasMaxLength(100).IsRequired(false);
+            entity.Property(e => e.RefundAccountNumber).HasMaxLength(34).IsRequired(false);
+            entity.Property(e => e.RefundAccountHolder).HasMaxLength(150).IsRequired(false);
             entity.Property(e => e.RefundReference).HasMaxLength(255).IsRequired(false);
             entity.ToTable("Order");
 

@@ -37,6 +37,9 @@ public partial class Order
 
     public DateTime? RefundedAt { get; set; }
 
+    public string RefundBankName { get; set; }
+    public string RefundAccountNumber { get; set; }
+    public string RefundAccountHolder { get; set; }
     public string RefundReference { get; set; }
 
     public Guid? RestaurantRef { get; set; }

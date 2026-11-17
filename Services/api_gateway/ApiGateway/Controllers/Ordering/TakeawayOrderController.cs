@@ -14,6 +14,40 @@ namespace ApiGateway.Controllers.Ordering;
 public sealed class TakeawayOrderController(OrderGrpc.OrderGrpcClient client, IOptions<OrderingClientSettings> settings)
     : OrderingControllerBase(settings)
 {
+    [HttpGet("{id:guid}/refund/account")]
+    public Task<IActionResult> GetRefundAccount(Guid restaurantId, Guid id, CancellationToken ct)
+    {
+        return Execute(async () => Result(MapRefund(await client.GetRefundAccountAsync(new TakeawayIdRequest
+        {
+            RestaurantId = restaurantId.ToString(),
+            OrderId = id.ToString()
+        }, Options(ct)))), ct);
+    }
+
+    [HttpPut("{id:guid}/refund/account")]
+    public Task<IActionResult> SaveRefundAccount(Guid restaurantId, Guid id, RefundAccountDTO body, CancellationToken ct)
+    {
+        return Execute(async () => Result(MapRefund(await client.SaveRefundAccountAsync(new RefundAccountRequest
+        {
+            RestaurantId = restaurantId.ToString(),
+            OrderId = id.ToString(),
+            BankName = body.BankName ?? "",
+            AccountNumber = body.AccountNumber ?? "",
+            AccountHolder = body.AccountHolder ?? ""
+        }, Options(ct)))), ct);
+    }
+
+    private static RefundAccountDTO MapRefund(RefundAccountInfo value)
+    {
+        return new RefundAccountDTO
+        {
+            Submitted = value.Submitted,
+            BankName = value.BankName,
+            AccountNumber = value.AccountNumber,
+            AccountHolder = value.AccountHolder
+        };
+    }
+
     [HttpPost]
     public Task<IActionResult> Create(Guid restaurantId, CreateTakeawayDTO body,
         [FromHeader(Name = "Idempotency-Key")] string key, CancellationToken ct)

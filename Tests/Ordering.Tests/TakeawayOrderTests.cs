@@ -12,6 +12,45 @@ namespace Ordering.Tests;
 
 public sealed class TakeawayOrderTests
 {
+    private static RefundAccountDTO RefundAccount()
+    {
+        return new RefundAccountDTO
+        {
+            BankName = "Example Bank",
+            AccountNumber = "00123456789",
+            AccountHolder = "NGUYEN VAN AN"
+        };
+    }
+
+    [Fact]
+    public async Task RefundAccountRequiresPendingRefundAndIsPrivateAndImmutable()
+    {
+        using var app = new OrderingFlowTests.Fixture();
+        app.PaymentState = "Paid";
+        var order = (await app.Orders.CreateTakeaway(app.Restaurant, "account", await Cart(app), default)).Order;
+        await Error(409, () => app.Orders.SaveRefundAccount(app.Restaurant, order.OrderId, RefundAccount(), default));
+        await app.Orders.CancelTakeaway(app.Restaurant, order.OrderId, order.Version, default);
+        var invalid = RefundAccount();
+        invalid.AccountNumber = "not-a-number";
+        await Error(400, () => app.Orders.SaveRefundAccount(app.Restaurant, order.OrderId, invalid, default));
+        var saved = await app.Orders.SaveRefundAccount(app.Restaurant, order.OrderId, RefundAccount(), default);
+        Assert.True(saved.Submitted);
+        Assert.Equal("00123456789", saved.AccountNumber);
+        Assert.True((await app.Orders.SaveRefundAccount(app.Restaurant, order.OrderId, RefundAccount(), default)).Submitted);
+        var changed = RefundAccount();
+        changed.AccountNumber = "9999999";
+        await Error(409, () => app.Orders.SaveRefundAccount(app.Restaurant, order.OrderId, changed, default));
+        app.CustomerUser = Guid.NewGuid();
+        await Error(404, () => app.Orders.GetRefundAccount(app.Restaurant, order.OrderId, default));
+        await Error(404, () => app.Orders.SaveRefundAccount(app.Restaurant, order.OrderId, RefundAccount(), default));
+        app.Staff = true;
+        await Error(403, () => app.Orders.GetRefundAccount(app.Restaurant, order.OrderId, default));
+        app.StaffRole = "cashier";
+        Assert.Equal(saved.AccountNumber, (await app.Orders.GetRefundAccount(app.Restaurant, order.OrderId, default)).AccountNumber);
+        await Error(403, () => app.Orders.GetRefundAccount(Guid.NewGuid(), order.OrderId, default));
+        await Error(403, () => app.Orders.SaveRefundAccount(app.Restaurant, order.OrderId, RefundAccount(), default));
+    }
+
     private static async Task<SubmitTakeawayDTO> Cart(OrderingFlowTests.Fixture app)
     {
         var cart = await app.Carts.Takeaway(app.Restaurant, null, "Create", null, default);
@@ -107,6 +146,10 @@ public sealed class TakeawayOrderTests
         await Error(409, () => app.Orders.AcceptTakeaway(app.Restaurant, order.OrderId, cancelled.Version, default));
         await Error(403, () => app.Orders.VerifyTakeawayRefund(app.Restaurant, order.OrderId, "bank", "https://evidence.example/1", default));
         app.StaffRole = "cashier";
+        await Error(409, () => app.Orders.VerifyTakeawayRefund(app.Restaurant, order.OrderId, "bank", "https://evidence.example/1", default));
+        app.Staff = false;
+        await app.Orders.SaveRefundAccount(app.Restaurant, order.OrderId, RefundAccount(), default);
+        app.Staff = true;
         var refunded = await app.Orders.VerifyTakeawayRefund(app.Restaurant, order.OrderId, "bank", "https://evidence.example/1", default);
         Assert.Equal("Cancelled", refunded.Status);
         Assert.Equal("Refunded", refunded.PaymentStatus);

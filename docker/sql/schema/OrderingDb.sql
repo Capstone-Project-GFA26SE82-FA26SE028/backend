@@ -138,6 +138,9 @@ CREATE TABLE dbo.[Order]
     [ReadyForPickupAt] datetime2(7) NULL,
     [CompletedAt] datetime2(7) NULL,
     [RefundedAt] datetime2(7) NULL,
+    [RefundBankName] nvarchar(100) NULL,
+    [RefundAccountNumber] nvarchar(34) NULL,
+    [RefundAccountHolder] nvarchar(150) NULL,
     [RefundReference] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
 );
 GO

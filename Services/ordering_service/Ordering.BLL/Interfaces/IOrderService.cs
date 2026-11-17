@@ -28,6 +28,8 @@ public interface IOrderService
 
     Task ReconcileTakeaway(CancellationToken ct);
 
+    Task<RefundAccountDTO> GetRefundAccount(Guid restaurantId, Guid id, CancellationToken ct);
+    Task<RefundAccountDTO> SaveRefundAccount(Guid restaurantId, Guid id, RefundAccountDTO request, CancellationToken ct);
     Task<OrderDTO> VerifyTakeawayRefund(Guid restaurantId, Guid id, string reference, string evidence, CancellationToken ct);
 
     Task<OrderDTO> ServeItem(Guid sessionId, Guid id, Guid orderItemId, string? version, CancellationToken ct);
