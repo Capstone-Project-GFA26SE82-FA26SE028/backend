@@ -126,6 +126,20 @@ CREATE TABLE dbo.NotificationRecipient (
     CONSTRAINT FK_NotificationRecipient_Notification FOREIGN KEY (NotificationId) REFERENCES dbo.Notification(NotificationId) ON DELETE CASCADE
 );
 CREATE INDEX IX_NotificationRecipient_UserId_ReadAt ON dbo.NotificationRecipient(UserId, ReadAt);
+CREATE TABLE dbo.Announcement (
+    AnnouncementId uniqueidentifier NOT NULL CONSTRAINT PK_Announcement PRIMARY KEY,
+    RestaurantId uniqueidentifier NOT NULL,
+    CreatedBy uniqueidentifier NOT NULL,
+    Title nvarchar(200) NOT NULL,
+    Message nvarchar(2000) NOT NULL,
+    AllStaff bit NOT NULL,
+    RecipientRoles nvarchar(200) NOT NULL,
+    Version uniqueidentifier NOT NULL,
+    CreatedAt datetime2 NOT NULL,
+    SentAt datetime2 NULL,
+    NotificationId uniqueidentifier NULL
+);
+CREATE INDEX IX_Announcement_RestaurantId_CreatedAt ON dbo.Announcement(RestaurantId, CreatedAt);
 CREATE TABLE dbo.NotificationSetting (
     RestaurantId uniqueidentifier NOT NULL,
     Type nvarchar(80) NOT NULL,

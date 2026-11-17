@@ -12,6 +12,12 @@ public sealed class RestaurantStaffService(IManagementAccess access, IStaffIdent
     IRestaurantStaffRepository staff, IRestaurantRepository restaurants, IReservationTransaction transaction,
     IOptions<RestaurantStaffSettings> settings) : IRestaurantStaffService
 {
+    public async Task<IReadOnlyList<RestaurantStaffDto>> GetNotificationRecipients(Guid restaurantId, CancellationToken ct)
+    {
+        await RequireRestaurant(restaurantId, ct);
+        return (await staff.GetAllAsync(restaurantId, ct)).Where(value => value.IsActive).Select(Map).ToArray();
+    }
+
     public async Task<RestaurantStaffDto> Provision(Guid restaurantId, Guid userId, CancellationToken ct)
     {
         ValidateIds(restaurantId, userId);

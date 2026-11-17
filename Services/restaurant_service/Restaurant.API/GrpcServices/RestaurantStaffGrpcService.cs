@@ -7,6 +7,22 @@ namespace Restaurant.API.GrpcServices;
 
 public sealed class RestaurantStaffGrpcService(IRestaurantStaffService service, IConfiguration configuration) : RestaurantStaffGrpc.RestaurantStaffGrpcBase
 {
+    public override async Task<RestaurantStaffListReply> GetNotificationRecipients(RestaurantStaffListRequest request, ServerCallContext context)
+    {
+        var expected = configuration["Notifications:ServiceKey"];
+        var supplied = context.RequestHeaders.GetValue("x-notification-key");
+        if (string.IsNullOrEmpty(expected) || expected.Length < 32 || string.IsNullOrEmpty(supplied)
+            || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                System.Text.Encoding.UTF8.GetBytes(expected), System.Text.Encoding.UTF8.GetBytes(supplied)))
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "Không có quyền xem danh sách nhận thông báo nội bộ."));
+        }
+
+        var reply = new RestaurantStaffListReply();
+        reply.Items.AddRange((await service.GetNotificationRecipients(ParseId(request.RestaurantId), context.CancellationToken)).Select(Map));
+        return reply;
+    }
+
     public override async Task<RestaurantStaffInfo> Provision(RestaurantStaffRequest request, ServerCallContext context)
     {
         var expected = configuration["StaffProvisioning:ServiceKey"];

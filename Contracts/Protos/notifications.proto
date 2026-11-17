@@ -21,6 +21,14 @@ service NotificationGrpc {
   rpc UnreadCount(NotificationRequest) returns (NotificationReply);
   rpc MarkRead(NotificationRequest) returns (NotificationReply);
 }
+service AnnouncementGrpc {
+  rpc Create(NotificationRequest) returns (NotificationReply);
+  rpc GetAll(NotificationRequest) returns (NotificationReply);
+  rpc GetById(NotificationRequest) returns (NotificationReply);
+  rpc Update(NotificationRequest) returns (NotificationReply);
+  rpc Delete(NotificationRequest) returns (NotificationReply);
+  rpc Send(NotificationRequest) returns (NotificationReply);
+}
 service NotificationSettingGrpc {
   rpc GetAll(NotificationRequest) returns (NotificationReply);
   rpc Update(NotificationRequest) returns (NotificationReply);

@@ -306,6 +306,7 @@ message UpdateReservationRequest {
 }
 
 service RestaurantStaffGrpc {
+  rpc GetNotificationRecipients(RestaurantStaffListRequest) returns (RestaurantStaffListReply);
   rpc Provision(RestaurantStaffRequest) returns (RestaurantStaffInfo);
   rpc Create(RestaurantStaffRequest) returns (RestaurantStaffInfo);
   rpc GetAll(RestaurantStaffListRequest) returns (RestaurantStaffListReply);
