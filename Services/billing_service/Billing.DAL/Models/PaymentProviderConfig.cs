@@ -7,6 +7,14 @@ namespace Billing.DAL.Models;
 
 public partial class PaymentProviderConfig
 {
+    public Guid RestaurantId { get; set; }
+
+    public bool Enabled { get; set; }
+
+    public string ReturnUrl { get; set; }
+
+    public string CancelUrl { get; set; }
+
     public Guid PaymentProviderConfigId { get; set; }
 
     public string Provider { get; set; }

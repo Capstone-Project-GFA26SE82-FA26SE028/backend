@@ -9,6 +9,7 @@ RUN dotnet publish Services/billing_service/Billing.API/Billing.API.csproj -c Re
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+RUN mkdir -p /app/App_Data/payment-keys && chown -R $APP_UID:$APP_UID /app/App_Data/payment-keys
 USER $APP_UID
 EXPOSE 5007
 ENTRYPOINT ["dotnet", "Billing.API.dll"]

@@ -354,6 +354,9 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
         modelBuilder.Entity<PaymentProviderConfig>(entity =>
         {
             entity.ToTable("PaymentProviderConfig");
+            entity.HasIndex(value => new { value.RestaurantId, value.Provider }).IsUnique();
+            entity.Property(value => value.ReturnUrl).IsRequired().HasMaxLength(2048).IsUnicode(false);
+            entity.Property(value => value.CancelUrl).IsRequired().HasMaxLength(2048).IsUnicode(false);
 
             entity.Property(e => e.PaymentProviderConfigId).ValueGeneratedNever();
             entity.Property(e => e.ClientId)
@@ -366,7 +369,6 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
                 .IsUnicode(false);
             entity.Property(e => e.SecretReference)
                 .IsRequired()
-                .HasMaxLength(500)
                 .IsUnicode(false);
             entity.Property(e => e.WebhookUrl)
                 .IsRequired()

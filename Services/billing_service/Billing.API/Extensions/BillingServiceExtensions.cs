@@ -6,6 +6,8 @@ using Billing.API.Settings;
 using Billing.BLL.Interfaces;
 using Billing.BLL.Implements;
 using Billing.Common.Settings;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.Options;
 
 namespace Billing.API.Extensions;
 
@@ -20,6 +22,17 @@ public static class BillingServiceExtensions
         });
         services.AddHttpContextAccessor();
         services.Configure<PayOsSettings>(configuration.GetSection("PayOs"));
+        services.Configure<PaymentProviderConfigurationSettings>(configuration.GetSection("PaymentProviderConfiguration"));
+        services.AddScoped<IOptions<PayOsSettings>, RestaurantPayOsOptions>();
+        services.AddScoped<IPaymentProviderSecrets, PaymentProviderSecrets>();
+        services.AddScoped<IPaymentProviderConfigService, PaymentProviderConfigService>();
+        var protection = services.AddDataProtection().SetApplicationName("RestaurantBilling");
+        var keyDirectory = configuration["PaymentProviderConfiguration:KeyDirectory"];
+        if (!string.IsNullOrWhiteSpace(keyDirectory))
+        {
+            protection.PersistKeysToFileSystem(new DirectoryInfo(keyDirectory));
+        }
+
         services.AddHttpClient<IPayOsClient, PayOsClient>(http =>
         {
             http.MaxResponseContentBufferSize = 262144;

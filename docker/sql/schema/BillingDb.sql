@@ -200,13 +200,16 @@ GO
 
 CREATE TABLE dbo.[PaymentProviderConfig]
 (
+    [Enabled] bit NOT NULL,
+    [ReturnUrl] varchar(2048) NOT NULL,
+    [CancelUrl] varchar(2048) NOT NULL,
     [PaymentProviderConfigId] uniqueidentifier NOT NULL,
     [Provider] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [ClientId] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [SecretReference] varchar(500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [SecretReference] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [WebhookUrl] varchar(2048) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [IsVerified] bit NOT NULL,
-    [RestaurantId] uniqueidentifier NULL
+    [RestaurantId] uniqueidentifier NOT NULL
 );
 GO
 
@@ -225,27 +228,6 @@ CREATE TABLE dbo.[PaymentWebhook]
 );
 GO
 
-CREATE TABLE dbo.[PayoutRequest]
-(
-    [PayoutRequestId] uniqueidentifier NOT NULL,
-    [RestaurantId] uniqueidentifier NOT NULL,
-    [Amount] decimal(18,0) NOT NULL,
-    [IdempotencyKey] nvarchar(100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [BankName] nvarchar(150) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [AccountNumber] nvarchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [AccountHolder] nvarchar(150) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [Status] nvarchar(20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [RequestedBy] uniqueidentifier NOT NULL,
-    [RequestedAt] datetime2(7) NOT NULL,
-    [ReviewedBy] uniqueidentifier NULL,
-    [ReviewedAt] datetime2(7) NULL,
-    [PaidBy] uniqueidentifier NULL,
-    [PaidAt] datetime2(7) NULL,
-    [TransferReference] nvarchar(150) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-    [EvidenceUrl] nvarchar(1000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-    [Note] nvarchar(1000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
-);
-GO
 
 CREATE TABLE dbo.[Promotion]
 (
@@ -445,20 +427,6 @@ GO
 ALTER TABLE dbo.[PaymentWebhook] ADD CONSTRAINT [PK_PaymentWebhook] PRIMARY KEY CLUSTERED ([PaymentWebhookId] ASC);
 GO
 
-CREATE NONCLUSTERED INDEX [IX_PayoutRequest_RestaurantIsolation] ON dbo.[PayoutRequest] ([RestaurantId] ASC);
-GO
-ALTER TABLE dbo.[PayoutRequest] ADD CONSTRAINT [PK_PayoutRequest] PRIMARY KEY CLUSTERED ([PayoutRequestId] ASC);
-GO
-CREATE UNIQUE NONCLUSTERED INDEX [UX_PayoutRequest_Key] ON dbo.[PayoutRequest] ([RestaurantId] ASC, [IdempotencyKey] ASC);
-GO
-CREATE UNIQUE NONCLUSTERED INDEX [UX_PayoutRequest_Transfer] ON dbo.[PayoutRequest] ([TransferReference] ASC) WHERE ([TransferReference] IS NOT NULL);
-GO
-ALTER TABLE dbo.[PayoutRequest] WITH CHECK ADD CONSTRAINT [CK_PayoutRequest_Amount] CHECK ([Amount]>(0));
-GO
-ALTER TABLE dbo.[PayoutRequest] WITH CHECK ADD CONSTRAINT [CK_PayoutRequest_Paid] CHECK ([Status]<>'Paid' OR [PaidAt] IS NOT NULL AND [PaidBy] IS NOT NULL AND [TransferReference] IS NOT NULL AND [EvidenceUrl] IS NOT NULL);
-GO
-ALTER TABLE dbo.[PayoutRequest] WITH CHECK ADD CONSTRAINT [CK_PayoutRequest_Status] CHECK ([Status]='Cancelled' OR [Status]='Rejected' OR [Status]='Paid' OR [Status]='Approved' OR [Status]='Pending');
-GO
 
 CREATE NONCLUSTERED INDEX [IX_Promotion_RestaurantIsolation] ON dbo.[Promotion] ([RestaurantId] ASC);
 GO
@@ -550,4 +518,7 @@ GO
 ALTER TABLE dbo.[VoucherRedemption] WITH CHECK ADD CONSTRAINT [FK_VoucherRedemption_Bill] FOREIGN KEY ([BillId]) REFERENCES dbo.[Bill] ([BillId]);
 GO
 ALTER TABLE dbo.[VoucherRedemption] WITH CHECK ADD CONSTRAINT [FK_VoucherRedemption_Voucher] FOREIGN KEY ([VoucherId]) REFERENCES dbo.[Voucher] ([VoucherId]);
+GO
+
+CREATE UNIQUE INDEX [IX_PaymentProviderConfig_RestaurantId_Provider] ON dbo.[PaymentProviderConfig] ([RestaurantId], [Provider]);
 GO

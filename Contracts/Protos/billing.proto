@@ -325,7 +325,7 @@ message CreatePayOsPaymentRequest {
   string idempotency_key = 4;
 }
 message PayOsPaymentReply { PayOsPaymentInfo payment = 1; bool created = 2; }
-message PaymentWebhookRequest { string payload = 1; }
+message PaymentWebhookRequest { string payload = 1; string restaurant_id = 2; }
 message PaymentWebhookReply { bool received = 1; }
 message PayOsPaymentInfo {
   string payment_id = 1;
@@ -357,4 +357,28 @@ message OnlinePaymentRequest {
 message OnlinePaymentReply {
   string status = 1; string checkout_url = 2; string amount = 3;
   string paid_at = 4; string refunded_at = 5; string refund_reference = 6;
+}
+
+service PaymentProviderConfigGrpc {
+  rpc GetById(PayOsConfigurationRequest) returns (PayOsConfigurationInfo);
+  rpc Update(SavePayOsConfigurationRequest) returns (PayOsConfigurationInfo);
+}
+message PayOsConfigurationRequest { string restaurant_id = 1; }
+message SavePayOsConfigurationRequest {
+  string restaurant_id = 1;
+  string client_id = 2;
+  string api_key = 3;
+  string checksum_key = 4;
+  string return_url = 5;
+  string cancel_url = 6;
+  bool enabled = 7;
+}
+message PayOsConfigurationInfo {
+  string restaurant_id = 1;
+  bool configured = 2;
+  string client_id = 3;
+  string return_url = 4;
+  string cancel_url = 5;
+  string webhook_url = 6;
+  bool enabled = 7;
 }
