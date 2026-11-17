@@ -6,6 +6,7 @@ public partial class IdentityDbContext
 {
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotificationRecipient> NotificationRecipients => Set<NotificationRecipient>();
+    public DbSet<NotificationSetting> NotificationSettings => Set<NotificationSetting>();
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder)
     {
@@ -28,6 +29,12 @@ public partial class IdentityDbContext
             entity.HasIndex(value => new { value.UserId, value.ReadAt });
             entity.HasOne(value => value.Notification).WithMany(value => value.Recipients)
                 .HasForeignKey(value => value.NotificationId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<NotificationSetting>(entity =>
+        {
+            entity.ToTable("NotificationSetting");
+            entity.HasKey(value => new { value.RestaurantId, value.Type });
+            entity.Property(value => value.Type).HasMaxLength(80);
         });
     }
 }

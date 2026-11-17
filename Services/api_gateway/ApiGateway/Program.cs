@@ -224,6 +224,10 @@ builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationGrpc.
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]!);
 });
+builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationSettingGrpc.NotificationSettingGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]!);
+});
 
 var app = builder.Build();
 

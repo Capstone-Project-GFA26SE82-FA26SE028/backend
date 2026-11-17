@@ -21,3 +21,7 @@ service NotificationGrpc {
   rpc UnreadCount(NotificationRequest) returns (NotificationReply);
   rpc MarkRead(NotificationRequest) returns (NotificationReply);
 }
+service NotificationSettingGrpc {
+  rpc GetAll(NotificationRequest) returns (NotificationReply);
+  rpc Update(NotificationRequest) returns (NotificationReply);
+}

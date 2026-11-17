@@ -22,9 +22,11 @@ builder.Services.AddDbContext<IdentityDbContext>(options =>
     options.UseSqlServer(databaseConnectionString));
 
 builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<INotificationSettingRepository, NotificationSettingRepository>();
 builder.Services.AddScoped<INotificationAccess, NotificationAccess>();
 builder.Services.AddScoped<INotificationRestaurantAccess, Identity.API.Clients.NotificationRestaurantAccess>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<INotificationSettingService, NotificationSettingService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
@@ -54,6 +56,7 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 app.MapGrpcService<Identity.API.GrpcServices.NotificationGrpcService>();
+app.MapGrpcService<Identity.API.GrpcServices.NotificationSettingGrpcService>();
 app.MapGrpcService<Identity.API.GrpcServices.AccessGrpcService>();
 
 app.MapGrpcService<Identity.API.GrpcServices.IdentityGrpcService>();
