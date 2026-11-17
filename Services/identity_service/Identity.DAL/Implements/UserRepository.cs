@@ -76,9 +76,15 @@ namespace Identity.DAL.Implements
             return true;
         }
 
-        public async Task<(List<User> Items, int Total)> GetAllAsync(int page, int pageSize, string? search, CancellationToken ct, Identity.Common.DTOs.UserFilter? filter = null)
+        public async Task<(List<User> Items, int Total)> GetAllAsync(int page, int pageSize, string? search, CancellationToken ct, Identity.Common.DTOs.UserFilter? filter = null, Guid? restaurantId = null, string[]? staffRoles = null)
         {
             var query = _context.Users.AsNoTracking();
+            if (restaurantId.HasValue)
+            {
+                var roles = staffRoles ?? [];
+                query = query.Where(user => user.RestaurantId == restaurantId && roles.Contains(user.RoleId));
+            }
+
             if (!string.IsNullOrEmpty(search))
             {
                 query = query.Where(u => u.Email.Contains(search) || u.UserName.Contains(search) || u.FullName.Contains(search));
@@ -116,10 +122,37 @@ namespace Identity.DAL.Implements
             return matches.Count == 1 ? matches[0] : null;
         }
 
-        // Called inside UnitOfWork.ExecuteInTransactionAsync to protect concurrent changes.
-        public async Task<(int Status, User? User)> CreateEmployeeAsync(Guid actorId, User user, string[] adminRoles, CancellationToken ct)
+        public Task<List<User>> GetPendingProvisioningAsync(CancellationToken ct)
         {
-            if (!await _context.Users.AnyAsync(u => u.UserId == actorId && u.IsActive && adminRoles.Contains(u.RoleId), ct))
+            return _context.Users.AsNoTracking().Where(user => user.ProvisioningPending && user.RestaurantId.HasValue)
+                .OrderBy(user => user.CreatedAt).Take(50).ToListAsync(ct);
+        }
+
+        public async Task<bool> CompleteProvisioningAsync(Guid userId, CancellationToken ct)
+        {
+            var changed = await _context.Users.Where(user => user.UserId == userId && user.ProvisioningPending)
+                .ExecuteUpdateAsync(set => set.SetProperty(user => user.ProvisioningPending, false)
+                    .SetProperty(user => user.IsActive, true), ct);
+            if (changed > 0)
+            {
+                _context.RecordAudit(null, "STAFF_PROVISIONED", "User", userId.ToString());
+            }
+
+            return changed > 0;
+        }
+
+        // Called inside UnitOfWork.ExecuteInTransactionAsync to protect concurrent changes.
+        public async Task<(int Status, User? User)> CreateEmployeeAsync(Guid actorId, User user, string[] adminRoles, CancellationToken ct, Guid? restaurantId = null, string[]? staffRoles = null)
+        {
+            var actor = await _context.Users.AsNoTracking().SingleOrDefaultAsync(value => value.UserId == actorId, ct);
+            var platform = actor is not null && actor.IsActive && adminRoles.Contains(actor.RoleId);
+            if (!platform && (actor is null || !actor.IsActive || actor.RoleId != "admin"
+                || !restaurantId.HasValue || actor.RestaurantId != restaurantId))
+            {
+                return (403, null);
+            }
+
+            if (!platform && (user.RestaurantId != restaurantId || !(staffRoles ?? []).Contains(user.RoleId)))
             {
                 return (403, null);
             }
@@ -152,9 +185,12 @@ namespace Identity.DAL.Implements
             return (201, user);
         }
 
-        public async Task<(int Status, User? User)> ChangeAccessAsync(Guid actorId, Guid id, string? roleId, bool? isActive, string[] adminRoles, CancellationToken ct)
+        public async Task<(int Status, User? User)> ChangeAccessAsync(Guid actorId, Guid id, string? roleId, bool? isActive, string[] adminRoles, CancellationToken ct, Guid? restaurantId = null, string[]? staffRoles = null)
         {
-            if (!await _context.Users.AnyAsync(u => u.UserId == actorId && u.IsActive && adminRoles.Contains(u.RoleId), ct))
+            var actor = await _context.Users.AsNoTracking().SingleOrDefaultAsync(value => value.UserId == actorId, ct);
+            var platform = actor is not null && actor.IsActive && adminRoles.Contains(actor.RoleId);
+            if (!platform && (actor is null || !actor.IsActive || actor.RoleId != "admin"
+                || !restaurantId.HasValue || actor.RestaurantId != restaurantId))
             {
                 return (403, null);
             }
@@ -163,6 +199,17 @@ namespace Identity.DAL.Implements
             if (user is null)
             {
                 return (404, null);
+            }
+
+            if (!platform && (user.RestaurantId != restaurantId || !(staffRoles ?? []).Contains(user.RoleId)
+                || (roleId is not null && !(staffRoles ?? []).Contains(roleId))))
+            {
+                return (403, null);
+            }
+
+            if (user.ProvisioningPending)
+            {
+                return (409, null);
             }
 
             var nextRole = roleId is null ? user.RoleId : await _context.Roles.Where(r => r.RoleId == roleId).Select(r => r.RoleId).FirstOrDefaultAsync(ct);

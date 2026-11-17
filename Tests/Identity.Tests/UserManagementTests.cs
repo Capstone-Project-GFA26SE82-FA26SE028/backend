@@ -76,6 +76,27 @@ public sealed partial class UserManagementTests : IDisposable
         var closed = new UserService(new UnitOfWork(db), Options.Create(new UserManagementSettings()));
         Assert.Equal(403, (await closed.GetAll(adminId, 1, 20, null, default)).StatusCode);
     }
+
+    [Fact]
+    public async Task RestaurantAdminCannotUsePlatformUserManagement()
+    {
+        db.Roles.Add(new Role
+        {
+            RoleId = "platform_admin",
+            RoleName = "Platform administrator"
+        });
+        var platformId = Guid.NewGuid();
+        db.Users.Add(NewUser(platformId, "platform_admin", "platform@example.test"));
+        await db.SaveChangesAsync();
+        var platformService = new UserService(new UnitOfWork(db), Options.Create(new UserManagementSettings
+        {
+            AdminRoleIds = ["platform_admin"]
+        }));
+
+        Assert.Equal(403, (await platformService.GetAll(adminId, 1, 20, null, default)).StatusCode);
+        Assert.Equal(403, (await platformService.SetRole(adminId, memberId, "platform_admin", default)).StatusCode);
+        Assert.Equal(200, (await platformService.GetAll(platformId, 1, 20, null, default)).StatusCode);
+    }
     [Fact]
     public async Task ProfileUpdateChangesOnlyAllowedFields()
     {

@@ -4,6 +4,7 @@ namespace Identity.BLL.Interfaces;
 
 public interface IUserService
 {
+    Task ProvisionPending(CancellationToken ct);
     Task<ResponseDTO> Update(Guid actorId, Guid userId, UpdateUserDTO request, CancellationToken ct);
     Task<ResponseDTO> Create(Guid actorId, CreateUserDTO request, CancellationToken ct);
     Task<ResponseDTO> SetRole(Guid actorId, Guid userId, string roleId, CancellationToken ct);

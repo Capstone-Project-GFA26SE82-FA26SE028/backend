@@ -84,6 +84,7 @@ public sealed class UserGrpcService(IUserService users, IRoleService roles) : Us
             UserName = request.UserName,
             Email = request.Email,
             Password = request.Password,
+            RestaurantId = string.IsNullOrEmpty(request.RestaurantId) ? null : ParseId(request.RestaurantId),
             AvatarUrl = request.HasAvatarUrl ? request.AvatarUrl : null,
             FullName = request.FullName,
             PhoneNumber = request.HasPhoneNumber ? request.PhoneNumber : null,
@@ -125,6 +126,8 @@ public sealed class UserGrpcService(IUserService users, IRoleService roles) : Us
         var info = new UserInfo
         {
             UserId = user.UserId.ToString(),
+            RestaurantId = user.RestaurantId?.ToString() ?? "",
+            ProvisioningPending = user.ProvisioningPending,
             RoleId = user.RoleId,
             UserName = user.UserName,
             Email = user.Email,

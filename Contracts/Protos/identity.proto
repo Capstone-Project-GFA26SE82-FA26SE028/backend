@@ -75,6 +75,8 @@ message UserInfo {
   bool is_active = 8;
   google.protobuf.Timestamp created_at = 9;
   google.protobuf.Timestamp updated_at = 10;
+  string restaurant_id = 11;
+  bool provisioning_pending = 12;
 }
 
 service UserGrpc {
@@ -126,6 +128,7 @@ message CreateUserRequest {
   string user_name = 1;
   string email = 2;
   string password = 3;
+  string restaurant_id = 8;
   string full_name = 4;
   optional string phone_number = 5;
   string role_id = 6;

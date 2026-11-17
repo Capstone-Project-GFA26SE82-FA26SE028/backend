@@ -5,8 +5,22 @@ using Restaurant.Common.DTOs;
 
 namespace Restaurant.API.GrpcServices;
 
-public sealed class RestaurantStaffGrpcService(IRestaurantStaffService service) : RestaurantStaffGrpc.RestaurantStaffGrpcBase
+public sealed class RestaurantStaffGrpcService(IRestaurantStaffService service, IConfiguration configuration) : RestaurantStaffGrpc.RestaurantStaffGrpcBase
 {
+    public override async Task<RestaurantStaffInfo> Provision(RestaurantStaffRequest request, ServerCallContext context)
+    {
+        var expected = configuration["StaffProvisioning:ServiceKey"];
+        var supplied = context.RequestHeaders.GetValue("x-staff-provisioning-key");
+        if (expected?.Length < 32 || string.IsNullOrEmpty(expected) || string.IsNullOrEmpty(supplied)
+            || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                System.Text.Encoding.UTF8.GetBytes(expected), System.Text.Encoding.UTF8.GetBytes(supplied)))
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "Không có quyền phân công nội bộ."));
+        }
+
+        return Map(await service.Provision(ParseId(request.RestaurantId), ParseId(request.UserIdRef), context.CancellationToken));
+    }
+
     public override async Task<RestaurantStaffInfo> Create(RestaurantStaffRequest request, ServerCallContext context)
     {
         return Map(await service.Create(ParseId(request.RestaurantId), ParseId(request.UserIdRef), context.CancellationToken));

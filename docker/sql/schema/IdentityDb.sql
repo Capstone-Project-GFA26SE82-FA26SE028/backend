@@ -18,6 +18,8 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[User](
+    [RestaurantId] [uniqueidentifier] NULL,
+    [ProvisioningPending] [bit] NOT NULL CONSTRAINT [DF_User_ProvisioningPending] DEFAULT (0),
 	[UserId] [uniqueidentifier] NOT NULL,
 	[RoleId] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[UserName] [varchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -96,4 +98,7 @@ ALTER TABLE [dbo].[AuditLog]  WITH CHECK ADD  CONSTRAINT [FK_AuditLog_User] FORE
 REFERENCES [dbo].[User] ([UserId])
 GO
 ALTER TABLE [dbo].[AuditLog] CHECK CONSTRAINT [FK_AuditLog_User]
+GO
+
+CREATE INDEX IX_User_RestaurantId ON dbo.[User](RestaurantId);
 GO

@@ -8,6 +8,9 @@ namespace Identity.Common.DTOs
 {
     public class UserDTO
     {
+        public Guid? RestaurantId { get; set; }
+        public bool ProvisioningPending { get; set; }
+
         public Guid UserId { get; set; }
 
         public string RoleId { get; set; }
