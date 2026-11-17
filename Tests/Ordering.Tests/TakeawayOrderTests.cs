@@ -12,6 +12,53 @@ namespace Ordering.Tests;
 
 public sealed class TakeawayOrderTests
 {
+    [Fact]
+    public async Task NotificationOutboxFollowsCommittedRefundTransitionsAndRetryIsIdempotent()
+    {
+        using var app = new OrderingFlowTests.Fixture();
+        app.PaymentState = "Paid";
+        var order = (await app.Orders.CreateTakeaway(app.Restaurant, "outbox", await Cart(app), default)).Order;
+        var rows = app.Db.Set<Shared.Persistence.Notifications.NotificationOutbox>();
+        Assert.Equal(2, await rows.CountAsync());
+        await app.Orders.GetTakeawayById(app.Restaurant, order.OrderId, default);
+        Assert.Equal(2, await rows.CountAsync());
+        await app.Orders.CancelTakeaway(app.Restaurant, order.OrderId, order.Version, default);
+        await app.Orders.SaveRefundAccount(app.Restaurant, order.OrderId, RefundAccount(), default);
+        await app.Orders.SaveRefundAccount(app.Restaurant, order.OrderId, RefundAccount(), default);
+        app.Staff = true;
+        app.StaffRole = "cashier";
+        await app.Orders.VerifyTakeawayRefund(app.Restaurant, order.OrderId, "bank", "https://evidence.test/file", default);
+        var values = await rows.AsNoTracking().ToListAsync();
+        Assert.Equal(6, values.Count);
+        Assert.Equal(6, values.Select(value => value.EventKey).Distinct().Count());
+        Assert.DoesNotContain("00123456789", string.Join(" ", values.Select(value => value.Payload)));
+        var delivery = new Shared.Persistence.Notifications.NotificationOutboxRepository<OrderingDbContext>(app.Db);
+        var first = values[0];
+        await delivery.RetryAsync(first.NotificationOutboxId, 0, "Unavailable", default);
+        Assert.DoesNotContain(await delivery.GetPendingAsync(default), value => value.NotificationOutboxId == first.NotificationOutboxId);
+        await delivery.CompleteAsync(first.NotificationOutboxId, default);
+        await delivery.RetryAsync(first.NotificationOutboxId, 1, "LateFailure", default);
+        Assert.NotNull((await rows.AsNoTracking().SingleAsync(value => value.NotificationOutboxId == first.NotificationOutboxId)).ProcessedAt);
+    }
+
+    [Fact]
+    public async Task NotificationOutboxRollsBackWithOrderChange()
+    {
+        using var app = new OrderingFlowTests.Fixture();
+        var result = (await app.Orders.CreateTakeaway(app.Restaurant, "rollback-outbox", await Cart(app), default)).Order;
+        await using (var transaction = await app.Db.Database.BeginTransactionAsync())
+        {
+            var order = await app.Db.Orders.SingleAsync(value => value.OrderId == result.OrderId);
+            order.Status = "Cancelled";
+            await app.Db.SaveChangesAsync();
+            Assert.Single(await app.Db.Set<Shared.Persistence.Notifications.NotificationOutbox>().ToListAsync());
+            await transaction.RollbackAsync();
+        }
+        app.Db.ChangeTracker.Clear();
+        Assert.Empty(await app.Db.Set<Shared.Persistence.Notifications.NotificationOutbox>().ToListAsync());
+        Assert.Equal("PendingPayment", (await app.Db.Orders.SingleAsync()).Status);
+    }
+
     private static RefundAccountDTO RefundAccount()
     {
         return new RefundAccountDTO

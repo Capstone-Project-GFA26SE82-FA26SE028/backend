@@ -18,6 +18,7 @@ builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationGrpc.
     options.Address = new Uri(builder.Configuration["GrpcServices:Identity"] ?? "http://localhost:5001");
 });
 builder.Services.AddHostedService<RestaurantIsolation.NotificationOutboxWorker<Ordering.DAL.Models.OrderingDbContext>>();
+builder.Services.AddScoped<RestaurantIsolation.INotificationEventEnricher, Ordering.API.Clients.NotificationEventEnricher>();
 
 var app = builder.Build();
 
