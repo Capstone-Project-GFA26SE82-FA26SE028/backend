@@ -7,13 +7,20 @@ using Entity = Restaurant.DAL.Models.Table;
 namespace Restaurant.BLL.Implements;
 
 public sealed class TableService(ITableRepository repository, IAreaRepository areas,
-    IManagementTransaction transaction, IManagementAccess access, ITableSessionOrderAccess waiterAccess) : ITableService
+    IManagementTransaction transaction, IManagementAccess access, ITableSessionOrderAccess waiterAccess,
+    IRestaurantStaffRepository staff) : ITableService
 {
     public async Task<PageResult<ServiceTableDto>> GetServiceTables(ListQuery query, CancellationToken ct)
     {
-        await waiterAccess.RequireStaffAsync(ct);
+        var userId = await waiterAccess.RequireStaffAsync(ct);
         ManagementValidation.Query(query);
-        var page = await repository.GetServicePageAsync(query, ct);
+        var assigned = await staff.GetRestaurantIdsAsync(userId, ct);
+        if (query.RestaurantId.HasValue && !assigned.Contains(query.RestaurantId.Value))
+        {
+            throw new ManagementException(403, "Bạn không được phân công tại nhà hàng này.");
+        }
+
+        var page = await repository.GetServicePageAsync(query, assigned, ct);
         return new PageResult<ServiceTableDto>
         {
             Items = page.Items.Select(table => new ServiceTableDto

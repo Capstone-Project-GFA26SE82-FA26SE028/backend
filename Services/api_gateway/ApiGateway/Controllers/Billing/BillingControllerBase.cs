@@ -26,6 +26,11 @@ public abstract class BillingControllerBase(IOptions<BillingClientSettings> sett
         {
             { "authorization", authorization }
         };
+        var restaurantHeader = Request.Headers["x-restaurant-id"].ToString();
+        if (!string.IsNullOrWhiteSpace(restaurantHeader))
+        {
+            headers.Add("x-restaurant-id", restaurantHeader);
+        }
         var options = new CallOptions(headers, DateTime.UtcNow.AddSeconds(settings.Value.TimeoutSeconds), ct);
         try
         {

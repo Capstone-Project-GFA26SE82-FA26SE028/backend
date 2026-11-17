@@ -14,10 +14,12 @@ public sealed class FeedbackTests
         var orderId = Guid.NewGuid();
         var item1 = Guid.NewGuid();
         var item2 = Guid.NewGuid();
+        var token = await fixture.FeedbackService.CreateFeedbackAccess(orderId, default);
 
         var result = await fixture.FeedbackService.SubmitFeedback(new SubmitFeedbackDTO
         {
             OrderRef = orderId,
+            AccessToken = token,
             Star = 5,
             Comment = "Đồ ăn rất ngon và nóng sốt!",
             Items = new List<FeedbackItemDTO>
@@ -43,10 +45,12 @@ public sealed class FeedbackTests
         using var fixture = new CustomerTestFixture();
 
         var orderId = Guid.NewGuid();
+        var token = await fixture.FeedbackService.CreateFeedbackAccess(orderId, default);
 
         await fixture.FeedbackService.SubmitFeedback(new SubmitFeedbackDTO
         {
             OrderRef = orderId,
+            AccessToken = token,
             Star = 5,
             Comment = "Lần 1"
         }, default);
@@ -91,10 +95,17 @@ public sealed class FeedbackTests
     {
         using var fixture = new CustomerTestFixture();
 
-        await fixture.FeedbackService.SubmitFeedback(new SubmitFeedbackDTO { OrderRef = Guid.NewGuid(), Star = 5 }, default);
-        await fixture.FeedbackService.SubmitFeedback(new SubmitFeedbackDTO { OrderRef = Guid.NewGuid(), Star = 5 }, default);
-        await fixture.FeedbackService.SubmitFeedback(new SubmitFeedbackDTO { OrderRef = Guid.NewGuid(), Star = 4 }, default);
-        await fixture.FeedbackService.SubmitFeedback(new SubmitFeedbackDTO { OrderRef = Guid.NewGuid(), Star = 2 }, default);
+        foreach (var star in new[] { 5, 5, 4, 2 })
+        {
+            var orderId = Guid.NewGuid();
+            var token = await fixture.FeedbackService.CreateFeedbackAccess(orderId, default);
+            await fixture.FeedbackService.SubmitFeedback(new SubmitFeedbackDTO
+            {
+                OrderRef = orderId,
+                AccessToken = token,
+                Star = star
+            }, default);
+        }
 
         var summary = await fixture.FeedbackService.GetSummary(default);
 
@@ -106,6 +117,30 @@ public sealed class FeedbackTests
         Assert.Equal(0, summary.Star3Count);
         Assert.Equal(1, summary.Star2Count);
         Assert.Equal(0, summary.Star1Count);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WrongOrExpiredTokenCannotCreateFeedback(bool expired)
+    {
+        using var fixture = new CustomerTestFixture();
+        var orderId = Guid.NewGuid();
+        var token = await fixture.FeedbackService.CreateFeedbackAccess(orderId, default);
+        if (expired)
+        {
+            fixture.Db.FeedbackAccesses.Single().ExpiredAt = fixture.Clock.GetUtcNow().UtcDateTime.AddMinutes(-1);
+            await fixture.Db.SaveChangesAsync();
+        }
+
+        var error = await Assert.ThrowsAsync<CustomerException>(() => fixture.FeedbackService.SubmitFeedback(new SubmitFeedbackDTO
+        {
+            OrderRef = orderId,
+            AccessToken = expired ? token : new string('0', 64),
+            Star = 5
+        }, default));
+        Assert.Equal(401, error.StatusCode);
+        Assert.Empty(fixture.Db.Feedbacks);
     }
 }
 

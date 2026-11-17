@@ -145,6 +145,7 @@ builder.Services.AddSwaggerGen(options =>
         Description = "Dán mã truy cập được trả về khi đăng nhập hoặc làm mới mã."
     });
     options.OperationFilter<ApiGateway.Swagger.BearerSecurityFilter>();
+    options.OperationFilter<ApiGateway.Swagger.RestaurantScopeFilter>();
 });
 
 var identityAddress =
@@ -217,6 +218,19 @@ builder.Services.AddGrpcClient<Backend.Contracts.Customer.CustomerGrpc.CustomerG
 builder.Services.AddGrpcClient<Backend.Contracts.Customer.FeedbackGrpc.FeedbackGrpcClient>(options =>
 {
     options.Address = new Uri(customerAddress);
+});
+
+builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationGrpc.NotificationGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]!);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Notifications.AnnouncementGrpc.AnnouncementGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]!);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationSettingGrpc.NotificationSettingGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]!);
 });
 
 var app = builder.Build();

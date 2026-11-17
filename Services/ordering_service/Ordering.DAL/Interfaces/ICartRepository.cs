@@ -8,6 +8,8 @@ public interface ICartRepository
 
     Task<Cart?> GetForGuestAsync(Guid sessionId, Guid guestId, DateTime now, CancellationToken ct);
 
+    Task<Cart?> GetForCustomerAsync(Guid restaurantId, Guid customerId, DateTime now, CancellationToken ct);
+
     void Create(Cart cart);
 
     void ReplaceItems(Cart cart, ICollection<CartItem> items);

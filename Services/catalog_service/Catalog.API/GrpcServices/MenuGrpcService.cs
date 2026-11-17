@@ -13,6 +13,7 @@ public sealed class MenuGrpcService(IMenuService service) : MenuGrpc.MenuGrpcBas
     {
         var response = await service.GetAll(new MenuQueryDTO
         {
+            RestaurantId = request.HasRestaurantId ? ParseId(request.RestaurantId) : null,
             CategoryId = request.HasCategoryId ? ParseId(request.CategoryId) : null,
             Search = request.HasSearch ? request.Search : null,
             Channel = request.Channel,

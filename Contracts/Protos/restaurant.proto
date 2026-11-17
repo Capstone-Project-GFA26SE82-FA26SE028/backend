@@ -30,7 +30,16 @@ message BillingSessionReply { string table_session_id = 1; string restaurant_id 
 
 service RestaurantAccessGrpc {
   rpc GetCurrentScope(CurrentRestaurantScopeRequest) returns (CurrentRestaurantScopeReply);
+  rpc ResolveDataScope(RestaurantDataScopeRequest) returns (RestaurantDataScopeReply);
 }
+
+message RestaurantDataScopeRequest {
+  string restaurant_id = 1;
+  string table_session_id = 2;
+  string guest_token = 3;
+  bool allow_customer = 4;
+}
+message RestaurantDataScopeReply { string restaurant_id = 1; }
 
 message CurrentRestaurantScopeRequest {
   optional string restaurant_id = 1;
@@ -71,6 +80,7 @@ message RestaurantInfo {
 }
 message RestaurantPage { repeated RestaurantInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
 service RestaurantGrpc {
+  rpc Browse(ListRequest) returns (RestaurantPage);
   rpc GetAll(ListRequest) returns (RestaurantPage);
   rpc GetById(IdRequest) returns (RestaurantInfo);
   rpc Create(RestaurantInfo) returns (RestaurantInfo);
@@ -296,6 +306,8 @@ message UpdateReservationRequest {
 }
 
 service RestaurantStaffGrpc {
+  rpc GetNotificationRecipients(RestaurantStaffListRequest) returns (RestaurantStaffListReply);
+  rpc Provision(RestaurantStaffRequest) returns (RestaurantStaffInfo);
   rpc Create(RestaurantStaffRequest) returns (RestaurantStaffInfo);
   rpc GetAll(RestaurantStaffListRequest) returns (RestaurantStaffListReply);
   rpc Delete(RestaurantStaffRequest) returns (RestaurantStaffInfo);

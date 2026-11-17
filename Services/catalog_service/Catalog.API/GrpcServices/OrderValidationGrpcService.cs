@@ -14,6 +14,7 @@ public sealed class OrderValidationGrpcService(IOrderValidationService service) 
         var response = await service.ValidateOrderItems(new ValidateOrderItemsDTO
         {
             Channel = request.Channel,
+            RestaurantId = request.HasRestaurantId ? ParseId(request.RestaurantId) : null,
             Items = request.Items.Select(item => new OrderSelectionDTO
             {
                 ItemId = ParseId(item.ItemId),

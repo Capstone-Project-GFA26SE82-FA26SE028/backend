@@ -5,7 +5,15 @@ using Customer.DAL.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddGrpc();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddGrpc(options =>
+{
+    options.Interceptors.Add<RestaurantIsolation.RestaurantScopeInterceptor>();
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantAccessGrpc.RestaurantAccessGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Restaurant"]!);
+});
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))

@@ -42,6 +42,24 @@ public sealed class OrderRepository(OrderingDbContext db) : IOrderRepository
             .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
     }
 
+    public Task<List<Order>> GetTakeawayAsync(Guid restaurantId, Guid? customerId, string? status, int page, int pageSize, CancellationToken ct)
+    {
+        var query = db.Orders.Where(order => order.RestaurantRef == restaurantId
+            && order.Channel == "Takeaway" && order.TableSessionRef == null);
+        if (customerId.HasValue)
+        {
+            query = query.Where(order => order.CustomerUserRef == customerId);
+        }
+
+        if (status is not null)
+        {
+            query = query.Where(order => order.Status == status);
+        }
+
+        return Details(query).OrderByDescending(order => order.CreatedAt).ThenBy(order => order.OrderId)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+    }
+
     private static IQueryable<Order> Details(IQueryable<Order> query)
     {
         return query
@@ -51,6 +69,14 @@ public sealed class OrderRepository(OrderingDbContext db) : IOrderRepository
                 .ThenInclude(item => item.KitchenTasks)
                     .ThenInclude(task => task.Events)
             .AsSplitQuery();
+    }
+
+    public Task<List<Order>> GetOnlinePendingAsync(CancellationToken ct)
+    {
+        return db.Orders.AsNoTracking().Where(order => order.CustomerUserRef != null
+            && (order.Status == "PendingPayment" || (order.CancellationRequested && order.PaymentStatus != "Refunded"
+                && order.PaymentStatus != "Cancelled")))
+            .OrderBy(order => order.CreatedAt).Take(100).ToListAsync(ct);
     }
 
     public void Create(Order order)

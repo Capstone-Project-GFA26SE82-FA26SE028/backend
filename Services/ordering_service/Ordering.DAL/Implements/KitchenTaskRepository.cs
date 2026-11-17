@@ -6,6 +6,20 @@ namespace Ordering.DAL.Implements;
 
 public sealed class KitchenTaskRepository(OrderingDbContext db) : IKitchenTaskRepository
 {
+    private Guid[] onlineRestaurants = [];
+
+    public void SetOnlineRestaurantScope(IReadOnlyList<Guid> restaurantIds)
+    {
+        onlineRestaurants = restaurantIds.ToArray();
+    }
+
+    private IQueryable<KitchenTask> ScopedTasks()
+    {
+        return db.KitchenTasks.Where(task => task.OrderItem.Order.CustomerUserRef == null
+            || (task.OrderItem.Order.RestaurantRef.HasValue
+                && onlineRestaurants.Contains(task.OrderItem.Order.RestaurantRef.Value)));
+    }
+
     public async Task<Guid?> GetOnlyActiveStationAsync(CancellationToken ct)
     {
         var ids = await db.KitchenStations
@@ -38,7 +52,7 @@ public sealed class KitchenTaskRepository(OrderingDbContext db) : IKitchenTaskRe
         Guid? sessionId,
         CancellationToken ct)
     {
-        var query = db.KitchenTasks.AsNoTracking();
+        var query = ScopedTasks().AsNoTracking();
 
         if (stationId.HasValue && stationId.Value != Guid.Empty)
         {
@@ -94,7 +108,7 @@ public sealed class KitchenTaskRepository(OrderingDbContext db) : IKitchenTaskRe
 
     public Task<KitchenTask?> GetByIdAsync(Guid id, CancellationToken ct)
     {
-        return db.KitchenTasks.AsNoTracking()
+        return ScopedTasks().AsNoTracking()
             .Include(t => t.KitchenStation)
             .Include(t => t.OrderItem)
                 .ThenInclude(i => i.OrderItemOptions)
@@ -105,7 +119,7 @@ public sealed class KitchenTaskRepository(OrderingDbContext db) : IKitchenTaskRe
 
     public Task<KitchenTask?> GetByIdForUpdateAsync(Guid id, CancellationToken ct)
     {
-        return db.KitchenTasks
+        return ScopedTasks()
             .Include(t => t.Events)
             .Include(t => t.KitchenStation)
             .Include(t => t.OrderItem)
@@ -120,7 +134,7 @@ public sealed class KitchenTaskRepository(OrderingDbContext db) : IKitchenTaskRe
         Guid? stationId,
         CancellationToken ct)
     {
-        var query = db.KitchenTasks.AsNoTracking();
+        var query = ScopedTasks().AsNoTracking();
 
         if (stationId.HasValue && stationId.Value != Guid.Empty)
         {
@@ -147,7 +161,7 @@ public sealed class KitchenTaskRepository(OrderingDbContext db) : IKitchenTaskRe
 
     public Task<List<KitchenTask>> GetPendingForBatchesAsync(Guid? stationId, CancellationToken ct)
     {
-        var query = db.KitchenTasks.AsNoTracking()
+        var query = ScopedTasks().AsNoTracking()
             .Where(t => t.Status == "Pending" && t.OrderItem.Status != "Served");
 
         if (stationId.HasValue && stationId.Value != Guid.Empty)
@@ -167,7 +181,7 @@ public sealed class KitchenTaskRepository(OrderingDbContext db) : IKitchenTaskRe
     public Task<List<KitchenTask>> GetByIdsForUpdateAsync(IEnumerable<Guid> ids, CancellationToken ct)
     {
         var idList = ids.ToList();
-        return db.KitchenTasks
+        return ScopedTasks()
             .Include(t => t.Events)
             .Include(t => t.OrderItem)
                 .ThenInclude(i => i.Order)
@@ -178,7 +192,7 @@ public sealed class KitchenTaskRepository(OrderingDbContext db) : IKitchenTaskRe
 
     public Task<List<KitchenTask>> GetHoldTasksAsync(Guid sessionId, Guid? orderId, CancellationToken ct)
     {
-        var query = db.KitchenTasks
+        var query = ScopedTasks()
             .Include(t => t.Events)
             .Include(t => t.OrderItem)
             .Where(t => t.Status == "Hold" && t.OrderItem.Order.TableSessionRef == sessionId);

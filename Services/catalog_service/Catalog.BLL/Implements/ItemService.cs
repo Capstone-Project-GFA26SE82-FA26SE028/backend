@@ -24,8 +24,41 @@ public sealed class ItemService(
     IOptions<PricingSettings> pricingSettings,
     TimeProvider timeProvider,
     IKitchenStationLookup kitchenStations,
-    ILogger<ItemService> logger) : IItemService
+    ILogger<ItemService> logger, IRestaurantMenuAccess restaurantAccess) : IItemService
 {
+    public async Task<ResponseDTO> SetRestaurant(Guid id, Guid restaurantId, string versionText, CancellationToken ct)
+    {
+        await access.RequireMenuManagerAsync(ct);
+        await restaurantAccess.RequireManagerAsync(restaurantId, ct);
+        if (restaurantId == Guid.Empty || !TryParseVersion(versionText, out var version))
+        {
+            return new ResponseDTO("Vui lòng cung cấp nhà hàng và phiên bản dữ liệu.", 400);
+        }
+
+        return await WriteAsync(async () =>
+        {
+            var item = await items.GetByIdAsync(id, ct);
+            if (item is null)
+            {
+                return (ItemNotFound(), (Item?)null);
+            }
+
+            if (item.RestaurantRef.HasValue && item.RestaurantRef != restaurantId)
+            {
+                return (new ResponseDTO("Không được chuyển món ăn thuộc nhà hàng khác.", 403), (Item?)null);
+            }
+
+            if (!item.Version.SequenceEqual(version))
+            {
+                return (ConcurrentUpdate(), (Item?)null);
+            }
+
+            items.SetOriginalVersion(item, version);
+            item.RestaurantRef = restaurantId;
+            return (new ResponseDTO("Đã gán nhà hàng thành công.", 200, true), item);
+        }, ct);
+    }
+
     public async Task<ResponseDTO> SetKitchenStation(Guid id, SetItemKitchenStationDTO request, CancellationToken cancellationToken)
     {
         await access.RequireMenuManagerAsync(cancellationToken);

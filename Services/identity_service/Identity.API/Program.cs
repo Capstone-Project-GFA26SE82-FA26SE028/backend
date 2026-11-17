@@ -21,9 +21,31 @@ var databaseConnectionString = builder.Configuration.GetConnectionString("Defaul
 builder.Services.AddDbContext<IdentityDbContext>(options =>
     options.UseSqlServer(databaseConnectionString));
 
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<IAnnouncementRepository, AnnouncementRepository>();
+builder.Services.AddScoped<INotificationSettingRepository, NotificationSettingRepository>();
+builder.Services.AddScoped<INotificationAccess, NotificationAccess>();
+builder.Services.AddScoped<INotificationAudience, Identity.API.Clients.NotificationAudience>();
+builder.Services.AddScoped<INotificationRestaurantAccess, Identity.API.Clients.NotificationRestaurantAccess>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
+builder.Services.AddScoped<INotificationSettingService, NotificationSettingService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantAccessGrpc.RestaurantAccessGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Restaurant"] ?? "http://localhost:5002");
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantStaffGrpc.RestaurantStaffGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Restaurant"] ?? "http://localhost:5002");
+});
+builder.Services.AddScoped<Identity.API.Clients.RestaurantStaffClient>();
+builder.Services.AddScoped<IUserRestaurantAccess>(provider => provider.GetRequiredService<Identity.API.Clients.RestaurantStaffClient>());
+builder.Services.AddScoped<IStaffProvisioner>(provider => provider.GetRequiredService<Identity.API.Clients.RestaurantStaffClient>());
+builder.Services.AddHostedService<Identity.API.Workers.StaffProvisioningWorker>();
 builder.Services.AddScoped<IRoleRepository, RoleRepository>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
@@ -36,6 +58,9 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+app.MapGrpcService<Identity.API.GrpcServices.NotificationGrpcService>();
+app.MapGrpcService<Identity.API.GrpcServices.AnnouncementGrpcService>();
+app.MapGrpcService<Identity.API.GrpcServices.NotificationSettingGrpcService>();
 app.MapGrpcService<Identity.API.GrpcServices.AccessGrpcService>();
 
 app.MapGrpcService<Identity.API.GrpcServices.IdentityGrpcService>();

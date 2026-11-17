@@ -15,6 +15,7 @@ public static class OrderingServiceExtensions
     {
         services.AddGrpc(options =>
         {
+            options.Interceptors.Add<RestaurantIsolation.RestaurantScopeInterceptor>();
             options.Interceptors.Add<OrderingInterceptor>();
         });
         services.AddHttpContextAccessor();
@@ -54,6 +55,13 @@ public static class OrderingServiceExtensions
         services.AddScoped<ICatalogOrderClient, CatalogOrderClient>();
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<IOrderService, OrderService>();
+        services.AddScoped<ITakeawayAccess, TakeawayAccess>();
+        services.AddScoped<ITakeawayPaymentClient, TakeawayPaymentClient>();
+        services.AddHostedService<Ordering.API.Workers.TakeawayReconciliationWorker>();
+        services.AddGrpcClient<Backend.Contracts.Billing.OnlinePaymentGrpc.OnlinePaymentGrpcClient>(options =>
+        {
+            options.Address = Address(configuration, "Billing");
+        });
         services.AddGrpcClient<BillingSessionGrpc.BillingSessionGrpcClient>(options =>
         {
             options.Address = Address(configuration, "Restaurant");

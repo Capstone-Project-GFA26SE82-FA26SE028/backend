@@ -19,7 +19,15 @@ public sealed class MenuService(
     public async Task<ResponseDTO> GetAll(
         MenuQueryDTO query, Guid? tableSessionId, string? guestToken, CancellationToken cancellationToken)
     {
-        await access.RequireReadAsync(tableSessionId, guestToken, cancellationToken);
+        if (query.RestaurantId.HasValue)
+        {
+            await access.RequireOnlineReadAsync(query.RestaurantId.Value, cancellationToken);
+        }
+        else
+        {
+            await access.RequireReadAsync(tableSessionId, guestToken, cancellationToken);
+        }
+
         if (query.Page < 1 || query.PageSize is < 1 or > 100
             || (long)(query.Page - 1) * query.PageSize > int.MaxValue
             || query.CategoryId == Guid.Empty || query.Search?.Length > 255)

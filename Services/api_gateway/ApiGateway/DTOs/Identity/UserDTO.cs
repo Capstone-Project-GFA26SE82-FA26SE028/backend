@@ -2,6 +2,10 @@ namespace ApiGateway.DTOs.Identity;
 
 public class UserDTO
 {
+    public bool ProvisioningPending { get; set; }
+
+    public Guid? RestaurantId { get; set; }
+
     public string UserId { get; set; } = string.Empty;
     public string RoleId { get; set; } = string.Empty;
     public string UserName { get; set; } = string.Empty;

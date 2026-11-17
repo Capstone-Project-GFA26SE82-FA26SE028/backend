@@ -5,9 +5,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddGrpc(options =>
 {
+    options.Interceptors.Add<RestaurantIsolation.RestaurantScopeInterceptor>();
     options.Interceptors.Add<Inventory.API.GrpcServices.InventoryInterceptor>();
 });
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantAccessGrpc.RestaurantAccessGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Restaurant"]!);
+});
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddGrpcClient<Backend.Contracts.Identity.UserGrpc.UserGrpcClient>(options =>
 {

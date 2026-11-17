@@ -13,8 +13,12 @@
     <ProjectReference Include="..\Inventory.BLL\Inventory.BLL.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Protobuf Include="../../../Contracts/Protos/restaurant.proto" GrpcServices="Client" />
     <Protobuf Include="../../../Contracts/Protos/identity.proto" Link="Protos/identity.proto" GrpcServices="Client" />
     <Protobuf Include="../../../Contracts/Protos/inventory.proto" Link="Protos/inventory.proto" GrpcServices="Server" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../../Shared/RestaurantIsolation/RestaurantScopeInterceptor.cs" Link="RestaurantIsolation/RestaurantScopeInterceptor.cs" />
   </ItemGroup>
 </Project>
 

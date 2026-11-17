@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Grpc.Net.ClientFactory" Version="2.84.0" />
     <PackageReference Include="Grpc.AspNetCore" Version="2.84.0" />
 	<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
   </ItemGroup>
@@ -20,7 +21,11 @@
     <Protobuf Include="..\..\..\Contracts\Protos\identity.proto"
               Link="Protos\identity.proto"
               GrpcServices="Server" />
+    <Protobuf Include="../../../Contracts/Protos/restaurant.proto" GrpcServices="Client" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Protobuf Include="../../../Contracts/Protos/notifications.proto" GrpcServices="Server" />
+  </ItemGroup>
 </Project>
 

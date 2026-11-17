@@ -4,6 +4,8 @@ namespace Ordering.DAL.Interfaces;
 
 public interface IKitchenTaskRepository
 {
+    void SetOnlineRestaurantScope(IReadOnlyList<Guid> restaurantIds);
+
     Task<Guid?> GetOnlyActiveStationAsync(CancellationToken ct);
 
     Task<bool> IsStationActiveAsync(Guid stationId, CancellationToken ct);

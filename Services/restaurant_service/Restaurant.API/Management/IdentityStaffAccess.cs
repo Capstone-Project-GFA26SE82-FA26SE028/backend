@@ -69,6 +69,7 @@ public sealed class IdentityStaffAccess(UserGrpc.UserGrpcClient users, IManageme
         return new StaffActorDto
         {
             UserId = userId,
+            RestaurantId = Guid.TryParse(reply.Result.RestaurantId, out var restaurantId) ? restaurantId : null,
             RoleId = reply.Result.RoleId
         };
     }

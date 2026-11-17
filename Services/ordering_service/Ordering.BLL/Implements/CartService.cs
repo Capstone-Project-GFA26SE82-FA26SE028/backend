@@ -6,8 +6,8 @@ using Ordering.DAL.Models;
 
 namespace Ordering.BLL.Implements;
 
-public sealed class CartService(ICartRepository carts, IOrderingTransaction transaction,
-    IOrderingAccess access, ICatalogOrderClient catalog, TimeProvider clock) : ICartService
+public sealed partial class CartService(ICartRepository carts, IOrderingTransaction transaction,
+    IOrderingAccess access, ICatalogOrderClient catalog, TimeProvider clock, ITakeawayAccess takeawayAccess) : ICartService
 {
     public async Task<CartDTO> Create(Guid sessionId, string guestToken, CancellationToken ct)
     {
@@ -125,6 +125,7 @@ public sealed class CartService(ICartRepository carts, IOrderingTransaction tran
         return new CartDTO
         {
             CartId = cart.CartId,
+            RestaurantId = cart.RestaurantRef,
             TableSessionId = cart.TableSessionRef,
             ExpiresAt = OrderingRules.Utc(cart.ExpiredAt),
             Version = OrderingRules.CartVersion(cart),

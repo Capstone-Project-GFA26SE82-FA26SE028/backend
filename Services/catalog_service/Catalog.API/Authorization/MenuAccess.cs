@@ -13,7 +13,22 @@ public sealed class MenuAccess(
     IHttpContextAccessor httpContextAccessor,
     IOptions<CatalogManagementSettings> settings) : IMenuAccess
 {
-    public async Task RequireReadAsync(Guid? tableSessionId, string? guestToken, CancellationToken cancellationToken)
+    public Task RequireReadAsync(Guid? tableSessionId, string? guestToken, CancellationToken cancellationToken)
+    {
+        return ReadAsync(tableSessionId, guestToken, false, cancellationToken);
+    }
+
+    public Task RequireOnlineReadAsync(Guid restaurantId, CancellationToken cancellationToken)
+    {
+        if (restaurantId == Guid.Empty)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Vui lòng cung cấp nhà hàng."));
+        }
+
+        return ReadAsync(null, null, true, cancellationToken);
+    }
+
+    private async Task ReadAsync(Guid? tableSessionId, string? guestToken, bool online, CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow.AddSeconds(settings.Value.IdentityTimeoutSeconds);
         if (tableSessionId.HasValue)
@@ -61,6 +76,11 @@ public sealed class MenuAccess(
             || !Guid.TryParse(reply.Result.UserId, out var userId) || userId == Guid.Empty)
         {
             throw new RpcException(new Status(StatusCode.Unauthenticated, "Tài khoản không hợp lệ hoặc đang bị khóa."));
+        }
+
+        if (online && reply.Result.RoleId == "customer")
+        {
+            return;
         }
 
         if (!settings.Value.MenuReaderRoleIds.Concat(settings.Value.MenuManagerRoleIds)

@@ -24,7 +24,14 @@ public sealed class OrderValidationService(
     public async Task<ResponseDTO> ValidateOrderItems(
         ValidateOrderItemsDTO request, Guid? tableSessionId, string? guestToken, CancellationToken cancellationToken)
     {
-        await access.RequireReadAsync(tableSessionId, guestToken, cancellationToken);
+        if (request.RestaurantId.HasValue)
+        {
+            await access.RequireOnlineReadAsync(request.RestaurantId.Value, cancellationToken);
+        }
+        else
+        {
+            await access.RequireReadAsync(tableSessionId, guestToken, cancellationToken);
+        }
         var invalid = ValidateRequest(request);
         if (invalid is not null)
         {
@@ -62,7 +69,13 @@ public sealed class OrderValidationService(
             for (var index = 0; index < request.Items.Count; index++)
             {
                 var selection = request.Items[index];
-                var error = ValidateLine(index, selection, catalogItems.GetValueOrDefault(selection.ItemId),
+                var candidate = catalogItems.GetValueOrDefault(selection.ItemId);
+                if (request.RestaurantId.HasValue && candidate?.RestaurantRef != request.RestaurantId)
+                {
+                    candidate = null;
+                }
+
+                var error = ValidateLine(index, selection, candidate,
                     itemRecipes, optionRecipes, request.Channel, at, timeZone, out var validated);
                 if (error is not null)
                 {

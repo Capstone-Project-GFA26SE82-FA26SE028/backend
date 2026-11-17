@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Ordering.DAL.Models;
 
-public partial class OrderingDbContext : DbContext
+public partial class OrderingDbContext : Shared.Persistence.RestaurantIsolation.RestaurantDbContext
 {
     public OrderingDbContext()
     {
@@ -14,6 +14,11 @@ public partial class OrderingDbContext : DbContext
 
     public OrderingDbContext(DbContextOptions<OrderingDbContext> options)
         : base(options)
+    {
+    }
+
+    public OrderingDbContext(DbContextOptions<OrderingDbContext> options,
+        Shared.Persistence.RestaurantIsolation.RestaurantDataScope scope) : base(options, scope)
     {
     }
 
@@ -180,6 +185,18 @@ public partial class OrderingDbContext : DbContext
 
         modelBuilder.Entity<Order>(entity =>
         {
+            entity.HasIndex(e => new { e.RestaurantRef, e.Channel, e.CreatedAt });
+
+            entity.Property(e => e.PickupName).HasMaxLength(100).IsRequired(false);
+            entity.Property(e => e.PickupPhone).HasMaxLength(20).IsRequired(false);
+            entity.Property(e => e.PickupCode).HasMaxLength(64).IsRequired(false);
+            entity.Property(e => e.PaymentStatus).HasMaxLength(30).IsRequired(false);
+            entity.Property(e => e.CheckoutUrl).HasMaxLength(2048).IsRequired(false);
+            entity.Property(e => e.CancellationReason).HasMaxLength(1000).IsRequired(false);
+            entity.Property(e => e.RefundBankName).HasMaxLength(100).IsRequired(false);
+            entity.Property(e => e.RefundAccountNumber).HasMaxLength(34).IsRequired(false);
+            entity.Property(e => e.RefundAccountHolder).HasMaxLength(150).IsRequired(false);
+            entity.Property(e => e.RefundReference).HasMaxLength(255).IsRequired(false);
             entity.ToTable("Order");
 
             entity.Property(e => e.OrderId).ValueGeneratedNever();
@@ -293,6 +310,8 @@ public partial class OrderingDbContext : DbContext
         });
 
         OnModelCreatingPartial(modelBuilder);
+        Shared.Persistence.Notifications.NotificationOutboxModel.Configure(modelBuilder);
+        ConfigureRestaurantIsolation(modelBuilder);
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);

@@ -30,6 +30,11 @@ public sealed class MenuController(
                 Page = query.Page,
                 PageSize = query.PageSize
             };
+            if (query.RestaurantId.HasValue)
+            {
+                request.RestaurantId = query.RestaurantId.Value.ToString();
+            }
+
             if (query.CategoryId.HasValue)
             {
                 request.CategoryId = query.CategoryId.Value.ToString();

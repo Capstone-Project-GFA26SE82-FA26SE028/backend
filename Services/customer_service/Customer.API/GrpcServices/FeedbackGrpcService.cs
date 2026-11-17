@@ -4,10 +4,16 @@ using Customer.Common.DTOs;
 using Customer.Common.Exceptions;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
+using Customer.DAL.Models;
+using Microsoft.EntityFrameworkCore;
+using Shared.Persistence.RestaurantIsolation;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Customer.API.GrpcServices;
 
-public sealed class FeedbackGrpcService(IFeedbackService service) : Backend.Contracts.Customer.FeedbackGrpc.FeedbackGrpcBase
+public sealed class FeedbackGrpcService(IFeedbackService service, CustomerDbContext db, RestaurantDataScope scope,
+    TimeProvider clock) : Backend.Contracts.Customer.FeedbackGrpc.FeedbackGrpcBase
 {
     public override async Task<FeedbackAccessReply> CreateAccess(FeedbackAccessRequest request, ServerCallContext context)
     {
@@ -34,6 +40,26 @@ public sealed class FeedbackGrpcService(IFeedbackService service) : Backend.Cont
     {
         try
         {
+            // The possession token, not a caller-supplied restaurant id, determines ownership.
+            if (request.AccessToken.Length != 64 || !Guid.TryParse(request.OrderRef, out var tokenOrderId))
+            {
+                throw new RpcException(new Status(StatusCode.Unauthenticated, "Mã truy cập đánh giá không hợp lệ."));
+            }
+
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(request.AccessToken))).ToLowerInvariant();
+            var now = clock.GetUtcNow().UtcDateTime;
+            var owner = await db.FeedbackAccesses.IgnoreQueryFilters()
+                .Where(value => value.TokenHash == hash && value.OrderRef == tokenOrderId
+                    && value.UsedAt == null && value.ExpiredAt > now)
+                .Select(value => EF.Property<Guid?>(value, "RestaurantId"))
+                .SingleOrDefaultAsync(context.CancellationToken);
+            var header = context.RequestHeaders.GetValue("x-restaurant-id");
+            if (!owner.HasValue || (header is not null && (!Guid.TryParse(header, out var selected) || selected != owner)))
+            {
+                throw new RpcException(new Status(StatusCode.Unauthenticated, "Mã truy cập đánh giá không hợp lệ hoặc đã hết hạn."));
+            }
+
+            scope.Select(owner.Value);
             if (!Guid.TryParse(request.OrderRef, out var orderRef))
             {
                 throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã tham chiếu đơn hàng không hợp lệ."));

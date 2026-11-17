@@ -26,6 +26,10 @@ public sealed class BillingInterceptor(ILogger<BillingInterceptor> logger) : Int
             };
             throw new RpcException(new Status(status, error.Message));
         }
+        catch (Shared.Persistence.RestaurantIsolation.RestaurantScopeException error)
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, error.Message));
+        }
         catch (RpcException)
         {
             throw;

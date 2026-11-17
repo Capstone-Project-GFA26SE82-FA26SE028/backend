@@ -11,12 +11,13 @@ namespace ApiGateway.Controllers.Billing;
 
 [ApiController]
 [Route("api/payments/payos/webhook")]
+[Route("api/restaurants/{restaurantId:guid}/payments/payos/webhook")]
 public sealed class PaymentWebhookController(PaymentWebhookGrpc.PaymentWebhookGrpcClient client,
     IOptions<PayOsGatewaySettings> settings) : ControllerBase
 {
     [HttpPost]
     [RequestSizeLimit(65536)]
-    public async Task<IActionResult> Process([FromBody] JsonElement body, CancellationToken ct)
+    public async Task<IActionResult> Process([FromBody] JsonElement body, CancellationToken ct, [FromRoute] Guid? restaurantId = null)
     {
         Response.Headers.CacheControl = "no-store";
         var payload = body.GetRawText();
@@ -29,7 +30,8 @@ public sealed class PaymentWebhookController(PaymentWebhookGrpc.PaymentWebhookGr
         {
             var result = await client.ProcessAsync(new PaymentWebhookRequest
             {
-                Payload = payload
+                Payload = payload,
+                RestaurantId = restaurantId?.ToString() ?? string.Empty
             }, deadline: DateTime.UtcNow.AddSeconds(settings.Value.TimeoutSeconds), cancellationToken: ct);
             return Ok(new ResponseDTO("Đã nhận webhook thành công.", 200, true, new
             {

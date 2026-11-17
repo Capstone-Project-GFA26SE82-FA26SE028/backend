@@ -10,7 +10,7 @@ using Shared.Common.DTOs;
 namespace Identity.BLL.Implements;
 
 public sealed class RoleService(IRoleRepository repository, IUnitOfWork unitOfWork,
-    IOptions<UserManagementSettings> settings) : IRoleService
+    IOptions<UserManagementSettings> settings, IUserRestaurantAccess? restaurants = null) : IRoleService
 {
     private async Task<bool> IsAdmin(Guid actorId, CancellationToken ct)
     {
@@ -21,7 +21,11 @@ public sealed class RoleService(IRoleRepository repository, IUnitOfWork unitOfWo
 
     public async Task<ResponseDTO> GetAll(Guid actorId, CancellationToken ct, string? search = null)
     {
-        if (!await IsAdmin(actorId, ct))
+        var platform = await IsAdmin(actorId, ct);
+        var actor = await unitOfWork.UserRepo.FindUserAsync(actorId, ct);
+        if (!platform && (actor is null || !actor.IsActive || actor.RoleId != "admin"
+            || !actor.RestaurantId.HasValue || restaurants is null
+            || !await restaurants.CanManageAsync(actorId, actor.RestaurantId.Value, ct)))
         {
             return new ResponseDTO("Bạn không có quyền quản lý vai trò.", 403);
         }
@@ -32,6 +36,12 @@ public sealed class RoleService(IRoleRepository repository, IUnitOfWork unitOfWo
         }
 
         var roles = await repository.GetAllAsync(ct);
+        if (!platform)
+        {
+            string[] staffRoles = ["manager", "waiter", "cashier", "kitchen", "inventory"];
+            roles = roles.Where(role => staffRoles.Contains(role.RoleId)).ToList();
+        }
+
         if (!string.IsNullOrWhiteSpace(search))
         {
             roles = roles.Where(role => role.RoleId.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase)

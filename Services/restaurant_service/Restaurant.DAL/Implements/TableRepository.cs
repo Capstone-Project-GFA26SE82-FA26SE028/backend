@@ -22,9 +22,10 @@ public sealed class TableRepository(RestaurantDbContext db) : GenericRepository<
         return source.Include(table => table.Area).SingleOrDefaultAsync(ct);
     }
 
-    public async Task<PageResult<TableEntity>> GetServicePageAsync(ListQuery query, CancellationToken ct)
+    public async Task<PageResult<TableEntity>> GetServicePageAsync(ListQuery query, IReadOnlyCollection<Guid> restaurantIds, CancellationToken ct)
     {
-        var source = _context.Tables.AsNoTracking().Where(table => table.IsActive && table.Area.IsActive);
+        var source = _context.Tables.AsNoTracking().Where(table => table.IsActive && table.Area.IsActive
+            && restaurantIds.Contains(table.Area.RestaurantId));
         if (query.RestaurantId.HasValue)
         {
             source = source.Where(table => table.Area.RestaurantId == query.RestaurantId.Value);

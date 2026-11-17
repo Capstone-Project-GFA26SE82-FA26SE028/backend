@@ -20,4 +20,13 @@
     <Protobuf Include="../../../Contracts/Protos/inventory.proto" Link="Protos/inventory.proto" GrpcServices="Client" />
     <Protobuf Include="../../../Contracts/Protos/billing.proto" Link="Protos/billing.proto" GrpcServices="Client" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../../Shared/RestaurantIsolation/RestaurantScopeInterceptor.cs" Link="RestaurantIsolation/RestaurantScopeInterceptor.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Protobuf Include="../../../Contracts/Protos/notifications.proto" GrpcServices="Client" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../../Shared/RestaurantIsolation/NotificationOutboxWorker.cs" Link="Notifications/NotificationOutboxWorker.cs" />
+  </ItemGroup>
 </Project>

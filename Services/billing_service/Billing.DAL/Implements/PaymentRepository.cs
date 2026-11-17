@@ -117,7 +117,8 @@ public sealed class PaymentRepository(BillingDbContext db)
             }
 
             var text = number.ToString(CultureInfo.InvariantCulture);
-            if (!await _context.Payments.AnyAsync(value => value.ProviderOrderCode == text, ct))
+            if (!await _context.Payments.IgnoreQueryFilters().AnyAsync(value => value.ProviderOrderCode == text, ct)
+                && !await _context.OnlinePayments.IgnoreQueryFilters().AnyAsync(value => value.ProviderOrderCode == (long)number, ct))
             {
                 return text;
             }

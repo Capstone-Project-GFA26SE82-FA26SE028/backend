@@ -21,27 +21,37 @@ public sealed class FeedbackService(
             throw new CustomerException(400, "Mã tham chiếu đơn hàng không hợp lệ.");
         }
 
-        var existing = await feedbacks.GetAccessByOrderAsync(orderRef, ct);
-        if (existing is not null && existing.ExpiredAt > clock.GetUtcNow().UtcDateTime)
+        return await transaction.ExecuteAsync(async () =>
         {
-            return existing.TokenHash;
-        }
+            var existing = await feedbacks.GetAccessByOrderAsync(orderRef, ct);
+            if (existing?.UsedAt is not null)
+            {
+                throw new CustomerException(409, "Đơn hàng này đã được gửi đánh giá.");
+            }
 
-        var rawToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        var tokenHash = HashToken(rawToken);
-        var now = clock.GetUtcNow().UtcDateTime;
+            var rawToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            var tokenHash = HashToken(rawToken);
+            var now = clock.GetUtcNow().UtcDateTime;
 
-        var access = new FeedbackAccess
-        {
-            FeedbackAccessId = Guid.NewGuid(),
-            OrderRef = orderRef,
-            TokenHash = tokenHash,
-            ExpiredAt = now.AddDays(7),
-            UsedAt = null
-        };
+            if (existing is not null)
+            {
+                existing.TokenHash = tokenHash;
+                existing.ExpiredAt = now.AddDays(7);
+                return rawToken;
+            }
 
-        feedbacks.CreateAccess(access);
-        return rawToken;
+            var access = new FeedbackAccess
+            {
+                FeedbackAccessId = Guid.NewGuid(),
+                OrderRef = orderRef,
+                TokenHash = tokenHash,
+                ExpiredAt = now.AddDays(7),
+                UsedAt = null
+            };
+
+            feedbacks.CreateAccess(access);
+            return rawToken;
+        }, ct);
     }
 
     public async Task<FeedbackDTO> SubmitFeedback(SubmitFeedbackDTO request, CancellationToken ct)
@@ -72,23 +82,13 @@ public sealed class FeedbackService(
             var access = await feedbacks.GetAccessByOrderAsync(request.OrderRef, ct);
             var now = clock.GetUtcNow().UtcDateTime;
 
-            if (access is null)
+            if (access is null || access.UsedAt.HasValue || access.ExpiredAt <= now
+                || string.IsNullOrEmpty(request.AccessToken) || access.TokenHash != HashToken(request.AccessToken))
             {
-                // Auto create access record for this order
-                access = new FeedbackAccess
-                {
-                    FeedbackAccessId = Guid.NewGuid(),
-                    OrderRef = request.OrderRef,
-                    TokenHash = HashToken(request.OrderRef.ToString()),
-                    ExpiredAt = now.AddDays(7),
-                    UsedAt = now
-                };
-                feedbacks.CreateAccess(access);
+                throw new CustomerException(401, "Mã truy cập đánh giá không hợp lệ hoặc đã hết hạn.");
             }
-            else
-            {
-                access.UsedAt = now;
-            }
+
+            access.UsedAt = now;
 
             string? customerName = null;
             if (request.CustomerId.HasValue && request.CustomerId != Guid.Empty)

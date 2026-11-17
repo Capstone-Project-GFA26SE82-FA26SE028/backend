@@ -10,6 +10,11 @@ public abstract class CustomerControllerBase : ControllerBase
     protected CallOptions Options(CancellationToken ct)
     {
         var headers = new Metadata();
+        var restaurantHeader = Request.Headers["x-restaurant-id"].ToString();
+        if (!string.IsNullOrWhiteSpace(restaurantHeader))
+        {
+            headers.Add("x-restaurant-id", restaurantHeader);
+        }
         var auth = Request.Headers.Authorization.ToString();
         if (!string.IsNullOrWhiteSpace(auth))
         {

@@ -8,7 +8,7 @@ using Ordering.DAL.Models;
 
 namespace Ordering.BLL.Implements;
 
-public sealed class OrderService(
+public sealed partial class OrderService(
     IOrderRepository orders,
     ICartRepository carts,
     IKitchenTaskRepository kitchen,
@@ -17,7 +17,9 @@ public sealed class OrderService(
     ICatalogOrderClient catalog,
     IOptions<OrderingSettings> settings,
     TimeProvider clock,
-    ICheckoutLockRepository checkouts) : IOrderService
+    ICheckoutLockRepository checkouts,
+    ITakeawayAccess takeawayAccess,
+    ITakeawayPaymentClient takeawayPayments) : IOrderService
 {
     public async Task<(OrderDTO Order, bool Created)> Create(
         Guid sessionId,
@@ -27,6 +29,11 @@ public sealed class OrderService(
         CancellationToken ct)
     {
         var actor = await access.RequireAsync(sessionId, request.TableId, guestToken, ct);
+        var channel = string.IsNullOrWhiteSpace(request.Channel) ? "DineIn"
+            : string.Equals(request.Channel, "DineIn", StringComparison.OrdinalIgnoreCase) ? "DineIn"
+            : string.Equals(request.Channel, "Takeaway", StringComparison.OrdinalIgnoreCase) ? "Takeaway"
+            : throw new OrderingException(400, "Kênh đặt món không hợp lệ.");
+        actor = actor with { Channel = channel };
         if (string.IsNullOrWhiteSpace(key) || key.Length > 128 || key.Any(char.IsControl) || key != key.Trim())
         {
             throw new OrderingException(400, "Idempotency-Key là bắt buộc, tối đa 128 ký tự và không chứa khoảng trắng ở hai đầu.");
@@ -81,7 +88,8 @@ public sealed class OrderService(
             var existing = await orders.GetByKeyAsync(scopedKey, ct);
             if (existing is not null)
             {
-                if (!string.Equals(existing.RequestHash, requestHash, StringComparison.Ordinal))
+                if (!string.Equals(existing.RequestHash, requestHash, StringComparison.Ordinal)
+                    || !string.Equals(existing.Channel, channel, StringComparison.OrdinalIgnoreCase))
                 {
                     throw new OrderingException(409, "Idempotency-Key đã được sử dụng với một yêu cầu khác trước đó.");
                 }
@@ -128,7 +136,7 @@ public sealed class OrderService(
                 OrderId = orderId,
                 OrderNumber = $"ORD-{orderId:N}",
                 TableSessionRef = sessionId,
-                Channel = !string.IsNullOrWhiteSpace(request.Channel) ? request.Channel : "DineIn",
+                Channel = channel,
                 CreatedByRef = actor.UserId,
                 IdempotencyKey = scopedKey,
                 RequestHash = requestHash,
@@ -264,7 +272,7 @@ public sealed class OrderService(
                 }).ToList()
             }).ToList();
 
-            var quote = await catalog.ValidateAsync(actor, string.Empty, lines, ct);
+            var quote = await catalog.ValidateAsync(actor with { Channel = found.Channel }, string.Empty, lines, ct);
             if (!quote.IsValid)
             {
                 throw new OrderingException(409, quote.Message);
@@ -489,7 +497,8 @@ public sealed class OrderService(
         {
             OrderId = order.OrderId,
             OrderNumber = order.OrderNumber,
-            TableSessionId = order.TableSessionRef!.Value,
+            TableSessionId = order.TableSessionRef,
+            RestaurantId = order.RestaurantRef,
             Channel = order.Channel,
             Source = order.CreatedByRef.HasValue ? "Staff" : "Guest",
             Status = order.Status,

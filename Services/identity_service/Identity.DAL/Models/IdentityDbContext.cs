@@ -69,6 +69,7 @@ public partial class IdentityDbContext : DbContext
         {
             entity.ToTable("User");
 
+            entity.HasIndex(e => e.RestaurantId);
             entity.Property(e => e.UserId).ValueGeneratedNever();
             entity.Property(e => e.AvatarUrl).IsUnicode(false);
             entity.Property(e => e.CreatedAt).HasColumnType("datetime");

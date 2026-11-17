@@ -11,8 +11,22 @@ public sealed class IdentityKitchenStationAccess(
     UserGrpc.UserGrpcClient client,
     IHttpContextAccessor http,
     IOptions<KitchenStationSettings> roles,
-    IOptions<OrderingSettings> settings) : IKitchenStationAccess
+    IOptions<OrderingSettings> settings,
+    Backend.Contracts.Restaurant.RestaurantAccessGrpc.RestaurantAccessGrpcClient? restaurants = null) : IKitchenStationAccess
 {
+    public async Task<IReadOnlyList<Guid>> GetOnlineRestaurantIdsAsync(CancellationToken ct)
+    {
+        if (restaurants is null)
+        {
+            return [];
+        }
+
+        var scope = await restaurants.GetCurrentScopeAsync(new Backend.Contracts.Restaurant.CurrentRestaurantScopeRequest(),
+            new Metadata { { "authorization", http.HttpContext?.Request.Headers.Authorization.ToString() ?? "" } },
+            deadline: DateTime.UtcNow.AddSeconds(settings.Value.DependencyTimeoutSeconds), cancellationToken: ct);
+        return scope.IsAdministrator ? [] : scope.RestaurantIds.Select(Guid.Parse).ToArray();
+    }
+
     public async Task RequireAsync(bool write, CancellationToken ct)
     {
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();

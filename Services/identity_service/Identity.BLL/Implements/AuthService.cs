@@ -18,6 +18,37 @@ namespace Identity.BLL.Implements;
 public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessions,
     IOptions<JwtSettingModel> options) : IAuthService
 {
+    public async Task<ResponseDTO> Register(RegisterCustomerDTO request, CancellationToken ct)
+    {
+        var email = request.Email?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email) || email.Length > 255
+            || !System.Net.Mail.MailAddress.TryCreate(email, out var address) || address.Address != email
+            || string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8
+            || Encoding.UTF8.GetByteCount(request.Password) > 72
+            || string.IsNullOrWhiteSpace(request.FullName) || request.FullName.Length > 255
+            || request.PhoneNumber?.Length > 20)
+        {
+            return new ResponseDTO("Vui lòng nhập email hợp lệ và họ tên không quá 255 ký tự, mật khẩu ít nhất 8 ký tự và không quá 72 byte UTF-8; số điện thoại không quá 20 ký tự.", 400);
+        }
+
+        var user = new User
+        {
+            UserId = Guid.NewGuid(),
+            UserName = "c-" + Guid.NewGuid().ToString("N"),
+            Email = email,
+            FullName = request.FullName.Trim(),
+            PhoneNumber = request.PhoneNumber,
+            RoleId = "customer",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            IsActive = true,
+            CreatedAt = UtcNow()
+        };
+        var created = await unitOfWork.ExecuteInTransactionAsync(
+            () => unitOfWork.UserRepo.CreateCustomerAsync(user, ct), System.Data.IsolationLevel.Serializable, ct);
+        return created ? new ResponseDTO("Đăng ký tài khoản thành công. Vui lòng đăng nhập để tiếp tục.", 201, true)
+            : new ResponseDTO("Email này đã được sử dụng bởi một tài khoản khác.", 409);
+    }
+
     private JwtSettingModel Settings => options.Value;
     private static DateTime UtcNow()
     {
@@ -123,7 +154,7 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
             || request.NewPassword != request.ConfirmPassword
             || request.CurrentPassword == request.NewPassword)
         {
-            return new ResponseDTO("Mật khẩu mới phải từ 8 đến 72 ký tự, khác mật khẩu hiện tại và khớp với xác nhận mật khẩu.", 400);
+            return new ResponseDTO("Mật khẩu mới phải có ít nhất 8 ký tự và không quá 72 byte UTF-8, khác mật khẩu hiện tại và khớp với xác nhận mật khẩu.", 400);
         }
 
         var user = await unitOfWork.UserRepo.FindUserAsync(userId, ct);

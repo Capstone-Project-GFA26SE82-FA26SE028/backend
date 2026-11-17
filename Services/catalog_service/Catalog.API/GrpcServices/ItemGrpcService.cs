@@ -9,6 +9,12 @@ namespace Catalog.API.GrpcServices;
 
 public sealed class ItemGrpcService(IItemService service) : ItemGrpc.ItemGrpcBase
 {
+    public override async Task<ItemReply> SetRestaurant(SetItemRestaurantRequest request, ServerCallContext context)
+    {
+        return ToReply(await service.SetRestaurant(Guid.Parse(request.ItemId), Guid.Parse(request.RestaurantId),
+            request.Version, context.CancellationToken));
+    }
+
     public override async Task<ItemReply> SetKitchenStation(SetItemKitchenStationRequest request, ServerCallContext context)
     {
         return ToReply(await service.SetKitchenStation(ParseId(request.ItemId, "món ăn"),

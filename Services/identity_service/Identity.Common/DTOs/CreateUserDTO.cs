@@ -2,6 +2,8 @@ namespace Identity.Common.DTOs;
 
 public sealed class CreateUserDTO
 {
+    public Guid? RestaurantId { get; set; }
+
     public string? AvatarUrl { get; set; }
     public string? UserName { get; set; }
 

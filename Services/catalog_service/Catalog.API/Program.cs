@@ -5,7 +5,10 @@ using Catalog.API.GrpcServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddGrpc();
+builder.Services.AddGrpc(options =>
+{
+    options.Interceptors.Add<RestaurantIsolation.RestaurantScopeInterceptor>();
+});
 builder.Services.AddCatalogManagement(builder.Configuration);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");

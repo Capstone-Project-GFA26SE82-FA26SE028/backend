@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Billing.DAL.Models;
 
-public partial class BillingDbContext : DbContext
+public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.RestaurantDbContext
 {
     public BillingDbContext()
     {
@@ -14,6 +14,11 @@ public partial class BillingDbContext : DbContext
 
     public BillingDbContext(DbContextOptions<BillingDbContext> options)
         : base(options)
+    {
+    }
+
+    public BillingDbContext(DbContextOptions<BillingDbContext> options,
+        Shared.Persistence.RestaurantIsolation.RestaurantDataScope scope) : base(options, scope)
     {
     }
 
@@ -349,6 +354,9 @@ public partial class BillingDbContext : DbContext
         modelBuilder.Entity<PaymentProviderConfig>(entity =>
         {
             entity.ToTable("PaymentProviderConfig");
+            entity.HasIndex(value => new { value.RestaurantId, value.Provider }).IsUnique();
+            entity.Property(value => value.ReturnUrl).IsRequired().HasMaxLength(2048).IsUnicode(false);
+            entity.Property(value => value.CancelUrl).IsRequired().HasMaxLength(2048).IsUnicode(false);
 
             entity.Property(e => e.PaymentProviderConfigId).ValueGeneratedNever();
             entity.Property(e => e.ClientId)
@@ -361,7 +369,6 @@ public partial class BillingDbContext : DbContext
                 .IsUnicode(false);
             entity.Property(e => e.SecretReference)
                 .IsRequired()
-                .HasMaxLength(500)
                 .IsUnicode(false);
             entity.Property(e => e.WebhookUrl)
                 .IsRequired()
@@ -603,6 +610,8 @@ public partial class BillingDbContext : DbContext
         });
 
         OnModelCreatingPartial(modelBuilder);
+        Shared.Persistence.Notifications.NotificationOutboxModel.Configure(modelBuilder);
+        ConfigureRestaurantIsolation(modelBuilder);
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);

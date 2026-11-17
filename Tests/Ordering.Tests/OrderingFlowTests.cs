@@ -322,7 +322,7 @@ public sealed class OrderingFlowTests
         Assert.Equal(50, takeawayTask.Priority);
     }
 
-    internal sealed class Fixture : IOrderingAccess, ICatalogOrderClient, IDisposable
+    internal sealed class Fixture : IOrderingAccess, ICatalogOrderClient, ITakeawayAccess, ITakeawayPaymentClient, IDisposable
     {
         private readonly SqliteConnection connection = new("Data Source=:memory:");
         public TestDb Db { get; }
@@ -342,6 +342,8 @@ public sealed class OrderingFlowTests
         public bool Staff { get; set; }
         public bool Closed { get; set; }
         public bool Valid { get; set; } = true;
+        public Guid Restaurant { get; } = Guid.NewGuid();
+        public string? QuotedChannel { get; private set; }
         public decimal Price { get; set; } = 50000;
 
         public Fixture()
@@ -359,9 +361,50 @@ public sealed class OrderingFlowTests
             Db.SaveChanges();
             var carts = new CartRepository(Db);
             var transaction = new OrderingTransaction(new UnitOfWork<OrderingDbContext>(Db));
-            Carts = new CartService(carts, transaction, this, this, TimeProvider.System);
+            Carts = new CartService(carts, transaction, this, this, TimeProvider.System, this);
             Orders = new OrderService(new OrderRepository(Db), carts, new KitchenTaskRepository(Db),
-                transaction, this, this, Options.Create(new OrderingSettings()), TimeProvider.System, new CheckoutLockRepository(Db));
+                transaction, this, this, Options.Create(new OrderingSettings()), TimeProvider.System, new CheckoutLockRepository(Db), this, this);
+        }
+
+        public Guid CustomerUser { get; set; } = Guid.NewGuid();
+        public string StaffRole { get; set; } = "waiter";
+        public string PaymentState { get; set; } = "Pending";
+        public int PaymentCalls { get; private set; }
+        public bool PaymentUnavailable { get; set; }
+
+        public Task<TakeawayActor> GetActorAsync(Guid restaurantId, CancellationToken ct)
+        {
+            if (restaurantId != Restaurant)
+            {
+                throw new OrderingException(403, "Restaurant mismatch");
+            }
+
+            return Task.FromResult(new TakeawayActor(Staff ? User : CustomerUser, !Staff, Staff ? StaffRole : "customer"));
+        }
+
+        public Task<TakeawayPaymentResult> ExecuteAsync(Order order, string action, string reason,
+            string reference, string evidence, CancellationToken ct)
+        {
+            PaymentCalls++;
+            if (PaymentUnavailable)
+            {
+                throw new OrderingException(503, "Provider unavailable");
+            }
+
+            if (action is "Cancel" or "Refund")
+            {
+                PaymentState = PaymentState == "Paid" ? "RefundPending"
+                    : PaymentState == "Pending" ? "Cancelled" : PaymentState;
+            }
+
+            if (action == "VerifyRefund")
+            {
+                PaymentState = "Refunded";
+            }
+
+            return Task.FromResult(new TakeawayPaymentResult(PaymentState, "https://pay.example/order",
+                PaymentState == "Paid" ? DateTimeOffset.UtcNow : null,
+                PaymentState == "Refunded" ? DateTimeOffset.UtcNow : null, null));
         }
 
         public List<SelectionDTO> Lines()
@@ -401,6 +444,7 @@ public sealed class OrderingFlowTests
 
         public Task<QuoteDTO> ValidateAsync(OrderingActor actor, string guestToken, List<SelectionDTO> items, CancellationToken ct)
         {
+            QuotedChannel = actor.Channel;
             return Task.FromResult(new QuoteDTO
             {
                 IsValid = Valid,

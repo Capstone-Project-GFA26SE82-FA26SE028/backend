@@ -115,6 +115,16 @@ public sealed class BillingOrderReadTests
             throw new NotSupportedException();
         }
 
+        public Task<List<Order>> GetTakeawayAsync(Guid restaurantId, Guid? customerId, string? status, int page, int pageSize, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<List<Order>> GetOnlinePendingAsync(CancellationToken ct)
+        {
+            return Task.FromResult(new List<Order>());
+        }
+
         public void Create(Order order)
         {
             Writes++;

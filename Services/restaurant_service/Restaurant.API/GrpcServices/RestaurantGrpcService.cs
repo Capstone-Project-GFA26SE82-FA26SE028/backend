@@ -9,6 +9,19 @@ namespace Restaurant.API.GrpcServices;
 
 public sealed class RestaurantGrpcService(IRestaurantService service) : RestaurantGrpc.RestaurantGrpcBase
 {
+    public override async Task<RestaurantPage> Browse(ListRequest request, ServerCallContext context)
+    {
+        var page = await service.Browse(ManagementMapping.ToDto(request), context.CancellationToken);
+        var reply = new RestaurantPage
+        {
+            TotalCount = page.TotalCount,
+            Page = page.Page,
+            PageSize = page.PageSize
+        };
+        reply.Items.AddRange(page.Items.Select(ManagementMapping.ToWire));
+        return reply;
+    }
+
     public override async Task<RestaurantPage> GetAll(ListRequest request, ServerCallContext context)
     {
         var page = await service.GetAll(ManagementMapping.ToDto(request), context.CancellationToken);

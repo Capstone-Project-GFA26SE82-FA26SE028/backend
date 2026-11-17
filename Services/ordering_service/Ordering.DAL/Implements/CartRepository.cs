@@ -23,6 +23,15 @@ public sealed class CartRepository(OrderingDbContext db) : ICartRepository
             .AsSplitQuery().OrderBy(cart => cart.CartId).FirstOrDefaultAsync(ct);
     }
 
+    public async Task<Cart?> GetForCustomerAsync(Guid restaurantId, Guid customerId, DateTime now, CancellationToken ct)
+    {
+        var query = db.Database.IsSqlServer()
+            ? db.Carts.FromSqlInterpolated($"SELECT * FROM [Cart] WITH (UPDLOCK, HOLDLOCK) WHERE [RestaurantRef] = {restaurantId} AND [CustomerUserRef] = {customerId} AND [ExpiredAt] > {now}")
+            : db.Carts.Where(cart => cart.RestaurantRef == restaurantId && cart.CustomerUserRef == customerId && cart.ExpiredAt > now);
+        return await query.Include(cart => cart.CartItems).ThenInclude(item => item.CartItemOptions)
+            .OrderBy(cart => cart.CartId).FirstOrDefaultAsync(ct);
+    }
+
     public void Create(Cart cart)
     {
         db.Carts.Add(cart);

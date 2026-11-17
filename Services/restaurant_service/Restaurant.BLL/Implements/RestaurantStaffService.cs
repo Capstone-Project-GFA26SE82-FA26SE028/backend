@@ -12,11 +12,48 @@ public sealed class RestaurantStaffService(IManagementAccess access, IStaffIdent
     IRestaurantStaffRepository staff, IRestaurantRepository restaurants, IReservationTransaction transaction,
     IOptions<RestaurantStaffSettings> settings) : IRestaurantStaffService
 {
+    public async Task<IReadOnlyList<RestaurantStaffDto>> GetNotificationRecipients(Guid restaurantId, CancellationToken ct)
+    {
+        await RequireRestaurant(restaurantId, ct);
+        return (await staff.GetAllAsync(restaurantId, ct)).Where(value => value.IsActive).Select(Map).ToArray();
+    }
+
+    public async Task<RestaurantStaffDto> Provision(Guid restaurantId, Guid userId, CancellationToken ct)
+    {
+        ValidateIds(restaurantId, userId);
+        return await transaction.ExecuteAsync(async () =>
+        {
+            await RequireRestaurant(restaurantId, ct);
+            if ((await staff.GetRestaurantIdsAsync(userId, ct)).Any(id => id != restaurantId))
+            {
+                throw new ManagementException(409, "Nhân viên đã thuộc nhà hàng khác.");
+            }
+
+            var assignment = await staff.LockAsync(restaurantId, userId, ct);
+            if (assignment is null)
+            {
+                assignment = new RestaurantStaff
+                {
+                    RestaurantId = restaurantId,
+                    UserIdRef = userId,
+                    IsActive = true
+                };
+                await staff.AddAsync(assignment);
+            }
+
+            return Map(assignment);
+        }, ct);
+    }
+
     public async Task<RestaurantStaffDto> Create(Guid restaurantId, Guid userId, CancellationToken ct)
     {
         await access.RequireAdmin(ct);
         ValidateIds(restaurantId, userId);
         var employee = await identity.GetUserAsync(userId, ct);
+        if (employee.RestaurantId.HasValue && employee.RestaurantId != restaurantId)
+        {
+            throw new ManagementException(403, "Tài khoản nhân viên thuộc nhà hàng khác.");
+        }
         if (!settings.Value.AssignableRoleIds.Contains(employee.RoleId, StringComparer.Ordinal))
         {
             throw new ManagementException(403, "Chỉ các vai trò nhân viên hợp lệ mới có thể được phân công vào nhà hàng.");

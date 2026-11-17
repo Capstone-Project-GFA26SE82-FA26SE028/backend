@@ -71,7 +71,9 @@ message CategoryListReply {
 
 message SetItemKitchenStationRequest { string item_id = 1; optional string kitchen_station_id = 2; string version = 3; }
 
+message SetItemRestaurantRequest { string item_id = 1; string restaurant_id = 2; string version = 3; }
 service ItemGrpc {
+  rpc SetRestaurant(SetItemRestaurantRequest) returns (ItemReply);
   rpc SetKitchenStation(SetItemKitchenStationRequest) returns (ItemReply);
   rpc Create (CreateItemRequest) returns (ItemReply);
   rpc GetAll (ItemListRequest) returns (ItemListReply);
@@ -538,6 +540,7 @@ message MenuAccessRequest {
   string guest_token = 2;
 }
 message MenuListRequest {
+  optional string restaurant_id = 7;
   MenuAccessRequest access = 1;
   string channel = 2;
   optional string category_id = 3;
@@ -606,6 +609,7 @@ message ValidateOrderItemsRequest {
   MenuAccessRequest access = 1;
   string channel = 2;
   repeated OrderSelection items = 3;
+  optional string restaurant_id = 4;
 }
 message OrderSelection {
   string item_id = 1;

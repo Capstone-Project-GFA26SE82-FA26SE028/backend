@@ -18,6 +18,8 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[User](
+    [RestaurantId] [uniqueidentifier] NULL,
+    [ProvisioningPending] [bit] NOT NULL CONSTRAINT [DF_User_ProvisioningPending] DEFAULT (0),
 	[UserId] [uniqueidentifier] NOT NULL,
 	[RoleId] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[UserName] [varchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -96,4 +98,52 @@ ALTER TABLE [dbo].[AuditLog]  WITH CHECK ADD  CONSTRAINT [FK_AuditLog_User] FORE
 REFERENCES [dbo].[User] ([UserId])
 GO
 ALTER TABLE [dbo].[AuditLog] CHECK CONSTRAINT [FK_AuditLog_User]
+GO
+
+CREATE INDEX IX_User_RestaurantId ON dbo.[User](RestaurantId);
+GO
+
+CREATE TABLE dbo.Notification (
+    NotificationId uniqueidentifier NOT NULL CONSTRAINT PK_Notification PRIMARY KEY,
+    RestaurantId uniqueidentifier NOT NULL,
+    EventKey nvarchar(200) NOT NULL,
+    Type nvarchar(80) NOT NULL,
+    Title nvarchar(200) NOT NULL,
+    Message nvarchar(2000) NOT NULL,
+    EntityType nvarchar(40) NOT NULL,
+    EntityId uniqueidentifier NOT NULL,
+    CreatedAt datetime2 NOT NULL,
+    Suppressed bit NOT NULL CONSTRAINT DF_Notification_Suppressed DEFAULT (0)
+);
+CREATE UNIQUE INDEX IX_Notification_EventKey ON dbo.Notification(EventKey);
+CREATE INDEX IX_Notification_RestaurantId_CreatedAt ON dbo.Notification(RestaurantId, CreatedAt);
+CREATE TABLE dbo.NotificationRecipient (
+    NotificationId uniqueidentifier NOT NULL,
+    UserId uniqueidentifier NOT NULL,
+    IsCustomer bit NOT NULL,
+    ReadAt datetime2 NULL,
+    CONSTRAINT PK_NotificationRecipient PRIMARY KEY (NotificationId, UserId),
+    CONSTRAINT FK_NotificationRecipient_Notification FOREIGN KEY (NotificationId) REFERENCES dbo.Notification(NotificationId) ON DELETE CASCADE
+);
+CREATE INDEX IX_NotificationRecipient_UserId_ReadAt ON dbo.NotificationRecipient(UserId, ReadAt);
+CREATE TABLE dbo.Announcement (
+    AnnouncementId uniqueidentifier NOT NULL CONSTRAINT PK_Announcement PRIMARY KEY,
+    RestaurantId uniqueidentifier NOT NULL,
+    CreatedBy uniqueidentifier NOT NULL,
+    Title nvarchar(200) NOT NULL,
+    Message nvarchar(2000) NOT NULL,
+    AllStaff bit NOT NULL,
+    RecipientRoles nvarchar(200) NOT NULL,
+    Version uniqueidentifier NOT NULL,
+    CreatedAt datetime2 NOT NULL,
+    SentAt datetime2 NULL,
+    NotificationId uniqueidentifier NULL
+);
+CREATE INDEX IX_Announcement_RestaurantId_CreatedAt ON dbo.Announcement(RestaurantId, CreatedAt);
+CREATE TABLE dbo.NotificationSetting (
+    RestaurantId uniqueidentifier NOT NULL,
+    Type nvarchar(80) NOT NULL,
+    Enabled bit NOT NULL,
+    CONSTRAINT PK_NotificationSetting PRIMARY KEY (RestaurantId, Type)
+);
 GO

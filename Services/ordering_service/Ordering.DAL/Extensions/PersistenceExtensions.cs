@@ -15,11 +15,13 @@ public static class PersistenceExtensions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddScoped<Shared.Persistence.RestaurantIsolation.RestaurantDataScope>(services);
         services.AddDbContext<OrderingDbContext>(options =>
         {
             options.UseSqlServer(connectionString);
         });
         services.AddScoped<Ordering.DAL.Interfaces.IKitchenStationRepository, Ordering.DAL.Implements.KitchenStationRepository>();
+        services.AddScoped<Shared.Persistence.Notifications.NotificationOutboxRepository<OrderingDbContext>>();
         services.AddScoped<IUnitOfWork, UnitOfWork<OrderingDbContext>>();
         services.AddScoped<Ordering.DAL.Interfaces.ICartRepository, Ordering.DAL.Implements.CartRepository>();
         services.AddScoped<Ordering.DAL.Interfaces.IOrderRepository, Ordering.DAL.Implements.OrderRepository>();

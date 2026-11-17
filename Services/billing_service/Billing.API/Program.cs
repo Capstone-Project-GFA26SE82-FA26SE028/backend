@@ -17,6 +17,12 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 builder.Services.AddBillingPersistence(connectionString);
 
+builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationGrpc.NotificationGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"] ?? "http://localhost:5001");
+});
+builder.Services.AddHostedService<RestaurantIsolation.NotificationOutboxWorker<Billing.DAL.Models.BillingDbContext>>();
+
 var app = builder.Build();
 
 app.MapGrpcService<CashRegisterGrpcService>();
@@ -25,6 +31,8 @@ app.MapGrpcService<BillGrpcService>();
 app.MapGrpcService<ShiftReportGrpcService>();
 app.MapGrpcService<PaymentGrpcService>();
 app.MapGrpcService<PayOsPaymentGrpcService>();
+app.MapGrpcService<OnlinePaymentGrpcService>();
+app.MapGrpcService<PaymentProviderConfigGrpcService>();
 app.MapGrpcService<PaymentWebhookGrpcService>();
 app.MapGrpcService<CashMovementGrpcService>();
 app.MapGrpcService<BillCheckoutGrpcService>();

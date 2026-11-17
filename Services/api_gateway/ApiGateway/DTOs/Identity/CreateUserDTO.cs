@@ -4,6 +4,8 @@ namespace ApiGateway.DTOs.Identity;
 
 public sealed class CreateUserDTO
 {
+    public Guid? RestaurantId { get; set; }
+
     public string? AvatarUrl { get; set; }
     [Required(ErrorMessage = "Trường {0} là bắt buộc."), StringLength(100, ErrorMessage = "Trường {0} phải có độ dài từ {2} đến {1} ký tự.")] public string UserName { get; set; } = "";
     [Required(ErrorMessage = "Trường {0} là bắt buộc."), EmailAddress(ErrorMessage = "Trường {0} phải là địa chỉ email hợp lệ."), StringLength(255, ErrorMessage = "Trường {0} phải có độ dài từ {2} đến {1} ký tự.")] public string Email { get; set; } = "";

@@ -9,8 +9,66 @@ using Microsoft.Extensions.Options;
 
 namespace Identity.BLL.Implements;
 
-public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementSettings> settings) : IUserService
+public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementSettings> settings,
+    IUserRestaurantAccess? restaurants = null, IStaffProvisioner? provisioner = null) : IUserService
 {
+    private static readonly string[] StaffRoles = ["manager", "waiter", "cashier", "kitchen", "inventory"];
+
+    private async Task<bool> CanManage(Guid actorId, Guid? targetId, CancellationToken ct)
+    {
+        if (await IsAdmin(actorId, ct))
+        {
+            return true;
+        }
+
+        var actor = await unitOfWork.UserRepo.FindUserAsync(actorId, ct);
+        if (actor is null || !actor.IsActive || actor.RoleId != "admin" || !actor.RestaurantId.HasValue
+            || restaurants is null || !await restaurants.CanManageAsync(actorId, actor.RestaurantId.Value, ct))
+        {
+            return false;
+        }
+
+        if (!targetId.HasValue)
+        {
+            return true;
+        }
+
+        var target = await unitOfWork.UserRepo.FindUserAsync(targetId.Value, ct);
+        return target is not null && target.RestaurantId == actor.RestaurantId && StaffRoles.Contains(target.RoleId);
+    }
+
+    private async Task<Guid?> ManagedRestaurant(Guid actorId, CancellationToken ct)
+    {
+        return await IsAdmin(actorId, ct) ? null : (await unitOfWork.UserRepo.FindUserAsync(actorId, ct))?.RestaurantId;
+    }
+
+    public async Task ProvisionPending(CancellationToken ct)
+    {
+        if (provisioner?.IsConfigured != true)
+        {
+            return;
+        }
+
+        foreach (var user in await unitOfWork.UserRepo.GetPendingProvisioningAsync(ct))
+        {
+            await TryProvision(user, ct);
+        }
+    }
+
+    private async Task<bool> TryProvision(User user, CancellationToken ct)
+    {
+        if (!user.RestaurantId.HasValue || provisioner?.IsConfigured != true
+            || !await provisioner.EnsureAssignmentAsync(user.RestaurantId.Value, user.UserId, ct))
+        {
+            return false;
+        }
+
+        await unitOfWork.ExecuteInTransactionAsync(() => unitOfWork.UserRepo.CompleteProvisioningAsync(user.UserId, ct), ct);
+        user.ProvisioningPending = false;
+        user.IsActive = true;
+        return true;
+    }
+
     private static ResponseDTO Missing()
     {
         return new("Không tìm thấy người dùng.", 404);
@@ -75,7 +133,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
 
     public async Task<ResponseDTO> GetAll(Guid actorId, int page, int pageSize, string? search, CancellationToken ct, Identity.Common.DTOs.UserFilter? filter = null)
     {
-        if (!await IsAdmin(actorId, ct))
+        if (!await CanManage(actorId, null, ct))
         {
             return Forbidden();
         }
@@ -91,13 +149,13 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             return new("Phân trang hoặc từ khóa tìm kiếm không hợp lệ. Số lượng mỗi trang phải từ 1 đến 100.", 400);
         }
 
-        var (items, count) = await unitOfWork.UserRepo.GetAllAsync(page, pageSize, search?.Trim(), ct, filter);
+        var (items, count) = await unitOfWork.UserRepo.GetAllAsync(page, pageSize, search?.Trim(), ct, filter, await ManagedRestaurant(actorId, ct), StaffRoles);
         return new("Thành công.", 200, true, new PagedResult<UserDTO>(items.Select(Map).ToList(), count, page, pageSize));
     }
 
     public async Task<ResponseDTO> GetById(Guid actorId, Guid userId, CancellationToken ct)
     {
-        if (!await IsAdmin(actorId, ct))
+        if (!await CanManage(actorId, userId, ct))
         {
             return Forbidden();
         }
@@ -107,7 +165,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
 
     public async Task<ResponseDTO> SetStatus(Guid actorId, Guid userId, bool isActive, CancellationToken ct)
     {
-        if (!await IsAdmin(actorId, ct))
+        if (!await CanManage(actorId, userId, ct))
         {
             return Forbidden();
         }
@@ -117,12 +175,13 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             return new("Bạn không thể tự vô hiệu hóa tài khoản của chính mình.", 400);
         }
 
-        return AccessResponse(await unitOfWork.ExecuteInTransactionAsync(() => unitOfWork.UserRepo.ChangeAccessAsync(actorId, userId, null, isActive, settings.Value.AdminRoleIds, ct), ct));
+        var managedRestaurant = await ManagedRestaurant(actorId, ct);
+        return AccessResponse(await unitOfWork.ExecuteInTransactionAsync(() => unitOfWork.UserRepo.ChangeAccessAsync(actorId, userId, null, isActive, settings.Value.AdminRoleIds, ct, managedRestaurant, StaffRoles), ct));
     }
 
     public async Task<ResponseDTO> Create(Guid actorId, CreateUserDTO request, CancellationToken ct)
     {
-        if (!await IsAdmin(actorId, ct))
+        if (!await CanManage(actorId, null, ct))
         {
             return Forbidden();
         }
@@ -144,20 +203,50 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             return new("Dữ liệu không hợp lệ. Mật khẩu phải chứa ít nhất 8 ký tự và tối đa 72 byte UTF-8.", 400);
         }
 
+        var managedRestaurant = await ManagedRestaurant(actorId, ct);
+        if (managedRestaurant.HasValue && (!StaffRoles.Contains(role)
+            || (request.RestaurantId.HasValue && request.RestaurantId != managedRestaurant)))
+        {
+            return Forbidden();
+        }
+
+        var owner = managedRestaurant ?? request.RestaurantId;
+        if (owner.HasValue && role != "admin" && !StaffRoles.Contains(role))
+        {
+            return Forbidden();
+        }
+        if (owner.HasValue && (owner == Guid.Empty || restaurants is null
+            || !await restaurants.CanManageAsync(actorId, owner.Value, ct)))
+        {
+            return Forbidden();
+        }
+
+        if (owner.HasValue && provisioner?.IsConfigured != true)
+        {
+            return new("Chưa cấu hình dịch vụ phân công nhân viên.", 503);
+        }
+
         var user = new User
         {
             UserId = Guid.NewGuid(),
+            RestaurantId = owner,
+            ProvisioningPending = owner.HasValue,
             UserName = name,
             Email = email,
             FullName = fullName,
             PhoneNumber = phone!,
             RoleId = role,
-            IsActive = true,
+            IsActive = !owner.HasValue,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             AvatarUrl = avatar!,
             CreatedAt = DateTime.UtcNow
         };
-        var result = await unitOfWork.ExecuteInTransactionAsync(() => unitOfWork.UserRepo.CreateEmployeeAsync(actorId, user, settings.Value.AdminRoleIds, ct), ct);
+        var result = await unitOfWork.ExecuteInTransactionAsync(() => unitOfWork.UserRepo.CreateEmployeeAsync(actorId, user, settings.Value.AdminRoleIds, ct, managedRestaurant, StaffRoles), ct);
+        if (result.Status == 201 && user.ProvisioningPending && !await TryProvision(user, ct))
+        {
+            return new("Tài khoản đang chờ phân công vào nhà hàng và chưa thể đăng nhập.", 202, true, Map(user));
+        }
+
         return result.Status switch
         {
             201 => new("Tạo tài khoản thành công.", 201, true, Map(result.User!)),
@@ -169,7 +258,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
 
     public async Task<ResponseDTO> Update(Guid actorId, Guid userId, UpdateUserDTO request, CancellationToken ct)
     {
-        if (!await IsAdmin(actorId, ct))
+        if (!await CanManage(actorId, userId, ct))
         {
             return Forbidden();
         }
@@ -191,7 +280,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
 
         return await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            if (!await IsAdmin(actorId, ct))
+            if (!await CanManage(actorId, userId, ct))
             {
                 return Forbidden();
             }
@@ -222,7 +311,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
 
     public async Task<ResponseDTO> SetRole(Guid actorId, Guid userId, string roleId, CancellationToken ct)
     {
-        if (!await IsAdmin(actorId, ct))
+        if (!await CanManage(actorId, userId, ct))
         {
             return Forbidden();
         }
@@ -232,7 +321,8 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             return new("Vai trò không hợp lệ.", 400);
         }
 
-        return AccessResponse(await unitOfWork.ExecuteInTransactionAsync(() => unitOfWork.UserRepo.ChangeAccessAsync(actorId, userId, roleId.Trim(), null, settings.Value.AdminRoleIds, ct), ct));
+        var managedRestaurant = await ManagedRestaurant(actorId, ct);
+        return AccessResponse(await unitOfWork.ExecuteInTransactionAsync(() => unitOfWork.UserRepo.ChangeAccessAsync(actorId, userId, roleId.Trim(), null, settings.Value.AdminRoleIds, ct, managedRestaurant, StaffRoles), ct));
     }
 
     private static ResponseDTO AccessResponse((int Status, User? User) result)
@@ -242,7 +332,7 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             200 => new("Cập nhật thành công.", 200, true, Map(result.User!)),
             404 => Missing(),
             403 => Forbidden(),
-            409 => new("Không thể xóa hoặc hạ quyền tài khoản Quản trị viên (Admin) đang hoạt động cuối cùng.", 409),
+            409 => new("Tài khoản đang chờ phân công hoặc đây là quản trị nền tảng đang hoạt động cuối cùng.", 409),
             _ => new("Vai trò không tồn tại.", 400)
         };
     }
@@ -252,6 +342,8 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
         return new()
         {
             UserId = user.UserId,
+            RestaurantId = user.RestaurantId,
+            ProvisioningPending = user.ProvisioningPending,
             RoleId = user.RoleId,
             UserName = user.UserName,
             Email = user.Email,

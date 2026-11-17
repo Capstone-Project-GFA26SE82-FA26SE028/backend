@@ -35,10 +35,13 @@ services:
       dockerfile: Services/identity_service/Identity.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      Notifications__ServiceKey: ${NOTIFICATION_SERVICE_KEY:-${JWT_SECRET_KEY}}
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=IdentityDb;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env};Encrypt=True;TrustServerCertificate=True"
       Jwt__SecretKey: ${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
       Jwt__Issuer: ${JWT_ISSUER:-backend-identity}
       Jwt__Audience: ${JWT_AUDIENCE:-backend-clients}
+      GrpcServices__Restaurant: http://restaurant:5002
+      StaffProvisioning__ServiceKey: ${STAFF_PROVISIONING_SERVICE_KEY:-${JWT_SECRET_KEY}}
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -71,12 +74,14 @@ services:
       dockerfile: Services/restaurant_service/Restaurant.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      Notifications__ServiceKey: ${NOTIFICATION_SERVICE_KEY:-${JWT_SECRET_KEY}}
       Cloudinary__CloudName: ${CLOUDINARY_CLOUD_NAME:-dworxzse0}
       Cloudinary__ApiKey: ${CLOUDINARY_API_KEY:?Set Cloudinary API key in external .env}
       Cloudinary__ApiSecret: ${CLOUDINARY_API_SECRET:?Set Cloudinary API secret in external .env}
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=RestaurantDb;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env};Encrypt=True;TrustServerCertificate=True"
       Qr__MenuBaseUrl: ${QR_MENU_BASE_URL:-http://localhost:5173/menu}
       Qr__ImageDirectory: /app/App_Data/qr-images
+      StaffProvisioning__ServiceKey: ${STAFF_PROVISIONING_SERVICE_KEY:-${JWT_SECRET_KEY}}
     volumes:
       - qr-images:/app/App_Data/qr-images
     depends_on:
@@ -115,6 +120,9 @@ services:
       dockerfile: Services/ordering_service/Ordering.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      Notifications__ServiceKey: ${NOTIFICATION_SERVICE_KEY:-${JWT_SECRET_KEY}}
+      GrpcServices__Identity: http://identity:5001
+      Takeaway__ServiceKey: ${TAKEAWAY_SERVICE_KEY:-}
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=OrderingDb;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env};Encrypt=True;TrustServerCertificate=True"
     depends_on:
       db-init:
@@ -157,14 +165,14 @@ services:
       dockerfile: Services/billing_service/Billing.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
-      PayOs__Enabled: ${PAYOS_ENABLED:-false}
-      PayOs__ClientId: ${PAYOS_CLIENT_ID:-}
-      PayOs__ApiKey: ${PAYOS_API_KEY:-}
-      PayOs__ChecksumKey: ${PAYOS_CHECKSUM_KEY:-}
-      PayOs__ReturnUrl: ${PAYOS_RETURN_URL:-}
-      PayOs__CancelUrl: ${PAYOS_CANCEL_URL:-}
-      PayOs__WebhookUrl: ${PAYOS_WEBHOOK_URL:-}
+      Notifications__ServiceKey: ${NOTIFICATION_SERVICE_KEY:-${JWT_SECRET_KEY}}
+      GrpcServices__Identity: http://identity:5001
+      PaymentProviderConfiguration__WebhookBaseUrl: ${PAYOS_WEBHOOK_BASE_URL:-}
+      PaymentProviderConfiguration__KeyDirectory: /app/App_Data/payment-keys
+      Takeaway__ServiceKey: ${TAKEAWAY_SERVICE_KEY:-}
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=BillingDb;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env};Encrypt=True;TrustServerCertificate=True"
+    volumes:
+      - payment-keys:/app/App_Data/payment-keys
     depends_on:
       db-init:
         condition: service_completed_successfully
@@ -174,6 +182,7 @@ services:
 volumes:
   sql-data:
   qr-images:
+  payment-keys:
 networks:
   backend:
     driver: bridge

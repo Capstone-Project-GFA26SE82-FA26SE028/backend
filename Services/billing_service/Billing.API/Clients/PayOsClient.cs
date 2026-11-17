@@ -37,6 +37,11 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
     {
         EnsureConfigured();
         var s = options.Value;
+        if (!s.Enabled)
+        {
+            throw new BillingException(409, "Nhà hàng chưa bật thanh toán PayOS.");
+        }
+
         if (!ValidUrl(s.ReturnUrl) || !ValidUrl(s.CancelUrl) || !ValidUrl(s.WebhookUrl) || s.LinkLifetimeMinutes <= 0)
         {
             throw new BillingException(409, "Cấu hình các đường dẫn HTTPS return, cancel, webhook và hạn liên kết PayOS.");

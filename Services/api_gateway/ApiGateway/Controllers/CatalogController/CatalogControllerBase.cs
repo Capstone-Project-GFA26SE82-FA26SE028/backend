@@ -12,6 +12,11 @@ public abstract class CatalogControllerBase(
     protected CallOptions Options(CancellationToken cancellationToken)
     {
         var headers = new Metadata();
+        var restaurantHeader = HttpContext.Request.Headers["x-restaurant-id"].ToString();
+        if (!string.IsNullOrWhiteSpace(restaurantHeader))
+        {
+            headers.Add("x-restaurant-id", restaurantHeader);
+        }
         var authorization = Request.Headers.Authorization.ToString();
         if (!string.IsNullOrWhiteSpace(authorization))
         {
