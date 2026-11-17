@@ -26,6 +26,10 @@ public sealed class InventoryInterceptor(ILogger<InventoryInterceptor> logger) :
             };
             throw new RpcException(new Status(code, exception.Message));
         }
+        catch (Shared.Persistence.RestaurantIsolation.RestaurantScopeException error)
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, error.Message));
+        }
         catch (RpcException)
         {
             throw;

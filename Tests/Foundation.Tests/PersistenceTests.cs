@@ -63,6 +63,11 @@ public class PersistenceTests
         using var scope = provider.CreateScope();
         using var secondScope = provider.CreateScope();
         var db = (DbContext)scope.ServiceProvider.GetRequiredService(contextType);
+        if (db is Shared.Persistence.RestaurantIsolation.RestaurantDbContext restaurantDb)
+        {
+            Assert.True(restaurantDb.RequiresRestaurantScope);
+            Assert.Null(restaurantDb.CurrentRestaurantId);
+        }
         Assert.Same(db, scope.ServiceProvider.GetRequiredService(contextType));
         Assert.NotSame(db, secondScope.ServiceProvider.GetRequiredService(contextType));
         Assert.IsAssignableFrom<IUnitOfWork>(scope.ServiceProvider.GetRequiredService<IUnitOfWork>());

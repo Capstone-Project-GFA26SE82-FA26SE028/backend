@@ -23,7 +23,7 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
 
     public async Task<TaxFeePolicyDTO> Create(CreateTaxFeePolicyDTO request, CancellationToken ct)
     {
-        var actor = await RequireAdministrator(ct);
+        var actor = await RequirePolicyManager(ct);
         if (request is null || request.VatRate is not decimal vatRate || !ValidRate(vatRate)
             || request.ServiceRate is not decimal serviceRate || !ValidRate(serviceRate)
             || request.ServiceEnabled is not bool serviceEnabled)
@@ -51,7 +51,7 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
                 throw new BillingException(409, "Tạo chính sách thuế đang bận. Vui lòng thử lại yêu cầu.");
             }
 
-            var currentActor = await RequireAdministrator(ct);
+            var currentActor = await RequirePolicyManager(ct);
             if (currentActor != actor)
             {
                 throw new BillingException(401, "Phiên đăng nhập nhân viên đã thay đổi. Vui lòng đăng nhập lại.");
@@ -98,7 +98,7 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
 
     public async Task<PagedResult<TaxFeePolicyDTO>> GetAll(TaxFeePolicyQueryDTO query, CancellationToken ct)
     {
-        await RequireAdministrator(ct);
+        await RequirePolicyManager(ct);
         if (query is null || !new PaginationRequest
         {
             Page = query.Page,
@@ -114,7 +114,7 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
 
     public async Task<TaxFeePolicyDTO> GetById(Guid id, CancellationToken ct)
     {
-        await RequireAdministrator(ct);
+        await RequirePolicyManager(ct);
         if (id == Guid.Empty)
         {
             throw new BillingException(400, "Mã chính sách thuế không hợp lệ hoặc bị trống.");
@@ -124,7 +124,7 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
         return Map(policy);
     }
 
-    private async Task<Guid> RequireAdministrator(CancellationToken ct)
+    private async Task<Guid> RequirePolicyManager(CancellationToken ct)
     {
         var actor = await access.GetCurrentScopeAsync(null, ct);
         if (actor.UserId == Guid.Empty)
@@ -132,9 +132,9 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
             throw new BillingException(401, "Yêu cầu phiên đăng nhập nhân viên hợp lệ.");
         }
 
-        if (!actor.IsAdministrator)
+        if (!actor.IsAdministrator && actor.RoleId != "manager")
         {
-            throw new BillingException(403, "Chỉ Quản trị viên hệ thống mới có thể quản lý chính sách thuế và phí dịch vụ.");
+            throw new BillingException(403, "Chỉ quản lý nhà hàng hoặc quản trị viên mới được quản lý chính sách thuế và phí dịch vụ.");
         }
 
         return actor.UserId;

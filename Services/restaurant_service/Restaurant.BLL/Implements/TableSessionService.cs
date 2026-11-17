@@ -9,7 +9,8 @@ namespace Restaurant.BLL.Implements;
 
 public sealed class TableSessionService(IQrService qrService, ITableRepository tables,
     ITableSessionRepository sessions, IGenericRepository<SessionTable> sessionTables,
-    IManagementTransaction transaction, IGuestAccessService guestAccess, ITableSessionOrderAccess orderAccess) : ITableSessionService
+    IManagementTransaction transaction, IGuestAccessService guestAccess, ITableSessionOrderAccess orderAccess,
+    IRestaurantDataScopeService dataScope) : ITableSessionService
 {
     public async Task<TableSessionScanDto> OpenForWaiter(Guid tableId, CancellationToken ct)
     {
@@ -22,6 +23,7 @@ public sealed class TableSessionService(IQrService qrService, ITableRepository t
         {
             var table = await tables.LockForSessionAsync(tableId, ct)
                 ?? throw new ManagementException(404, "Không tìm thấy bàn.");
+            await dataScope.Resolve(table.Area.RestaurantId, null, "", false, ct);
             if (!table.IsActive || !table.Area.IsActive)
             {
                 throw new ManagementException(409, "Bàn hoặc khu vực đang ngừng hoạt động.");
@@ -82,6 +84,8 @@ public sealed class TableSessionService(IQrService qrService, ITableRepository t
         {
             result.UserId = await orderAccess.RequireStaffAsync(ct);
         }
+
+        await dataScope.Resolve(null, sessionId, guestToken, true, ct);
 
         var session = await sessions.GetForOrderingAsync(sessionId, ct)
             ?? throw new ManagementException(404, "Không tìm thấy phiên phục vụ bàn.");

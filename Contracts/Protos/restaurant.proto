@@ -30,7 +30,16 @@ message BillingSessionReply { string table_session_id = 1; string restaurant_id 
 
 service RestaurantAccessGrpc {
   rpc GetCurrentScope(CurrentRestaurantScopeRequest) returns (CurrentRestaurantScopeReply);
+  rpc ResolveDataScope(RestaurantDataScopeRequest) returns (RestaurantDataScopeReply);
 }
+
+message RestaurantDataScopeRequest {
+  string restaurant_id = 1;
+  string table_session_id = 2;
+  string guest_token = 3;
+  bool allow_customer = 4;
+}
+message RestaurantDataScopeReply { string restaurant_id = 1; }
 
 message CurrentRestaurantScopeRequest {
   optional string restaurant_id = 1;

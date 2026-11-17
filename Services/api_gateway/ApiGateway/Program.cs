@@ -145,6 +145,7 @@ builder.Services.AddSwaggerGen(options =>
         Description = "Dán mã truy cập được trả về khi đăng nhập hoặc làm mới mã."
     });
     options.OperationFilter<ApiGateway.Swagger.BearerSecurityFilter>();
+    options.OperationFilter<ApiGateway.Swagger.RestaurantScopeFilter>();
 });
 
 var identityAddress =

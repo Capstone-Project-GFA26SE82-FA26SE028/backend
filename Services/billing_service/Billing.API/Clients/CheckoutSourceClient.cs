@@ -65,6 +65,11 @@ public sealed class CheckoutSourceClient(CheckoutLockGrpc.CheckoutLockGrpcClient
     private async Task<T> Call<T>(Func<CallOptions, Task<T>> action, CancellationToken ct)
     {
         var headers = new Metadata();
+        var restaurantHeader = http.HttpContext?.Request.Headers["x-restaurant-id"].ToString();
+        if (!string.IsNullOrWhiteSpace(restaurantHeader))
+        {
+            headers.Add("x-restaurant-id", restaurantHeader);
+        }
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
         if (!string.IsNullOrEmpty(authorization))
         {

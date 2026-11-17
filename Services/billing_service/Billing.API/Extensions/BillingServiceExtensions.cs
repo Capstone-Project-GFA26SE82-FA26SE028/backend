@@ -15,6 +15,7 @@ public static class BillingServiceExtensions
     {
         services.AddGrpc(options =>
         {
+            options.Interceptors.Add<RestaurantIsolation.RestaurantScopeInterceptor>();
             options.Interceptors.Add<BillingInterceptor>();
         });
         services.AddHttpContextAccessor();

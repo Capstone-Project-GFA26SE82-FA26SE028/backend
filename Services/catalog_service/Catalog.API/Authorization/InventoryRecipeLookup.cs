@@ -12,6 +12,11 @@ public sealed class InventoryRecipeLookup(IngredientUnitGrpc.IngredientUnitGrpcC
     public async Task<(decimal Factor, ResponseDTO? Error)> ResolveAsync(Guid ingredientId, Guid unitId, CancellationToken ct)
     {
         var headers = new Metadata();
+        var restaurantHeader = http.HttpContext?.Request.Headers["x-restaurant-id"].ToString();
+        if (!string.IsNullOrWhiteSpace(restaurantHeader))
+        {
+            headers.Add("x-restaurant-id", restaurantHeader);
+        }
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
         if (!string.IsNullOrEmpty(authorization))
         {

@@ -18,5 +18,8 @@
     <Protobuf Include="../../../Contracts/Protos/billing.proto" Link="Protos/billing.proto" GrpcServices="Server" />
     <Protobuf Include="../../../Contracts/Protos/restaurant.proto" Link="Protos/restaurant.proto" GrpcServices="Client" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../../Shared/RestaurantIsolation/RestaurantScopeInterceptor.cs" Link="RestaurantIsolation/RestaurantScopeInterceptor.cs" />
+  </ItemGroup>
 </Project>
 

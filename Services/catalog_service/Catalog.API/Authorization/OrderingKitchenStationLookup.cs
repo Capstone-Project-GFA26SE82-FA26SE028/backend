@@ -11,6 +11,11 @@ public sealed class OrderingKitchenStationLookup(KitchenStationGrpc.KitchenStati
     public async Task<ResponseDTO?> ValidateAsync(Guid stationId, CancellationToken ct)
     {
         var headers = new Metadata();
+        var restaurantHeader = http.HttpContext?.Request.Headers["x-restaurant-id"].ToString();
+        if (!string.IsNullOrWhiteSpace(restaurantHeader))
+        {
+            headers.Add("x-restaurant-id", restaurantHeader);
+        }
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
         if (!string.IsNullOrEmpty(authorization))
         {

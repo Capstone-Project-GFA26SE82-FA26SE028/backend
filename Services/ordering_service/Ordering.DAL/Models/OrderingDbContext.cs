@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Ordering.DAL.Models;
 
-public partial class OrderingDbContext : DbContext
+public partial class OrderingDbContext : Shared.Persistence.RestaurantIsolation.RestaurantDbContext
 {
     public OrderingDbContext()
     {
@@ -14,6 +14,11 @@ public partial class OrderingDbContext : DbContext
 
     public OrderingDbContext(DbContextOptions<OrderingDbContext> options)
         : base(options)
+    {
+    }
+
+    public OrderingDbContext(DbContextOptions<OrderingDbContext> options,
+        Shared.Persistence.RestaurantIsolation.RestaurantDataScope scope) : base(options, scope)
     {
     }
 
@@ -302,6 +307,7 @@ public partial class OrderingDbContext : DbContext
         });
 
         OnModelCreatingPartial(modelBuilder);
+        ConfigureRestaurantIsolation(modelBuilder);
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);

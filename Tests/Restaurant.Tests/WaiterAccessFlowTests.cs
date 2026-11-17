@@ -42,6 +42,7 @@ public sealed partial class GatewayFlowTests
     {
         var restaurant = await CreateRestaurant();
         var area = await CreateArea(restaurant.RestaurantId, "WAITER");
+        await AssignWaiter(restaurant.RestaurantId);
         var table = await CreateTable(area.AreaId);
         var qr = await Read<QrCreatedDto>(await _http.PostAsync($"/api/qr/tables/{table.TableId}", null), HttpStatusCode.Created);
         var session = await Read<TableSessionScanDto>(await Scan(qr.Token));
@@ -90,6 +91,7 @@ public sealed partial class GatewayFlowTests
     public async Task WaiterOpensWithoutQrAndGuestScanReusesSession()
     {
         var restaurant = await CreateRestaurant();
+        await AssignWaiter(restaurant.RestaurantId);
         var area = await CreateArea(restaurant.RestaurantId, "OPEN");
         var table = await CreateTable(area.AreaId);
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "waiter");
@@ -132,6 +134,7 @@ public sealed partial class GatewayFlowTests
     public async Task WaiterCannotOpenInactiveTableOrArea(bool disableTable)
     {
         var restaurant = await CreateRestaurant();
+        await AssignWaiter(restaurant.RestaurantId);
         var area = await CreateArea(restaurant.RestaurantId, "OFF");
         var table = await CreateTable(area.AreaId);
         using (var scope = _restaurant.Services.CreateScope())
@@ -152,6 +155,77 @@ public sealed partial class GatewayFlowTests
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         using var verification = _restaurant.Services.CreateScope();
         Assert.Empty(await verification.ServiceProvider.GetRequiredService<RestaurantDbContext>().TableSessions.ToListAsync());
+    }
+
+    [Fact]
+    public async Task WaiterCannotOpenAnotherRestaurantTable()
+    {
+        var own = await CreateRestaurant();
+        await AssignWaiter(own.RestaurantId);
+        var other = await CreateRestaurant();
+        var area = await CreateArea(other.RestaurantId, "OTHER");
+        var table = await CreateTable(area.AreaId);
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "waiter");
+
+        var response = await _http.PostAsync($"/api/table-sessions/tables/{table.TableId}/open", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        using var scope = _restaurant.Services.CreateScope();
+        Assert.Empty(await scope.ServiceProvider.GetRequiredService<RestaurantDbContext>().TableSessions.ToListAsync());
+    }
+
+    private async Task AssignWaiter(Guid restaurantId)
+    {
+        using var scope = _restaurant.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<RestaurantDbContext>();
+        db.RestaurantStaffs.Add(new RestaurantStaff
+        {
+            RestaurantId = restaurantId,
+            UserIdRef = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            IsActive = true
+        });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task DataScopeUsesActiveAssignmentsAndRequiresAnExplicitChoiceForMultipleRestaurants()
+    {
+        var first = await CreateRestaurant();
+        var second = await CreateRestaurant();
+        await AssignWaiter(first.RestaurantId);
+        using var channel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions
+        {
+            HttpHandler = _restaurant.Server.CreateHandler()
+        });
+        var client = new RestaurantAccessGrpc.RestaurantAccessGrpcClient(channel);
+        var headers = new Metadata
+        {
+            { "authorization", "Bearer waiter" }
+        };
+        var inferred = await client.ResolveDataScopeAsync(new RestaurantDataScopeRequest(), headers);
+        Assert.Equal(first.RestaurantId.ToString(), inferred.RestaurantId);
+        var denied = await Assert.ThrowsAsync<RpcException>(async () => await client.ResolveDataScopeAsync(new RestaurantDataScopeRequest
+        {
+            RestaurantId = second.RestaurantId.ToString()
+        }, headers));
+        Assert.Equal(StatusCode.PermissionDenied, denied.StatusCode);
+
+        await AssignWaiter(second.RestaurantId);
+        var ambiguous = await Assert.ThrowsAsync<RpcException>(async () => await client.ResolveDataScopeAsync(new RestaurantDataScopeRequest(), headers));
+        Assert.Equal(StatusCode.InvalidArgument, ambiguous.StatusCode);
+
+        using (var scope = _restaurant.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<RestaurantDbContext>();
+            (await db.RestaurantStaffs.SingleAsync(value => value.RestaurantId == first.RestaurantId)).IsActive = false;
+            await db.SaveChangesAsync();
+        }
+
+        var revoked = await Assert.ThrowsAsync<RpcException>(async () => await client.ResolveDataScopeAsync(new RestaurantDataScopeRequest
+        {
+            RestaurantId = first.RestaurantId.ToString()
+        }, headers));
+        Assert.Equal(StatusCode.PermissionDenied, revoked.StatusCode);
     }
 
     private sealed class WaiterIdentityClient : IdentityClient

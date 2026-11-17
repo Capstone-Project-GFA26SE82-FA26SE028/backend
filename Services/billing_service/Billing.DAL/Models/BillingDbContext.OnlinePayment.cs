@@ -4,6 +4,12 @@ namespace Billing.DAL.Models;
 
 public partial class BillingDbContext
 {
+    protected override bool IsRestaurantEntity(Type type)
+    {
+        // Method codes (Cash/BankTransfer) are a shared read-only dictionary, not balances.
+        return type != typeof(PaymentMethod);
+    }
+
     public DbSet<OnlinePayment> OnlinePayments { get; set; }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder)

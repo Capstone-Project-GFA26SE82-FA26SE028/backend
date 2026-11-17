@@ -2,6 +2,7 @@ using Restaurant.DAL.Extensions;
 using Restaurant.DAL.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantDataScopeService, Restaurant.BLL.Implements.RestaurantDataScopeService>();
 
 builder.Services.AddGrpc(options =>
 {

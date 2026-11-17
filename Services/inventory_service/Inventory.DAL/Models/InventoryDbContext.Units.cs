@@ -16,7 +16,8 @@ public partial class InventoryDbContext
             entity.HasKey(x => x.UnitId);
             entity.Property(x => x.UnitId).ValueGeneratedNever();
             entity.Property(x => x.Code).HasMaxLength(50).IsUnicode(false).IsRequired();
-            entity.HasIndex(x => x.Code).IsUnique();
+            entity.Property<Guid?>("RestaurantId");
+            entity.HasIndex("RestaurantId", nameof(Unit.Code)).IsUnique();
             entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
         });
         modelBuilder.Entity<IngredientUnit>(entity =>

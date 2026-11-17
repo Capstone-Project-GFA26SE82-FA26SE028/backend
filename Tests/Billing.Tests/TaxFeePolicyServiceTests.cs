@@ -15,6 +15,17 @@ namespace Billing.Tests;
 public sealed class TaxFeePolicyServiceTests
 {
     [Fact]
+    public async Task RestaurantManagerCanCreatePolicy()
+    {
+        await using var fixture = await PolicyFixture.Create();
+        fixture.Access.Scope.RoleId = "manager";
+        fixture.Access.Scope.IsAdministrator = false;
+        fixture.Access.Scope.RestaurantIds = [Guid.NewGuid()];
+        var result = await fixture.Service.Create(Request(), default);
+        Assert.Equal(result.TaxFeePolicyId, (await fixture.Db.TaxFeePolicies.SingleAsync()).TaxFeePolicyId);
+    }
+
+    [Fact]
     public async Task AdministratorWithoutBranchAssignmentCreatesImmediatelyEffectivePolicy()
     {
         await using var fixture = await PolicyFixture.Create();
@@ -32,13 +43,12 @@ public sealed class TaxFeePolicyServiceTests
     }
 
     [Theory]
-    [InlineData("manager")]
     [InlineData("cashier")]
     [InlineData("waiter")]
     [InlineData("kitchen")]
     [InlineData("inventory")]
     [InlineData("admin")]
-    public async Task AdministratorFlagIsRequiredForAllOperations(string role)
+    public async Task NonManagerWithoutAdministratorFlagCannotManagePolicies(string role)
     {
         await using var fixture = await PolicyFixture.Create();
         fixture.Access.Scope.RoleId = role;
@@ -341,7 +351,7 @@ public sealed class TaxFeePolicyServiceTests
             return Task.FromResult(new BillingAccessScope
             {
                 UserId = user,
-                RoleId = calls == 1 ? "admin" : "manager",
+                RoleId = calls == 1 ? "admin" : "waiter",
                 IsAdministrator = calls == 1
             });
         }

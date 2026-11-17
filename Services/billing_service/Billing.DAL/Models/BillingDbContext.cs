@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Billing.DAL.Models;
 
-public partial class BillingDbContext : DbContext
+public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.RestaurantDbContext
 {
     public BillingDbContext()
     {
@@ -14,6 +14,11 @@ public partial class BillingDbContext : DbContext
 
     public BillingDbContext(DbContextOptions<BillingDbContext> options)
         : base(options)
+    {
+    }
+
+    public BillingDbContext(DbContextOptions<BillingDbContext> options,
+        Shared.Persistence.RestaurantIsolation.RestaurantDataScope scope) : base(options, scope)
     {
     }
 
@@ -603,6 +608,7 @@ public partial class BillingDbContext : DbContext
         });
 
         OnModelCreatingPartial(modelBuilder);
+        ConfigureRestaurantIsolation(modelBuilder);
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);

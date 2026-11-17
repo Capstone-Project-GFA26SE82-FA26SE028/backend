@@ -4,9 +4,34 @@ using Restaurant.BLL.Interfaces;
 
 namespace Restaurant.API.GrpcServices;
 
-public sealed class RestaurantAccessGrpcService(ICurrentRestaurantScopeService service)
+public sealed class RestaurantAccessGrpcService(ICurrentRestaurantScopeService service, IRestaurantDataScopeService dataScope)
     : RestaurantAccessGrpc.RestaurantAccessGrpcBase
 {
+    public override async Task<RestaurantDataScopeReply> ResolveDataScope(RestaurantDataScopeRequest request, ServerCallContext context)
+    {
+        var restaurantId = await dataScope.Resolve(ParseOptional(request.RestaurantId),
+            ParseOptional(request.TableSessionId), request.GuestToken, request.AllowCustomer, context.CancellationToken);
+        return new RestaurantDataScopeReply
+        {
+            RestaurantId = restaurantId.ToString()
+        };
+    }
+
+    private static Guid? ParseOptional(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return null;
+        }
+
+        if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã nhà hàng hoặc phiên bàn không hợp lệ."));
+        }
+
+        return id;
+    }
+
     public override async Task<CurrentRestaurantScopeReply> GetCurrentScope(
         CurrentRestaurantScopeRequest request, ServerCallContext context)
     {

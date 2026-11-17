@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Catalog.DAL.Models;
 
-public partial class CatalogDbContext : DbContext
+public partial class CatalogDbContext : Shared.Persistence.RestaurantIsolation.RestaurantDbContext
 {
     public CatalogDbContext()
     {
@@ -14,6 +14,11 @@ public partial class CatalogDbContext : DbContext
 
     public CatalogDbContext(DbContextOptions<CatalogDbContext> options)
         : base(options)
+    {
+    }
+
+    public CatalogDbContext(DbContextOptions<CatalogDbContext> options,
+        Shared.Persistence.RestaurantIsolation.RestaurantDataScope scope) : base(options, scope)
     {
     }
 
@@ -209,6 +214,7 @@ public partial class CatalogDbContext : DbContext
         });
 
         OnModelCreatingPartial(modelBuilder);
+        ConfigureRestaurantIsolation(modelBuilder);
     }
 
     partial void OnModelCreatingPartial(ModelBuilder modelBuilder);
