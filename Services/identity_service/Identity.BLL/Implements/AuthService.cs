@@ -154,7 +154,7 @@ public sealed class AuthService(IUnitOfWork unitOfWork, ISessionRepository sessi
             || request.NewPassword != request.ConfirmPassword
             || request.CurrentPassword == request.NewPassword)
         {
-            return new ResponseDTO("Mật khẩu mới phải từ 8 đến 72 ký tự, khác mật khẩu hiện tại và khớp với xác nhận mật khẩu.", 400);
+            return new ResponseDTO("Mật khẩu mới phải có ít nhất 8 ký tự và không quá 72 byte UTF-8, khác mật khẩu hiện tại và khớp với xác nhận mật khẩu.", 400);
         }
 
         var user = await unitOfWork.UserRepo.FindUserAsync(userId, ct);
