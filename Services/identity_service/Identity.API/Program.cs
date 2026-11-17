@@ -21,6 +21,10 @@ var databaseConnectionString = builder.Configuration.GetConnectionString("Defaul
 builder.Services.AddDbContext<IdentityDbContext>(options =>
     options.UseSqlServer(databaseConnectionString));
 
+builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
+builder.Services.AddScoped<INotificationAccess, NotificationAccess>();
+builder.Services.AddScoped<INotificationRestaurantAccess, Identity.API.Clients.NotificationRestaurantAccess>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
@@ -49,6 +53,7 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+app.MapGrpcService<Identity.API.GrpcServices.NotificationGrpcService>();
 app.MapGrpcService<Identity.API.GrpcServices.AccessGrpcService>();
 
 app.MapGrpcService<Identity.API.GrpcServices.IdentityGrpcService>();

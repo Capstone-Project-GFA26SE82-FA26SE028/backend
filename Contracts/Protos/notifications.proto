@@ -1,0 +1,23 @@
+syntax = "proto3";
+option csharp_namespace = "Backend.Contracts.Notifications";
+package notifications;
+
+message NotificationRequest {
+  string restaurant_id = 1;
+  string id = 2;
+  string json = 3;
+  string version = 4;
+  string type = 5;
+  bool enabled = 6;
+}
+message NotificationReply {
+  int32 status_code = 1;
+  string message = 2;
+  string json = 3;
+}
+service NotificationGrpc {
+  rpc GetAll(NotificationRequest) returns (NotificationReply);
+  rpc GetById(NotificationRequest) returns (NotificationReply);
+  rpc UnreadCount(NotificationRequest) returns (NotificationReply);
+  rpc MarkRead(NotificationRequest) returns (NotificationReply);
+}

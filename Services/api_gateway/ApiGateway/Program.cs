@@ -220,6 +220,11 @@ builder.Services.AddGrpcClient<Backend.Contracts.Customer.FeedbackGrpc.FeedbackG
     options.Address = new Uri(customerAddress);
 });
 
+builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationGrpc.NotificationGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]!);
+});
+
 var app = builder.Build();
 
 

@@ -24,5 +24,8 @@
     <Protobuf Include="../../../Contracts/Protos/restaurant.proto" GrpcServices="Client" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Protobuf Include="../../../Contracts/Protos/notifications.proto" GrpcServices="Server" />
+  </ItemGroup>
 </Project>
 
