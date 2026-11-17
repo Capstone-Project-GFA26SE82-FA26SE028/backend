@@ -62,13 +62,20 @@ public abstract class RestaurantDbContext : DbContext
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ValidateOwnershipAsync(CancellationToken.None).GetAwaiter().GetResult();
+        CaptureNotificationEventsAsync(CancellationToken.None).GetAwaiter().GetResult();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         await ValidateOwnershipAsync(cancellationToken);
+        await CaptureNotificationEventsAsync(cancellationToken);
         return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    protected virtual Task CaptureNotificationEventsAsync(CancellationToken ct)
+    {
+        return Task.CompletedTask;
     }
 
     private async Task ValidateOwnershipAsync(CancellationToken ct)

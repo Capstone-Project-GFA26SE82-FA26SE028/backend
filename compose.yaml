@@ -120,6 +120,8 @@ services:
       dockerfile: Services/ordering_service/Ordering.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      Notifications__ServiceKey: ${NOTIFICATION_SERVICE_KEY:-${JWT_SECRET_KEY}}
+      GrpcServices__Identity: http://identity:5001
       Takeaway__ServiceKey: ${TAKEAWAY_SERVICE_KEY:-}
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=OrderingDb;User Id=sa;Password=${SQL_SA_PASSWORD:?Set SQL_SA_PASSWORD in .env};Encrypt=True;TrustServerCertificate=True"
     depends_on:
@@ -163,6 +165,8 @@ services:
       dockerfile: Services/billing_service/Billing.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      Notifications__ServiceKey: ${NOTIFICATION_SERVICE_KEY:-${JWT_SECRET_KEY}}
+      GrpcServices__Identity: http://identity:5001
       PaymentProviderConfiguration__WebhookBaseUrl: ${PAYOS_WEBHOOK_BASE_URL:-}
       PaymentProviderConfiguration__KeyDirectory: /app/App_Data/payment-keys
       Takeaway__ServiceKey: ${TAKEAWAY_SERVICE_KEY:-}

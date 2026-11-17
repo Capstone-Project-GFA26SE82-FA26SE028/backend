@@ -610,6 +610,7 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
         });
 
         OnModelCreatingPartial(modelBuilder);
+        Shared.Persistence.Notifications.NotificationOutboxModel.Configure(modelBuilder);
         ConfigureRestaurantIsolation(modelBuilder);
     }
 

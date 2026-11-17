@@ -310,6 +310,7 @@ public partial class OrderingDbContext : Shared.Persistence.RestaurantIsolation.
         });
 
         OnModelCreatingPartial(modelBuilder);
+        Shared.Persistence.Notifications.NotificationOutboxModel.Configure(modelBuilder);
         ConfigureRestaurantIsolation(modelBuilder);
     }
 

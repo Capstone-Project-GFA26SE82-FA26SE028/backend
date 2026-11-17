@@ -20,6 +20,7 @@ public static class PersistenceExtensions
         {
             options.UseSqlServer(connectionString);
         });
+        services.AddScoped<Shared.Persistence.Notifications.NotificationOutboxRepository<BillingDbContext>>();
         services.AddScoped<IUnitOfWork, UnitOfWork<BillingDbContext>>();
         services.AddScoped<IPaymentProviderConfigRepository, PaymentProviderConfigRepository>();
         services.AddScoped<IShiftReportRepository, ShiftReportRepository>();

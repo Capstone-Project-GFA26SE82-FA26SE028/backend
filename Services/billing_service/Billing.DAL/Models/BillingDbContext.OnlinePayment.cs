@@ -7,7 +7,7 @@ public partial class BillingDbContext
     protected override bool IsRestaurantEntity(Type type)
     {
         // Method codes (Cash/BankTransfer) are a shared read-only dictionary, not balances.
-        return type != typeof(PaymentMethod);
+        return type != typeof(PaymentMethod) && type != typeof(Shared.Persistence.Notifications.NotificationOutbox);
     }
 
     public DbSet<OnlinePayment> OnlinePayments { get; set; }

@@ -13,6 +13,12 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 builder.Services.AddOrderingPersistence(connectionString);
 
+builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationGrpc.NotificationGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"] ?? "http://localhost:5001");
+});
+builder.Services.AddHostedService<RestaurantIsolation.NotificationOutboxWorker<Ordering.DAL.Models.OrderingDbContext>>();
+
 var app = builder.Build();
 
 app.MapGrpcService<Ordering.API.GrpcServices.KitchenStationGrpcService>();

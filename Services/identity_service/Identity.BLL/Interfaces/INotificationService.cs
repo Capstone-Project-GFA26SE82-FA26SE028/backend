@@ -9,4 +9,5 @@ public interface INotificationService
     Task<NotificationDetails> GetById(Guid userId, Guid? restaurantId, Guid id, CancellationToken ct);
     Task<int> UnreadCount(Guid userId, CancellationToken ct);
     Task MarkRead(Guid userId, Guid? id, CancellationToken ct);
+    Task Publish(NotificationEvent request, CancellationToken ct);
 }

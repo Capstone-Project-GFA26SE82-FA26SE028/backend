@@ -7,7 +7,7 @@ using Shared.Common.Notifications;
 
 namespace Identity.API.GrpcServices;
 
-public sealed class NotificationGrpcService(INotificationService service) : NotificationGrpc.NotificationGrpcBase
+public sealed class NotificationGrpcService(INotificationService service, IConfiguration configuration) : NotificationGrpc.NotificationGrpcBase
 {
     public override Task<NotificationReply> GetAll(NotificationRequest request, ServerCallContext context)
     {
@@ -35,4 +35,20 @@ public sealed class NotificationGrpcService(INotificationService service) : Noti
         });
     }
 
+    public override Task<NotificationReply> Publish(NotificationRequest request, ServerCallContext context)
+    {
+        return NotificationRpc.Execute(async () =>
+        {
+            var expected = configuration["Notifications:ServiceKey"];
+            var supplied = context.RequestHeaders.GetValue("x-notification-key");
+            if (string.IsNullOrEmpty(expected) || expected.Length < 32 || string.IsNullOrEmpty(supplied)
+                || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(supplied)))
+            {
+                throw new NotificationException(403, "Không có quyền gửi sự kiện thông báo nội bộ.");
+            }
+
+            await service.Publish(NotificationRpc.Body<NotificationEvent>(request.Json), context.CancellationToken);
+            return null;
+        });
+    }
 }

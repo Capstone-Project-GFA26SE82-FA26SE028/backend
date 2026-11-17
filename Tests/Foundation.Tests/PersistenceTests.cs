@@ -86,7 +86,9 @@ public class PersistenceTests
         // Implicit many-to-many join tables are managed through navigation properties.
         foreach (var entity in db.Model.GetEntityTypes().Where(entity => !entity.HasSharedClrType))
         {
-            var repositoryType = typeof(IGenericRepository<>).MakeGenericType(entity.ClrType);
+            var repositoryType = entity.ClrType == typeof(Shared.Persistence.Notifications.NotificationOutbox)
+                ? typeof(Shared.Persistence.Notifications.NotificationOutboxRepository<>).MakeGenericType(contextType)
+                : typeof(IGenericRepository<>).MakeGenericType(entity.ClrType);
             var repository = scope.ServiceProvider.GetRequiredService(repositoryType);
             Assert.Same(repository, scope.ServiceProvider.GetRequiredService(repositoryType));
             Assert.NotSame(repository, secondScope.ServiceProvider.GetRequiredService(repositoryType));

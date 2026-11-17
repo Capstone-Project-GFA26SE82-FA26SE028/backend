@@ -279,3 +279,18 @@ ALTER TABLE dbo.[OrderItemOption] WITH CHECK ADD CONSTRAINT [FK_OrderItemOption_
 GO
 ALTER TABLE dbo.[ServiceRecord] WITH CHECK ADD CONSTRAINT [FK_ServiceRecord_OrderItem] FOREIGN KEY ([OrderItemId]) REFERENCES dbo.[OrderItem] ([OrderItemId]);
 GO
+
+CREATE TABLE dbo.NotificationOutbox (
+    NotificationOutboxId uniqueidentifier NOT NULL CONSTRAINT PK_NotificationOutbox PRIMARY KEY,
+    RestaurantId uniqueidentifier NOT NULL,
+    EventKey nvarchar(200) NOT NULL,
+    Payload nvarchar(max) NOT NULL,
+    CreatedAt datetime2 NOT NULL,
+    NextAttemptAt datetime2 NOT NULL,
+    ProcessedAt datetime2 NULL,
+    Attempts int NOT NULL,
+    LastError nvarchar(100) NULL
+);
+CREATE UNIQUE INDEX IX_NotificationOutbox_EventKey ON dbo.NotificationOutbox(EventKey);
+CREATE INDEX IX_NotificationOutbox_ProcessedAt_NextAttemptAt ON dbo.NotificationOutbox(ProcessedAt, NextAttemptAt);
+GO
