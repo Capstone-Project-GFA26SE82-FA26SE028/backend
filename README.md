@@ -457,3 +457,9 @@ After a verified PayOS payment or Cashier confirmation of cash handover, Billing
 Restaurant retries acknowledged payment requests for sessions still open. If Restaurant or Billing is temporarily unavailable, the payment already committed remains paid and closure resumes after connectivity returns. Repeat requests preserve the original closure time. B6 uses the existing `Notifications:ServiceKey` to authenticate both internal gRPC calls. Compose already supplies this key to both services using `NOTIFICATION_SERVICE_KEY` or its existing JWT key fallback. For native runs, the two services use the same existing `Notifications__ServiceKey`. There is no new public closure endpoint.
 
 Confirmed items can be billed before they are served. Kitchen tasks can still reach Ready after session closure, and an assigned Waiter can read the order and mark a ready item from the paid checkout Served through the existing endpoints. The closed guest session cannot submit more orders.
+
+## Billing B8: Recover uncertain PayOS outcomes
+
+When the PayOS response times out, use the existing payment ID for status or reconciliation and the original idempotency key for a create replay. Billing keeps the checkout held while the outcome is unknown. The reconciliation worker queries the stored PayOS order code, including after a restart. If link creation succeeded but its response was lost, a query can recover the provider link ID and financial status. The QR and checkout URL remain unavailable when PayOS does not return them.
+
+After a timed-out cancellation, another payment remains blocked until PayOS confirms a terminal state with zero money received. Billing then allows a new payment attempt for the same checkout. Disabling link creation for a restaurant still permits reconciliation of existing attempts. Cancellation of the local request stops its provider calls and leaves the saved attempt available to the worker.

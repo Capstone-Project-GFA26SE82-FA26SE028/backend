@@ -271,9 +271,14 @@ public sealed partial class ReservationSqlServerTests
         public const string Qr = "GatewayTestQr";
         private readonly ConcurrentDictionary<long, Transfer> orders = new();
         private int queryCount;
+        private int createCount;
         public bool Offline { get; set; }
+        public bool LoseCreateResponse { get; set; }
+        public bool LoseCancelResponse { get; set; }
+        public bool LookupTimesOut { get; set; }
         public long? QueryAmountOverride { get; set; }
         public int QueryCount => Volatile.Read(ref queryCount);
+        public int CreateCount => Volatile.Read(ref createCount);
         public ICollection<long> OrderCodes => orders.Keys;
 
         public void Settle(long code)
@@ -315,11 +320,18 @@ public sealed partial class ReservationSqlServerTests
             var route = request.RequestUri!.AbsolutePath;
             if (request.Method == HttpMethod.Post && route == path)
             {
+                Interlocked.Increment(ref createCount);
                 var create = await request.Content!.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
                 var code = create.GetProperty("orderCode").GetInt64();
                 var amount = create.GetProperty("amount").GetInt64();
                 VerifyCreateSignature(create, code, amount);
                 var row = orders.GetOrAdd(code, _ => new Transfer(amount, Guid.NewGuid().ToString("N"), "PENDING"));
+                if (LoseCreateResponse)
+                {
+                    LookupTimesOut = true;
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                }
+
                 return Signed(new
                 {
                     orderCode = code,
@@ -343,11 +355,19 @@ public sealed partial class ReservationSqlServerTests
             {
                 status = status with { Status = "CANCELLED" };
                 orders[orderCode] = status;
+                if (LoseCancelResponse)
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                }
             }
 
             if (request.Method == HttpMethod.Get)
             {
                 Interlocked.Increment(ref queryCount);
+                if (LookupTimesOut)
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                }
             }
 
             var settled = status.Status == "PAID";

@@ -67,6 +67,12 @@ public sealed partial class ReservationSqlServerTests
     }
 
     [SqlServerFact]
+    public Task PaymentSubmissionRecoversTimedOutPayOsCreateAndCancelWithoutDuplicateCharges()
+    {
+        return VerifyPaymentSubmission(PayOsScenario.TimeoutRecovery);
+    }
+
+    [SqlServerFact]
     public Task PaymentSubmissionRecoversPaidSessionWhenFirstClosureFails()
     {
         return VerifyPaymentSubmission(recoverClosure: true);
@@ -291,8 +297,16 @@ public sealed partial class ReservationSqlServerTests
                     return;
                 }
 
-                await VerifyPayOsPayment(db, payOs, presented, reopened, nextCashier, cashier, waiter,
-                    sameRestaurantWaiter, otherWaiter, webhookClient, otherRestaurant.RestaurantId);
+                if (payOsScenario == PayOsScenario.TimeoutRecovery)
+                {
+                    await VerifyPayOsTimeoutRecovery(billing.Services, db, payOs, presented, reopened, nextCashier,
+                        waiter, orderingGuest);
+                }
+                else
+                {
+                    await VerifyPayOsPayment(db, payOs, presented, reopened, nextCashier, cashier, waiter,
+                        sameRestaurantWaiter, otherWaiter, webhookClient, otherRestaurant.RestaurantId);
+                }
             }
 
             if (recoverClosure)
@@ -501,6 +515,11 @@ public sealed partial class ReservationSqlServerTests
             builder.UseSetting("GrpcServices:Restaurant", "http://restaurant.test");
             builder.UseSetting("GrpcServices:Ordering", "http://ordering.test");
             builder.UseSetting("Notifications:ServiceKey", ClosureKey);
+            if (payOs is not null)
+            {
+                builder.UseSetting("PayOs:RequestTimeoutSeconds", "1");
+            }
+
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
@@ -669,7 +688,8 @@ public sealed partial class ReservationSqlServerTests
     {
         Settlement,
         Review,
-        ConflictingWebhook
+        ConflictingWebhook,
+        TimeoutRecovery
     }
 
     private sealed record PreparedResult(Guid CheckoutId, Guid TableSessionId, string CheckoutStatus, BillDTO Bill,

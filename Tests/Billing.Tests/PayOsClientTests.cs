@@ -96,6 +96,19 @@ public sealed class PayOsClientTests
     }
 
     [Fact]
+    public async Task CallerCancellationPropagatesFromProviderRequest()
+    {
+        using var caller = new CancellationTokenSource();
+        var provider = Client((Func<HttpRequestMessage, HttpResponseMessage>)(_ =>
+        {
+            caller.Cancel();
+            throw new OperationCanceledException(caller.Token);
+        }));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => provider.GetAsync(123, caller.Token));
+    }
+
+    [Fact]
     public void WebhookAuthenticatesFullDataButDedupesFinancialFieldsOnly()
     {
         var provider = Client(_ => Response(Data()));
