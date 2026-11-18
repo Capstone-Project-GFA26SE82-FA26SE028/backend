@@ -67,6 +67,12 @@ public static class BillingServiceExtensions
         {
             options.Address = uri;
         });
+        services.AddGrpcClient<ServiceRequestGrpc.ServiceRequestGrpcClient>(options =>
+        {
+            options.Address = uri;
+        });
+        services.AddScoped<IPaymentReviewClient, PaymentReviewClient>();
+        services.AddScoped<IPaymentSubmissionService, PaymentSubmissionService>();
         services.AddGrpcClient<Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient>(options =>
         {
             var orderingAddress = configuration["GrpcServices:Ordering"];

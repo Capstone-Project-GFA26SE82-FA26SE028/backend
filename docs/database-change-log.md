@@ -481,3 +481,13 @@ Danh sách file của đợt sửa:
 ### Đồng bộ repo SQL riêng trong Downloads — 2026-10-28
 
 Đã đồng bộ `C:/Users/phucg/Downloads/Database-SQLServer-main/Database-SQLServer/BillingDb.sql`: thêm đúng ba cột PayOS nullable/không default và seed Cash/BankTransfer nếu thiếu, giữ bản ghi đã có kể cả bị tắt. Đây là đưa các thay đổi Billing đã được phép vào bản SQL riêng, không phát sinh schema mới. Chỉ file BillingDb.sql thay đổi trong repo SQL; OrderingDb.sql giữ nguyên. Đã kiểm thử bản sao script trên database SQL Server Docker cô lập CodexBillingSqlSync_* và kiểm tra đúng varchar(100)/varchar(2048)/varchar(max), NULL, default=0 cùng hai seed; đã xóa database thử. Không chạy script reset vào BillingDb đang dùng. File Downloads là script tạo mới có DROP/CREATE; nâng cấp database có dữ liệu dùng docker/sql/upgrades/BillingPayOs.sql trong backend. Repo SQL và backend đều chưa commit/push ở lần đồng bộ này.
+
+### B2 — Chuyển yêu cầu thanh toán đến quầy mặc định
+
+| Database và bảng | Thay đổi | Kiểu, NULL và DEFAULT | Khóa và ERD |
+| --- | --- | --- | --- |
+| BillingDb.dbo.BillCheckout | Thêm `CashRegisterId` | `uniqueidentifier NULL`, không DEFAULT | FK `FK_BillCheckout_CashRegister` đến `CashRegister(CashRegisterId)`. Dây mới CashRegister 1–n BillCheckout, mỗi checkout cũ có thể chưa có quầy. |
+| BillingDb.dbo.BillCheckout | Thêm `SubmittedAt` | `datetime2(7) NULL`, không DEFAULT | Không đổi khóa hoặc dây ERD. |
+| BillingDb.dbo.CashRegister | Thêm UNIQUE index `UX_CashRegister_Restaurant` | Dùng cột `RestaurantId uniqueidentifier NOT NULL` có sẵn | Restaurant 1–0..1 CashRegister, quan hệ logic, không FK xuyên database. |
+
+Giữ PK, UNIQUE/CHECK và các index đang có. Không thêm bảng, không tạo FK xuyên database, không gán quầy vào bản ghi cũ. Script dừng toàn bộ nếu phát hiện một nhà hàng có nhiều quầy. Hàng chờ theo quầy được Cashier đứng ca mới tiếp quản khi đọc danh sách, không đổi khóa ca trên giao dịch cũ. Schema tạo mới ở `docker/sql/schema/BillingDb.sql`. Dùng `docker/sql/upgrades/BillingCheckoutSubmission.sql` để nâng cấp BillingDb hiện có. Đã thử nâng cấp hai lần và scaffold bằng EF Core 8.0.24 trên SQL Server LocalDB cô lập. Chưa áp dụng vào database đang dùng.

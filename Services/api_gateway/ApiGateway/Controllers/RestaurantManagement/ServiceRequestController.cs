@@ -64,15 +64,42 @@ public sealed class ServiceRequestController(ServiceRequestGrpc.ServiceRequestGr
         }, ct);
     }
 
+    [HttpGet("{id:guid}/review")]
+    [RequireBearerToken]
+    public Task<IActionResult> GetReview(Guid sessionId, Guid id, CancellationToken ct)
+    {
+        return Execute(async () =>
+        {
+            var reply = await client.GetReviewAsync(StaffRequest(sessionId, id), Options(ct));
+            return new
+            {
+                reply.PendingOrderCount,
+                Items = reply.Items.Select(item => new
+                {
+                    OrderItemId = Guid.Parse(item.OrderItemId),
+                    TableId = Guid.Parse(item.TableId),
+                    item.Name,
+                    item.Quantity,
+                    item.Status
+                }).ToArray()
+            };
+        }, ct);
+    }
+
     [HttpPost("{id:guid}/acknowledge")]
     [RequireBearerToken]
     public Task<IActionResult> Acknowledge(Guid sessionId, Guid id, CancellationToken ct)
     {
-        return Execute(async () => Map(await client.AcknowledgeAsync(new PaymentServiceRequest
+        return Execute(async () => Map(await client.AcknowledgeAsync(StaffRequest(sessionId, id), Options(ct))), ct);
+    }
+
+    private static PaymentServiceRequest StaffRequest(Guid sessionId, Guid id)
+    {
+        return new PaymentServiceRequest
         {
             TableSessionId = sessionId.ToString(),
             ServiceRequestId = id.ToString()
-        }, Options(ct))), ct);
+        };
     }
 
     private PaymentServiceRequest GuestRequest(Guid sessionId, Guid id)

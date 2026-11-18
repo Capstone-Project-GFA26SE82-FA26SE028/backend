@@ -32,6 +32,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
             if (existing is not null)
             {
                 CheckSession(existing, sessionId);
+                RequireLegacyCheckout(existing);
                 return existing;
             }
 
@@ -159,6 +160,7 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         var value = await InSession(sessionId, async () =>
         {
             var current = await Find(sessionId, id, ct);
+            RequireLegacyCheckout(current);
             if (await checkouts.HasPaymentOrFinalBillAsync(sessionId, ct, PayOsPaymentRules.BlockingExpression))
             {
                 throw new BillingException(409, "Không thể hủy yêu cầu thanh toán sau khi đã bắt đầu thanh toán hoặc hóa đơn đã hoàn tất.");
@@ -244,6 +246,14 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
         var value = await checkouts.GetByIdAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy yêu cầu thanh toán.");
         CheckSession(value, sessionId);
         return value;
+    }
+
+    private static void RequireLegacyCheckout(BillCheckout checkout)
+    {
+        if (checkout.SubmittedAt.HasValue)
+        {
+            throw new BillingException(409, "Yêu cầu đã chuyển vào quầy mặc định. Không thể xử lý qua luồng checkout cũ.");
+        }
     }
 
     private static void CheckSession(BillCheckout value, Guid sessionId)

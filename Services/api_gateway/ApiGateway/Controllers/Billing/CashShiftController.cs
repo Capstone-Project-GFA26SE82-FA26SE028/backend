@@ -34,6 +34,25 @@ public sealed class CashShiftController(CashShiftGrpc.CashShiftGrpcClient client
         }, ct, 201);
     }
 
+    [HttpPost("/api/restaurants/{restaurantId:guid}/cash-shifts/open")]
+    [ProducesResponseType(typeof(ResponseDTO<CashShiftDTO>), StatusCodes.Status201Created)]
+    public Task<IActionResult> OpenDefault(Guid restaurantId, OpenCashShiftDTO body, CancellationToken ct)
+    {
+        return Execute(async options =>
+        {
+            var request = new OpenDefaultCashShiftRequest
+            {
+                RestaurantId = restaurantId.ToString()
+            };
+            if (body.OpeningCash.HasValue)
+            {
+                request.OpeningCash = body.OpeningCash.Value.ToString(CultureInfo.InvariantCulture);
+            }
+
+            return Map(await client.OpenDefaultAsync(request, options));
+        }, ct, 201);
+    }
+
     [HttpGet("current")]
     [ProducesResponseType(typeof(ResponseDTO<CashShiftDTO>), StatusCodes.Status200OK)]
     public Task<IActionResult> GetCurrent(Guid cashRegisterId, CancellationToken ct)

@@ -58,6 +58,13 @@ builder.Services.AddGrpcClient<Backend.Contracts.Identity.UserGrpc.UserGrpcClien
         ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Identity."));
 });
 
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IPaymentRequestOrderClient, Restaurant.API.Management.PaymentRequestOrderClient>();
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
+});
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {

@@ -206,6 +206,8 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
         {
             entity.ToTable("CashRegister");
 
+            entity.HasIndex(e => e.RestaurantId, "UX_CashRegister_Restaurant").IsUnique();
+
             entity.Property(e => e.CashRegisterId).ValueGeneratedNever();
             entity.Property(e => e.RestaurantId).IsRequired();
             entity.Property(e => e.Code)
@@ -607,6 +609,10 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
             entity.HasOne(d => d.Bill).WithMany(p => p.BillCheckouts)
                 .HasForeignKey(d => d.BillId)
                 .HasConstraintName("FK_BillCheckout_Bill");
+
+            entity.HasOne(d => d.CashRegister).WithMany(p => p.BillCheckouts)
+                .HasForeignKey(d => d.CashRegisterId)
+                .HasConstraintName("FK_BillCheckout_CashRegister");
         });
 
         OnModelCreatingPartial(modelBuilder);

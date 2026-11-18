@@ -339,6 +339,7 @@ service ServiceRequestGrpc {
   rpc GetCurrent(GuestAccessRequest) returns (PaymentServiceRequestInfo);
   rpc GetAll(PaymentServiceRequestList) returns (PaymentServiceRequestPage);
   rpc Acknowledge(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+  rpc GetReview(PaymentServiceRequest) returns (PaymentRequestReviewInfo);
 }
 
 message PaymentServiceRequest {
@@ -362,6 +363,20 @@ message PaymentServiceRequestInfo {
   optional string acknowledged_at = 6;
   optional string handled_by_ref = 7;
   repeated PaymentServiceRequestTable tables = 8;
+}
+
+message PaymentRequestReviewInfo {
+  int32 pending_order_count = 1;
+  repeated PaymentRequestReviewItem items = 2;
+  string restaurant_id = 3;
+}
+
+message PaymentRequestReviewItem {
+  string order_item_id = 1;
+  string table_id = 2;
+  string name = 3;
+  int32 quantity = 4;
+  string status = 5;
 }
 
 message PaymentServiceRequestTable {

@@ -36,6 +36,7 @@ app.MapGrpcService<PaymentProviderConfigGrpcService>();
 app.MapGrpcService<PaymentWebhookGrpcService>();
 app.MapGrpcService<CashMovementGrpcService>();
 app.MapGrpcService<BillCheckoutGrpcService>();
+app.MapGrpcService<PaymentSubmissionGrpcService>();
 app.MapGrpcService<TaxFeePolicyGrpcService>();
 
 app.MapGet("/health/live", () =>

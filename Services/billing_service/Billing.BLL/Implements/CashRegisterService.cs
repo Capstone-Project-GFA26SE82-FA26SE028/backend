@@ -40,9 +40,9 @@ public sealed class CashRegisterService(ICashRegisterRepository registers, IUnit
                 throw new BillingException(409, "Thao tác tạo quầy thu ngân tại nhà hàng này đang bận. Vui lòng thử lại.");
             }
 
-            if (await registers.CodeExistsAsync(request.RestaurantId, code, cancellationToken))
+            if (await DefaultCashRegister.FindAsync(registers, request.RestaurantId, cancellationToken) is not null)
             {
-                throw new BillingException(409, "Mã quầy thu ngân đã tồn tại trong nhà hàng này.");
+                throw new BillingException(409, "Nhà hàng đã có quầy thu ngân.");
             }
 
             var register = new CashRegister

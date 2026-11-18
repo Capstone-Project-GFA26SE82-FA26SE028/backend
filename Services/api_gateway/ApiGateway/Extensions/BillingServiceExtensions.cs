@@ -38,6 +38,10 @@ public static class BillingServiceExtensions
         {
             options.Address = uri;
         });
+        services.AddGrpcClient<PaymentSubmissionGrpc.PaymentSubmissionGrpcClient>(options =>
+        {
+            options.Address = uri;
+        });
         services.AddGrpcClient<BillCheckoutGrpc.BillCheckoutGrpcClient>(options =>
         {
             options.Address = uri;

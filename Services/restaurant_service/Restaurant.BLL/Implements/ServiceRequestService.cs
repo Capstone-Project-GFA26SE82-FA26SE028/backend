@@ -13,7 +13,8 @@ namespace Restaurant.BLL.Implements;
 
 public sealed class ServiceRequestService(IServiceRequestRepository requests, ITableSessionRepository sessions,
     IManagementTransaction transaction, IGuestAccessService guests, IStaffIdentity identity,
-    IRestaurantStaffRepository staff, IOptions<ServiceRequestSettings> settings, TimeProvider clock) : IServiceRequestService
+    IRestaurantStaffRepository staff, IOptions<ServiceRequestSettings> settings, TimeProvider clock,
+    IPaymentRequestOrderClient orders) : IServiceRequestService
 {
     public async Task<ServiceRequestDto> Create(Guid sessionId, Guid id, string guestToken, CancellationToken ct)
     {
@@ -89,6 +90,29 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
             Page = page,
             PageSize = pageSize
         };
+    }
+
+    public async Task<PaymentRequestReviewDto> GetReview(Guid sessionId, Guid id, CancellationToken ct)
+    {
+        var waiter = await GetWaiter(ct);
+        var session = await GetSession(sessionId, ct);
+        var restaurantId = GetRestaurantId(session);
+        await RequireAssignment(restaurantId, waiter, ct);
+        RequireOpenSession(session);
+
+        var request = await Find(sessionId, id, ct);
+        if (request.HandledByRef.HasValue && request.HandledByRef != waiter)
+        {
+            throw new ManagementException(403, "Chỉ nhân viên đang phụ trách yêu cầu mới được kiểm tra các món.");
+        }
+
+        if (request.CompletedAt.HasValue || request.Status != PaymentRequestStatuses.Acknowledged
+            || request.HandledByRef != waiter)
+        {
+            throw new ManagementException(409, "Phải tiếp nhận yêu cầu trước khi kiểm tra các món.");
+        }
+
+        return await orders.GetReviewAsync(sessionId, restaurantId, ct);
     }
 
     public async Task<ServiceRequestDto> Acknowledge(Guid sessionId, Guid id, CancellationToken ct)
@@ -171,9 +195,13 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
 
     private async Task<Guid> GetRestaurantId(Guid sessionId, CancellationToken ct)
     {
-        var session = await sessions.GetForOrderingAsync(sessionId, ct)
+        return GetRestaurantId(await GetSession(sessionId, ct));
+    }
+
+    private async Task<TableSession> GetSession(Guid sessionId, CancellationToken ct)
+    {
+        return await sessions.GetForOrderingAsync(sessionId, ct)
             ?? throw new ManagementException(404, "Không tìm thấy phiên bàn.");
-        return GetRestaurantId(session);
     }
 
     private static Guid GetRestaurantId(TableSession session)

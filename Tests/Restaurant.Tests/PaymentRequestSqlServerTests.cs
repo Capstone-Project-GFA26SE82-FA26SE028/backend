@@ -213,9 +213,14 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal(HttpStatusCode.NotFound, (await otherGuest.GetAsync(PaymentRequestPath(otherSession) + "/current")).StatusCode);
     }
 
-    private async Task AddSecondPaymentWaiter(Guid restaurantId)
+    private Task AddSecondPaymentWaiter(Guid restaurantId)
     {
-        const string email = "waiter2@sql.example.test";
+        return AddPaymentStaff("secondWaiter", "waiter", restaurantId);
+    }
+
+    private async Task AddPaymentStaff(string account, string role, Guid restaurantId)
+    {
+        var email = $"{account.ToLowerInvariant()}@sql.example.test";
         var userId = Guid.NewGuid();
         using (var scope = _identity.Services.CreateScope())
         {
@@ -224,10 +229,10 @@ public sealed partial class ReservationSqlServerTests
             {
                 UserId = userId,
                 RestaurantId = restaurantId,
-                RoleId = "waiter",
-                UserName = "waiter2",
+                RoleId = role,
+                UserName = account,
                 Email = email,
-                FullName = "Second SQL waiter",
+                FullName = account,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(_password),
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
@@ -246,9 +251,9 @@ public sealed partial class ReservationSqlServerTests
             Password = _password
         });
         Assert.True(reply.IsSuccess);
-        _users["secondWaiter"] = userId;
-        _tokens["secondWaiter"] = reply.Result.AccessToken;
-        await Grant(restaurantId, "secondWaiter");
+        _users[account] = userId;
+        _tokens[account] = reply.Result.AccessToken;
+        await Grant(restaurantId, account);
     }
 
     private async Task<HttpResponseMessage[]> ContendForPaymentSession(Guid session,

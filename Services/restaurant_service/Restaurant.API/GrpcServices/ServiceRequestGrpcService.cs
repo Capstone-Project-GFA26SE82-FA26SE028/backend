@@ -46,6 +46,25 @@ public sealed class ServiceRequestGrpcService(IServiceRequestService service) : 
             context.CancellationToken));
     }
 
+    public override async Task<PaymentRequestReviewInfo> GetReview(PaymentServiceRequest request, ServerCallContext context)
+    {
+        var result = await service.GetReview(ParseId(request.TableSessionId), ParseId(request.ServiceRequestId), context.CancellationToken);
+        var reply = new PaymentRequestReviewInfo
+        {
+            RestaurantId = result.RestaurantId.ToString(),
+            PendingOrderCount = result.PendingOrderCount
+        };
+        reply.Items.AddRange(result.Items.Select(item => new PaymentRequestReviewItem
+        {
+            OrderItemId = item.OrderItemId.ToString(),
+            TableId = item.TableId.ToString(),
+            Name = item.Name,
+            Quantity = item.Quantity,
+            Status = item.Status
+        }));
+        return reply;
+    }
+
     private static Guid ParseId(string value)
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)

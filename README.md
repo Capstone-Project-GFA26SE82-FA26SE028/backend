@@ -213,6 +213,16 @@ docker compose up -d --no-deps ordering billing gateway
 
 New databases use the checkout tables from the current BillingDb and OrderingDb schema scripts. For an existing database with an older checkout schema, verify the restaurant mappings and prepare a data-preserving upgrade for that database before running the current services. See the [database change log](docs/database-change-log.md) for the original checkout schema and ERD relationships.
 
+### Chuyển yêu cầu thanh toán đến quầy mặc định
+
+1. Thu ngân đúng nhà hàng mở ca bằng `POST /api/restaurants/{restaurantId}/cash-shifts/open`, body ví dụ `{ "openingCash": 0 }`. Nếu chưa có quầy, hệ thống tạo quầy mặc định cùng lúc mở ca. Nếu nhà hàng đã có đúng một quầy, dùng lại quầy đó. Với nhiều quầy cũ, kiểm tra cấu hình trước khi dùng luồng mặc định.
+2. Phục vụ tiếp nhận yêu cầu thanh toán, sau đó gọi `GET /api/table-sessions/{sessionId}/payment-requests/{id}/review` để xem đơn chờ xác nhận và các món còn tính tiền theo Ordering.
+3. Phục vụ phụ trách gọi `POST /api/table-sessions/{sessionId}/payment-requests/{id}/submit`, không gửi mã quầy. Đơn còn chờ xác nhận hoặc nhà hàng chưa có quầy mặc định sẽ trả `409`. Khi quầy đã tồn tại, yêu cầu gửi trong lúc đổi ca vẫn vào danh sách chờ. Thử lại cùng ID yêu cầu sẽ dùng lượt đã lưu.
+4. Thu ngân đang đứng ca xem `GET /api/restaurants/{restaurantId}/payment-requests/incoming`. Sau khi mở ca mới, danh sách hiện cả yêu cầu tồn từ ca trước, yêu cầu gửi giữa hai ca và bill chưa thanh toán có một phiên bàn xác định. Bill cũ có thể trả `billId` cùng `checkoutId: null` và `submittedAt: null`. Khoản đã thanh toán và lịch sử giao dịch vẫn thuộc ca gốc.
+
+Với BillingDb đã khởi tạo, áp dụng `docker/sql/upgrades/BillingCheckoutSubmission.sql` trước khi chạy bản mới. Compose khởi tạo database mới từ schema và giữ nguyên database đã có.
+
+
 Ordering uses `GrpcServices:Billing` and `Ordering:CheckoutCashierRoleIds`; both local and Docker appsettings contain the repository's current Cashier role ID. Identity and Restaurant still verify the actual account, login session and branch assignment. No account IDs or credentials are supplied by the checkout payload.
 
 API sequence in Gateway Swagger:
