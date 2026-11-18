@@ -147,6 +147,41 @@ public sealed class ShiftReportServiceTests
     }
 
     [Fact]
+    public async Task PendingCashHandoverExcludesAnIncorrectlyPostedSaleAndBlocksClosing()
+    {
+        await using var f = await CashPaymentServiceTests.Fixture.Create();
+        await f.RecordCash(300);
+        var payment = await f.Db.Payments.SingleAsync();
+        var movementId = Guid.NewGuid();
+        f.Db.CashMovements.Add(new CashMovement
+        {
+            CashMovementId = movementId,
+            CashShiftId = f.ShiftId,
+            PaymentId = payment.PaymentId,
+            Type = "Sale",
+            SignedAmount = payment.Amount,
+            IdempotencyKey = "test-inconsistent-pending-sale",
+            PostedAt = DateTime.UtcNow
+        });
+        await f.Db.SaveChangesAsync();
+
+        var service = Make(f.Db, f.Core.Actor);
+        var preview = await service.Preview(f.ShiftId, default);
+        Assert.Equal(1000m, preview.ExpectedCash);
+        Assert.Equal(0m, preview.SaleTotal);
+        Assert.Equal(0m, preview.MovementTotal);
+        Assert.False(preview.CanClose);
+        Assert.Contains(preview.Blockers, item => item.Code == "UnresolvedPayment" && item.PaymentId == payment.PaymentId
+            && item.Message.Contains("chưa xác nhận bàn giao", StringComparison.Ordinal));
+        Assert.Contains(preview.Blockers, item => item.Code == "InconsistentSale" && item.CashMovementId == movementId);
+        await Status(409, () => service.Close(f.ShiftId, Body(1000, 0), default));
+        Assert.Equal("PendingHandover", (await f.Db.Payments.AsNoTracking().SingleAsync()).Status);
+        Assert.Equal("Active", (await f.Db.CashShifts.AsNoTracking().SingleAsync()).Status);
+        Assert.Empty(await f.Db.ShiftReports.ToListAsync());
+        Assert.Single(await f.Db.CashMovements.ToListAsync());
+    }
+
+    [Fact]
     public async Task UnsupportedMethodAndHandoverCannotBeAssumedCompleted()
     {
         await using var f = await CashPaymentServiceTests.Fixture.Create(withHandover: true);

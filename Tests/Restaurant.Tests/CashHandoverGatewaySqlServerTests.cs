@@ -96,9 +96,14 @@ public sealed partial class ReservationSqlServerTests
         Assert.Empty(await db.CashMovements.AsNoTracking().ToListAsync());
         var before = await Read<ShiftReconciliationDTO>(await cashier.GetAsync(reconcile));
         Assert.False(before.CanClose);
+        Assert.Equal(shift.OpeningCash, before.ExpectedCash);
         Assert.Equal(0, before.SaleTotal);
-        Assert.Contains(before.Blockers, blocker => blocker.PaymentId == collected.PaymentId && blocker.Code == "UnresolvedPayment");
+        var blocker = Assert.Single(before.Blockers);
+        Assert.Equal(collected.PaymentId, blocker.PaymentId);
+        Assert.Equal("UnresolvedPayment", blocker.Code);
+        Assert.Contains("chưa xác nhận bàn giao", blocker.Message);
         Assert.Equal(HttpStatusCode.Conflict, (await cashier.PostAsJsonAsync(close, new { actualCash = 0, cashHandleOver = 0 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync($"/api/cash-shifts/{shift.CashShiftId}/report")).StatusCode);
 
         var confirm = paymentPath + "/confirm";
         await AssertCashHandoverRequiresBody(cashier, confirm);
@@ -139,8 +144,14 @@ public sealed partial class ReservationSqlServerTests
         var after = await Read<ShiftReconciliationDTO>(await cashier.GetAsync(reconcile));
         Assert.True(after.CanClose);
         Assert.Equal(28517m, after.SaleTotal);
-        await Read<ShiftReportDTO>(await cashier.PostAsJsonAsync(close, new { actualCash = 28517, cashHandleOver = 0 }),
+        Assert.Equal(shift.OpeningCash + 28517m, after.ExpectedCash);
+        Assert.Equal(0, after.BankTransferTotal);
+        var report = await Read<ShiftReportDTO>(await cashier.PostAsJsonAsync(close, new { actualCash = 28517, cashHandleOver = 0 }),
             HttpStatusCode.Created);
+        Assert.Equal(after.ExpectedCash, report.ExpectedCash);
+        Assert.Equal(0, report.Difference);
+        Assert.Equal(report.ShiftReportId, (await Read<ShiftReportDTO>(await cashier.PostAsJsonAsync(close,
+            new { actualCash = 28517, cashHandleOver = 0 }))).ShiftReportId);
         Assert.Equivalent(confirmed, await Read<CashHandoverDTO>(await cashier.PostAsJsonAsync(confirm,
             new { confirmedAmount = received })), strict: true);
     }
