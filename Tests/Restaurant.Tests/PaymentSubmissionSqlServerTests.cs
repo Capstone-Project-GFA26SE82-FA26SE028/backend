@@ -222,7 +222,8 @@ public sealed partial class ReservationSqlServerTests
             var paidBill = await SeedHandoverBill(billing, location, paidSession, paid: true);
             using var closed = await cashier.PostAsJsonAsync($"/api/cash-shifts/{opened.CashShiftId}/close",
                 new { actualCash = 0, cashHandleOver = 0 });
-            Assert.True(closed.StatusCode == HttpStatusCode.Created, await closed.Content.ReadAsStringAsync());
+            var closedReport = await Read<ShiftReportDTO>(closed, HttpStatusCode.Created);
+            Assert.Equal(0, closedReport.ExpectedCash);
             Assert.Equal(HttpStatusCode.Conflict, (await nextCashier.GetAsync(inbox)).StatusCode);
 
             using var handoverGuest = await JoinPaymentSession(handoverSession);
@@ -250,6 +251,8 @@ public sealed partial class ReservationSqlServerTests
             Assert.Equal("Unpaid", inherited.Status);
             Assert.Null(inherited.CheckoutId);
             Assert.DoesNotContain(pendingItems, value => value.BillId == paidBill);
+            var previousReport = await Read<ShiftReportDTO>(await cashier.GetAsync($"/api/cash-shifts/{opened.CashShiftId}/report"));
+            Assert.Equivalent(closedReport, previousReport, strict: true);
             var legacy = $"/api/table-sessions/{session}/checkout/{id}";
             Assert.Equal(HttpStatusCode.Conflict, (await cashier.PostAsync(legacy + "/synchronize", null)).StatusCode);
             Assert.Equal(HttpStatusCode.Conflict, (await cashier.PostAsync(legacy + "/cancel", null)).StatusCode);

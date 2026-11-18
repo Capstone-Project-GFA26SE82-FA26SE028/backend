@@ -9,14 +9,21 @@ internal static class ShiftReconciliationCalculator
     public static ShiftReconciliationDTO Calculate(CashShift shift, IReadOnlyList<Payment> payments,
         IReadOnlyList<CashMovement> movements, IReadOnlyDictionary<Guid, int> billPaymentCounts, string cashMethod, bool singleActiveShift)
     {
+        var unverifiedHandoverPaymentIds = payments
+            .Where(payment => payment.Status == CashHandoverStatuses.PendingPayment
+                || (payment.CashHandover is not null && !PaymentService.IsConfirmedHandover(payment)))
+            .Select(payment => payment.PaymentId).ToHashSet();
+        var cashMovements = movements.Where(movement => movement.Type != PaymentStatuses.SaleMovement
+            || movement.PaymentId is not Guid paymentId || !unverifiedHandoverPaymentIds.Contains(paymentId)).ToArray();
+
         var result = new ShiftReconciliationDTO
         {
             CashShiftId = shift.CashShiftId,
             RestaurantId = shift.CashRegister.RestaurantId,
             Status = shift.Status,
             OpeningCash = shift.OpeningCash,
-            MovementTotal = movements.Sum(value => value.SignedAmount),
-            SaleTotal = movements.Where(value => value.Type == PaymentStatuses.SaleMovement).Sum(value => value.SignedAmount),
+            MovementTotal = cashMovements.Sum(value => value.SignedAmount),
+            SaleTotal = cashMovements.Where(value => value.Type == PaymentStatuses.SaleMovement).Sum(value => value.SignedAmount),
             CashInTotal = movements.Where(value => value.Type == CashMovementTypes.CashIn).Sum(value => value.SignedAmount),
             CashOutTotal = -movements.Where(value => value.Type == CashMovementTypes.CashOut).Sum(value => value.SignedAmount),
             BankTransferTotal = payments.Where(PayOsPaymentRules.IsVerifiedPaid).Sum(value => value.Amount),
@@ -57,6 +64,12 @@ internal static class ShiftReconciliationCalculator
                     Add(result, "UnresolvedPayOsPayment", "Khoản thanh toán PayOS chưa được xác minh là đã thanh toán đủ hoặc đã kết thúc mà không phát sinh tiền.", payment.PaymentId);
                 }
 
+                continue;
+            }
+
+            if (payment.Status == CashHandoverStatuses.PendingPayment)
+            {
+                Add(result, "UnresolvedPayment", "Thu ngân chưa xác nhận bàn giao khoản tiền phục vụ thu hộ.", payment.PaymentId);
                 continue;
             }
 
@@ -113,6 +126,11 @@ internal static class ShiftReconciliationCalculator
                 if (!movement.PaymentId.HasValue || !paymentIds.Contains(movement.PaymentId.Value) || movement.SignedAmount <= 0)
                 {
                     Add(result, "UnmatchedSale", "Bút toán bán hàng không liên kết với khoản thanh toán thuộc ca này.", movement.PaymentId, movement.CashMovementId);
+                }
+                else if (unverifiedHandoverPaymentIds.Contains(movement.PaymentId.Value))
+                {
+                    Add(result, "InconsistentSale", "Bút toán bán hàng gắn với khoản thu hộ chưa được xác nhận hợp lệ.",
+                        movement.PaymentId, movement.CashMovementId);
                 }
             }
             else if (movement.Type is CashMovementTypes.CashIn or CashMovementTypes.CashOut)

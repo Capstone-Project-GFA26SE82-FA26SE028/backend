@@ -97,6 +97,17 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal("Unpaid", waitingForVerification.BillStatus);
         Assert.Null(await ReadClosedAt(presented.TableSessionId));
 
+        var shiftPath = $"/api/cash-shifts/{shift.CashShiftId}";
+        var closeBody = new { actualCash = shift.OpeningCash, cashHandleOver = 0 };
+        var pendingReconciliation = await Read<ShiftReconciliationDTO>(await cashier.GetAsync(shiftPath + "/reconciliation"));
+        Assert.False(pendingReconciliation.CanClose);
+        Assert.Equal(0, pendingReconciliation.BankTransferTotal);
+        Assert.Contains(pendingReconciliation.Blockers,
+            blocker => blocker.Code == "UnresolvedPayOsPayment" && blocker.PaymentId == second.PaymentId);
+        using var pendingClose = await cashier.PostAsJsonAsync(shiftPath + "/close", closeBody);
+        Assert.Equal(HttpStatusCode.Conflict, pendingClose.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(shiftPath + "/report")).StatusCode);
+
         provider.Settle(orderCode);
         var deliveries = await Task.WhenAll(guest.PostAsJsonAsync(webhook, payload),
             guest.PostAsJsonAsync("/api/payments/payos/webhook", payload));
@@ -139,6 +150,28 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal("Applied", (await db.PaymentWebhooks.AsNoTracking().SingleAsync()).ProcessingStatus);
         Assert.Empty(await db.CashMovements.AsNoTracking().ToListAsync());
         Assert.Empty(await db.CashHandovers.AsNoTracking().ToListAsync());
+
+        var paidReconciliation = await Read<ShiftReconciliationDTO>(await cashier.GetAsync(shiftPath + "/reconciliation"));
+        Assert.True(paidReconciliation.CanClose);
+        Assert.Equal(presented.Bill.TotalAmount, paidReconciliation.BankTransferTotal);
+        Assert.Equal(shift.OpeningCash, paidReconciliation.ExpectedCash);
+        Assert.Equal(0, paidReconciliation.SaleTotal);
+        using var wrongOwner = await oldCashier.PostAsJsonAsync(shiftPath + "/close", closeBody);
+        Assert.Equal(HttpStatusCode.Forbidden, wrongOwner.StatusCode);
+        provider.Offline = true;
+        using var unavailableClose = await cashier.PostAsJsonAsync(shiftPath + "/close", closeBody);
+        Assert.Equal(HttpStatusCode.Conflict, unavailableClose.StatusCode);
+        Assert.Equal("Active", (await Read<ShiftReconciliationDTO>(await cashier.GetAsync(shiftPath + "/reconciliation"))).Status);
+        Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(shiftPath + "/report")).StatusCode);
+
+        provider.Offline = false;
+        var report = await Read<ShiftReportDTO>(await cashier.PostAsJsonAsync(shiftPath + "/close", closeBody), HttpStatusCode.Created);
+        Assert.Equal(shift.OpeningCash, report.ExpectedCash);
+        Assert.Equal(0, report.Difference);
+        var queriesAfterClose = provider.QueryCount;
+        var replayReport = await Read<ShiftReportDTO>(await cashier.PostAsJsonAsync(shiftPath + "/close", closeBody));
+        Assert.Equivalent(report, replayReport, strict: true);
+        Assert.Equal(queriesAfterClose, provider.QueryCount);
     }
 
     private async Task VerifyPayOsWebhookUnderReview(BillingDb db, PayOsHttpFixture provider, PreparedResult presented,
