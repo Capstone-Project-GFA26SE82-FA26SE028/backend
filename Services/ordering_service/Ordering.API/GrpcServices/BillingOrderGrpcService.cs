@@ -2,19 +2,40 @@ using System.Globalization;
 using Backend.Contracts.Ordering;
 using Grpc.Core;
 using Ordering.BLL.Interfaces;
+using Ordering.Common.DTOs;
+using Shared.Persistence.RestaurantIsolation;
 
 namespace Ordering.API.GrpcServices;
 
-public sealed class BillingOrderGrpcService(IBillingOrderService service) : BillingOrderGrpc.BillingOrderGrpcBase
+public sealed class BillingOrderGrpcService(IBillingOrderService service, IOrderingAccess access, RestaurantDataScope scope)
+    : BillingOrderGrpc.BillingOrderGrpcBase
 {
     public override async Task<BillingOrderSnapshot> GetBySession(BillingOrderRequest request, ServerCallContext context)
     {
-        if (!Guid.TryParse(request.TableSessionId, out var id) || id == Guid.Empty)
+        return Map(await service.GetBySession(ParseSessionId(request.TableSessionId), context.CancellationToken));
+    }
+
+    public override async Task<BillingOrderSnapshot> GetForPaymentReview(BillingOrderRequest request, ServerCallContext context)
+    {
+        var id = ParseSessionId(request.TableSessionId);
+        await access.RequireAsync(id, null, string.Empty, context.CancellationToken);
+        var restaurantId = scope.RestaurantId
+            ?? throw new RpcException(new Status(StatusCode.PermissionDenied, "Không xác định được phạm vi nhà hàng."));
+        return Map(await service.GetForRestaurant(id, restaurantId, context.CancellationToken));
+    }
+
+    private static Guid ParseSessionId(string value)
+    {
+        if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã phiên bàn không hợp lệ hoặc bị trống."));
         }
 
-        var source = await service.GetBySession(id, context.CancellationToken);
+        return id;
+    }
+
+    private static BillingOrderSnapshot Map(BillingOrderSnapshotDTO source)
+    {
         var reply = new BillingOrderSnapshot
         {
             TableSessionId = source.TableSessionId.ToString(),

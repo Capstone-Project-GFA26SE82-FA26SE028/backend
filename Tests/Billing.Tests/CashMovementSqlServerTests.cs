@@ -125,6 +125,9 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
         var prepared = await PrepareCash(source, actor);
         await using var paying = Context();
         await using var posting = Context();
+        var key = Guid.NewGuid().ToString();
+        var paymentId = await CashPaymentSqlServerTests.SeedPendingHandover(paying, prepared.BillId, prepared.Body, key);
+        paying.ChangeTracker.Clear();
         var payment = CashPaymentServiceTests.Fixture.MakeService(paying, actor, Service(paying, source, actor), new CashPaymentServiceTests.CheckoutSource());
         async Task<int> Withdraw()
         {
@@ -140,7 +143,7 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
             }
         }
 
-        var pay = payment.PayCash(prepared.BillId, Guid.NewGuid().ToString(), prepared.Body, default);
+        var pay = payment.ConfirmCashHandover(paymentId, prepared.BillId, key, prepared.Body, default);
         var withdrawal = Withdraw();
         await Task.WhenAll(pay, withdrawal);
         Assert.True(pay.Result.Created);
@@ -204,6 +207,11 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
 
         await using var one = Context();
         await using var two = Context();
+        var key = Guid.NewGuid().ToString();
+        var paymentId = includeSale
+            ? await CashPaymentSqlServerTests.SeedPendingHandover(two, prepared.BillId, prepared.Body, key)
+            : Guid.Empty;
+        two.ChangeTracker.Clear();
         async Task<int> Post(BillingDbContext db, bool sale)
         {
             try
@@ -211,8 +219,8 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
                 if (sale)
                 {
                     await CashPaymentServiceTests.Fixture.MakeService(db, actor, Service(db, source, actor),
-                        new CashPaymentServiceTests.CheckoutSource()).PayCash(prepared.BillId,
-                        Guid.NewGuid().ToString(), prepared.Body, default);
+                        new CashPaymentServiceTests.CheckoutSource()).ConfirmCashHandover(paymentId, prepared.BillId,
+                        key, prepared.Body, default);
                 }
                 else
                 {
@@ -236,9 +244,10 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
         Assert.Equal(232m, movement.SignedAmount);
         Assert.Equal(9999999999999999m, opening + movement.SignedAmount);
         var paid = movement.Type == "Sale";
-        Assert.Equal(paid ? 1 : 0, await check.Payments.CountAsync());
+        Assert.Equal(includeSale ? 1 : 0, await check.Payments.CountAsync());
+        Assert.Equal(paid, await check.Payments.AnyAsync(value => value.Status == "Paid"));
         Assert.Equal(paid ? "Paid" : "Unpaid", (await check.Bills.SingleAsync()).Status);
-        Assert.Equal(paid ? "Paid" : "Ready", (await check.BillCheckouts.SingleAsync()).Status);
+        Assert.Equal(paid ? "Paid" : includeSale ? "Presented" : "Ready", (await check.BillCheckouts.SingleAsync()).Status);
     }
 
     [BillingSqlServerFact]
@@ -255,16 +264,19 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
         }
 
         await using var paying = Context();
+        var key = Guid.NewGuid().ToString();
+        var paymentId = await CashPaymentSqlServerTests.SeedPendingHandover(paying, prepared.BillId, prepared.Body, key);
+        paying.ChangeTracker.Clear();
         var service = CashPaymentServiceTests.Fixture.MakeService(paying, actor, Service(paying, source, actor),
             new CashPaymentServiceTests.CheckoutSource());
-        var error = await Assert.ThrowsAsync<BillingException>(() => service.PayCash(prepared.BillId,
-            Guid.NewGuid().ToString(), prepared.Body, default));
+        var error = await Assert.ThrowsAsync<BillingException>(() => service.ConfirmCashHandover(paymentId, prepared.BillId,
+            key, prepared.Body, default));
         Assert.Equal(409, error.StatusCode);
         await using var check = Context();
-        Assert.Empty(await check.Payments.ToListAsync());
+        Assert.Equal("PendingHandover", (await check.Payments.SingleAsync()).Status);
         Assert.Empty(await check.CashMovements.ToListAsync());
         Assert.Equal("Unpaid", (await check.Bills.SingleAsync()).Status);
-        Assert.Equal("Ready", (await check.BillCheckouts.SingleAsync()).Status);
+        Assert.Equal("Presented", (await check.BillCheckouts.SingleAsync()).Status);
         Assert.Equal(9999999999999768m, (await check.CashShifts.SingleAsync()).OpeningCash);
     }
 

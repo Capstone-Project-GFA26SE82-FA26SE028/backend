@@ -14,12 +14,17 @@ public sealed class BillingOrderService(IOrderRepository orders, IBillingSession
             throw new OrderingException(400, "Mã phiên bàn không hợp lệ hoặc bị trống.");
         }
 
-        var branch = await sessions.GetRestaurantIdAsync(sessionId, ct);
+        var restaurantId = await sessions.GetRestaurantIdAsync(sessionId, ct);
+        return await GetForRestaurant(sessionId, restaurantId, ct);
+    }
+
+    public async Task<BillingOrderSnapshotDTO> GetForRestaurant(Guid sessionId, Guid restaurantId, CancellationToken ct)
+    {
         var source = await orders.GetForBillingAsync(sessionId, ct);
         var result = new BillingOrderSnapshotDTO
         {
             TableSessionId = sessionId,
-            RestaurantId = branch,
+            RestaurantId = restaurantId,
             PendingOrderCount = source.Count(order => order.Status == "PendingConfirmation")
         };
         foreach (var order in source.Where(order => order.Status is "Confirmed" or "Ready" or "Served"))

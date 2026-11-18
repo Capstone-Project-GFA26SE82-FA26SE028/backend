@@ -25,6 +25,7 @@ message CheckoutLockInfo {
 
 service BillingOrderGrpc {
   rpc GetBySession(BillingOrderRequest) returns (BillingOrderSnapshot);
+  rpc GetForPaymentReview(BillingOrderRequest) returns (BillingOrderSnapshot);
 }
 message BillingOrderRequest { string table_session_id = 1; }
 message BillingOrderSnapshot {

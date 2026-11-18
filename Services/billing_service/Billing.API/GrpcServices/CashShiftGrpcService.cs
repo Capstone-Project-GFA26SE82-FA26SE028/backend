@@ -24,6 +24,25 @@ public sealed class CashShiftGrpcService(ICashShiftService service) : CashShiftG
         }, context.CancellationToken));
     }
 
+    public override async Task<CashShiftInfo> OpenDefault(OpenDefaultCashShiftRequest request, ServerCallContext context)
+    {
+        if (!Guid.TryParse(request.RestaurantId, out var restaurantId) || restaurantId == Guid.Empty)
+        {
+            throw new BillingException(400, "Yêu cầu ID nhà hàng hợp lệ.");
+        }
+
+        if (!request.HasOpeningCash || !decimal.TryParse(request.OpeningCash,
+            NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var amount))
+        {
+            throw new BillingException(400, "Vui lòng nhập số tiền mặt đầu ca dưới dạng số thập phân dùng dấu chấm phân cách.");
+        }
+
+        return Map(await service.OpenDefault(restaurantId, new OpenCashShiftDTO
+        {
+            OpeningCash = amount
+        }, context.CancellationToken));
+    }
+
     public override async Task<CashShiftInfo> GetCurrent(CashShiftRegisterRequest request, ServerCallContext context)
     {
         return Map(await service.GetCurrent(ParseRegisterId(request.CashRegisterId), context.CancellationToken));

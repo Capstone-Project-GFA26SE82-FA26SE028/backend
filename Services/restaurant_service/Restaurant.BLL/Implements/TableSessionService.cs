@@ -7,10 +7,11 @@ using Shared.Persistence.Interfaces;
 
 namespace Restaurant.BLL.Implements;
 
-public sealed class TableSessionService(IQrService qrService, ITableRepository tables,
+public sealed partial class TableSessionService(IQrService qrService, ITableRepository tables,
     ITableSessionRepository sessions, IGenericRepository<SessionTable> sessionTables,
     IManagementTransaction transaction, IGuestAccessService guestAccess, ITableSessionOrderAccess orderAccess,
-    IRestaurantDataScopeService dataScope) : ITableSessionService
+    IRestaurantDataScopeService dataScope, IVerifiedPaymentClient payments, IServiceRequestRepository requests,
+    IGuestAccessRepository guests, TimeProvider clock) : ITableSessionService
 {
     public async Task<TableSessionScanDto> OpenForWaiter(Guid tableId, CancellationToken ct)
     {

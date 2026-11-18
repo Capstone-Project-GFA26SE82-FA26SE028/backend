@@ -20,7 +20,8 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
     IBillCheckoutRepository checkouts, ICashShiftRepository shifts, ICashRegisterRepository registers,
     IPaymentMethodRepository methods, IPaymentWebhookRepository webhooks, IUnitOfWork unitOfWork,
     IBillingAccess access, IBillService billService, ICheckoutSourceClient ordering, IPayOsClient provider,
-    IOptions<CashRegisterAccessSettings> roles, IOptions<PayOsSettings> settings, TimeProvider clock) : IPayOsPaymentService
+    IOptions<CashRegisterAccessSettings> roles, IOptions<PayOsSettings> settings, TimeProvider clock,
+    IPaymentReviewClient reviews, IPaidSessionClosureClient closure) : IPayOsPaymentService
 {
     public async Task<(PayOsPaymentDTO Payment, bool Created)> Create(Guid billId, string key, CreatePayOsPaymentDTO request, CancellationToken ct)
     {
@@ -83,11 +84,12 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
             var unclosed = await shifts.GetUnclosedAsync(register.CashRegisterId, ct);
             var active = await checkouts.GetActiveAsync(sessionId, ct);
             if (shift.Status != CashShiftStatuses.Active || shift.ClosedAt.HasValue || unclosed.Count != 1
-                || unclosed[0].CashShiftId != shift.CashShiftId || checkout?.Status != "Ready"
-                || checkout.BillId != billId || checkout.TableSessionRef != sessionId || checkout.ReleasedAt.HasValue
+                || unclosed[0].CashShiftId != shift.CashShiftId || checkout?.Status != "Presented"
+                || !PayOsPaymentRules.HasPresentedBill(checkout) || checkout.CashRegisterId != register.CashRegisterId
+                || checkout.BillId != billId || checkout.TableSessionRef != sessionId
                 || active?.CheckoutId != checkout.CheckoutId)
             {
-                throw new BillingException(409, "Yêu cầu trạng thái checkout Ready và ca làm việc duy nhất đang mở của bạn.");
+                throw new BillingException(409, "Chỉ tạo QR PayOS sau khi phục vụ đã đưa hóa đơn cho khách, trong ca đang mở của bạn tại quầy nhận.");
             }
 
             var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
@@ -263,7 +265,7 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
         return ids[0];
     }
 
-    private static string Hash(Bill value)
+    internal static string Hash(Bill value)
     {
         try
         {
@@ -285,8 +287,9 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
         return DateTime.SpecifyKind(new SqlDateTime(value.UtcDateTime).Value, DateTimeKind.Utc);
     }
 
-    private static PayOsPaymentDTO Map(Payment value)
+    private PayOsPaymentDTO Map(Payment value)
     {
+        var showQr = PayOsPaymentRules.CanPresentQr(value, clock.GetUtcNow());
         return new PayOsPaymentDTO
         {
             PaymentId = value.PaymentId,
@@ -297,14 +300,14 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
             Amount = value.Amount,
             ProviderOrderCode = value.ProviderOrderCode,
             ProviderPaymentLinkId = value.ProviderPaymentLinkId,
-            CheckoutUrl = value.ProviderCheckoutUrl,
-            QrCode = value.ProviderQrCode,
+            CheckoutUrl = showQr ? value.ProviderCheckoutUrl : null,
+            QrCode = showQr ? value.ProviderQrCode : null,
             ProviderTransactionId = value.ProviderTransactionId,
             ExpiresAt = value.ExpiredAt.HasValue ? new DateTimeOffset(DateTime.SpecifyKind(value.ExpiredAt.Value, DateTimeKind.Utc)) : null,
             PaidAt = value.PaidAt.HasValue ? new DateTimeOffset(DateTime.SpecifyKind(value.PaidAt.Value, DateTimeKind.Utc)) : null,
             IsVerifiedZero = PayOsPaymentRules.IsVerifiedZero(value),
             RequiresReview = value.Status == PayOsStates.ReviewRequired,
-            LinkDetailsAvailable = !string.IsNullOrEmpty(value.ProviderCheckoutUrl) && !string.IsNullOrEmpty(value.ProviderQrCode)
+            LinkDetailsAvailable = showQr
         };
     }
 

@@ -210,6 +210,10 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
 
             return new PayOsProviderResult(order, amount, status, id, paid, remaining, list);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception error) when (error is HttpRequestException or OperationCanceledException or JsonException or InvalidOperationException or KeyNotFoundException or FormatException)
         {
             throw new PayOsClientException("OutcomeUnknown");

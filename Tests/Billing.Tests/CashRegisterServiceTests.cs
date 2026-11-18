@@ -88,11 +88,11 @@ public sealed class CashRegisterServiceTests
     }
 
     [Fact]
-    public async Task DuplicateCodeWithinBranchIsCaseInsensitiveButAnotherBranchCanUseIt()
+    public async Task EachRestaurantCanHaveOnlyOneRegisterRegardlessOfCode()
     {
         var fixture = CreateFixture("admin", true, []);
         await fixture.Service.Create(Request(firstRestaurant, "POS-01"), default);
-        await AssertStatus(409, () => fixture.Service.Create(Request(firstRestaurant, "pos-01"), default));
+        await AssertStatus(409, () => fixture.Service.Create(Request(firstRestaurant, "POS-02"), default));
         await fixture.Service.Create(Request(secondRestaurant, "pos-01"), default);
         Assert.Equal(2, fixture.Repository.Values.Count);
     }

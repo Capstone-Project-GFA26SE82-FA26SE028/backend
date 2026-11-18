@@ -21,5 +21,17 @@ public partial class BillCheckout
 
     public DateTime? ReleasedAt { get; set; }
 
+    public Guid? CashRegisterId { get; set; }
+
+    public DateTime? SubmittedAt { get; set; }
+
+    public Guid? PreparedByRef { get; set; }
+
+    public DateTime? PreparedAt { get; set; }
+
+    public DateTime? PresentedAt { get; set; }
+
+    public virtual CashRegister CashRegister { get; set; }
+
     public virtual Bill Bill { get; set; }
 }

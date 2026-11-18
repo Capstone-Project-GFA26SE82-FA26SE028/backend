@@ -30,12 +30,15 @@ app.MapGrpcService<CashShiftGrpcService>();
 app.MapGrpcService<BillGrpcService>();
 app.MapGrpcService<ShiftReportGrpcService>();
 app.MapGrpcService<PaymentGrpcService>();
+app.MapGrpcService<PaymentSettlementGrpcService>();
+app.MapGrpcService<CashHandoverGrpcService>();
 app.MapGrpcService<PayOsPaymentGrpcService>();
 app.MapGrpcService<OnlinePaymentGrpcService>();
 app.MapGrpcService<PaymentProviderConfigGrpcService>();
 app.MapGrpcService<PaymentWebhookGrpcService>();
 app.MapGrpcService<CashMovementGrpcService>();
 app.MapGrpcService<BillCheckoutGrpcService>();
+app.MapGrpcService<PaymentSubmissionGrpcService>();
 app.MapGrpcService<TaxFeePolicyGrpcService>();
 
 app.MapGet("/health/live", () =>

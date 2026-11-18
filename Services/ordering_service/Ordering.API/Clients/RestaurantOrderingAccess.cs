@@ -29,6 +29,25 @@ public sealed class RestaurantOrderingAccess(TableSessionGrpc.TableSessionGrpcCl
             request.TableId = tableId.Value.ToString();
         }
 
+        var reply = await client.GetForOrderingAsync(request, GetHeaders(),
+            deadline: DateTime.UtcNow.AddSeconds(settings.Value.DependencyTimeoutSeconds), cancellationToken: ct);
+        return MapActor(reply, sessionId, tableId, !string.IsNullOrEmpty(guestToken));
+    }
+
+    public async Task<OrderingActor> RequireForServingAsync(Guid sessionId, CancellationToken ct)
+    {
+        if (sessionId == Guid.Empty)
+        {
+            throw new OrderingException(400, "Mã phiên không hợp lệ.");
+        }
+
+        var reply = await client.GetForServingAsync(new IdRequest { Id = sessionId.ToString() }, GetHeaders(),
+            deadline: DateTime.UtcNow.AddSeconds(settings.Value.DependencyTimeoutSeconds), cancellationToken: ct);
+        return MapActor(reply, sessionId, null, false);
+    }
+
+    private Metadata GetHeaders()
+    {
         var headers = new Metadata();
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
         if (!string.IsNullOrEmpty(authorization))
@@ -36,14 +55,16 @@ public sealed class RestaurantOrderingAccess(TableSessionGrpc.TableSessionGrpcCl
             headers.Add("authorization", authorization);
         }
 
-        var reply = await client.GetForOrderingAsync(request, headers,
-            deadline: DateTime.UtcNow.AddSeconds(settings.Value.DependencyTimeoutSeconds), cancellationToken: ct);
+        return headers;
+    }
+
+    private OrderingActor MapActor(OrderSessionReply reply, Guid sessionId, Guid? tableId, bool guest)
+    {
         if (!Guid.TryParse(reply.TableSessionId, out var verified) || verified != sessionId)
         {
             throw new OrderingException(503, "Phản hồi xác minh phiên không hợp lệ.");
         }
 
-        var guest = !string.IsNullOrEmpty(guestToken);
         Guid? guestId = null;
         Guid? userId = null;
         DateTimeOffset? expiry = null;
@@ -80,6 +101,20 @@ public sealed class RestaurantOrderingAccess(TableSessionGrpc.TableSessionGrpcCl
             resolvedTable = id;
         }
 
-        return new OrderingActor(sessionId, resolvedTable, userId, guestId, expiry);
+        Guid? paidCheckoutId = null;
+        if (reply.HasPaidCheckoutId)
+        {
+            if (guest || !Guid.TryParse(reply.PaidCheckoutId, out var id) || id == Guid.Empty)
+            {
+                throw new OrderingException(503, "Phản hồi xác minh thanh toán của phiên không hợp lệ.");
+            }
+
+            paidCheckoutId = id;
+        }
+
+        return new OrderingActor(sessionId, resolvedTable, userId, guestId, expiry)
+        {
+            PaidCheckoutId = paidCheckoutId
+        };
     }
 }

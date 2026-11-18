@@ -12,7 +12,7 @@ public sealed partial class PayOsPaymentService
     {
         provider.EnsureConfigured();
         payments.ResetProviderTracking();
-        return await Controlled(async () => await unitOfWork.ExecuteInTransactionAsync(async () =>
+        var (paymentResult, paidSessionId) = await Controlled(async () => await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             var initial = await payments.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy khoản thanh toán.");
             if (!PayOsPaymentRules.IsPayOs(initial))
@@ -22,7 +22,7 @@ public sealed partial class PayOsPaymentService
 
             if (!await payments.LockProviderWorkAsync(id, ct))
             {
-                return Map(initial);
+                return (Map(initial), (Guid?)null);
             }
 
             var order = long.Parse(initial.ProviderOrderCode, CultureInfo.InvariantCulture);
@@ -35,7 +35,8 @@ public sealed partial class PayOsPaymentService
             }
             catch (PayOsClientException)
             {
-                if (initial.Status is PayOsStates.Creating or PayOsStates.Unknown && initial.ProviderPaymentLinkId is null
+                if (settings.Value.Enabled && initial.Status is (PayOsStates.Creating or PayOsStates.Unknown)
+                    && initial.ProviderPaymentLinkId is null
                     && initial.ExpiredAt.HasValue && initial.ExpiredAt.Value > clock.GetUtcNow().UtcDateTime)
                 {
                     try
@@ -109,8 +110,14 @@ public sealed partial class PayOsPaymentService
             var result = Map(payment);
             result.ProviderAmountPaid = bank?.AmountPaid;
             result.ProviderAmountRemaining = bank?.AmountRemaining;
-            return result;
+            return (result, result.Status == PaymentStatuses.Paid ? (Guid?)sessionId : null);
         }, ct));
+        if (paidSessionId.HasValue)
+        {
+            await closure.TryCloseAsync(paymentResult.RestaurantId, paidSessionId.Value, ct);
+        }
+
+        return paymentResult;
     }
 
     private async Task Apply(Payment payment, PayOsProviderResult? bank, Guid sessionId, bool cancellationAttempted, CancellationToken ct)
@@ -213,7 +220,8 @@ public sealed partial class PayOsPaymentService
             || payment.CashReceived.HasValue || payment.ChangeAmount.HasValue || payment.CashMovements.Count != 0
             || payment.Refunds.Count != 0 || payment.CashHandover is not null
             || payment.Bill.Payments.Any(value => value.PaymentId != payment.PaymentId && PayOsPaymentRules.IsBlocking(value))
-            || checkout?.BillId != payment.BillId || checkout.Status != "Ready" || checkout.SourceHash != Hash(payment.Bill))
+            || checkout?.BillId != payment.BillId || !PayOsPaymentRules.BelongsToCheckout(payment, checkout.CheckoutId)
+            || !CanSettleCheckout(checkout, payment) || checkout.SourceHash != Hash(payment.Bill))
         {
             payment.Status = PayOsStates.ReviewRequired;
             payment.VerificationSource = PayOsStates.QueryVerified;
@@ -240,5 +248,17 @@ public sealed partial class PayOsPaymentService
         payment.Bill.PaidAt = payment.PaidAt;
         var writable = await checkouts.GetByIdAsync(checkout.CheckoutId, ct) ?? throw new BillingException(409, "Không còn tìm thấy lần chốt hóa đơn.");
         writable.Status = PaymentStatuses.Paid;
+    }
+
+    private static bool CanSettleCheckout(BillCheckout checkout, Payment payment)
+    {
+        if (checkout.Status == "Ready")
+        {
+            // Existing PayOS attempts from the earlier checkout can still be reconciled.
+            return !checkout.CashRegisterId.HasValue || checkout.CashRegisterId == payment.CashShift.CashRegisterId;
+        }
+
+        return checkout.Status == "Presented" && PayOsPaymentRules.HasPresentedBill(checkout)
+            && checkout.CashRegisterId == payment.CashShift.CashRegisterId;
     }
 }

@@ -91,7 +91,7 @@ public sealed class BillSqlServerTests : IAsyncLifetime
     public async Task UpgradeIsRepeatableAndDoesNotChangeKeysOrCreateFakeDefaults()
     {
         var upgrade = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Sql", "BillingBillRestaurant.sql"));
-        await Execute(_connection, "ALTER TABLE dbo.Bill DROP COLUMN RestaurantId; ALTER TABLE dbo.BillLine ALTER COLUMN CogsSnapshot decimal(18,2) NOT NULL;");
+        await PrepareLegacyBillSchema();
         await Execute(_connection, upgrade);
         await Execute(_connection, upgrade);
         await using var connection = new SqlConnection(_connection);
@@ -103,9 +103,16 @@ public sealed class BillSqlServerTests : IAsyncLifetime
     [BillingSqlServerFact]
     public async Task LegacyBillsWithoutRestaurantMappingsRejectUpgradeWithoutChangingCogs()
     {
-        await Execute(_connection, "ALTER TABLE dbo.Bill DROP COLUMN RestaurantId; ALTER TABLE dbo.BillLine ALTER COLUMN CogsSnapshot decimal(18,2) NOT NULL; INSERT dbo.Bill (BillId,BillNumber,Status,SubTotal,DiscountAmount,VatRateSnapshot,ServiceRateSnapshot,VatAmount,ServiceAmount,TotalAmount,Currency) VALUES (NEWID(),'LEGACY','Unpaid',1,0,0,0,0,0,1,'VND');");
+        await PrepareLegacyBillSchema();
+        await Execute(_connection, """
+            INSERT dbo.Bill (BillId, BillNumber, Status, SubTotal, DiscountAmount, VatRateSnapshot,
+                ServiceRateSnapshot, VatAmount, ServiceAmount, TotalAmount, Currency)
+            VALUES (NEWID(), 'LEGACY', 'Unpaid', 1, 0, 0, 0, 0, 0, 1, 'VND');
+            """);
         var upgrade = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Sql", "BillingBillRestaurant.sql"));
-        await Assert.ThrowsAsync<SqlException>(() => Execute(_connection, upgrade));
+        var error = await Assert.ThrowsAsync<SqlException>(() => Execute(_connection, upgrade));
+        Assert.Equal(50001, error.Number);
+        Assert.Contains("BillId-to-RestaurantId", error.Message);
         await using var connection = new SqlConnection(_connection);
         await connection.OpenAsync();
         await using var query = new SqlCommand("SELECT COUNT(*) FROM dbo.Bill; SELECT is_nullable FROM sys.columns WHERE object_id=OBJECT_ID('dbo.BillLine') AND name='CogsSnapshot';", connection);
@@ -115,6 +122,16 @@ public sealed class BillSqlServerTests : IAsyncLifetime
         await reader.NextResultAsync();
         Assert.True(await reader.ReadAsync());
         Assert.False(reader.GetBoolean(0));
+    }
+
+    private async Task PrepareLegacyBillSchema()
+    {
+        RequireOwnedDatabase();
+        await Execute(_connection, """
+            DROP INDEX IX_Bill_RestaurantIsolation ON dbo.Bill;
+            ALTER TABLE dbo.Bill DROP COLUMN RestaurantId;
+            ALTER TABLE dbo.BillLine ALTER COLUMN CogsSnapshot decimal(18,2) NOT NULL;
+            """);
     }
 
     private static async Task<int> Create(BillingDbContext db, BillServiceTests.BillSource source)

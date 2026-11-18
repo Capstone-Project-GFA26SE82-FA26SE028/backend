@@ -7,4 +7,5 @@ public sealed class OrderSessionDto
     public Guid? UserId { get; set; }
     public Guid? GuestAccessId { get; set; }
     public DateTime? ExpiresAt { get; set; }
+    public Guid? PaidCheckoutId { get; set; }
 }

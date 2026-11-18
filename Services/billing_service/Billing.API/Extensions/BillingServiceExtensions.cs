@@ -51,6 +51,10 @@ public static class BillingServiceExtensions
                 && value.CashierRoleIds.All(role => !string.IsNullOrWhiteSpace(role))
                 && !value.ManagerRoleIds.Intersect(value.CashierRoleIds, StringComparer.Ordinal).Any(),
                 "Vui lòng cấu hình ID vai trò quản lý và thu ngân riêng biệt để truy cập quầy thu ngân.")
+            .Validate(value => value.WaiterRoleIds.Length > 0
+                && value.WaiterRoleIds.All(role => !string.IsNullOrWhiteSpace(role))
+                && !value.WaiterRoleIds.Intersect(value.CashierRoleIds.Concat(value.ManagerRoleIds), StringComparer.Ordinal).Any(),
+                "Vui lòng cấu hình ID vai trò phục vụ riêng biệt cho nghiệp vụ thu hộ.")
             .ValidateOnStart();
         services.AddOptions<RestaurantAccessSettings>()
             .Bind(configuration.GetSection("RestaurantAccess"))
@@ -67,6 +71,18 @@ public static class BillingServiceExtensions
         {
             options.Address = uri;
         });
+        services.AddGrpcClient<ServiceRequestGrpc.ServiceRequestGrpcClient>(options =>
+        {
+            options.Address = uri;
+        });
+        services.AddScoped<IPaymentReviewClient, PaymentReviewClient>();
+        services.AddGrpcClient<PaidSessionClosureGrpc.PaidSessionClosureGrpcClient>(options =>
+        {
+            options.Address = uri;
+        });
+        services.AddScoped<IPaidSessionClosureClient, PaidSessionClosureClient>();
+        services.AddScoped<IPaymentSettlementService, PaymentSettlementService>();
+        services.AddScoped<IPaymentSubmissionService, PaymentSubmissionService>();
         services.AddGrpcClient<Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient>(options =>
         {
             var orderingAddress = configuration["GrpcServices:Ordering"];
@@ -96,6 +112,7 @@ public static class BillingServiceExtensions
             .ValidateOnStart();
         services.AddScoped<IShiftReportService, ShiftReportService>();
         services.AddScoped<IPaymentService, PaymentService>();
+        services.AddScoped<ICashHandoverService, CashHandoverService>();
         services.AddScoped<ICashMovementService, CashMovementService>();
         services.AddScoped<IBillService, BillService>();
         services.AddScoped<ITaxFeePolicyService, TaxFeePolicyService>();

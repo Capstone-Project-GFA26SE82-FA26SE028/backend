@@ -53,6 +53,23 @@ message CurrentRestaurantScopeReply {
 }
 option csharp_namespace = "Backend.Contracts.Restaurant";
 package restaurant;
+
+service PaidSessionClosureGrpc {
+  rpc CloseAfterPayment(PaidSessionClosureRequest) returns (PaidSessionClosureReply);
+}
+
+message PaidSessionClosureRequest {
+  string restaurant_id = 1;
+  string table_session_id = 2;
+}
+
+message PaidSessionClosureReply {
+  bool closed = 1;
+}
+
+message PaymentResultAccessInfo {
+  string restaurant_id = 1;
+}
 import "google/protobuf/empty.proto";
 
 message IdRequest { string id = 1; string version = 2; }
@@ -177,6 +194,7 @@ service TableSessionGrpc {
   rpc OpenForWaiter(IdRequest) returns (TableSessionScanReply);
   rpc Scan(QrTokenRequest) returns (TableSessionScanReply);
   rpc GetForOrdering(OrderSessionRequest) returns (OrderSessionReply);
+  rpc GetForServing(IdRequest) returns (OrderSessionReply);
 }
 
 message OrderSessionRequest {
@@ -190,6 +208,7 @@ message OrderSessionReply {
   optional string user_id = 3;
   optional string guest_access_id = 4;
   optional string expires_at = 5;
+  optional string paid_checkout_id = 6;
 }
 
 
@@ -330,4 +349,64 @@ message RestaurantStaffInfo {
 
 message RestaurantStaffListReply {
   repeated RestaurantStaffInfo items = 1;
+}
+
+// Dine-in payment requests are stored by Restaurant until a waiter receives them.
+service ServiceRequestGrpc {
+  rpc GetResultAccess(PaymentServiceRequest) returns (PaymentResultAccessInfo);
+  rpc Create(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+  rpc GetById(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+  rpc GetCurrent(GuestAccessRequest) returns (PaymentServiceRequestInfo);
+  rpc GetAll(PaymentServiceRequestList) returns (PaymentServiceRequestPage);
+  rpc Acknowledge(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+  rpc GetReview(PaymentServiceRequest) returns (PaymentRequestReviewInfo);
+}
+
+message PaymentServiceRequest {
+  string table_session_id = 1;
+  string service_request_id = 2;
+  string guest_token = 3;
+}
+
+message PaymentServiceRequestList {
+  string restaurant_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+message PaymentServiceRequestInfo {
+  string service_request_id = 1;
+  string table_session_id = 2;
+  string restaurant_id = 3;
+  string status = 4;
+  string requested_at = 5;
+  optional string acknowledged_at = 6;
+  optional string handled_by_ref = 7;
+  repeated PaymentServiceRequestTable tables = 8;
+}
+
+message PaymentRequestReviewInfo {
+  int32 pending_order_count = 1;
+  repeated PaymentRequestReviewItem items = 2;
+  string restaurant_id = 3;
+}
+
+message PaymentRequestReviewItem {
+  string order_item_id = 1;
+  string table_id = 2;
+  string name = 3;
+  int32 quantity = 4;
+  string status = 5;
+}
+
+message PaymentServiceRequestTable {
+  string table_id = 1;
+  string table_code = 2;
+}
+
+message PaymentServiceRequestPage {
+  repeated PaymentServiceRequestInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
 }

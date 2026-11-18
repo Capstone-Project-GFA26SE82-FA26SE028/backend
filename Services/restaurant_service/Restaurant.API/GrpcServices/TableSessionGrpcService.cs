@@ -2,6 +2,7 @@ using Restaurant.API.Management;
 using Backend.Contracts.Restaurant;
 using Grpc.Core;
 using Restaurant.BLL.Interfaces;
+using Restaurant.Common.DTOs;
 
 namespace Restaurant.API.GrpcServices;
 
@@ -33,6 +34,17 @@ public sealed class TableSessionGrpcService(ITableSessionService service) : Tabl
 
         var result = await service.GetForOrdering(id, request.HasTableId ? Guid.Parse(request.TableId) : null,
             request.GuestToken, context.CancellationToken);
+        return MapOrderSession(result);
+    }
+
+    public override async Task<OrderSessionReply> GetForServing(IdRequest request, ServerCallContext context)
+    {
+        var result = await service.GetForServing(ManagementMapping.Id(request.Id), context.CancellationToken);
+        return MapOrderSession(result);
+    }
+
+    private static OrderSessionReply MapOrderSession(OrderSessionDto result)
+    {
         var reply = new OrderSessionReply
         {
             TableSessionId = result.TableSessionId.ToString()
@@ -51,6 +63,11 @@ public sealed class TableSessionGrpcService(ITableSessionService service) : Tabl
         {
             reply.GuestAccessId = result.GuestAccessId.Value.ToString();
             reply.ExpiresAt = DateTime.SpecifyKind(result.ExpiresAt!.Value, DateTimeKind.Utc).ToString("O");
+        }
+
+        if (result.PaidCheckoutId.HasValue)
+        {
+            reply.PaidCheckoutId = result.PaidCheckoutId.Value.ToString();
         }
 
         return reply;

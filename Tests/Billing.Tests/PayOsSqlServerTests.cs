@@ -244,7 +244,7 @@ public sealed class PayOsSqlServerTests : IAsyncLifetime
         {
             Assert.Equal("Unpaid", (await check.Bills.SingleAsync()).Status);
             Assert.Equal("Pending", (await check.Payments.SingleAsync()).Status);
-            Assert.Equal("Ready", (await check.BillCheckouts.SingleAsync()).Status);
+            Assert.Equal("Presented", (await check.BillCheckouts.SingleAsync()).Status);
         }
 
         await Execute(_connection, "DROP TRIGGER dbo.PayOsTestFailure;");
@@ -266,7 +266,7 @@ public sealed class PayOsSqlServerTests : IAsyncLifetime
             }), Options.Create(new PayOsSettings
             {
                 Enabled = true
-            }), TimeProvider.System);
+            }), TimeProvider.System, new TestPaymentReviewClient(), new TestPaidSessionClosureClient());
     }
 
     private static ShiftIdentity CashActor(BillServiceTests.BillSource source)
@@ -288,12 +288,14 @@ public sealed class PayOsSqlServerTests : IAsyncLifetime
         var bill = await Service(db, source, actor).Create(source.Value.TableSessionId, default);
         var shiftId = Guid.NewGuid();
         var checkoutId = Guid.NewGuid();
+        var registerId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
         db.CashShifts.Add(new CashShift
         {
             CashShiftId = shiftId,
             CashRegister = new CashRegister
             {
-                CashRegisterId = Guid.NewGuid(),
+                CashRegisterId = registerId,
                 RestaurantId = source.Value.RestaurantId,
                 Code = "SQL-CASH"
             },
@@ -312,9 +314,14 @@ public sealed class PayOsSqlServerTests : IAsyncLifetime
             CheckoutId = checkoutId,
             BillId = bill.BillId,
             TableSessionRef = source.Value.TableSessionId,
-            Status = "Ready",
+            Status = "Presented",
             SourceHash = bill.Items[0].Item.SourceFingerprint,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            CashRegisterId = registerId,
+            SubmittedAt = now,
+            PreparedAt = now,
+            PreparedByRef = actor.Scope.UserId,
+            PresentedAt = now
         });
         await db.SaveChangesAsync();
         return (bill.BillId, new CreateCashPaymentDTO
