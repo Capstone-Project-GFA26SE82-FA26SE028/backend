@@ -60,6 +60,11 @@ public sealed class BillGrpcService(IBillService service) : BillGrpc.BillGrpcBas
 
     private static BillInfo Map(BillDTO source)
     {
+        return Map(source, includeCost: true);
+    }
+
+    internal static BillInfo Map(BillDTO source, bool includeCost)
+    {
         var result = new BillInfo
         {
             BillId = source.BillId.ToString(),
@@ -76,7 +81,7 @@ public sealed class BillGrpcService(IBillService service) : BillGrpc.BillGrpcBas
             TotalAmount = Decimal(source.TotalAmount),
             RoundingAdjustment = Decimal(source.RoundingAdjustment),
             Version = source.Version,
-            HasCompleteCogs = source.HasCompleteCogs,
+            HasCompleteCogs = includeCost && source.HasCompleteCogs,
             SourceStatus = source.SourceStatus
         };
         result.Warnings.AddRange(source.Warnings);
@@ -98,7 +103,7 @@ public sealed class BillGrpcService(IBillService service) : BillGrpc.BillGrpcBas
                 item.ComboGroupRef = line.ComboGroupRef.Value.ToString();
             }
 
-            if (line.CogsSnapshot.HasValue)
+            if (includeCost && line.CogsSnapshot.HasValue)
             {
                 item.CogsSnapshot = Decimal(line.CogsSnapshot.Value);
             }

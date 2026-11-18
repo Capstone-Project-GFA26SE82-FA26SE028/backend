@@ -18,27 +18,52 @@ public sealed class TableSessionRepository(RestaurantDbContext db)
 
     public Task<TableSession?> GetForOrderingAsync(Guid id, CancellationToken ct)
     {
-        return _context.TableSessions.AsNoTracking()
-            .Include(session => session.SessionTables.Where(link => link.ReleasedAt == null))
-                .ThenInclude(link => link.Table).ThenInclude(table => table.Area)
+        return WithActiveTables(_context.TableSessions.AsNoTracking())
             .SingleOrDefaultAsync(session => session.TableSessionId == id, ct);
     }
 
     public Task<TableSession?> LockAsync(Guid id, CancellationToken ct)
     {
+        RequireTransaction();
+        if (_context.Database.IsSqlServer())
+        {
+            return LockedSession(id).SingleOrDefaultAsync(ct);
+        }
+
+        return GetByIdAsync(id, ct);
+    }
+
+    public Task<TableSession?> LockWithActiveTablesAsync(Guid id, CancellationToken ct)
+    {
+        RequireTransaction();
+        var query = _context.Database.IsSqlServer()
+            ? LockedSession(id) : _context.TableSessions.Where(session => session.TableSessionId == id);
+        return WithActiveTables(query.AsNoTracking()).SingleOrDefaultAsync(ct);
+    }
+
+    public Task<List<SessionTable>> GetUnreleasedLinksAsync(Guid id, CancellationToken ct)
+    {
+        return _context.SessionTables.Where(link => link.TableSessionId == id && link.ReleasedAt == null).ToListAsync(ct);
+    }
+
+    private IQueryable<TableSession> LockedSession(Guid id)
+    {
+        return _context.TableSessions.FromSqlInterpolated(
+            $"SELECT * FROM [TableSession] WITH (UPDLOCK, HOLDLOCK) WHERE [TableSessionId] = {id}");
+    }
+
+    private static IQueryable<TableSession> WithActiveTables(IQueryable<TableSession> query)
+    {
+        return query.Include(session => session.SessionTables.Where(link => link.ReleasedAt == null))
+            .ThenInclude(link => link.Table).ThenInclude(table => table.Area);
+    }
+
+    private void RequireTransaction()
+    {
         if (_context.Database.CurrentTransaction is null)
         {
             throw new InvalidOperationException("Cần có giao dịch để khóa phiên bàn.");
         }
-
-        if (_context.Database.IsSqlServer())
-        {
-            return _context.TableSessions.FromSqlInterpolated(
-                $"SELECT * FROM [TableSession] WITH (UPDLOCK, HOLDLOCK) WHERE [TableSessionId] = {id}")
-                .SingleOrDefaultAsync(ct);
-        }
-
-        return GetByIdAsync(id, ct);
     }
 
     public Task<List<TableSession>> GetOpenForTableAsync(Guid tableId, CancellationToken ct)

@@ -34,7 +34,7 @@ public sealed class BillingBalanceSafetyTests
     [InlineData("9999999999999768", false)]
     public async Task CashSaleEitherCommitsEverythingOrRejectsWithoutPaidState(string opening, bool allowed)
     {
-        await using var fixture = await CashPaymentServiceTests.Fixture.Create();
+        await using var fixture = await CashPaymentServiceTests.Fixture.Create(withHandover: true);
         var shift = await fixture.Db.CashShifts.SingleAsync();
         shift.OpeningCash = decimal.Parse(opening, System.Globalization.CultureInfo.InvariantCulture);
         await fixture.Db.SaveChangesAsync();
@@ -49,10 +49,10 @@ public sealed class BillingBalanceSafetyTests
         }
 
         fixture.Db.ChangeTracker.Clear();
-        Assert.Equal(allowed ? 1 : 0, await fixture.Db.Payments.CountAsync());
+        Assert.Equal(allowed ? "Paid" : "PendingHandover", (await fixture.Db.Payments.SingleAsync()).Status);
         Assert.Equal(allowed ? 1 : 0, await fixture.Db.CashMovements.CountAsync());
         Assert.Equal(allowed ? "Paid" : "Unpaid", (await fixture.Db.Bills.SingleAsync()).Status);
-        Assert.Equal(allowed ? "Paid" : "Ready", (await fixture.Db.BillCheckouts.SingleAsync()).Status);
+        Assert.Equal(allowed ? "Paid" : "Presented", (await fixture.Db.BillCheckouts.SingleAsync()).Status);
         Assert.Equal(persistedOpening,
             (await fixture.Db.CashShifts.SingleAsync()).OpeningCash);
     }

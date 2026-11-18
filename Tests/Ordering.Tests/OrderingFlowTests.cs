@@ -442,6 +442,11 @@ public sealed class OrderingFlowTests
                 Staff ? null : Guest, DateTimeOffset.UtcNow.AddHours(1)));
         }
 
+        public Task<OrderingActor> RequireForServingAsync(Guid sessionId, CancellationToken ct)
+        {
+            return RequireAsync(sessionId, null, string.Empty, ct);
+        }
+
         public Task<QuoteDTO> ValidateAsync(OrderingActor actor, string guestToken, List<SelectionDTO> items, CancellationToken ct)
         {
             QuotedChannel = actor.Channel;

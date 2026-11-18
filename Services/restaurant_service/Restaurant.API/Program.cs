@@ -21,6 +21,8 @@ builder.Services.AddScoped<Restaurant.BLL.Interfaces.IReservationExpirationServi
 builder.Services.AddHostedService<Restaurant.API.Reservations.ReservationExpirationWorker>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableSessionOrderAccess, Restaurant.API.Management.IdentityTableSessionOrderAccess>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IGuestAccessService, Restaurant.BLL.Implements.GuestAccessService>();
+builder.Services.Configure<Restaurant.Common.Settings.ServiceRequestSettings>(builder.Configuration.GetSection("ServiceRequests"));
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IServiceRequestService, Restaurant.BLL.Implements.ServiceRequestService>();
 builder.Services.AddOptions<Restaurant.Common.Settings.GuestAccessSettings>()
     .Bind(builder.Configuration.GetSection("GuestAccess"))
     .Validate(x => double.IsFinite(x.LifetimeHours) && x.LifetimeHours > 0 && x.LifetimeHours <= 8760,
@@ -32,6 +34,8 @@ builder.Services.AddScoped<Restaurant.BLL.Interfaces.IAreaService, Restaurant.BL
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableService, Restaurant.BLL.Implements.TableService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IQrService, Restaurant.BLL.Implements.QrService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableSessionService, Restaurant.BLL.Implements.TableSessionService>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IVerifiedPaymentClient, Restaurant.API.Management.VerifiedPaymentClient>();
+builder.Services.AddHostedService<Restaurant.API.Workers.PaidSessionClosureWorker>();
 builder.Services.Configure<Restaurant.Common.Settings.QrSettings>(builder.Configuration.GetSection("Qr"));
 builder.Services.AddSingleton(builder.Configuration.GetSection("Cloudinary")
     .Get<Shared.Common.Images.CloudinarySettings>() ?? new Shared.Common.Images.CloudinarySettings());
@@ -56,6 +60,18 @@ builder.Services.AddGrpcClient<Backend.Contracts.Identity.UserGrpc.UserGrpcClien
         ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Identity."));
 });
 
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IPaymentRequestOrderClient, Restaurant.API.Management.PaymentRequestOrderClient>();
+builder.Services.AddGrpcClient<Backend.Contracts.Billing.PaymentSettlementGrpc.PaymentSettlementGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Billing"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Billing."));
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
+});
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
@@ -74,11 +90,13 @@ app.MapGrpcService<Restaurant.API.GrpcServices.AreaGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.TableGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.QrGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.TableSessionGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.PaidSessionClosureGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.ReservationGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantStaffGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantAccessGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.BillingSessionGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.GuestAccessGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.ServiceRequestGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

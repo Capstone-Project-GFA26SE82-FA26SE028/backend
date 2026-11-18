@@ -504,7 +504,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         }
     }
 
-    private static BillDTO Map(Bill bill)
+    internal static BillDTO Map(Bill bill)
     {
         var result = new BillDTO
         {

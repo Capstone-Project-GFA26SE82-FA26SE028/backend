@@ -1,3 +1,4 @@
+using System.Globalization;
 using Backend.Contracts.Billing;
 using Billing.BLL.Interfaces;
 using Billing.Common.DTOs;
@@ -23,6 +24,21 @@ public sealed class BillCheckoutGrpcService(IBillCheckoutService service) : Bill
         return Map(await service.Synchronize(Id(request.TableSessionId), Id(request.CheckoutId), context.CancellationToken));
     }
 
+    public override async Task<PreparedBillInfo> Prepare(BillCheckoutRequest request, ServerCallContext context)
+    {
+        return MapPrepared(await service.Prepare(Id(request.TableSessionId), Id(request.CheckoutId), context.CancellationToken));
+    }
+
+    public override async Task<PreparedBillInfo> GetPrepared(BillCheckoutRequest request, ServerCallContext context)
+    {
+        return MapPrepared(await service.GetPrepared(Id(request.TableSessionId), Id(request.CheckoutId), context.CancellationToken));
+    }
+
+    public override async Task<PreparedBillInfo> Present(BillCheckoutRequest request, ServerCallContext context)
+    {
+        return MapPrepared(await service.Present(Id(request.TableSessionId), Id(request.CheckoutId), context.CancellationToken));
+    }
+
     public override async Task<BillCheckoutInfo> Cancel(BillCheckoutRequest request, ServerCallContext context)
     {
         return Map(await service.Cancel(Id(request.TableSessionId), Id(request.CheckoutId), context.CancellationToken));
@@ -42,6 +58,25 @@ public sealed class BillCheckoutGrpcService(IBillCheckoutService service) : Bill
         }
 
         return id;
+    }
+
+    private static PreparedBillInfo MapPrepared(PreparedBillDTO value)
+    {
+        var reply = new PreparedBillInfo
+        {
+            CheckoutId = value.CheckoutId.ToString(),
+            TableSessionId = value.TableSessionId.ToString(),
+            CheckoutStatus = value.CheckoutStatus,
+            Bill = BillGrpcService.Map(value.Bill, includeCost: false),
+            PreparedByRef = value.PreparedByRef.ToString(),
+            PreparedAt = value.PreparedAt.ToString("O", CultureInfo.InvariantCulture)
+        };
+        if (value.PresentedAt.HasValue)
+        {
+            reply.PresentedAt = value.PresentedAt.Value.ToString("O", CultureInfo.InvariantCulture);
+        }
+
+        return reply;
     }
 
     private static BillCheckoutInfo Map(BillCheckoutDTO value)

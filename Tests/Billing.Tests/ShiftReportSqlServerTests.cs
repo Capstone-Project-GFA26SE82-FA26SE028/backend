@@ -149,36 +149,47 @@ public sealed class ShiftReportSqlServerTests : IAsyncLifetime
     }
 
     [BillingSqlServerFact]
-    public async Task CloseAndCashPaymentCannotLeaveSaleOutsideTheSnapshot()
+    public async Task CloseAndCashHandoverCannotLeaveSaleOutsideTheSnapshot()
     {
         var source = new BillServiceTests.BillSource();
         var actor = CashActor(source);
         var p = await PrepareCash(source, actor);
         await using var closing = Context();
         await using var paying = Context();
-        async Task<int> Pay()
+        var key = Guid.NewGuid().ToString();
+        var paymentId = await CashPaymentSqlServerTests.SeedPendingHandover(paying, p.BillId, p.Body, key);
+        paying.ChangeTracker.Clear();
+        async Task<bool> TryClose()
         {
             try
             {
-                await CashPaymentServiceTests.Fixture.MakeService(paying, actor, Service(paying, source, actor),
-                    new CashPaymentServiceTests.CheckoutSource()).PayCash(p.BillId, Guid.NewGuid().ToString(), p.Body, default);
-                return 201;
+                var result = await ShiftReportServiceTests.Make(closing, actor).Close(p.Body.CashShiftId,
+                    ShiftReportServiceTests.Body(1232, 0), default);
+                Assert.Equal(1232, result.Report.ExpectedCash);
+                return true;
             }
             catch (BillingException error)
             {
-                return error.StatusCode;
+                Assert.Equal(409, error.StatusCode);
+                return false;
             }
         }
 
-        var close = ShiftReportServiceTests.Make(closing, actor).Close(p.Body.CashShiftId,
-            ShiftReportServiceTests.Body(1000, 0, "End count"), default);
-        var pay = Pay();
+        var close = TryClose();
+        var pay = CashPaymentServiceTests.Fixture.MakeService(paying, actor, Service(paying, source, actor),
+            new CashPaymentServiceTests.CheckoutSource()).ConfirmCashHandover(paymentId, p.BillId, key, p.Body, default);
         await Task.WhenAll(close, pay);
-        Assert.Contains(pay.Result, new[] { 201, 409 });
-        Assert.Equal(pay.Result == 201 ? 1232 : 1000, close.Result.Report.ExpectedCash);
+        Assert.True(pay.Result.Created);
         await using var check = Context();
-        Assert.Equal(pay.Result == 201 ? 1 : 0, await check.Payments.CountAsync());
-        Assert.Equal(pay.Result == 201 ? 1 : 0, await check.CashMovements.CountAsync());
+        if (!close.Result)
+        {
+            var result = await ShiftReportServiceTests.Make(check, actor).Close(p.Body.CashShiftId,
+                ShiftReportServiceTests.Body(1232, 0), default);
+            Assert.Equal(1232, result.Report.ExpectedCash);
+        }
+
+        Assert.Equal("Paid", (await check.Payments.SingleAsync()).Status);
+        Assert.Single(await check.CashMovements.ToListAsync());
         Assert.Single(await check.ShiftReports.ToListAsync());
     }
 

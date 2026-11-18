@@ -2,6 +2,19 @@ syntax = "proto3";
 
 option csharp_namespace = "Backend.Contracts.Billing";
 package billing;
+
+service PaymentSettlementGrpc {
+  rpc GetVerifiedCheckout(VerifiedCheckoutRequest) returns (VerifiedCheckoutReply);
+}
+
+message VerifiedCheckoutRequest {
+  string restaurant_id = 1;
+  string table_session_id = 2;
+}
+
+message VerifiedCheckoutReply {
+  optional string checkout_id = 1;
+}
 import "google/protobuf/empty.proto";
 service PaymentGrpc {
   rpc PayCash(PayCashRequest) returns (CashPaymentReply);
@@ -34,10 +47,45 @@ message PaymentInfo {
   string paid_at = 15;
   string cash_movement_id = 16;
 }
+service PaymentSubmissionGrpc {
+  rpc Submit(SubmitPaymentRequest) returns (PaymentSubmissionInfo);
+  rpc GetIncoming(PaymentSubmissionListRequest) returns (PaymentSubmissionPage);
+}
+
+message SubmitPaymentRequest {
+  string table_session_id = 1;
+  string service_request_id = 2;
+}
+
+message PaymentSubmissionListRequest {
+  string restaurant_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+message PaymentSubmissionInfo {
+  optional string checkout_id = 1;
+  string table_session_id = 2;
+  string cash_register_id = 3;
+  optional string submitted_at = 4;
+  string status = 5;
+  optional string bill_id = 6;
+}
+
+message PaymentSubmissionPage {
+  repeated PaymentSubmissionInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
 service BillCheckoutGrpc {
   rpc Request(BillCheckoutRequest) returns (BillCheckoutInfo);
   rpc GetCurrent(BillCheckoutRequest) returns (BillCheckoutInfo);
   rpc Synchronize(BillCheckoutRequest) returns (BillCheckoutInfo);
+  rpc Prepare(BillCheckoutRequest) returns (PreparedBillInfo);
+  rpc GetPrepared(BillCheckoutRequest) returns (PreparedBillInfo);
+  rpc Present(BillCheckoutRequest) returns (PreparedBillInfo);
   rpc Cancel(BillCheckoutRequest) returns (BillCheckoutInfo);
   rpc AuthorizeRelease(BillCheckoutRequest) returns (google.protobuf.Empty);
 }
@@ -46,6 +94,16 @@ message BillCheckoutRequest {
   string checkout_id = 2;
   string guest_token = 3;
 }
+message PreparedBillInfo {
+  string checkout_id = 1;
+  string table_session_id = 2;
+  string checkout_status = 3;
+  BillInfo bill = 4;
+  string prepared_by_ref = 5;
+  string prepared_at = 6;
+  optional string presented_at = 7;
+}
+
 message BillCheckoutInfo {
   string checkout_id = 1;
   string table_session_id = 2;
@@ -94,11 +152,17 @@ service CashRegisterGrpc {
 
 service CashShiftGrpc {
   rpc Open(OpenCashShiftRequest) returns (CashShiftInfo);
+  rpc OpenDefault(OpenDefaultCashShiftRequest) returns (CashShiftInfo);
   rpc GetCurrent(CashShiftRegisterRequest) returns (CashShiftInfo);
 }
 
 message CashShiftRegisterRequest {
   string cash_register_id = 1;
+}
+
+message OpenDefaultCashShiftRequest {
+  string restaurant_id = 1;
+  optional string opening_cash = 2;
 }
 
 message OpenCashShiftRequest {
@@ -310,6 +374,8 @@ message ShiftReconciliationInfo {
 }
 
 service PayOsPaymentGrpc {
+  rpc GetForCheckout(WaiterPayOsRequest) returns (WaiterPayOsPage);
+  rpc GetForWaiter(WaiterPayOsRequest) returns (WaiterPayOsInfo);
   rpc Create(CreatePayOsPaymentRequest) returns (PayOsPaymentReply);
   rpc GetById(PaymentIdRequest) returns (PayOsPaymentInfo);
   rpc Reconcile(PaymentIdRequest) returns (PayOsPaymentInfo);
@@ -381,4 +447,81 @@ message PayOsConfigurationInfo {
   string cancel_url = 5;
   string webhook_url = 6;
   bool enabled = 7;
+}
+
+service CashHandoverGrpc {
+  rpc Create(CreateCashHandoverRequest) returns (CashHandoverReply);
+  rpc GetById(PaymentIdRequest) returns (CashHandoverInfo);
+  rpc GetAll(CashHandoverListRequest) returns (CashHandoverPage);
+  rpc Confirm(ConfirmCashHandoverRequest) returns (CashHandoverInfo);
+}
+message CreateCashHandoverRequest {
+  string bill_id = 1;
+  string checkout_id = 2;
+  optional string cash_received = 3;
+  string idempotency_key = 4;
+}
+message ConfirmCashHandoverRequest {
+  string payment_id = 1;
+  optional string confirmed_amount = 2;
+}
+message CashHandoverListRequest {
+  string cash_register_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+message CashHandoverInfo {
+  string payment_id = 1;
+  string bill_id = 2;
+  string restaurant_id = 3;
+  string cash_register_id = 4;
+  string cash_shift_id = 5;
+  string waiter_user_ref = 6;
+  optional string cashier_user_ref = 7;
+  string amount = 8;
+  string cash_received = 9;
+  string change_amount = 10;
+  optional string confirmed_amount = 11;
+  string status = 12;
+  string payment_status = 13;
+  string collected_at = 14;
+  optional string confirmed_at = 15;
+}
+message CashHandoverReply { CashHandoverInfo handover = 1; bool created = 2; }
+message CashHandoverPage {
+  repeated CashHandoverInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message WaiterPayOsRequest {
+  string table_session_id = 1;
+  string checkout_id = 2;
+  string payment_id = 3;
+  int32 page = 4;
+  int32 page_size = 5;
+}
+message WaiterPayOsInfo {
+  string payment_id = 1;
+  string bill_id = 2;
+  string table_session_id = 3;
+  string checkout_id = 4;
+  string status = 5;
+  string bill_status = 6;
+  string amount = 7;
+  optional string checkout_url = 8;
+  optional string qr_code = 9;
+  optional string expires_at = 10;
+  optional string paid_at = 11;
+  bool can_present_qr = 12;
+  bool payment_confirmed = 13;
+  bool requires_review = 14;
+  string evaluated_at = 15;
+}
+message WaiterPayOsPage {
+  repeated WaiterPayOsInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
 }

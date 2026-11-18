@@ -98,25 +98,28 @@ public sealed class CashShiftSqlServerTests : IAsyncLifetime
     }
 
     [BillingSqlServerFact]
-    public async Task DifferentRegistersCanOpenWithoutInventingOneRegisterPerCashierRestriction()
+    public async Task SqlServerRejectsASecondRegisterForTheSameRestaurant()
     {
-        var secondRegister = Guid.NewGuid();
-        await using (var db = Context())
+        await using var db = Context();
+        db.CashRegisters.Add(new CashRegister
         {
-            db.CashRegisters.Add(new CashRegister
-            {
-                CashRegisterId = secondRegister,
-                RestaurantId = _restaurant,
-                Code = "SQL-SHIFT-2"
-            });
-            await db.SaveChangesAsync();
-        }
+            CashRegisterId = Guid.NewGuid(),
+            RestaurantId = _restaurant,
+            Code = "SQL-SHIFT-2"
+        });
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        Assert.Equal(2601, Assert.IsType<SqlException>(error.InnerException).Number);
 
-        var cashier = Guid.NewGuid();
-        var results = await Task.WhenAll(Open(_register, cashier, 0), Open(secondRegister, cashier, 0));
-        Assert.All(results, status => Assert.Equal(201, status));
         await using var check = Context();
-        Assert.Equal(2, await check.CashShifts.CountAsync());
+        Assert.Equal(_register, (await check.CashRegisters.SingleAsync()).CashRegisterId);
+        check.CashRegisters.Add(new CashRegister
+        {
+            CashRegisterId = Guid.NewGuid(),
+            RestaurantId = Guid.NewGuid(),
+            Code = "SQL-SHIFT"
+        });
+        await check.SaveChangesAsync();
+        Assert.Equal(2, await check.CashRegisters.CountAsync());
     }
 
     private async Task<int> Open(Guid register, Guid cashier, decimal amount)

@@ -86,6 +86,8 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
                 services.AddGrpcClient<RestaurantStaffGrpc.RestaurantStaffGrpcClient>()
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
+                services.AddGrpcClient<ServiceRequestGrpc.ServiceRequestGrpcClient>()
+                    .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
                 services.AddGrpcClient<ReservationGrpc.ReservationGrpcClient>()
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
                 services.AddGrpcClient<TableSessionGrpc.TableSessionGrpcClient>()

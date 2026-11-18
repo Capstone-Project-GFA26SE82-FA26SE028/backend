@@ -232,7 +232,7 @@ Không sửa/xóa cột hoặc ràng buộc của bảng cũ; không thêm bản
 ### File SQL, Database First và trạng thái áp dụng
 
 - Schema database mới: docker/sql/schema/BillingDb.sql và docker/sql/schema/OrderingDb.sql, chỉ bổ sung DDL hai bảng.
-- Database đang dùng: docker/sql/upgrades/BillingCheckout.sql và docker/sql/upgrades/OrderingCheckout.sql. Mỗi script có transaction, không xóa dữ liệu, kiểm tra shape bảng/index trước khi chấp nhận chạy lại; không tự sửa một bảng trùng tên nhưng khác cấu trúc.
+- Ở đợt checkout trước, database đang dùng được nâng cấp bằng `BillingCheckout.sql` và `OrderingCheckout.sql`. Hai script đã được gỡ khỏi backend mới vì chỉ chấp nhận cấu trúc cũ chưa có `RestaurantId`. Schema hiện tại nằm trong `docker/sql/schema`. Việc gỡ file không thay đổi bảng, khóa, index, ERD hoặc dữ liệu đang dùng.
 - docker/sql/init.sh gọi hai upgrade cho database Docker đã khởi tạo và cho database mới. Không dùng schema tạo mới để reset database hiện có.
 - Đã áp dụng lên BillingDb và OrderingDb của SQL Server Docker hiện tại; đã chạy lại upgrade hai lần và kiểm tra. Không áp dụng thay cho các database trên máy thành viên khác. Không chỉnh/push repository Database-SQLServer riêng trong đợt này.
 - Đã scaffold từ SQL Server bằng dotnet-ef 8.0.24, đồng phiên bản EF Core của DAL; chỉ nhập model BillCheckout/CheckoutLock, mapping DbContext liên quan và navigation Bill.BillCheckouts. Cập nhật danh sách bảng trong hai efpt.config.json. Không tạo migration hoặc ghi connection string vào model.
@@ -481,3 +481,45 @@ Danh sách file của đợt sửa:
 ### Đồng bộ repo SQL riêng trong Downloads — 2026-10-28
 
 Đã đồng bộ `C:/Users/phucg/Downloads/Database-SQLServer-main/Database-SQLServer/BillingDb.sql`: thêm đúng ba cột PayOS nullable/không default và seed Cash/BankTransfer nếu thiếu, giữ bản ghi đã có kể cả bị tắt. Đây là đưa các thay đổi Billing đã được phép vào bản SQL riêng, không phát sinh schema mới. Chỉ file BillingDb.sql thay đổi trong repo SQL; OrderingDb.sql giữ nguyên. Đã kiểm thử bản sao script trên database SQL Server Docker cô lập CodexBillingSqlSync_* và kiểm tra đúng varchar(100)/varchar(2048)/varchar(max), NULL, default=0 cùng hai seed; đã xóa database thử. Không chạy script reset vào BillingDb đang dùng. File Downloads là script tạo mới có DROP/CREATE; nâng cấp database có dữ liệu dùng docker/sql/upgrades/BillingPayOs.sql trong backend. Repo SQL và backend đều chưa commit/push ở lần đồng bộ này.
+
+### B2 — Chuyển yêu cầu thanh toán đến quầy mặc định
+
+| Database và bảng | Thay đổi | Kiểu, NULL và DEFAULT | Khóa và ERD |
+| --- | --- | --- | --- |
+| BillingDb.dbo.BillCheckout | Thêm `CashRegisterId` | `uniqueidentifier NULL`, không DEFAULT | FK `FK_BillCheckout_CashRegister` đến `CashRegister(CashRegisterId)`. Dây mới CashRegister 1–n BillCheckout, mỗi checkout cũ có thể chưa có quầy. |
+| BillingDb.dbo.BillCheckout | Thêm `SubmittedAt` | `datetime2(7) NULL`, không DEFAULT | Không đổi khóa hoặc dây ERD. |
+| BillingDb.dbo.CashRegister | Thêm UNIQUE index `UX_CashRegister_Restaurant` | Dùng cột `RestaurantId uniqueidentifier NOT NULL` có sẵn | Restaurant 1–0..1 CashRegister, quan hệ logic, không FK xuyên database. |
+
+Giữ PK, UNIQUE/CHECK và các index đang có. Không thêm bảng, không tạo FK xuyên database, không gán quầy vào bản ghi cũ. Script dừng toàn bộ nếu phát hiện một nhà hàng có nhiều quầy. Hàng chờ theo quầy được Cashier đứng ca mới tiếp quản khi đọc danh sách, không đổi khóa ca trên giao dịch cũ. Schema tạo mới ở `docker/sql/schema/BillingDb.sql`. Dùng `docker/sql/upgrades/BillingCheckoutSubmission.sql` để nâng cấp BillingDb hiện có. Đã thử nâng cấp hai lần và scaffold bằng EF Core 8.0.24 trên SQL Server LocalDB cô lập. Chưa áp dụng vào database đang dùng.
+
+### B3 — Chốt hóa đơn và xác nhận đã đưa khách
+
+| Bảng | Cột | Kiểu và mặc định | Quan hệ |
+| --- | --- | --- | --- |
+| BillingDb.dbo.BillCheckout | `PreparedByRef` | `uniqueidentifier NULL`, không DEFAULT | Tham chiếu logic đến Identity.User, 1–n. Không có FK xuyên database. |
+| BillingDb.dbo.BillCheckout | `PreparedAt` | `datetime2(7) NULL`, không DEFAULT | Thời điểm Cashier chốt hóa đơn (UTC). |
+| BillingDb.dbo.BillCheckout | `PresentedAt` | `datetime2(7) NULL`, không DEFAULT | Thời điểm Waiter phụ trách xác nhận đã đưa hóa đơn cho khách (UTC). |
+
+Không thêm bảng, PK, FK, UNIQUE, CHECK hoặc index trong B3. Dữ liệu cũ giữ NULL. Với BillingDb đang dùng, áp dụng `BillingCheckoutSubmission.sql` trước, sau đó áp dụng `BillingCheckoutPreparation.sql`. Đã chạy thử trên SQL Server LocalDB cô lập và xác nhận chạy lặp giữ nguyên bản ghi cũ. Chưa áp dụng vào database đang dùng.
+
+### B4 — Thu hộ tiền mặt và xác nhận bàn giao
+
+B4 dùng `Payment`, `CashHandover`, `CashMovement` và các khóa đã có trong `docker/sql/schema/BillingDb.sql`. `CashHandover.PaymentId` là PK và FK nội bộ đến `Payment.PaymentId`, quan hệ Payment 1–0..1 CashHandover. `WaiterUserRef` và `CashierUserRef` là tham chiếu logic đến Identity, không có FK xuyên database.
+
+Khoản thu hộ chờ xác nhận được giữ trong ca nhận tiền và chặn đóng ca. Khi Cashier xác nhận đủ toàn bộ số tiền đã ghi, Billing ghi một bút toán `Sale` bằng giá trị hóa đơn và chuyển giao dịch sang `Paid` trong cùng transaction.
+
+#### Đồng bộ CashHandover sau review B4
+
+Repo SQL riêng bổ sung theo schema backend cột `BillingDb.dbo.CashHandover.RestaurantId uniqueidentifier NULL`, không DEFAULT, và index nonclustered không UNIQUE `IX_CashHandover_RestaurantIsolation(RestaurantId)`. Đây là quan hệ logic Restaurant 1–n CashHandover, mỗi bản ghi có thể chưa xác định được nhà hàng. PK và FK nội bộ đến Payment giữ nguyên. EF Core đã dùng cột này làm thuộc tính ẩn để cô lập dữ liệu.
+
+Với database hiện có, dùng `BillingCashHandoverRestaurantIsolation.sql` trong thư mục upgrade của một trong hai repo. Script chỉ điền `RestaurantId` còn NULL khi hóa đơn và quầy nhận cùng thuộc một nhà hàng hợp lệ. Đã đối chiếu DDL, thử nâng cấp và chạy lặp trên SQL Server LocalDB cô lập. Chưa áp dụng vào database đang dùng.
+
+### B5 — QR PayOS sau khi đưa hóa đơn
+
+Không có thay đổi schema trong backend. Repo SQL riêng đồng bộ ba cột đã có trong `BillingDb.dbo.Payment`: `ProviderPaymentLinkId varchar(100) NULL`, `ProviderCheckoutUrl varchar(2048) NULL` và `ProviderQrCode varchar(max) NULL`. Ba cột không có DEFAULT. PK, FK, UNIQUE, CHECK, index và quan hệ ERD giữ nguyên. Seed `PaymentMethod.BankTransfer` nếu thiếu, giữ bản ghi đã bị tắt. Bản tạo mới và script upgrade chạy lặp đã được kiểm tra trên SQL Server LocalDB cô lập.
+
+Chỉ Cashier đứng ca tại quầy nhận tạo QR mới khi checkout ở `Presented`. Waiter phụ trách xem QR và kết quả theo phiên bàn. Các giao dịch PayOS đã mở trên checkout `Ready` cũ vẫn có thể đối soát. Webhook kích hoạt xác minh với PayOS và Billing chỉ ghi `Paid` khi kết quả khớp. Tự đóng phiên thuộc đợt riêng.
+
+### B6 — Tự đóng phiên sau khi thanh toán
+
+**Không có thay đổi schema.** Dùng các trường đã có `TableSession.Status/ClosedAt`, `SessionTable.ReleasedAt`, `GuestAccess.RevokedAt` và `ServiceRequest.Status/CompletedAt` để đóng phiên sau khi xác minh giao dịch. Giữ nguyên khóa, index và quan hệ ERD. Không có script SQL nâng cấp cho B6.

@@ -47,7 +47,12 @@ CREATE TABLE dbo.[BillCheckout]
     [Status] varchar(20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [CreatedAt] datetime2(7) NOT NULL,
     [ReleasedAt] datetime2(7) NULL,
-    [RestaurantId] uniqueidentifier NULL
+    [RestaurantId] uniqueidentifier NULL,
+    [CashRegisterId] uniqueidentifier NULL,
+    [SubmittedAt] datetime2(7) NULL,
+    [PreparedByRef] uniqueidentifier NULL,
+    [PreparedAt] datetime2(7) NULL,
+    [PresentedAt] datetime2(7) NULL
 );
 GO
 
@@ -378,6 +383,9 @@ GO
 ALTER TABLE dbo.[CashMovement] ADD CONSTRAINT [PK_CashMovement] PRIMARY KEY CLUSTERED ([CashMovementId] ASC);
 GO
 
+CREATE UNIQUE NONCLUSTERED INDEX [UX_CashRegister_Restaurant] ON dbo.[CashRegister] ([RestaurantId] ASC);
+GO
+
 CREATE NONCLUSTERED INDEX [IX_CashRegister_RestaurantIsolation] ON dbo.[CashRegister] ([RestaurantId] ASC);
 GO
 ALTER TABLE dbo.[CashRegister] ADD CONSTRAINT [PK_CashRegister] PRIMARY KEY CLUSTERED ([CashRegisterId] ASC);
@@ -481,6 +489,9 @@ ALTER TABLE dbo.[BillAdjustment] WITH CHECK ADD CONSTRAINT [FK_BillAdjustment_Pr
 GO
 ALTER TABLE dbo.[BillAdjustment] WITH CHECK ADD CONSTRAINT [FK_BillAdjustment_Voucher] FOREIGN KEY ([VoucherId]) REFERENCES dbo.[Voucher] ([VoucherId]);
 GO
+ALTER TABLE dbo.[BillCheckout] WITH CHECK ADD CONSTRAINT [FK_BillCheckout_CashRegister] FOREIGN KEY ([CashRegisterId]) REFERENCES dbo.[CashRegister] ([CashRegisterId]);
+GO
+
 ALTER TABLE dbo.[BillCheckout] WITH CHECK ADD CONSTRAINT [FK_BillCheckout_Bill] FOREIGN KEY ([BillId]) REFERENCES dbo.[Bill] ([BillId]);
 GO
 ALTER TABLE dbo.[BillLine] WITH CHECK ADD CONSTRAINT [FK_BillLine_Bill] FOREIGN KEY ([BillId]) REFERENCES dbo.[Bill] ([BillId]);

@@ -78,7 +78,7 @@ public sealed class BillController(BillGrpc.BillGrpcClient client, IOptions<Bill
         return decimal.Parse(value, CultureInfo.InvariantCulture);
     }
 
-    private static BillDTO Map(BillInfo source)
+    internal static BillDTO Map(BillInfo source)
     {
         return new BillDTO
         {
