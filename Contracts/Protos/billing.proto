@@ -70,6 +70,9 @@ service BillCheckoutGrpc {
   rpc Request(BillCheckoutRequest) returns (BillCheckoutInfo);
   rpc GetCurrent(BillCheckoutRequest) returns (BillCheckoutInfo);
   rpc Synchronize(BillCheckoutRequest) returns (BillCheckoutInfo);
+  rpc Prepare(BillCheckoutRequest) returns (PreparedBillInfo);
+  rpc GetPrepared(BillCheckoutRequest) returns (PreparedBillInfo);
+  rpc Present(BillCheckoutRequest) returns (PreparedBillInfo);
   rpc Cancel(BillCheckoutRequest) returns (BillCheckoutInfo);
   rpc AuthorizeRelease(BillCheckoutRequest) returns (google.protobuf.Empty);
 }
@@ -78,6 +81,16 @@ message BillCheckoutRequest {
   string checkout_id = 2;
   string guest_token = 3;
 }
+message PreparedBillInfo {
+  string checkout_id = 1;
+  string table_session_id = 2;
+  string checkout_status = 3;
+  BillInfo bill = 4;
+  string prepared_by_ref = 5;
+  string prepared_at = 6;
+  optional string presented_at = 7;
+}
+
 message BillCheckoutInfo {
   string checkout_id = 1;
   string table_session_id = 2;

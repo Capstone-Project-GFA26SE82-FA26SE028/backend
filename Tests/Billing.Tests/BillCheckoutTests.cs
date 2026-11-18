@@ -178,7 +178,8 @@ public sealed class BillCheckoutTests
             Options.Create(new CashRegisterAccessSettings
             {
                 CashierRoleIds = ["cashier"]
-            }), TimeProvider.System);
+            }), TimeProvider.System, new CashRegisterRepository(fixture.Db), new CashShiftRepository(fixture.Db),
+            new TestPaymentReviewClient());
     }
 
     private static async Task Error(int status, Func<Task> action)

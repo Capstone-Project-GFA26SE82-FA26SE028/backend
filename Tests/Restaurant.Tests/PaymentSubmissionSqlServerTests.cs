@@ -38,7 +38,7 @@ namespace Restaurant.Tests;
 public sealed partial class ReservationSqlServerTests
 {
     [SqlServerFact]
-    public async Task PaymentSubmissionAndUnpaidBillsTransferToTheNextCashierThroughGateway()
+    public async Task PaymentSubmissionTransfersToNextCashierThenPreparesAndPresentsBillThroughGateway()
     {
         var location = await Location();
         var otherRestaurant = await Location(assignStaff: false);
@@ -85,6 +85,8 @@ public sealed partial class ReservationSqlServerTests
                     services.AddGrpcClient<PaymentSubmissionGrpc.PaymentSubmissionGrpcClient>()
                         .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
                     services.AddGrpcClient<BillCheckoutGrpc.BillCheckoutGrpcClient>()
+                        .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
+                    services.AddGrpcClient<PaymentGrpc.PaymentGrpcClient>()
                         .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
                     services.AddGrpcClient<ShiftReportGrpc.ShiftReportGrpcClient>()
                         .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
@@ -181,6 +183,9 @@ public sealed partial class ReservationSqlServerTests
             Assert.Equal(HttpStatusCode.Forbidden, (await cashier.GetAsync(
                 $"/api/restaurants/{otherRestaurant.RestaurantId}/payment-requests/incoming")).StatusCode);
 
+            var presented = await VerifyBillPreparation(billing, ordering, location, pendingId, path + $"/{id}",
+                cashier, nextCashier, waiter, otherWaiter, guest, reopened, id);
+
             using var scope = billing.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<BillingDb>();
             scope.ServiceProvider.GetRequiredService<Shared.Persistence.RestaurantIsolation.RestaurantDataScope>().Select(location.RestaurantId);
@@ -188,7 +193,11 @@ public sealed partial class ReservationSqlServerTests
             var checkouts = await db.BillCheckouts.ToListAsync();
             Assert.Equal(2, checkouts.Count);
             Assert.All(checkouts, checkout => Assert.Equal(opened.CashRegisterId, checkout.CashRegisterId));
-            Assert.Equal(2, await db.Bills.CountAsync());
+            Assert.Equal(3, await db.Bills.CountAsync());
+            var stored = Assert.Single(checkouts, checkout => checkout.CheckoutId == id);
+            Assert.Equal(presented.Bill.BillId, stored.BillId);
+            Assert.Equal(reopened.CashierUserRef, stored.PreparedByRef);
+            Assert.Equal(presented.PresentedAt!.Value.UtcDateTime, stored.PresentedAt);
             Assert.Empty(await db.Payments.ToListAsync());
         }
         finally
@@ -196,6 +205,94 @@ public sealed partial class ReservationSqlServerTests
             await DeleteTestDatabase(billingConnection, "CodexB2Billing_");
             await DeleteTestDatabase(orderingConnection, "CodexB2Ordering_");
         }
+    }
+
+    private async Task<PreparedResult> VerifyBillPreparation(WebApplicationFactory<BillingGrpc> billing,
+        WebApplicationFactory<OrderingGrpc> ordering, LocationIds location, Guid pendingOrderId, string requestPath,
+        HttpClient oldCashier, HttpClient cashier, HttpClient waiter, HttpClient otherWaiter, HttpClient guest,
+        CashShiftDTO shift, Guid checkoutId)
+    {
+        var prepare = requestPath + "/prepare";
+        var billPath = requestPath + "/bill";
+        var present = requestPath + "/present";
+        Assert.Equal(HttpStatusCode.Forbidden, (await oldCashier.PostAsync(prepare, null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await waiter.PostAsync(prepare, null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await waiter.GetAsync(billPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await waiter.PostAsync(present, null)).StatusCode);
+
+        // Another order can arrive after B2. B3 verifies again under Ordering's checkout lock.
+        await SetOrderStatus(ordering, location.RestaurantId, pendingOrderId, "PendingConfirmation");
+        Assert.Equal(HttpStatusCode.Conflict, (await cashier.PostAsync(prepare, null)).StatusCode);
+        await SetOrderStatus(ordering, location.RestaurantId, pendingOrderId, "Cancelled");
+        Assert.Equal(HttpStatusCode.Conflict, (await cashier.PostAsync(prepare, null)).StatusCode);
+
+        using (var scope = billing.Services.CreateScope())
+        {
+            scope.ServiceProvider.GetRequiredService<Shared.Persistence.RestaurantIsolation.RestaurantDataScope>()
+                .Select(location.RestaurantId);
+            var db = scope.ServiceProvider.GetRequiredService<BillingDb>();
+            db.TaxFeePolicies.Add(new Billing.DAL.Models.TaxFeePolicy
+            {
+                TaxFeePolicyId = Guid.NewGuid(),
+                Version = 1,
+                VatRate = 0.1m,
+                ServiceRate = 0.05m,
+                ServiceEnabled = true,
+                EffectiveFrom = DateTime.UtcNow.AddDays(-1)
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var responses = await Task.WhenAll(cashier.PostAsync(prepare, null), cashier.PostAsync(prepare, null));
+        var prepared = await Read<PreparedResult>(responses[0]);
+        Assert.Equivalent(prepared, await Read<PreparedResult>(responses[1]), strict: true);
+        Assert.Equal(checkoutId, prepared.CheckoutId);
+        Assert.Equal("Prepared", prepared.CheckoutStatus);
+        Assert.Equal("Unpaid", prepared.Bill.Status);
+        Assert.Equal(28517m, prepared.Bill.TotalAmount);
+        Assert.Equal(2, Assert.Single(prepared.Bill.Items).Quantity);
+        Assert.Equal(shift.CashierUserRef, prepared.PreparedByRef);
+        Assert.Null(prepared.PresentedAt);
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await otherWaiter.GetAsync(billPath)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await otherWaiter.PostAsync(present, null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await guest.GetAsync(billPath)).StatusCode);
+        var viewed = await Read<PreparedResult>(await waiter.GetAsync(billPath));
+        Assert.Equivalent(prepared, viewed, strict: true);
+
+        var presented = await Read<PreparedResult>(await waiter.PostAsync(present, null));
+        Assert.Equal("Presented", presented.CheckoutStatus);
+        Assert.Equal("Unpaid", presented.Bill.Status);
+        Assert.Equal(prepared.PreparedAt, presented.PreparedAt);
+        Assert.NotNull(presented.PresentedAt);
+        Assert.True(presented.PresentedAt >= presented.PreparedAt);
+        Assert.Equivalent(presented, await Read<PreparedResult>(await waiter.PostAsync(present, null)), strict: true);
+        Assert.Equivalent(presented, await Read<PreparedResult>(await cashier.PostAsync(prepare, null)), strict: true);
+
+        using var cash = new HttpRequestMessage(HttpMethod.Post, $"/api/bills/{presented.Bill.BillId}/payments/cash")
+        {
+            Content = JsonContent.Create(new
+            {
+                checkoutId,
+                cashShiftId = shift.CashShiftId,
+                cashReceived = 30000
+            })
+        };
+        cash.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+        Assert.Equal(HttpStatusCode.Conflict, (await cashier.SendAsync(cash)).StatusCode);
+        return presented;
+    }
+
+    private static async Task SetOrderStatus(WebApplicationFactory<OrderingGrpc> ordering,
+        Guid restaurantId, Guid orderId, string status)
+    {
+        using var scope = ordering.Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<Shared.Persistence.RestaurantIsolation.RestaurantDataScope>()
+            .Select(restaurantId);
+        var db = scope.ServiceProvider.GetRequiredService<OrderingDb>();
+        var order = await db.Orders.SingleAsync(value => value.OrderId == orderId);
+        order.Status = status;
+        await db.SaveChangesAsync();
     }
 
     private async Task<Guid> PaymentSessionAtAnotherTable(LocationIds location, string code)
@@ -347,6 +444,7 @@ public sealed partial class ReservationSqlServerTests
             OriginalTableRef = location.TableId,
             NameSnapshot = "Test drink",
             Quantity = 3,
+            UnitPriceSnapshot = 12345,
             CancelledQuantity = 1,
             Status = "Served"
         });
@@ -383,6 +481,8 @@ public sealed partial class ReservationSqlServerTests
         }
     }
 
+    private sealed record PreparedResult(Guid CheckoutId, string CheckoutStatus, BillDTO Bill,
+        Guid PreparedByRef, DateTimeOffset PreparedAt, DateTimeOffset? PresentedAt);
     private sealed record ReviewResult(int PendingOrderCount, ReviewItem[] Items);
     private sealed record ReviewItem(Guid OrderItemId, Guid TableId, int Quantity, string Status);
     private sealed record SubmissionPage(SubmissionResult[] Items);

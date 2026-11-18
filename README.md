@@ -222,6 +222,15 @@ New databases use the checkout tables from the current BillingDb and OrderingDb 
 
 Với BillingDb đã khởi tạo, áp dụng `docker/sql/upgrades/BillingCheckoutSubmission.sql` trước khi chạy bản mới. Compose khởi tạo database mới từ schema và giữ nguyên database đã có.
 
+### Chốt hóa đơn và xác nhận đã đưa khách
+
+1. Cashier đang đứng ca tại quầy nhận gọi `POST /api/table-sessions/{sessionId}/payment-requests/{id}/prepare`. Hệ thống khóa lại tập món tại Ordering, kiểm tra đơn chờ xác nhận rồi lập hoặc cập nhật bill từ bản chụp. Sau khi đối chiếu, hệ thống ghi trạng thái checkout `Prepared`.
+2. Waiter phụ trách mở `GET /api/table-sessions/{sessionId}/payment-requests/{id}/bill` để lấy bill đưa khách kiểm tra.
+3. Khi đã đưa bill thật, Waiter gọi `POST /api/table-sessions/{sessionId}/payment-requests/{id}/present`. Hệ thống ghi `PresentedAt` một lần và chuyển checkout sang `Presented`.
+
+Hai trạng thái trên vẫn là bill `Unpaid`. Các API thu tiền của checkout cũ chưa xử lý được bill qua luồng này. BillingDb đang dùng cần áp dụng `BillingCheckoutSubmission.sql` rồi `BillingCheckoutPreparation.sql`. Bật đúng cấu hình chính sách VAT/phí trước khi lập bill mới.
+
+
 
 Ordering uses `GrpcServices:Billing` and `Ordering:CheckoutCashierRoleIds`; both local and Docker appsettings contain the repository's current Cashier role ID. Identity and Restaurant still verify the actual account, login session and branch assignment. No account IDs or credentials are supplied by the checkout payload.
 

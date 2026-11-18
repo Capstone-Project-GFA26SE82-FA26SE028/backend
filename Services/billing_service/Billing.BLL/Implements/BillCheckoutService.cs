@@ -12,10 +12,11 @@ using Shared.Persistence.Interfaces;
 
 namespace Billing.BLL.Implements;
 
-public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBillRepository bills,
+public sealed partial class BillCheckoutService(IBillCheckoutRepository checkouts, IBillRepository bills,
     IUnitOfWork unitOfWork, ICheckoutSourceClient ordering, IBillSourceClient source,
     IBillService billService, IBillingAccess access, IOptions<CashRegisterAccessSettings> roles,
-    TimeProvider clock) : IBillCheckoutService
+    TimeProvider clock, ICashRegisterRepository registers, ICashShiftRepository shifts,
+    IPaymentReviewClient reviews) : IBillCheckoutService
 {
     public async Task<BillCheckoutDTO> Request(Guid sessionId, Guid id, string guestToken, CancellationToken ct)
     {
@@ -105,6 +106,31 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
             throw new BillingException(409, "Yêu cầu thanh toán chưa được khóa nên chưa thể chuẩn bị thanh toán.");
         }
 
+        var bill = await BuildBill(sessionId, id, ct);
+        var hash = BillHash(bill);
+        if (hash != state.SourceHash)
+        {
+            throw new BillingException(409, "Hóa đơn không khớp với danh sách món đã khóa gọi món. Chưa thể thanh toán.");
+        }
+
+        await ordering.BindAsync(sessionId, id, bill.BillId, hash, ct);
+        return await InSession(sessionId, async () =>
+        {
+            var current = await Find(sessionId, id, ct);
+            if (current.Status is not ("Frozen" or "Ready") || current.ReleasedAt.HasValue)
+            {
+                throw new BillingException(409, "Yêu cầu thanh toán đã thay đổi trong khi đồng bộ hóa đơn.");
+            }
+
+            current.BillId = bill.BillId;
+            current.SourceHash = hash;
+            current.Status = "Ready";
+            return Map(current);
+        }, ct);
+    }
+
+    private async Task<BillDTO> BuildBill(Guid sessionId, Guid id, CancellationToken ct)
+    {
         var billId = await checkouts.GetBillIdAsync(sessionId, ct);
         BillDTO bill;
         if (billId.HasValue)
@@ -128,29 +154,14 @@ public sealed class BillCheckoutService(IBillCheckoutRepository checkouts, IBill
                 bill = await billService.RefreshForCheckout(billId.Value, id, ct);
             }
         }
+        return bill;
+    }
 
-        var hash = CheckoutHash.Compute(bill.Items.Select(line => new CheckoutHashLine(line.OrderItemRef,
+    private static string BillHash(BillDTO bill)
+    {
+        return CheckoutHash.Compute(bill.Items.Select(line => new CheckoutHashLine(line.OrderItemRef,
             line.Item.ItemId, line.Quantity, line.Item.BaseUnitPrice, line.Item.Options.Select(option =>
                 new CheckoutHashOption(option.OptionId, option.Quantity, option.ExtraPrice)).ToArray())));
-        if (hash != state.SourceHash)
-        {
-            throw new BillingException(409, "Hóa đơn không khớp với danh sách món đã khóa gọi món. Chưa thể thanh toán.");
-        }
-
-        await ordering.BindAsync(sessionId, id, bill.BillId, hash, ct);
-        return await InSession(sessionId, async () =>
-        {
-            var current = await Find(sessionId, id, ct);
-            if (current.Status is not ("Frozen" or "Ready") || current.ReleasedAt.HasValue)
-            {
-                throw new BillingException(409, "Yêu cầu thanh toán đã thay đổi trong khi đồng bộ hóa đơn.");
-            }
-
-            current.BillId = bill.BillId;
-            current.SourceHash = hash;
-            current.Status = "Ready";
-            return Map(current);
-        }, ct);
     }
 
     public async Task<BillCheckoutDTO> Cancel(Guid sessionId, Guid id, CancellationToken ct)

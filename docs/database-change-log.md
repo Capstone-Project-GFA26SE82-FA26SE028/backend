@@ -491,3 +491,13 @@ Danh sách file của đợt sửa:
 | BillingDb.dbo.CashRegister | Thêm UNIQUE index `UX_CashRegister_Restaurant` | Dùng cột `RestaurantId uniqueidentifier NOT NULL` có sẵn | Restaurant 1–0..1 CashRegister, quan hệ logic, không FK xuyên database. |
 
 Giữ PK, UNIQUE/CHECK và các index đang có. Không thêm bảng, không tạo FK xuyên database, không gán quầy vào bản ghi cũ. Script dừng toàn bộ nếu phát hiện một nhà hàng có nhiều quầy. Hàng chờ theo quầy được Cashier đứng ca mới tiếp quản khi đọc danh sách, không đổi khóa ca trên giao dịch cũ. Schema tạo mới ở `docker/sql/schema/BillingDb.sql`. Dùng `docker/sql/upgrades/BillingCheckoutSubmission.sql` để nâng cấp BillingDb hiện có. Đã thử nâng cấp hai lần và scaffold bằng EF Core 8.0.24 trên SQL Server LocalDB cô lập. Chưa áp dụng vào database đang dùng.
+
+### B3 — Chốt hóa đơn và xác nhận đã đưa khách
+
+| Bảng | Cột | Kiểu và mặc định | Quan hệ |
+| --- | --- | --- | --- |
+| BillingDb.dbo.BillCheckout | `PreparedByRef` | `uniqueidentifier NULL`, không DEFAULT | Tham chiếu logic đến Identity.User, 1–n. Không có FK xuyên database. |
+| BillingDb.dbo.BillCheckout | `PreparedAt` | `datetime2(7) NULL`, không DEFAULT | Thời điểm Cashier chốt hóa đơn (UTC). |
+| BillingDb.dbo.BillCheckout | `PresentedAt` | `datetime2(7) NULL`, không DEFAULT | Thời điểm Waiter phụ trách xác nhận đã đưa hóa đơn cho khách (UTC). |
+
+Không thêm bảng, PK, FK, UNIQUE, CHECK hoặc index trong B3. Dữ liệu cũ giữ NULL. Với BillingDb đang dùng, áp dụng `BillingCheckoutSubmission.sql` trước, sau đó áp dụng `BillingCheckoutPreparation.sql`. Đã chạy thử trên SQL Server LocalDB cô lập và xác nhận chạy lặp giữ nguyên bản ghi cũ. Chưa áp dụng vào database đang dùng.

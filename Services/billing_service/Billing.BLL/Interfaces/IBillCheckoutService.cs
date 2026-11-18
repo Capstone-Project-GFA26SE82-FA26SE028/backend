@@ -8,5 +8,8 @@ public interface IBillCheckoutService
     Task<BillCheckoutDTO> GetCurrent(Guid sessionId, string guestToken, CancellationToken ct);
     Task<BillCheckoutDTO> Synchronize(Guid sessionId, Guid id, CancellationToken ct);
     Task<BillCheckoutDTO> Cancel(Guid sessionId, Guid id, CancellationToken ct);
+    Task<PreparedBillDTO> Prepare(Guid sessionId, Guid id, CancellationToken ct);
+    Task<PreparedBillDTO> GetPrepared(Guid sessionId, Guid id, CancellationToken ct);
+    Task<PreparedBillDTO> Present(Guid sessionId, Guid id, CancellationToken ct);
     Task AuthorizeRelease(Guid sessionId, Guid id, CancellationToken ct);
 }

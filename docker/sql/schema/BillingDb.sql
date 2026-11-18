@@ -49,7 +49,10 @@ CREATE TABLE dbo.[BillCheckout]
     [ReleasedAt] datetime2(7) NULL,
     [RestaurantId] uniqueidentifier NULL,
     [CashRegisterId] uniqueidentifier NULL,
-    [SubmittedAt] datetime2(7) NULL
+    [SubmittedAt] datetime2(7) NULL,
+    [PreparedByRef] uniqueidentifier NULL,
+    [PreparedAt] datetime2(7) NULL,
+    [PresentedAt] datetime2(7) NULL
 );
 GO
 
