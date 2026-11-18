@@ -104,8 +104,8 @@ public sealed partial class PayOsPaymentService
         }
 
         RequireBranch(verified, bill.RestaurantId);
-        var review = await reviews.GetReviewAsync(sessionId, checkoutId, ct);
-        if (Session(bill) != sessionId || review.RestaurantId != bill.RestaurantId)
+        var verifiedRestaurant = await reviews.GetResultRestaurantAsync(sessionId, checkoutId, ct);
+        if (Session(bill) != sessionId || verifiedRestaurant != bill.RestaurantId)
         {
             throw new BillingException(403, "Chỉ phục vụ đã tiếp nhận và kiểm tra yêu cầu được lấy QR hoặc xem kết quả.");
         }

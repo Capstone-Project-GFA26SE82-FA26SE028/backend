@@ -519,3 +519,7 @@ Với database hiện có, dùng `BillingCashHandoverRestaurantIsolation.sql` tr
 Không có thay đổi schema trong backend. Repo SQL riêng đồng bộ ba cột đã có trong `BillingDb.dbo.Payment`: `ProviderPaymentLinkId varchar(100) NULL`, `ProviderCheckoutUrl varchar(2048) NULL` và `ProviderQrCode varchar(max) NULL`. Ba cột không có DEFAULT. PK, FK, UNIQUE, CHECK, index và quan hệ ERD giữ nguyên. Seed `PaymentMethod.BankTransfer` nếu thiếu, giữ bản ghi đã bị tắt. Bản tạo mới và script upgrade chạy lặp đã được kiểm tra trên SQL Server LocalDB cô lập.
 
 Chỉ Cashier đứng ca tại quầy nhận tạo QR mới khi checkout ở `Presented`. Waiter phụ trách xem QR và kết quả theo phiên bàn. Các giao dịch PayOS đã mở trên checkout `Ready` cũ vẫn có thể đối soát. Webhook kích hoạt xác minh với PayOS và Billing chỉ ghi `Paid` khi kết quả khớp. Tự đóng phiên thuộc đợt riêng.
+
+### B6 — Tự đóng phiên sau khi thanh toán
+
+**Không có thay đổi schema.** Dùng các trường đã có `TableSession.Status/ClosedAt`, `SessionTable.ReleasedAt`, `GuestAccess.RevokedAt` và `ServiceRequest.Status/CompletedAt` để đóng phiên sau khi xác minh giao dịch. Giữ nguyên khóa, index và quan hệ ERD. Không có script SQL nâng cấp cho B6.

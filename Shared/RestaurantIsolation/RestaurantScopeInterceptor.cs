@@ -12,9 +12,9 @@ public sealed class RestaurantScopeInterceptor(RestaurantAccessGrpc.RestaurantAc
     public override async Task<TResponse> UnaryServerHandler<TRequest, TResponse>(TRequest request,
         ServerCallContext context, UnaryServerMethod<TRequest, TResponse> continuation)
     {
-        // These Billing entry points establish scope after verifying the service key
-        // or locating the persisted provider order and checking the webhook signature.
+        // These entry points establish scope after checking their service key or webhook signature.
         if (context.Method is "/billing.OnlinePaymentGrpc/Execute" or "/billing.PaymentWebhookGrpc/Process"
+            or "/billing.PaymentSettlementGrpc/GetVerifiedCheckout"
             or "/customer.FeedbackGrpc/Submit")
         {
             return await continuation(request, context);

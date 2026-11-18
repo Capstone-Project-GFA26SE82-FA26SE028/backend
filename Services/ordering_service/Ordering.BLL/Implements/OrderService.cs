@@ -197,7 +197,9 @@ public sealed partial class OrderService(
 
     public async Task<OrderDTO> GetById(Guid sessionId, Guid id, string guestToken, CancellationToken ct)
     {
-        var actor = await access.RequireAsync(sessionId, null, guestToken, ct);
+        var actor = string.IsNullOrEmpty(guestToken)
+            ? await access.RequireForServingAsync(sessionId, ct)
+            : await access.RequireAsync(sessionId, null, guestToken, ct);
         var order = await transaction.ExecuteAsync(async () =>
         {
             var found = await orders.GetByIdAsync(id, ct);
@@ -210,7 +212,15 @@ public sealed partial class OrderService(
 
     public async Task<List<OrderDTO>> GetAll(Guid sessionId, int page, int pageSize, string guestToken, CancellationToken ct)
     {
-        var actor = await access.RequireAsync(sessionId, null, guestToken, ct);
+        if (string.IsNullOrEmpty(guestToken))
+        {
+            await access.RequireForServingAsync(sessionId, ct);
+        }
+        else
+        {
+            await access.RequireAsync(sessionId, null, guestToken, ct);
+        }
+
         if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue)
         {
             throw new OrderingException(400, "Phân trang không hợp lệ.");
@@ -310,7 +320,7 @@ public sealed partial class OrderService(
 
     public async Task<OrderDTO> ServeItem(Guid sessionId, Guid id, Guid orderItemId, string? version, CancellationToken ct)
     {
-        var actor = await access.RequireAsync(sessionId, null, string.Empty, ct);
+        var actor = await access.RequireForServingAsync(sessionId, ct);
         if (actor.IsGuest || !actor.UserId.HasValue)
         {
             throw new OrderingException(403, "Yêu cầu quyền nhân viên để phục vụ món ăn.");
@@ -318,6 +328,17 @@ public sealed partial class OrderService(
 
         var order = await transaction.ExecuteAsync(async () =>
         {
+            if (actor.PaidCheckoutId.HasValue)
+            {
+                await checkouts.LockSessionAsync(sessionId, ct);
+                var checkout = await checkouts.GetActiveAsync(sessionId, ct);
+                if (checkout is null || checkout.CheckoutId != actor.PaidCheckoutId.Value
+                    || checkout.Status != "Frozen" || !checkout.BillIdRef.HasValue)
+                {
+                    throw new OrderingException(409, "Không tìm thấy lượt chốt món của hóa đơn đã thanh toán.");
+                }
+            }
+
             var found = await orders.GetByIdAsync(id, ct);
             CheckOrder(found, actor);
 
@@ -339,6 +360,12 @@ public sealed partial class OrderService(
             if (item is null)
             {
                 throw new OrderingException(404, "Không tìm thấy món ăn trong đơn hàng.");
+            }
+
+            if (actor.PaidCheckoutId.HasValue && (found.Status is not ("Confirmed" or "Ready" or "Served")
+                || item.CancelledQuantity < 0 || item.Quantity <= item.CancelledQuantity))
+            {
+                throw new OrderingException(409, "Món ăn không thuộc phần đã tính tiền của phiên đã đóng.");
             }
 
             if (!string.Equals(item.Status, "Ready", StringComparison.OrdinalIgnoreCase))

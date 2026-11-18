@@ -12,7 +12,7 @@ public sealed partial class PayOsPaymentService
     {
         provider.EnsureConfigured();
         payments.ResetProviderTracking();
-        return await Controlled(async () => await unitOfWork.ExecuteInTransactionAsync(async () =>
+        var (paymentResult, paidSessionId) = await Controlled(async () => await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             var initial = await payments.GetDetailsAsync(id, ct) ?? throw new BillingException(404, "Không tìm thấy khoản thanh toán.");
             if (!PayOsPaymentRules.IsPayOs(initial))
@@ -22,7 +22,7 @@ public sealed partial class PayOsPaymentService
 
             if (!await payments.LockProviderWorkAsync(id, ct))
             {
-                return Map(initial);
+                return (Map(initial), (Guid?)null);
             }
 
             var order = long.Parse(initial.ProviderOrderCode, CultureInfo.InvariantCulture);
@@ -109,8 +109,14 @@ public sealed partial class PayOsPaymentService
             var result = Map(payment);
             result.ProviderAmountPaid = bank?.AmountPaid;
             result.ProviderAmountRemaining = bank?.AmountRemaining;
-            return result;
+            return (result, result.Status == PaymentStatuses.Paid ? (Guid?)sessionId : null);
         }, ct));
+        if (paidSessionId.HasValue)
+        {
+            await closure.TryCloseAsync(paymentResult.RestaurantId, paidSessionId.Value, ct);
+        }
+
+        return paymentResult;
     }
 
     private async Task Apply(Payment payment, PayOsProviderResult? bank, Guid sessionId, bool cancellationAttempted, CancellationToken ct)

@@ -34,6 +34,8 @@ builder.Services.AddScoped<Restaurant.BLL.Interfaces.IAreaService, Restaurant.BL
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableService, Restaurant.BLL.Implements.TableService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IQrService, Restaurant.BLL.Implements.QrService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableSessionService, Restaurant.BLL.Implements.TableSessionService>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IVerifiedPaymentClient, Restaurant.API.Management.VerifiedPaymentClient>();
+builder.Services.AddHostedService<Restaurant.API.Workers.PaidSessionClosureWorker>();
 builder.Services.Configure<Restaurant.Common.Settings.QrSettings>(builder.Configuration.GetSection("Qr"));
 builder.Services.AddSingleton(builder.Configuration.GetSection("Cloudinary")
     .Get<Shared.Common.Images.CloudinarySettings>() ?? new Shared.Common.Images.CloudinarySettings());
@@ -59,6 +61,11 @@ builder.Services.AddGrpcClient<Backend.Contracts.Identity.UserGrpc.UserGrpcClien
 });
 
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IPaymentRequestOrderClient, Restaurant.API.Management.PaymentRequestOrderClient>();
+builder.Services.AddGrpcClient<Backend.Contracts.Billing.PaymentSettlementGrpc.PaymentSettlementGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Billing"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Billing."));
+});
 builder.Services.AddGrpcClient<Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
@@ -83,6 +90,7 @@ app.MapGrpcService<Restaurant.API.GrpcServices.AreaGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.TableGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.QrGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.TableSessionGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.PaidSessionClosureGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.ReservationGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantStaffGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantAccessGrpcService>();

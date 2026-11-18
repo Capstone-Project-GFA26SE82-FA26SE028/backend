@@ -321,7 +321,7 @@ public sealed class PayOsPaymentServiceTests
                 {
                     CashierRoleIds = ["cashier"],
                     ManagerRoleIds = ["manager"]
-                }), Options.Create(Settings), TimeProvider.System, new TestPaymentReviewClient());
+                }), Options.Create(Settings), TimeProvider.System, new TestPaymentReviewClient(), new TestPaidSessionClosureClient());
             Webhooks = new PaymentWebhookService(payments, webhooks, bills, registers, shifts, uow, Provider, Service, TimeProvider.System);
         }
 

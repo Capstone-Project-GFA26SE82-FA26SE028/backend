@@ -41,6 +41,11 @@ public sealed class TableSessionRepository(RestaurantDbContext db)
         return WithActiveTables(query.AsNoTracking()).SingleOrDefaultAsync(ct);
     }
 
+    public Task<List<SessionTable>> GetUnreleasedLinksAsync(Guid id, CancellationToken ct)
+    {
+        return _context.SessionTables.Where(link => link.TableSessionId == id && link.ReleasedAt == null).ToListAsync(ct);
+    }
+
     private IQueryable<TableSession> LockedSession(Guid id)
     {
         return _context.TableSessions.FromSqlInterpolated(

@@ -24,14 +24,17 @@ using BillingRestaurantAccess = billingapi::Backend.Contracts.Restaurant.Restaur
 using BillingServiceRequest = billingapi::Backend.Contracts.Restaurant.ServiceRequestGrpc.ServiceRequestGrpcClient;
 using BillingOrderClient = billingapi::Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient;
 using BillingCheckoutLockClient = billingapi::Backend.Contracts.Ordering.CheckoutLockGrpc.CheckoutLockGrpcClient;
+using BillingClosureClient = billingapi::Backend.Contracts.Restaurant.PaidSessionClosureGrpc.PaidSessionClosureGrpcClient;
 using PayOsClient = billingapi::Billing.API.Clients.PayOsClient;
 using OrderingDb = Ordering.DAL.Models.OrderingDbContext;
 using OrderingModels = Ordering.DAL.Models;
 using OrderingGrpc = orderingapi::Ordering.API.GrpcServices.BillingOrderGrpcService;
 using OrderingRestaurantAccess = orderingapi::Backend.Contracts.Restaurant.RestaurantAccessGrpc.RestaurantAccessGrpcClient;
+using OrderingIdentityUser = orderingapi::Backend.Contracts.Identity.UserGrpc.UserGrpcClient;
 using OrderingTableSession = orderingapi::Backend.Contracts.Restaurant.TableSessionGrpc.TableSessionGrpcClient;
 using OrderingBillingSession = orderingapi::Backend.Contracts.Restaurant.BillingSessionGrpc.BillingSessionGrpcClient;
 using ReviewOrderingGrpc = restaurantapi::Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient;
+using VerifiedCheckoutClient = restaurantapi::Backend.Contracts.Billing.PaymentSettlementGrpc.PaymentSettlementGrpcClient;
 using ReviewRestaurantGrpc = Backend.Contracts.Restaurant.ServiceRequestGrpc.ServiceRequestGrpcClient;
 using RestaurantMarker = restaurantapi::Restaurant.API.ApiAssembly;
 
@@ -51,13 +54,20 @@ public sealed partial class ReservationSqlServerTests
         return VerifyPaymentSubmission(verifyPayOs: true);
     }
 
-    private async Task VerifyPaymentSubmission(bool verifyPayOs)
+    [SqlServerFact]
+    public Task PaymentSubmissionRecoversPaidSessionWhenFirstClosureFails()
+    {
+        return VerifyPaymentSubmission(verifyPayOs: false, recoverClosure: true);
+    }
+
+    private async Task VerifyPaymentSubmission(bool verifyPayOs, bool recoverClosure = false)
     {
         var location = await Location();
         var otherRestaurant = await Location(assignStaff: false);
         await AddSecondPaymentWaiter(otherRestaurant.RestaurantId);
         await AddPaymentStaff("nextCashier", "cashier", location.RestaurantId);
         await AddPaymentStaff("sameRestaurantWaiter", "waiter", location.RestaurantId);
+        await AddPaymentStaff("paymentKitchen", "kitchen", location.RestaurantId);
         var session = await SeedOpenPaymentSession(location);
         var handoverSession = await PaymentSessionAtAnotherTable(location, "T2");
         var unpaidSession = await PaymentSessionAtAnotherTable(location, "T3");
@@ -72,6 +82,7 @@ public sealed partial class ReservationSqlServerTests
         await Read<PaymentRequestResult>(await PostPaymentRequest(guest, path, id));
 
         var orderItemId = Guid.NewGuid();
+        var kitchenTaskId = Guid.NewGuid();
         var server = Environment.GetEnvironmentVariable("RESTAURANT_SQL_TEST_SERVER")!;
         var billingConnection = Connection(server, "CodexB2Billing_" + Guid.NewGuid().ToString("N"));
         var orderingConnection = Connection(server, "CodexB2Ordering_" + Guid.NewGuid().ToString("N"));
@@ -80,16 +91,26 @@ public sealed partial class ReservationSqlServerTests
             await CreatePaymentSubmissionSchema(billingConnection, "Billing");
             await CreatePaymentSubmissionSchema(orderingConnection, "Ordering");
             await using var ordering = CreatePaymentSubmissionOrderingHost(orderingConnection);
-            var pendingId = await SeedPaymentOrders(ordering, location, session, orderItemId);
+            var pendingId = await SeedPaymentOrders(ordering, location, session, orderItemId, kitchenTaskId);
 
+            WebApplicationFactory<BillingGrpc>? billingTarget = null;
             await using var reviewingRestaurant = _restaurant.WithWebHostBuilder(builder =>
             {
                 builder.UseSetting("GrpcServices:Ordering", "http://ordering.test");
-                builder.ConfigureTestServices(services => services.AddGrpcClient<ReviewOrderingGrpc>()
-                    .ConfigurePrimaryHttpMessageHandler(() => ordering.Server.CreateHandler()));
+                builder.UseSetting("GrpcServices:Billing", "http://billing.test");
+                builder.UseSetting("Notifications:ServiceKey", ClosureKey);
+                builder.ConfigureTestServices(services =>
+                {
+                    services.RemoveAll<IHostedService>();
+                    services.AddGrpcClient<ReviewOrderingGrpc>()
+                        .ConfigurePrimaryHttpMessageHandler(() => ordering.Server.CreateHandler());
+                    services.AddGrpcClient<VerifiedCheckoutClient>()
+                        .ConfigurePrimaryHttpMessageHandler(() => billingTarget!.Server.CreateHandler());
+                });
             });
             var payOs = verifyPayOs ? new PayOsHttpFixture() : null;
-            await using var billing = CreatePaymentSubmissionBillingHost(billingConnection, reviewingRestaurant, ordering, payOs);
+            await using var billing = CreatePaymentSubmissionBillingHost(billingConnection, reviewingRestaurant, ordering, payOs, recoverClosure);
+            billingTarget = billing;
             if (payOs is not null)
             {
                 await SeedPayOsConfiguration(billing.Services, location.RestaurantId, otherRestaurant.RestaurantId);
@@ -98,11 +119,18 @@ public sealed partial class ReservationSqlServerTests
             await using var gateway = _gateway.WithWebHostBuilder(builder =>
             {
                 builder.UseSetting("GrpcServices:Billing", "http://billing.test");
+                builder.UseSetting("GrpcServices:Ordering", "http://ordering.test");
                 builder.UseSetting("Swagger:Enabled", "true");
                 builder.ConfigureTestServices(services =>
                 {
                     services.AddGrpcClient<ReviewRestaurantGrpc>()
                         .ConfigurePrimaryHttpMessageHandler(() => reviewingRestaurant.Server.CreateHandler());
+                    services.AddGrpcClient<Backend.Contracts.Restaurant.TableSessionGrpc.TableSessionGrpcClient>()
+                        .ConfigurePrimaryHttpMessageHandler(() => reviewingRestaurant.Server.CreateHandler());
+                    services.AddGrpcClient<Backend.Contracts.Ordering.OrderGrpc.OrderGrpcClient>()
+                        .ConfigurePrimaryHttpMessageHandler(() => ordering.Server.CreateHandler());
+                    services.AddGrpcClient<Backend.Contracts.Ordering.KitchenTaskGrpc.KitchenTaskGrpcClient>()
+                        .ConfigurePrimaryHttpMessageHandler(() => ordering.Server.CreateHandler());
                     services.AddGrpcClient<PaymentSubmissionGrpc.PaymentSubmissionGrpcClient>()
                         .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
                     services.AddGrpcClient<BillCheckoutGrpc.BillCheckoutGrpcClient>()
@@ -141,7 +169,7 @@ public sealed partial class ReservationSqlServerTests
             Assert.Equal(orderItemId, item.OrderItemId);
             Assert.Equal(location.TableId, item.TableId);
             Assert.Equal(2, item.Quantity);
-            Assert.Equal("Served", item.Status);
+            Assert.Equal("Cooking", item.Status);
 
             Assert.Equal(HttpStatusCode.Forbidden, (await waiter.PostAsJsonAsync(open, new { openingCash = 0 })).StatusCode);
             var openings = await Task.WhenAll(cashier.PostAsJsonAsync(open, new { openingCash = 0 }),
@@ -227,6 +255,10 @@ public sealed partial class ReservationSqlServerTests
             Assert.Equal(reopened.CashierUserRef, stored.PreparedByRef);
             Assert.Equal(presented.PresentedAt!.Value.UtcDateTime, stored.PresentedAt);
             Assert.Empty(await db.Payments.ToListAsync());
+            using var orderingGuest = gateway.CreateClient();
+            await Read<ApiGateway.DTOs.Restaurant.GuestAccessDto>(await orderingGuest.PostAsJsonAsync(
+                $"/api/table-sessions/{session}/guest-access/join", new { phoneOrCode = "123" }));
+            await VerifyClosureRequiresPaidSession(reviewingRestaurant, billing, location, session, otherRestaurant.RestaurantId, guest);
 
             if (payOs is null)
             {
@@ -238,6 +270,45 @@ public sealed partial class ReservationSqlServerTests
                 await VerifyPayOsPayment(db, payOs, presented, reopened, nextCashier, cashier, waiter,
                     sameRestaurantWaiter, otherWaiter, webhookClient, otherRestaurant.RestaurantId);
             }
+
+            if (recoverClosure)
+            {
+                await VerifyClosureAfterRecovery(reviewingRestaurant.Services, session, guest);
+            }
+
+            await VerifyClosedSession(reviewingRestaurant, location, session, id, guest, orderingGuest, waiter);
+            using var checkoutScope = ordering.Services.CreateScope();
+            checkoutScope.ServiceProvider.GetRequiredService<Shared.Persistence.RestaurantIsolation.RestaurantDataScope>()
+                .Select(location.RestaurantId);
+            var orderingDb = checkoutScope.ServiceProvider.GetRequiredService<OrderingDb>();
+            var checkoutLock = await orderingDb.CheckoutLocks.AsNoTracking().SingleAsync(value => value.CheckoutId == id);
+            Assert.Equal("Frozen", checkoutLock.Status);
+            Assert.Null(checkoutLock.ReleasedAt);
+
+            var billedItem = await orderingDb.OrderItems.AsNoTracking().SingleAsync(value => value.OrderItemId == orderItemId);
+            var serve = $"/api/table-sessions/{session}/orders/{billedItem.OrderId}/items/{orderItemId}/serve";
+            var serveBody = new { version = "" };
+            Assert.Equal(HttpStatusCode.Unauthorized, (await orderingGuest.PostAsJsonAsync(serve, serveBody)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await otherWaiter.PostAsJsonAsync(serve, serveBody)).StatusCode);
+            Assert.Equal(HttpStatusCode.Forbidden, (await nextCashier.PostAsJsonAsync(serve, serveBody)).StatusCode);
+            Assert.Equal(HttpStatusCode.BadRequest, (await waiter.PostAsJsonAsync(serve, serveBody)).StatusCode);
+
+            using var kitchen = PaymentStaffClient(gateway, "paymentKitchen");
+            using var becameReady = await kitchen.PatchAsJsonAsync($"/api/kitchen-tasks/{kitchenTaskId}/status",
+                new { status = "Ready" });
+            var ready = await Read<Ordering.Common.DTOs.KitchenTaskDTO>(becameReady);
+            Assert.Equal("Ready", ready.Status);
+            var ordersPath = $"/api/table-sessions/{session}/orders";
+            var ordersForWaiter = await Read<List<ApiGateway.DTOs.Ordering.OrderDTO>>(await waiter.GetAsync(ordersPath));
+            var readyForWaiter = Assert.Single(ordersForWaiter, value => value.OrderId == billedItem.OrderId);
+            Assert.Equal("Ready", Assert.Single(readyForWaiter.Items, value => value.OrderItemId == orderItemId).Status);
+            Assert.Equal(HttpStatusCode.Forbidden, (await otherWaiter.GetAsync(ordersPath)).StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, (await orderingGuest.GetAsync(ordersPath)).StatusCode);
+            var servedOrder = await Read<ApiGateway.DTOs.Ordering.OrderDTO>(await waiter.PostAsJsonAsync(serve, serveBody));
+            Assert.Equal("Served", Assert.Single(servedOrder.Items, value => value.OrderItemId == orderItemId).Status);
+            Assert.Equal("Served", (await orderingDb.KitchenTasks.AsNoTracking()
+                .SingleAsync(value => value.KitchenTaskId == kitchenTaskId)).Status);
+            Assert.Equal("Paid", (await db.Bills.AsNoTracking().SingleAsync(value => value.BillId == stored.BillId)).Status);
         }
         finally
         {
@@ -396,7 +467,8 @@ public sealed partial class ReservationSqlServerTests
     }
 
     private WebApplicationFactory<BillingGrpc> CreatePaymentSubmissionBillingHost(string connection,
-        WebApplicationFactory<RestaurantMarker> restaurant, WebApplicationFactory<OrderingGrpc> ordering, PayOsHttpFixture? payOs)
+        WebApplicationFactory<RestaurantMarker> restaurant, WebApplicationFactory<OrderingGrpc> ordering, PayOsHttpFixture? payOs,
+        bool recoverClosure)
     {
         return new WebApplicationFactory<BillingGrpc>().WithWebHostBuilder(builder =>
         {
@@ -404,6 +476,7 @@ public sealed partial class ReservationSqlServerTests
             builder.UseSetting("ConnectionStrings:DefaultConnection", connection);
             builder.UseSetting("GrpcServices:Restaurant", "http://restaurant.test");
             builder.UseSetting("GrpcServices:Ordering", "http://ordering.test");
+            builder.UseSetting("Notifications:ServiceKey", ClosureKey);
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
@@ -416,6 +489,9 @@ public sealed partial class ReservationSqlServerTests
                     .ConfigurePrimaryHttpMessageHandler(() => restaurant.Server.CreateHandler());
                 services.AddGrpcClient<BillingServiceRequest>()
                     .ConfigurePrimaryHttpMessageHandler(() => restaurant.Server.CreateHandler());
+                services.AddGrpcClient<BillingClosureClient>()
+                    .ConfigurePrimaryHttpMessageHandler(() => recoverClosure
+                        ? new UnavailableClosureHandler() : restaurant.Server.CreateHandler());
                 services.AddGrpcClient<BillingOrderClient>()
                     .ConfigurePrimaryHttpMessageHandler(() => ordering.Server.CreateHandler());
                 services.AddGrpcClient<BillingCheckoutLockClient>()
@@ -487,6 +563,8 @@ public sealed partial class ReservationSqlServerTests
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
                 services.AddGrpcClient<OrderingTableSession>()
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
+                services.AddGrpcClient<OrderingIdentityUser>()
+                    .ConfigurePrimaryHttpMessageHandler(() => _identity.Server.CreateHandler());
                 services.AddGrpcClient<OrderingBillingSession>()
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
             });
@@ -494,25 +572,43 @@ public sealed partial class ReservationSqlServerTests
     }
 
     private async Task<Guid> SeedPaymentOrders(WebApplicationFactory<OrderingGrpc> ordering,
-        LocationIds location, Guid session, Guid servedItemId)
+        LocationIds location, Guid session, Guid billedItemId, Guid kitchenTaskId)
     {
         using var scope = ordering.Services.CreateScope();
         scope.ServiceProvider.GetRequiredService<Shared.Persistence.RestaurantIsolation.RestaurantDataScope>()
             .Select(location.RestaurantId);
         var db = scope.ServiceProvider.GetRequiredService<OrderingDb>();
-        var served = NewOrder("Served");
-        served.OrderItems.Add(new OrderingModels.OrderItem
+        var confirmed = NewOrder("Confirmed");
+        var billedItem = new OrderingModels.OrderItem
         {
-            OrderItemId = servedItemId,
+            OrderItemId = billedItemId,
             ItemRef = Guid.NewGuid(),
             OriginalTableRef = location.TableId,
             NameSnapshot = "Test drink",
             Quantity = 3,
             UnitPriceSnapshot = 12345,
             CancelledQuantity = 1,
-            Status = "Served"
+            Status = "Cooking"
+        };
+        billedItem.KitchenTasks.Add(new OrderingModels.KitchenTask
+        {
+            KitchenTaskId = kitchenTaskId,
+            KitchenStation = new OrderingModels.KitchenStation
+            {
+                KitchenStationId = Guid.NewGuid(),
+                KitchenStationCode = "PREP",
+                KitchenStationName = "Preparation",
+                IsActive = true
+            },
+            BatchNumber = 1,
+            Quantity = 2,
+            Status = "Cooking",
+            Priority = 40,
+            QueuedAt = _clock.Now.UtcDateTime,
+            CookingAt = _clock.Now.UtcDateTime
         });
-        served.OrderItems.Add(new OrderingModels.OrderItem
+        confirmed.OrderItems.Add(billedItem);
+        confirmed.OrderItems.Add(new OrderingModels.OrderItem
         {
             OrderItemId = Guid.NewGuid(),
             ItemRef = Guid.NewGuid(),
@@ -523,7 +619,7 @@ public sealed partial class ReservationSqlServerTests
             Status = "Cancelled"
         });
         var pending = NewOrder("PendingConfirmation");
-        db.Orders.AddRange(served, pending);
+        db.Orders.AddRange(confirmed, pending);
         await db.SaveChangesAsync();
         return pending.OrderId;
 

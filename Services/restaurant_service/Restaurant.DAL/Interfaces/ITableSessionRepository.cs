@@ -13,5 +13,7 @@ public interface ITableSessionRepository : IGenericRepository<TableSession>
 
     Task<TableSession?> LockWithActiveTablesAsync(Guid id, CancellationToken ct);
 
+    Task<List<SessionTable>> GetUnreleasedLinksAsync(Guid id, CancellationToken ct);
+
     Task<List<TableSession>> GetOpenForTableAsync(Guid tableId, CancellationToken ct);
 }

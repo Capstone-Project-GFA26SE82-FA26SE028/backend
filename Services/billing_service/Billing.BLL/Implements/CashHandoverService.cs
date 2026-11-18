@@ -17,7 +17,8 @@ public sealed class CashHandoverService(ICashHandoverRepository handovers, IPaym
     IBillRepository bills, IBillCheckoutRepository checkouts, ICashRegisterRepository registers,
     ICashShiftRepository shifts, IPaymentMethodRepository methods, IUnitOfWork unitOfWork,
     IBillingAccess access, IPaymentReviewClient reviews, IPaymentService paymentService,
-    IOptions<CashRegisterAccessSettings> roles, IOptions<CashPaymentSettings> settings, TimeProvider clock) : ICashHandoverService
+    IOptions<CashRegisterAccessSettings> roles, IOptions<CashPaymentSettings> settings, TimeProvider clock,
+    IPaidSessionClosureClient closure) : ICashHandoverService
 {
     public async Task<(CashHandoverDTO Handover, bool Created)> Create(Guid billId, string key,
         CreateCashHandoverDTO request, CancellationToken ct)
@@ -220,6 +221,7 @@ public sealed class CashHandoverService(ICashHandoverRepository handovers, IPaym
             CashShiftId = payment.CashShiftId,
             CashReceived = confirmedAmount
         }, ct);
+        await closure.TryCloseAsync(bill.RestaurantId, sessionId, ct);
         var confirmed = await Find(paymentId, ct);
         return Map(confirmed, confirmed.Payment);
     }
