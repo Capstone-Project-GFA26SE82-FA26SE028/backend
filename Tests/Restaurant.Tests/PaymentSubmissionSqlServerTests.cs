@@ -16,6 +16,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using ApiGateway.DTOs.Billing;
 using Backend.Contracts.Billing;
+using Billing.BLL.Interfaces;
 using Xunit;
 using BillingDb = Billing.DAL.Models.BillingDbContext;
 using BillingGrpc = billingapi::Billing.API.GrpcServices.PaymentSubmissionGrpcService;
@@ -23,6 +24,7 @@ using BillingRestaurantAccess = billingapi::Backend.Contracts.Restaurant.Restaur
 using BillingServiceRequest = billingapi::Backend.Contracts.Restaurant.ServiceRequestGrpc.ServiceRequestGrpcClient;
 using BillingOrderClient = billingapi::Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient;
 using BillingCheckoutLockClient = billingapi::Backend.Contracts.Ordering.CheckoutLockGrpc.CheckoutLockGrpcClient;
+using PayOsClient = billingapi::Billing.API.Clients.PayOsClient;
 using OrderingDb = Ordering.DAL.Models.OrderingDbContext;
 using OrderingModels = Ordering.DAL.Models;
 using OrderingGrpc = orderingapi::Ordering.API.GrpcServices.BillingOrderGrpcService;
@@ -38,7 +40,18 @@ namespace Restaurant.Tests;
 public sealed partial class ReservationSqlServerTests
 {
     [SqlServerFact]
-    public async Task PaymentSubmissionTransfersToNextCashierThenPreparesAndPresentsBillThroughGateway()
+    public Task PaymentSubmissionTransfersToNextCashierThenPreparesAndPresentsBillThroughGateway()
+    {
+        return VerifyPaymentSubmission(verifyPayOs: false);
+    }
+
+    [SqlServerFact]
+    public Task PaymentSubmissionCreatesPayOsQrAndSettlesOnlyAfterVerifiedWebhookThroughGateway()
+    {
+        return VerifyPaymentSubmission(verifyPayOs: true);
+    }
+
+    private async Task VerifyPaymentSubmission(bool verifyPayOs)
     {
         var location = await Location();
         var otherRestaurant = await Location(assignStaff: false);
@@ -75,7 +88,13 @@ public sealed partial class ReservationSqlServerTests
                 builder.ConfigureTestServices(services => services.AddGrpcClient<ReviewOrderingGrpc>()
                     .ConfigurePrimaryHttpMessageHandler(() => ordering.Server.CreateHandler()));
             });
-            await using var billing = CreatePaymentSubmissionBillingHost(billingConnection, reviewingRestaurant, ordering);
+            var payOs = verifyPayOs ? new PayOsHttpFixture() : null;
+            await using var billing = CreatePaymentSubmissionBillingHost(billingConnection, reviewingRestaurant, ordering, payOs);
+            if (payOs is not null)
+            {
+                await SeedPayOsConfiguration(billing.Services, location.RestaurantId, otherRestaurant.RestaurantId);
+            }
+
             await using var gateway = _gateway.WithWebHostBuilder(builder =>
             {
                 builder.UseSetting("GrpcServices:Billing", "http://billing.test");
@@ -91,6 +110,10 @@ public sealed partial class ReservationSqlServerTests
                     services.AddGrpcClient<PaymentGrpc.PaymentGrpcClient>()
                         .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
                     services.AddGrpcClient<CashHandoverGrpc.CashHandoverGrpcClient>()
+                        .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
+                    services.AddGrpcClient<PayOsPaymentGrpc.PayOsPaymentGrpcClient>()
+                        .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
+                    services.AddGrpcClient<PaymentWebhookGrpc.PaymentWebhookGrpcClient>()
                         .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
                     services.AddGrpcClient<ShiftReportGrpc.ShiftReportGrpcClient>()
                         .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
@@ -189,7 +212,7 @@ public sealed partial class ReservationSqlServerTests
                 $"/api/restaurants/{otherRestaurant.RestaurantId}/payment-requests/incoming")).StatusCode);
 
             var presented = await VerifyBillPreparation(billing, ordering, location, pendingId, path + $"/{id}",
-                cashier, nextCashier, waiter, otherWaiter, guest, reopened, id);
+                cashier, nextCashier, waiter, otherWaiter, guest, reopened, id, payOs);
 
             using var scope = billing.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<BillingDb>();
@@ -205,7 +228,16 @@ public sealed partial class ReservationSqlServerTests
             Assert.Equal(presented.PresentedAt!.Value.UtcDateTime, stored.PresentedAt);
             Assert.Empty(await db.Payments.ToListAsync());
 
-            await VerifyCashHandover(db, presented, reopened, nextCashier, cashier, waiter, sameRestaurantWaiter, otherWaiter, guest);
+            if (payOs is null)
+            {
+                await VerifyCashHandover(db, presented, reopened, nextCashier, cashier, waiter, sameRestaurantWaiter, otherWaiter, guest);
+            }
+            else
+            {
+                using var webhookClient = gateway.CreateClient();
+                await VerifyPayOsPayment(db, payOs, presented, reopened, nextCashier, cashier, waiter,
+                    sameRestaurantWaiter, otherWaiter, webhookClient, otherRestaurant.RestaurantId);
+            }
         }
         finally
         {
@@ -217,7 +249,7 @@ public sealed partial class ReservationSqlServerTests
     private async Task<PreparedResult> VerifyBillPreparation(WebApplicationFactory<BillingGrpc> billing,
         WebApplicationFactory<OrderingGrpc> ordering, LocationIds location, Guid pendingOrderId, string requestPath,
         HttpClient oldCashier, HttpClient cashier, HttpClient waiter, HttpClient otherWaiter, HttpClient guest,
-        CashShiftDTO shift, Guid checkoutId)
+        CashShiftDTO shift, Guid checkoutId, PayOsHttpFixture? payOs)
     {
         var prepare = requestPath + "/prepare";
         var billPath = requestPath + "/bill";
@@ -269,6 +301,12 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equivalent(prepared, viewed, strict: true);
         var tooEarly = await CollectCash(waiter, prepared.Bill.BillId, checkoutId, 30000, Guid.NewGuid());
         Assert.Equal(HttpStatusCode.Conflict, tooEarly.StatusCode);
+        if (payOs is not null)
+        {
+            using var earlyPayOs = await CreatePayOs(cashier, prepared, shift, Guid.NewGuid());
+            Assert.Equal(HttpStatusCode.Conflict, earlyPayOs.StatusCode);
+            Assert.Empty(payOs.OrderCodes);
+        }
 
         var presented = await Read<PreparedResult>(await waiter.PostAsync(present, null));
         Assert.Equal("Presented", presented.CheckoutStatus);
@@ -358,7 +396,7 @@ public sealed partial class ReservationSqlServerTests
     }
 
     private WebApplicationFactory<BillingGrpc> CreatePaymentSubmissionBillingHost(string connection,
-        WebApplicationFactory<RestaurantMarker> restaurant, WebApplicationFactory<OrderingGrpc> ordering)
+        WebApplicationFactory<RestaurantMarker> restaurant, WebApplicationFactory<OrderingGrpc> ordering, PayOsHttpFixture? payOs)
     {
         return new WebApplicationFactory<BillingGrpc>().WithWebHostBuilder(builder =>
         {
@@ -382,6 +420,11 @@ public sealed partial class ReservationSqlServerTests
                     .ConfigurePrimaryHttpMessageHandler(() => ordering.Server.CreateHandler());
                 services.AddGrpcClient<BillingCheckoutLockClient>()
                     .ConfigurePrimaryHttpMessageHandler(() => ordering.Server.CreateHandler());
+                if (payOs is not null)
+                {
+                    services.AddHttpClient<IPayOsClient, PayOsClient>()
+                        .ConfigurePrimaryHttpMessageHandler(() => payOs);
+                }
             });
         });
     }
@@ -502,7 +545,7 @@ public sealed partial class ReservationSqlServerTests
         }
     }
 
-    private sealed record PreparedResult(Guid CheckoutId, string CheckoutStatus, BillDTO Bill,
+    private sealed record PreparedResult(Guid CheckoutId, Guid TableSessionId, string CheckoutStatus, BillDTO Bill,
         Guid PreparedByRef, DateTimeOffset PreparedAt, DateTimeOffset? PresentedAt);
     private sealed record ReviewResult(int PendingOrderCount, ReviewItem[] Items);
     private sealed record ReviewItem(Guid OrderItemId, Guid TableId, int Quantity, string Status);

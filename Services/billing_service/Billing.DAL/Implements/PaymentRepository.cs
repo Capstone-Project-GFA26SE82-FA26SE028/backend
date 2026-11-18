@@ -9,6 +9,7 @@ using Billing.DAL.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Shared.Persistence.Repositories;
+using Shared.Common.Pagination;
 
 namespace Billing.DAL.Implements;
 
@@ -180,6 +181,24 @@ public sealed class PaymentRepository(BillingDbContext db)
         await _context.Database.ExecuteSqlRawAsync("EXEC @result=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=@timeout;",
             [result, name, timeout], ct);
         return (int)result.Value >= 0;
+    }
+
+    public async Task<PagedResult<Payment>> GetPayOsPageAsync(Guid billId, Guid checkoutId, int page, int pageSize, CancellationToken ct)
+    {
+        var suffix = ":" + checkoutId.ToString("N");
+        var query = Details().Where(value => value.BillId == billId && value.MethodCode == PayOsStates.Method
+            && value.ProviderOrderCode != null && value.IdempotencyKey.StartsWith(PayOsStates.KeyPrefix)
+            && value.IdempotencyKey.EndsWith(suffix));
+        var total = await query.CountAsync(ct);
+        var rows = await query.OrderByDescending(value => value.ExpiredAt).ThenBy(value => value.PaymentId)
+            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        return new PagedResult<Payment>(rows, total, page, pageSize);
+    }
+
+    public async Task<IReadOnlyList<Guid>> GetBlockingIdsAsync(Guid billId, Expression<Func<Payment, bool>> predicate, CancellationToken ct)
+    {
+        return await _context.Payments.AsNoTracking().Where(value => value.BillId == billId)
+            .Where(predicate).OrderBy(value => value.PaymentId).Select(value => value.PaymentId).Take(2).ToListAsync(ct);
     }
 
     private IQueryable<Payment> Details()

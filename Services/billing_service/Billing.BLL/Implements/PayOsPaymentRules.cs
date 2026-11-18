@@ -6,6 +6,30 @@ namespace Billing.BLL.Implements;
 
 internal static class PayOsPaymentRules
 {
+    public static bool HasPresentedBill(BillCheckout? checkout)
+    {
+        return checkout is { ReleasedAt: null, BillId: not null, CashRegisterId: not null, SubmittedAt: not null,
+            PreparedByRef: not null, PreparedAt: not null, PresentedAt: not null }
+            && !string.IsNullOrWhiteSpace(checkout.SourceHash);
+    }
+
+    public static bool BelongsToCheckout(Payment payment, Guid checkoutId)
+    {
+        return IsPayOs(payment) && payment.IdempotencyKey.EndsWith(":" + checkoutId.ToString("N"), StringComparison.Ordinal);
+    }
+
+    public static bool CanPresentQr(Payment payment, DateTimeOffset now)
+    {
+        return payment.Status == PayOsStates.Pending && payment.PaidAt is null
+            && payment.VerificationSource != PayOsStates.WebhookVerified && payment.ProviderTransactionId is null
+            && payment.CashShift.Status == CashShiftStatuses.Active && !payment.CashShift.ClosedAt.HasValue
+            && payment.Bill.Status == "Unpaid" && !payment.Bill.PaidAt.HasValue
+            && payment.ExpiredAt > now.UtcDateTime && !string.IsNullOrWhiteSpace(payment.ProviderPaymentLinkId)
+            && !string.IsNullOrWhiteSpace(payment.ProviderCheckoutUrl) && !string.IsNullOrWhiteSpace(payment.ProviderQrCode)
+            && payment.CashReceived is null && payment.ChangeAmount is null && payment.CashHandover is null
+            && payment.CashMovements.Count == 0 && payment.Refunds.Count == 0;
+    }
+
     public static readonly Expression<Func<Payment, bool>> BlockingExpression = value => !(value.MethodCode == PayOsStates.Method
         && value.IdempotencyKey.StartsWith(PayOsStates.KeyPrefix) && value.ProviderOrderCode != null
         && value.ProviderPaymentLinkId != null && value.ProviderPaymentLinkId != ""

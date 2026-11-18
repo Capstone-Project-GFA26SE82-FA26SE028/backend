@@ -14,6 +14,34 @@ namespace Billing.Tests;
 public sealed class PayOsPaymentServiceTests
 {
     [Fact]
+    public async Task LegacyReadyCheckoutCannotCreateNewLink()
+    {
+        await using var fixture = await Fixture.Create(presented: false);
+        await Status(409, () => fixture.CreatePayment());
+        Assert.Empty(await fixture.Core.Db.Payments.ToListAsync());
+        Assert.Equal(0, fixture.Provider.CreateCalls);
+    }
+
+    [Fact]
+    public async Task LegacyReadyCheckoutCanReconcileAnExistingLink()
+    {
+        await using var fixture = await Fixture.Create();
+        var first = await fixture.CreatePayment();
+        var checkout = await fixture.Core.Db.BillCheckouts.SingleAsync();
+        checkout.Status = "Ready";
+        checkout.CashRegisterId = null;
+        checkout.SubmittedAt = null;
+        checkout.PreparedAt = null;
+        checkout.PreparedByRef = null;
+        checkout.PresentedAt = null;
+        await fixture.Core.Db.SaveChangesAsync();
+
+        fixture.Provider.Settle(232);
+        Assert.Equal("Paid", (await fixture.Service.Reconcile(first.Payment.PaymentId, default)).Status);
+        Assert.Equal("Paid", (await fixture.Core.Db.Bills.SingleAsync()).Status);
+    }
+
+    [Fact]
     public async Task CreateAndReplayKeepOneProviderOrderAndPersistRealLinkDetails()
     {
         await using var fixture = await Fixture.Create();
@@ -55,6 +83,8 @@ public sealed class PayOsPaymentServiceTests
         var paid = await fixture.Service.Reconcile(first.Payment.PaymentId, default);
         Assert.Equal("Paid", paid.Status);
         Assert.Equal(232, paid.ProviderAmountPaid);
+        Assert.Null(paid.QrCode);
+        Assert.Null(paid.CheckoutUrl);
         Assert.Equal("Paid", (await fixture.Core.Db.Bills.AsNoTracking().SingleAsync()).Status);
         var checkout = await fixture.Core.Db.BillCheckouts.AsNoTracking().SingleAsync();
         Assert.Equal("Paid", checkout.Status);
@@ -291,13 +321,26 @@ public sealed class PayOsPaymentServiceTests
                 {
                     CashierRoleIds = ["cashier"],
                     ManagerRoleIds = ["manager"]
-                }), Options.Create(Settings), TimeProvider.System);
+                }), Options.Create(Settings), TimeProvider.System, new TestPaymentReviewClient());
             Webhooks = new PaymentWebhookService(payments, webhooks, bills, registers, shifts, uow, Provider, Service, TimeProvider.System);
         }
 
-        public static async Task<Fixture> Create()
+        public static async Task<Fixture> Create(bool presented = true)
         {
             var fixture = new Fixture(await CashPaymentServiceTests.Fixture.Create());
+            if (presented)
+            {
+                var shift = await fixture.Core.Db.CashShifts.SingleAsync();
+                var checkout = await fixture.Core.Db.BillCheckouts.SingleAsync();
+                var now = DateTime.UtcNow;
+                checkout.Status = "Presented";
+                checkout.CashRegisterId = shift.CashRegisterId;
+                checkout.SubmittedAt = now;
+                checkout.PreparedByRef = shift.CashierUserRef;
+                checkout.PreparedAt = now;
+                checkout.PresentedAt = now;
+            }
+
             fixture.Core.Db.PaymentMethods.Add(new PaymentMethod
             {
                 MethodCode = "BankTransfer",
