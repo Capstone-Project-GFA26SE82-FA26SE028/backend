@@ -213,7 +213,8 @@ public sealed partial class PayOsPaymentService
             || payment.CashReceived.HasValue || payment.ChangeAmount.HasValue || payment.CashMovements.Count != 0
             || payment.Refunds.Count != 0 || payment.CashHandover is not null
             || payment.Bill.Payments.Any(value => value.PaymentId != payment.PaymentId && PayOsPaymentRules.IsBlocking(value))
-            || checkout?.BillId != payment.BillId || checkout.Status != "Ready" || checkout.SourceHash != Hash(payment.Bill))
+            || checkout?.BillId != payment.BillId || !PayOsPaymentRules.BelongsToCheckout(payment, checkout.CheckoutId)
+            || !CanSettleCheckout(checkout, payment) || checkout.SourceHash != Hash(payment.Bill))
         {
             payment.Status = PayOsStates.ReviewRequired;
             payment.VerificationSource = PayOsStates.QueryVerified;
@@ -240,5 +241,17 @@ public sealed partial class PayOsPaymentService
         payment.Bill.PaidAt = payment.PaidAt;
         var writable = await checkouts.GetByIdAsync(checkout.CheckoutId, ct) ?? throw new BillingException(409, "Không còn tìm thấy lần chốt hóa đơn.");
         writable.Status = PaymentStatuses.Paid;
+    }
+
+    private static bool CanSettleCheckout(BillCheckout checkout, Payment payment)
+    {
+        if (checkout.Status == "Ready")
+        {
+            // Existing PayOS attempts from the earlier checkout can still be reconciled.
+            return !checkout.CashRegisterId.HasValue || checkout.CashRegisterId == payment.CashShift.CashRegisterId;
+        }
+
+        return checkout.Status == "Presented" && PayOsPaymentRules.HasPresentedBill(checkout)
+            && checkout.CashRegisterId == payment.CashShift.CashRegisterId;
     }
 }

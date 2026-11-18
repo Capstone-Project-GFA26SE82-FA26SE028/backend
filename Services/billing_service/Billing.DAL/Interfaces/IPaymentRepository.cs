@@ -1,11 +1,14 @@
 using System.Linq.Expressions;
 using Billing.DAL.Models;
 using Shared.Persistence.Interfaces;
+using Shared.Common.Pagination;
 
 namespace Billing.DAL.Interfaces;
 
 public interface IPaymentRepository : IGenericRepository<Payment>
 {
+    Task<PagedResult<Payment>> GetPayOsPageAsync(Guid billId, Guid checkoutId, int page, int pageSize, CancellationToken ct);
+    Task<IReadOnlyList<Guid>> GetBlockingIdsAsync(Guid billId, Expression<Func<Payment, bool>> predicate, CancellationToken ct);
     Task<IReadOnlyDictionary<Guid, int>> GetBillPaymentCountsAsync(Guid shiftId, CancellationToken ct, Expression<Func<Payment, bool>>? include = null);
     Task<IReadOnlyList<Payment>> GetForReconciliationAsync(Guid shiftId, CancellationToken ct);
     void ResetProviderTracking();
