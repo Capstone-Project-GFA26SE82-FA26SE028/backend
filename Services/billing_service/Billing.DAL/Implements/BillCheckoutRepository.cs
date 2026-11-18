@@ -73,7 +73,7 @@ public sealed class BillCheckoutRepository(BillingDbContext db) : IBillCheckoutR
                 bill.TableSessionId,
                 BillId = (Guid?)bill.BillId,
                 SubmittedAt = checkout == null ? (DateTime?)null : checkout.SubmittedAt,
-                Status = "Unpaid"
+                Status = checkout == null ? "Unpaid" : checkout.Status
             };
 
         var queue = bills.Concat(routed.Where(row => !bills.Any(bill => bill.CheckoutId == row.CheckoutId)));

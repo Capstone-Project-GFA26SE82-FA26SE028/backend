@@ -157,7 +157,7 @@ public sealed partial class BillCheckoutService(IBillCheckoutRepository checkout
         return bill;
     }
 
-    private static string BillHash(BillDTO bill)
+    internal static string BillHash(BillDTO bill)
     {
         return CheckoutHash.Compute(bill.Items.Select(line => new CheckoutHashLine(line.OrderItemRef,
             line.Item.ItemId, line.Quantity, line.Item.BaseUnitPrice, line.Item.Options.Select(option =>

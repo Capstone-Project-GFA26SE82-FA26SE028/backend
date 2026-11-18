@@ -15,7 +15,7 @@ public sealed class ShiftReportServiceTests
     [Fact]
     public async Task ClosingSnapshotsCashBeforeHandoverWithoutPostingCashOut()
     {
-        await using var f = await CashPaymentServiceTests.Fixture.Create();
+        await using var f = await CashPaymentServiceTests.Fixture.Create(withHandover: true);
         await f.Pay(300);
         var ledger = CashMovementServiceTests.Make(f.Db, f.Core.Actor);
         await ledger.Create(f.ShiftId, Guid.NewGuid().ToString(), CashMovementServiceTests.Body("CashIn", 200), default);
@@ -54,7 +54,7 @@ public sealed class ShiftReportServiceTests
         await Status(409, () => service.Close(f.ShiftId, Body(999, 800, "Changed count"), default));
         Assert.Single(await f.Db.ShiftReports.ToListAsync());
         Assert.False((await service.Preview(f.ShiftId, default)).CanClose);
-        await Status(409, () => f.Pay(300));
+        await Status(409, () => f.RecordCash(300));
         await Status(409, () => CashMovementServiceTests.Make(f.Db, f.Core.Actor).Create(f.ShiftId,
             Guid.NewGuid().ToString(), CashMovementServiceTests.Body("CashIn", 1), default));
     }
@@ -127,7 +127,7 @@ public sealed class ShiftReportServiceTests
     [Fact]
     public async Task UnresolvedPaymentAndMismatchedSalePreventClosingWithoutChangingTheirStatus()
     {
-        await using var f = await CashPaymentServiceTests.Fixture.Create();
+        await using var f = await CashPaymentServiceTests.Fixture.Create(withHandover: true);
         await f.Pay(300);
         var payment = await f.Db.Payments.SingleAsync();
         payment.Status = "Pending";
@@ -149,7 +149,7 @@ public sealed class ShiftReportServiceTests
     [Fact]
     public async Task UnsupportedMethodAndHandoverCannotBeAssumedCompleted()
     {
-        await using var f = await CashPaymentServiceTests.Fixture.Create();
+        await using var f = await CashPaymentServiceTests.Fixture.Create(withHandover: true);
         await f.Pay(300);
         f.Db.PaymentMethods.Add(new PaymentMethod
         {
@@ -163,13 +163,7 @@ public sealed class ShiftReportServiceTests
         Assert.Contains((await service.Preview(f.ShiftId, default)).Blockers, value => value.Code == "UnsupportedPaymentFlow");
         await Status(409, () => service.Close(f.ShiftId, Body(1232, 0), default));
         payment.MethodCode = "Cash";
-        f.Db.CashHandovers.Add(new CashHandover
-        {
-            PaymentId = payment.PaymentId,
-            WaiterUserRef = Guid.NewGuid(),
-            Status = "Pending",
-            CollectedAt = DateTime.UtcNow
-        });
+        (await f.Db.CashHandovers.SingleAsync()).Status = "Pending";
         await f.Db.SaveChangesAsync();
         Assert.Contains((await service.Preview(f.ShiftId, default)).Blockers, value => value.Code == "UnsupportedCashHandover");
         await Status(409, () => service.Close(f.ShiftId, Body(1232, 0), default));
@@ -224,7 +218,7 @@ public sealed class ShiftReportServiceTests
     [Fact]
     public async Task DuplicateBillPaymentsAndLedgerKeysRequireReview()
     {
-        await using var f = await CashPaymentServiceTests.Fixture.Create();
+        await using var f = await CashPaymentServiceTests.Fixture.Create(withHandover: true);
         await f.Pay(300);
         var original = await f.Db.Payments.SingleAsync();
         f.Db.Payments.Add(new Payment
