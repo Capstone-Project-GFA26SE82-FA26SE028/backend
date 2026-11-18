@@ -35,7 +35,8 @@ public sealed partial class PayOsPaymentService
             }
             catch (PayOsClientException)
             {
-                if (initial.Status is PayOsStates.Creating or PayOsStates.Unknown && initial.ProviderPaymentLinkId is null
+                if (settings.Value.Enabled && initial.Status is (PayOsStates.Creating or PayOsStates.Unknown)
+                    && initial.ProviderPaymentLinkId is null
                     && initial.ExpiredAt.HasValue && initial.ExpiredAt.Value > clock.GetUtcNow().UtcDateTime)
                 {
                     try

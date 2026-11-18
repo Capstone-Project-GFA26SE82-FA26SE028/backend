@@ -161,6 +161,25 @@ public sealed class PayOsPaymentServiceTests
         Assert.False((await fixture.CreatePayment()).Created);
     }
 
+    [Fact]
+    public async Task DisabledCreationDoesNotPostAgainWhenAnUnknownPaymentCannotBeQueried()
+    {
+        await using var fixture = await Fixture.Create();
+        fixture.Provider.Offline = true;
+        var attempt = await fixture.CreatePayment();
+        Assert.Equal("Unknown", attempt.Payment.Status);
+
+        fixture.Settings.Enabled = false;
+        var createCalls = fixture.Provider.CreateCalls;
+        var reconciled = await fixture.Service.Reconcile(attempt.Payment.PaymentId, default);
+
+        Assert.Equal("Unknown", reconciled.Status);
+        Assert.Equal(attempt.Payment.ProviderOrderCode, reconciled.ProviderOrderCode);
+        Assert.Equal(createCalls, fixture.Provider.CreateCalls);
+        Assert.Single(await fixture.Core.Db.Payments.ToListAsync());
+        Assert.Null((await fixture.Core.Db.BillCheckouts.SingleAsync()).ReleasedAt);
+    }
+
     [Theory]
     [InlineData("admin", true)]
     [InlineData("manager", false)]
