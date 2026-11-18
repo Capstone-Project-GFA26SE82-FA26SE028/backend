@@ -22,7 +22,7 @@ namespace Restaurant.Tests;
 
 public sealed partial class ReservationSqlServerTests
 {
-    private static async Task VerifyPayOsPayment(BillingDb db, PayOsHttpFixture provider, PreparedResult presented,
+    private async Task VerifyPayOsPayment(BillingDb db, PayOsHttpFixture provider, PreparedResult presented,
         CashShiftDTO shift, HttpClient cashier, HttpClient oldCashier, HttpClient waiter, HttpClient otherWaiter,
         HttpClient crossRestaurantWaiter, HttpClient guest, Guid otherRestaurant)
     {
@@ -95,9 +95,19 @@ public sealed partial class ReservationSqlServerTests
         Assert.False(waitingForVerification.PaymentConfirmed);
         Assert.Null(waitingForVerification.QrCode);
         Assert.Equal("Unpaid", waitingForVerification.BillStatus);
+        Assert.Null(await ReadClosedAt(presented.TableSessionId));
 
         provider.Settle(orderCode);
-        Assert.Equal(HttpStatusCode.OK, (await guest.PostAsJsonAsync(webhook, payload)).StatusCode);
+        var deliveries = await Task.WhenAll(guest.PostAsJsonAsync(webhook, payload),
+            guest.PostAsJsonAsync("/api/payments/payos/webhook", payload));
+        foreach (var response in deliveries)
+        {
+            using (response)
+            {
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            }
+        }
+
         var verified = await Read<WaiterPayOsPaymentDTO>(await waiter.GetAsync(finalDetail));
         Assert.Equal("Paid", verified.Status);
         Assert.Equal("Paid", verified.BillStatus);
@@ -108,16 +118,105 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal("Paid", cashierResult.Status);
         Assert.Null(cashierResult.QrCode);
 
+        var paidAt = cashierResult.PaidAt;
+        var closedAt = await ReadClosedAt(presented.TableSessionId);
+        Assert.NotNull(paidAt);
+        Assert.NotNull(closedAt);
+        _clock.Now = _clock.Now.AddMinutes(1);
+        var queryCount = provider.QueryCount;
         Assert.Equal(HttpStatusCode.OK, (await guest.PostAsJsonAsync(webhook, payload)).StatusCode);
+        Assert.Equal(queryCount, provider.QueryCount);
+        Assert.Equal(closedAt, await ReadClosedAt(presented.TableSessionId));
         Assert.Equal(2, await db.Payments.AsNoTracking().CountAsync());
         var paid = await db.Payments.AsNoTracking().SingleAsync(value => value.Status == "Paid");
         Assert.Equal(second.PaymentId, paid.PaymentId);
         Assert.Equal("PayOSQuery", paid.VerificationSource);
-        Assert.Equal("Paid", (await db.Bills.AsNoTracking().SingleAsync(value => value.BillId == paid.BillId)).Status);
+        Assert.Equal(paidAt.Value.UtcDateTime, paid.PaidAt);
+        var paidBill = await db.Bills.AsNoTracking().SingleAsync(value => value.BillId == paid.BillId);
+        Assert.Equal("Paid", paidBill.Status);
+        Assert.Equal(paid.PaidAt, paidBill.PaidAt);
         Assert.Equal("Paid", (await db.BillCheckouts.AsNoTracking().SingleAsync(value => value.CheckoutId == presented.CheckoutId)).Status);
         Assert.Equal("Applied", (await db.PaymentWebhooks.AsNoTracking().SingleAsync()).ProcessingStatus);
         Assert.Empty(await db.CashMovements.AsNoTracking().ToListAsync());
         Assert.Empty(await db.CashHandovers.AsNoTracking().ToListAsync());
+    }
+
+    private async Task VerifyPayOsWebhookUnderReview(BillingDb db, PayOsHttpFixture provider, PreparedResult presented,
+        CashShiftDTO shift, HttpClient cashier, HttpClient webhookClient, HttpClient guest)
+    {
+        var pending = await Read<PayOsPaymentDTO>(await CreatePayOs(cashier, presented, shift, Guid.NewGuid()),
+            HttpStatusCode.Created);
+        var orderCode = long.Parse(pending.ProviderOrderCode!, CultureInfo.InvariantCulture);
+        provider.Settle(orderCode);
+        provider.QueryAmountOverride = (long)pending.Amount + 1;
+
+        var reconcile = $"/api/payments/{pending.PaymentId}/payos/reconcile";
+        var mismatched = await Read<PayOsPaymentDTO>(await cashier.PostAsync(reconcile, null));
+        Assert.Equal("ReviewRequired", mismatched.Status);
+        Assert.Null(mismatched.PaidAt);
+        Assert.Empty(await db.PaymentWebhooks.AsNoTracking().ToListAsync());
+
+        provider.QueryAmountOverride = null;
+        var queryCount = provider.QueryCount;
+        var webhook = $"/api/restaurants/{shift.RestaurantId}/payments/payos/webhook";
+        var payload = provider.Webhook(orderCode);
+        using var first = await webhookClient.PostAsJsonAsync(webhook, payload);
+        using var duplicate = await webhookClient.PostAsJsonAsync(webhook, payload);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, duplicate.StatusCode);
+
+        var audit = await db.PaymentWebhooks.AsNoTracking().SingleAsync();
+        Assert.Equal(pending.PaymentId, audit.PaymentId);
+        Assert.Equal("ReviewRequired", audit.ProcessingStatus);
+        Assert.NotNull(audit.ProcessedAt);
+        var payment = await db.Payments.AsNoTracking().SingleAsync();
+        Assert.Equal("ReviewRequired", payment.Status);
+        Assert.Null(payment.PaidAt);
+        Assert.Equal("Unpaid", (await db.Bills.AsNoTracking().SingleAsync(bill => bill.BillId == presented.Bill.BillId)).Status);
+        var checkout = await db.BillCheckouts.AsNoTracking().SingleAsync(value => value.CheckoutId == presented.CheckoutId);
+        Assert.Equal("Presented", checkout.Status);
+        Assert.Null(checkout.ReleasedAt);
+        Assert.Empty(await db.CashMovements.AsNoTracking().ToListAsync());
+        Assert.Null(await ReadClosedAt(presented.TableSessionId));
+        using var currentGuest = await guest.GetAsync($"/api/table-sessions/{presented.TableSessionId}/guest-access/me");
+        Assert.Equal(HttpStatusCode.OK, currentGuest.StatusCode);
+        Assert.Equal(queryCount, provider.QueryCount);
+    }
+
+    private async Task VerifyConflictingPayOsWebhook(BillingDb db, PayOsHttpFixture provider, PreparedResult presented,
+        CashShiftDTO shift, HttpClient cashier, HttpClient webhookClient)
+    {
+        var pending = await Read<PayOsPaymentDTO>(await CreatePayOs(cashier, presented, shift, Guid.NewGuid()),
+            HttpStatusCode.Created);
+        var orderCode = long.Parse(pending.ProviderOrderCode!, CultureInfo.InvariantCulture);
+        var webhook = $"/api/restaurants/{shift.RestaurantId}/payments/payos/webhook";
+        var original = provider.Webhook(orderCode);
+        using var first = await webhookClient.PostAsJsonAsync(webhook, original);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var waiting = await db.PaymentWebhooks.AsNoTracking().SingleAsync();
+        Assert.Equal("AwaitingProvider", waiting.ProcessingStatus);
+        Assert.Null(waiting.ProcessedAt);
+
+        var queryCount = provider.QueryCount;
+        using var conflict = await webhookClient.PostAsJsonAsync(webhook, provider.Webhook(orderCode, amount: (long)pending.Amount + 1));
+        Assert.Equal(HttpStatusCode.OK, conflict.StatusCode);
+        var audits = await db.PaymentWebhooks.AsNoTracking().ToListAsync();
+        Assert.Equal(2, audits.Count);
+        Assert.All(audits, audit =>
+        {
+            Assert.Equal("ReviewRequired", audit.ProcessingStatus);
+            Assert.NotNull(audit.ProcessedAt);
+        });
+
+        using var retry = await webhookClient.PostAsJsonAsync(webhook, original);
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        Assert.Equal(2, await db.PaymentWebhooks.AsNoTracking().CountAsync());
+        Assert.Equal(queryCount, provider.QueryCount);
+        var payment = await db.Payments.AsNoTracking().SingleAsync();
+        Assert.Equal("ReviewRequired", payment.Status);
+        Assert.Null(payment.PaidAt);
+        Assert.Equal("Unpaid", (await db.Bills.AsNoTracking().SingleAsync(bill => bill.BillId == presented.Bill.BillId)).Status);
+        Assert.Null(await ReadClosedAt(presented.TableSessionId));
     }
 
     private static async Task SeedPayOsConfiguration(IServiceProvider services, params Guid[] restaurantIds)
@@ -171,7 +270,10 @@ public sealed partial class ReservationSqlServerTests
         public const string Checksum = "gateway-test-pay-os-checksum";
         public const string Qr = "GatewayTestQr";
         private readonly ConcurrentDictionary<long, Transfer> orders = new();
+        private int queryCount;
         public bool Offline { get; set; }
+        public long? QueryAmountOverride { get; set; }
+        public int QueryCount => Volatile.Read(ref queryCount);
         public ICollection<long> OrderCodes => orders.Keys;
 
         public void Settle(long code)
@@ -179,13 +281,13 @@ public sealed partial class ReservationSqlServerTests
             orders[code] = orders[code] with { Status = "PAID" };
         }
 
-        public JsonElement Webhook(long orderCode, bool validSignature = true)
+        public JsonElement Webhook(long orderCode, bool validSignature = true, long? amount = null)
         {
             var row = orders[orderCode];
             var data = JsonSerializer.SerializeToElement(new
             {
                 orderCode,
-                amount = row.Amount,
+                amount = amount ?? row.Amount,
                 reference = Reference(orderCode),
                 paymentLinkId = row.LinkId,
                 currency = "VND",
@@ -243,16 +345,22 @@ public sealed partial class ReservationSqlServerTests
                 orders[orderCode] = status;
             }
 
+            if (request.Method == HttpMethod.Get)
+            {
+                Interlocked.Increment(ref queryCount);
+            }
+
             var settled = status.Status == "PAID";
+            var queryAmount = QueryAmountOverride ?? status.Amount;
             return Signed(new
             {
                 orderCode,
                 id = status.LinkId,
-                amount = status.Amount,
-                amountPaid = settled ? status.Amount : 0,
-                amountRemaining = settled ? 0 : status.Amount,
+                amount = queryAmount,
+                amountPaid = settled ? queryAmount : 0,
+                amountRemaining = settled ? 0 : queryAmount,
                 status = status.Status,
-                transactions = settled ? new[] { new { reference = Reference(orderCode), amount = status.Amount } } : []
+                transactions = settled ? new[] { new { reference = Reference(orderCode), amount = queryAmount } } : []
             });
         }
 
