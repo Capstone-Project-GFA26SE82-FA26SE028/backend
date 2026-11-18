@@ -501,3 +501,15 @@ Giữ PK, UNIQUE/CHECK và các index đang có. Không thêm bảng, không t�
 | BillingDb.dbo.BillCheckout | `PresentedAt` | `datetime2(7) NULL`, không DEFAULT | Thời điểm Waiter phụ trách xác nhận đã đưa hóa đơn cho khách (UTC). |
 
 Không thêm bảng, PK, FK, UNIQUE, CHECK hoặc index trong B3. Dữ liệu cũ giữ NULL. Với BillingDb đang dùng, áp dụng `BillingCheckoutSubmission.sql` trước, sau đó áp dụng `BillingCheckoutPreparation.sql`. Đã chạy thử trên SQL Server LocalDB cô lập và xác nhận chạy lặp giữ nguyên bản ghi cũ. Chưa áp dụng vào database đang dùng.
+
+### B4 — Thu hộ tiền mặt và xác nhận bàn giao
+
+B4 dùng `Payment`, `CashHandover`, `CashMovement` và các khóa đã có trong `docker/sql/schema/BillingDb.sql`. `CashHandover.PaymentId` là PK và FK nội bộ đến `Payment.PaymentId`, quan hệ Payment 1–0..1 CashHandover. `WaiterUserRef` và `CashierUserRef` là tham chiếu logic đến Identity, không có FK xuyên database.
+
+Khoản thu hộ chờ xác nhận được giữ trong ca nhận tiền và chặn đóng ca. Khi Cashier xác nhận đủ toàn bộ số tiền đã ghi, Billing ghi một bút toán `Sale` bằng giá trị hóa đơn và chuyển giao dịch sang `Paid` trong cùng transaction.
+
+#### Đồng bộ CashHandover sau review B4
+
+Repo SQL riêng bổ sung theo schema backend cột `BillingDb.dbo.CashHandover.RestaurantId uniqueidentifier NULL`, không DEFAULT, và index nonclustered không UNIQUE `IX_CashHandover_RestaurantIsolation(RestaurantId)`. Đây là quan hệ logic Restaurant 1–n CashHandover, mỗi bản ghi có thể chưa xác định được nhà hàng. PK và FK nội bộ đến Payment giữ nguyên. EF Core đã dùng cột này làm thuộc tính ẩn để cô lập dữ liệu.
+
+Với database hiện có, dùng `BillingCashHandoverRestaurantIsolation.sql` trong thư mục upgrade của một trong hai repo. Script chỉ điền `RestaurantId` còn NULL khi hóa đơn và quầy nhận cùng thuộc một nhà hàng hợp lệ. Đã đối chiếu DDL, thử nâng cấp và chạy lặp trên SQL Server LocalDB cô lập. Chưa áp dụng vào database đang dùng.

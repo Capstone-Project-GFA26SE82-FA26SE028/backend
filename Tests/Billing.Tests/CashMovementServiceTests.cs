@@ -15,7 +15,7 @@ public sealed class CashMovementServiceTests
     [Fact]
     public async Task ManualCashAndPaymentSaleAreCountedOnceWithDistinctPerformerSources()
     {
-        await using var f = await CashPaymentServiceTests.Fixture.Create();
+        await using var f = await CashPaymentServiceTests.Fixture.Create(withHandover: true);
         var service = Make(f.Db, f.Core.Actor);
         var added = await service.Create(f.ShiftId, Guid.NewGuid().ToString(), Body("CashIn", 200), default);
         Assert.True(added.Created);

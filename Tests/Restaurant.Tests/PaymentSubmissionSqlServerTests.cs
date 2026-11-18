@@ -44,6 +44,7 @@ public sealed partial class ReservationSqlServerTests
         var otherRestaurant = await Location(assignStaff: false);
         await AddSecondPaymentWaiter(otherRestaurant.RestaurantId);
         await AddPaymentStaff("nextCashier", "cashier", location.RestaurantId);
+        await AddPaymentStaff("sameRestaurantWaiter", "waiter", location.RestaurantId);
         var session = await SeedOpenPaymentSession(location);
         var handoverSession = await PaymentSessionAtAnotherTable(location, "T2");
         var unpaidSession = await PaymentSessionAtAnotherTable(location, "T3");
@@ -78,6 +79,7 @@ public sealed partial class ReservationSqlServerTests
             await using var gateway = _gateway.WithWebHostBuilder(builder =>
             {
                 builder.UseSetting("GrpcServices:Billing", "http://billing.test");
+                builder.UseSetting("Swagger:Enabled", "true");
                 builder.ConfigureTestServices(services =>
                 {
                     services.AddGrpcClient<ReviewRestaurantGrpc>()
@@ -87,6 +89,8 @@ public sealed partial class ReservationSqlServerTests
                     services.AddGrpcClient<BillCheckoutGrpc.BillCheckoutGrpcClient>()
                         .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
                     services.AddGrpcClient<PaymentGrpc.PaymentGrpcClient>()
+                        .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
+                    services.AddGrpcClient<CashHandoverGrpc.CashHandoverGrpcClient>()
                         .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
                     services.AddGrpcClient<ShiftReportGrpc.ShiftReportGrpcClient>()
                         .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
@@ -102,6 +106,7 @@ public sealed partial class ReservationSqlServerTests
             using var admin = PaymentStaffClient(gateway, "admin");
             using var waiter = PaymentStaffClient(gateway, "waiter");
             using var otherWaiter = PaymentStaffClient(gateway, "secondWaiter");
+            using var sameRestaurantWaiter = PaymentStaffClient(gateway, "sameRestaurantWaiter");
 
             Assert.Equal(HttpStatusCode.Conflict, (await waiter.PostAsync(submit, null)).StatusCode);
             Assert.Equal(HttpStatusCode.Forbidden, (await otherWaiter.PostAsync(submit, null)).StatusCode);
@@ -199,6 +204,8 @@ public sealed partial class ReservationSqlServerTests
             Assert.Equal(reopened.CashierUserRef, stored.PreparedByRef);
             Assert.Equal(presented.PresentedAt!.Value.UtcDateTime, stored.PresentedAt);
             Assert.Empty(await db.Payments.ToListAsync());
+
+            await VerifyCashHandover(db, presented, reopened, nextCashier, cashier, waiter, sameRestaurantWaiter, otherWaiter, guest);
         }
         finally
         {
@@ -253,12 +260,15 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal(2, Assert.Single(prepared.Bill.Items).Quantity);
         Assert.Equal(shift.CashierUserRef, prepared.PreparedByRef);
         Assert.Null(prepared.PresentedAt);
+        await AssertIncomingCheckoutStatus(cashier, location.RestaurantId, checkoutId, prepared.Bill.BillId, "Prepared");
 
         Assert.Equal(HttpStatusCode.Forbidden, (await otherWaiter.GetAsync(billPath)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await otherWaiter.PostAsync(present, null)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await guest.GetAsync(billPath)).StatusCode);
         var viewed = await Read<PreparedResult>(await waiter.GetAsync(billPath));
         Assert.Equivalent(prepared, viewed, strict: true);
+        var tooEarly = await CollectCash(waiter, prepared.Bill.BillId, checkoutId, 30000, Guid.NewGuid());
+        Assert.Equal(HttpStatusCode.Conflict, tooEarly.StatusCode);
 
         var presented = await Read<PreparedResult>(await waiter.PostAsync(present, null));
         Assert.Equal("Presented", presented.CheckoutStatus);
@@ -266,6 +276,7 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal(prepared.PreparedAt, presented.PreparedAt);
         Assert.NotNull(presented.PresentedAt);
         Assert.True(presented.PresentedAt >= presented.PreparedAt);
+        await AssertIncomingCheckoutStatus(cashier, location.RestaurantId, checkoutId, prepared.Bill.BillId, "Presented");
         Assert.Equivalent(presented, await Read<PreparedResult>(await waiter.PostAsync(present, null)), strict: true);
         Assert.Equivalent(presented, await Read<PreparedResult>(await cashier.PostAsync(prepare, null)), strict: true);
 
@@ -281,6 +292,16 @@ public sealed partial class ReservationSqlServerTests
         cash.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
         Assert.Equal(HttpStatusCode.Conflict, (await cashier.SendAsync(cash)).StatusCode);
         return presented;
+    }
+
+    private static async Task AssertIncomingCheckoutStatus(HttpClient cashier, Guid restaurantId,
+        Guid checkoutId, Guid billId, string expectedStatus)
+    {
+        var inbox = $"/api/restaurants/{restaurantId}/payment-requests/incoming";
+        var page = await Read<SubmissionPage>(await cashier.GetAsync(inbox));
+        var entry = Assert.Single(page.Items, value => value.CheckoutId == checkoutId);
+        Assert.Equal(billId, entry.BillId);
+        Assert.Equal(expectedStatus, entry.Status);
     }
 
     private static async Task SetOrderStatus(WebApplicationFactory<OrderingGrpc> ordering,

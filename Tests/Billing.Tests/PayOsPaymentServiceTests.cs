@@ -37,7 +37,7 @@ public sealed class PayOsPaymentServiceTests
         fixture.Provider.Offline = true;
         var first = await fixture.CreatePayment();
         Assert.Equal("Unknown", first.Payment.Status);
-        await Status(409, () => fixture.Core.Pay(300));
+        await Status(409, () => fixture.Core.RecordCash(300));
         fixture.Provider.Offline = false;
         var recovered = await fixture.CreatePayment();
         Assert.False(recovered.Created);
@@ -64,7 +64,7 @@ public sealed class PayOsPaymentServiceTests
         var again = await fixture.Service.Reconcile(first.Payment.PaymentId, default);
         Assert.Equal(paid.PaidAt, again.PaidAt);
         Assert.Null((await fixture.Core.Db.Payments.SingleAsync()).ConfirmedByRef);
-        await Status(409, () => fixture.Core.Pay(300));
+        await Status(409, () => fixture.Core.RecordCash(300));
     }
 
     [Fact]
@@ -75,6 +75,7 @@ public sealed class PayOsPaymentServiceTests
         var cancelled = await fixture.Service.Cancel(first.Payment.PaymentId, default);
         Assert.True(cancelled.IsVerifiedZero);
         Assert.Equal("Cancelled", cancelled.Status);
+        await fixture.Core.RecordCash(300);
         var cash = await fixture.Core.Pay(300);
         var originalPaidAt = cash.Payment.PaidAt;
         fixture.Provider.Settle(232);
@@ -97,7 +98,7 @@ public sealed class PayOsPaymentServiceTests
         var result = await fixture.Service.Reconcile(first.Payment.PaymentId, default);
         Assert.True(result.RequiresReview);
         Assert.Equal("Unpaid", (await fixture.Core.Db.Bills.AsNoTracking().SingleAsync()).Status);
-        await Status(409, () => fixture.Core.Pay(300));
+        await Status(409, () => fixture.Core.RecordCash(300));
     }
 
     [Fact]
@@ -112,7 +113,7 @@ public sealed class PayOsPaymentServiceTests
         var result = await fixture.Service.Reconcile(first.Payment.PaymentId, default);
         Assert.Equal("CancelRequested", result.Status);
         Assert.False(result.IsVerifiedZero);
-        await Status(409, () => fixture.Core.Pay(300));
+        await Status(409, () => fixture.Core.RecordCash(300));
         fixture.Provider.CancelTimeout = false;
         result = await fixture.Service.Reconcile(first.Payment.PaymentId, default);
         Assert.True(result.IsVerifiedZero);
