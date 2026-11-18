@@ -72,7 +72,8 @@ public sealed class PaymentWebhookService(IPaymentRepository payments, IPaymentW
             var needsReview = conflict;
             if (payment is not null && data.Code == "00")
             {
-                needsReview |= data.Currency != "VND" || data.Amount != payment.Amount || data.Amount <= 0
+                needsReview |= payment.Status == PayOsStates.ReviewRequired
+                    || data.Currency != "VND" || data.Amount != payment.Amount || data.Amount <= 0
                     || data.LinkId.Length is 0 or > 100
                     || (payment.ProviderPaymentLinkId is not null && payment.ProviderPaymentLinkId != data.LinkId)
                     || (payment.ProviderTransactionId is not null && payment.ProviderTransactionId != data.Reference);
@@ -82,9 +83,15 @@ public sealed class PaymentWebhookService(IPaymentRepository payments, IPaymentW
                 }
 
                 payment.ProviderTransactionId ??= data.Reference;
-                if (needsReview || payment.Status == PayOsStates.ReviewRequired)
+                if (needsReview)
                 {
                     payment.Status = PayOsStates.ReviewRequired;
+                    var reviewedAt = clock.GetUtcNow().UtcDateTime;
+                    foreach (var pendingWebhook in await webhooks.PendingAsync(payment.PaymentId, ct))
+                    {
+                        pendingWebhook.ProcessingStatus = PayOsStates.ReviewRequired;
+                        pendingWebhook.ProcessedAt = reviewedAt;
+                    }
                 }
                 else if (payment.Status != PaymentStatuses.Paid)
                 {

@@ -45,22 +45,34 @@ public sealed partial class ReservationSqlServerTests
     [SqlServerFact]
     public Task PaymentSubmissionTransfersToNextCashierThenPreparesAndPresentsBillThroughGateway()
     {
-        return VerifyPaymentSubmission(verifyPayOs: false);
+        return VerifyPaymentSubmission();
     }
 
     [SqlServerFact]
     public Task PaymentSubmissionCreatesPayOsQrAndSettlesOnlyAfterVerifiedWebhookThroughGateway()
     {
-        return VerifyPaymentSubmission(verifyPayOs: true);
+        return VerifyPaymentSubmission(PayOsScenario.Settlement);
+    }
+
+    [SqlServerFact]
+    public Task PaymentSubmissionKeepsPayOsWebhookUnderReviewWithoutRequeryingProvider()
+    {
+        return VerifyPaymentSubmission(PayOsScenario.Review);
+    }
+
+    [SqlServerFact]
+    public Task PaymentSubmissionFinalizesPendingPayOsAuditWhenSignedCallbackConflicts()
+    {
+        return VerifyPaymentSubmission(PayOsScenario.ConflictingWebhook);
     }
 
     [SqlServerFact]
     public Task PaymentSubmissionRecoversPaidSessionWhenFirstClosureFails()
     {
-        return VerifyPaymentSubmission(verifyPayOs: false, recoverClosure: true);
+        return VerifyPaymentSubmission(recoverClosure: true);
     }
 
-    private async Task VerifyPaymentSubmission(bool verifyPayOs, bool recoverClosure = false)
+    private async Task VerifyPaymentSubmission(PayOsScenario? payOsScenario = null, bool recoverClosure = false)
     {
         var location = await Location();
         var otherRestaurant = await Location(assignStaff: false);
@@ -108,7 +120,7 @@ public sealed partial class ReservationSqlServerTests
                         .ConfigurePrimaryHttpMessageHandler(() => billingTarget!.Server.CreateHandler());
                 });
             });
-            var payOs = verifyPayOs ? new PayOsHttpFixture() : null;
+            var payOs = payOsScenario.HasValue ? new PayOsHttpFixture() : null;
             await using var billing = CreatePaymentSubmissionBillingHost(billingConnection, reviewingRestaurant, ordering, payOs, recoverClosure);
             billingTarget = billing;
             if (payOs is not null)
@@ -267,6 +279,18 @@ public sealed partial class ReservationSqlServerTests
             else
             {
                 using var webhookClient = gateway.CreateClient();
+                if (payOsScenario == PayOsScenario.Review)
+                {
+                    await VerifyPayOsWebhookUnderReview(db, payOs, presented, reopened, nextCashier, webhookClient, guest);
+                    return;
+                }
+
+                if (payOsScenario == PayOsScenario.ConflictingWebhook)
+                {
+                    await VerifyConflictingPayOsWebhook(db, payOs, presented, reopened, nextCashier, webhookClient);
+                    return;
+                }
+
                 await VerifyPayOsPayment(db, payOs, presented, reopened, nextCashier, cashier, waiter,
                     sameRestaurantWaiter, otherWaiter, webhookClient, otherRestaurant.RestaurantId);
             }
@@ -639,6 +663,13 @@ public sealed partial class ReservationSqlServerTests
                 Status = status
             };
         }
+    }
+
+    private enum PayOsScenario
+    {
+        Settlement,
+        Review,
+        ConflictingWebhook
     }
 
     private sealed record PreparedResult(Guid CheckoutId, Guid TableSessionId, string CheckoutStatus, BillDTO Bill,
