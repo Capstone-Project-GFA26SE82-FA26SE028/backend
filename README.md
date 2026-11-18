@@ -211,7 +211,7 @@ docker compose run --rm db-init
 docker compose up -d --no-deps ordering billing gateway
 ```
 
-For an existing database outside Docker, run `docker/sql/upgrades/BillingCheckout.sql` against **BillingDb** and `docker/sql/upgrades/OrderingCheckout.sql` against **OrderingDb**, using the team's normal SQL Server connection. These are repeatable upgrades; do not run a database reset script. New databases use the updated schema scripts. The two new tables and ERD relationships are recorded in [the database change log](docs/database-change-log.md).
+New databases use the checkout tables from the current BillingDb and OrderingDb schema scripts. For an existing database with an older checkout schema, verify the restaurant mappings and prepare a data-preserving upgrade for that database before running the current services. See the [database change log](docs/database-change-log.md) for the original checkout schema and ERD relationships.
 
 Ordering uses `GrpcServices:Billing` and `Ordering:CheckoutCashierRoleIds`; both local and Docker appsettings contain the repository's current Cashier role ID. Identity and Restaurant still verify the actual account, login session and branch assignment. No account IDs or credentials are supplied by the checkout payload.
 
@@ -368,7 +368,7 @@ ShiftReport persists only the existing ExpectedCash, ActualCash, CashHandleOver,
 
 ## Billing: automatic PayOS bank transfer (increment 6)
 
-Prerequisites: the existing authenticated Cashier, assigned restaurant, own Active shift, held Ready checkout and current Unpaid whole-VND bill. Apply `docker/sql/upgrades/BillingPayOs.sql` to an existing BillingDb before running the new binary. Fresh creation uses `docker/sql/schema/BillingDb.sql`; Compose initialization applies the upgrade automatically. The upgrade adds only three nullable Payment metadata columns and inserts BankTransfer when absent; it preserves a disabled BankTransfer row. Never run the creation script over an existing database.
+Prerequisites: the existing authenticated Cashier, assigned restaurant, own Active shift, held Ready checkout and current Unpaid whole-VND bill. Apply `docker/sql/upgrades/BillingPayOs.sql` to an existing BillingDb before running the new binary. Compose creates new databases from `docker/sql/schema/BillingDb.sql`. It does not run upgrade scripts on existing databases. The upgrade adds only three nullable Payment metadata columns and inserts BankTransfer when absent; it preserves a disabled BankTransfer row. Never run the creation script over an existing database.
 
 PayOS is disabled by default. No merchant credentials are committed. For native development:
 

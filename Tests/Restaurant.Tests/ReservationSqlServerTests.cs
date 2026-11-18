@@ -176,6 +176,10 @@ public sealed partial class ReservationSqlServerTests : IAsyncLifetime
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
                 services.AddGrpcClient<RestaurantStaffGrpc.RestaurantStaffGrpcClient>()
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
+                services.AddGrpcClient<ServiceRequestGrpc.ServiceRequestGrpcClient>()
+                    .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
+                services.AddGrpcClient<GuestAccessGrpc.GuestAccessGrpcClient>()
+                    .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
                 services.AddGrpcClient<ReservationGrpc.ReservationGrpcClient>()
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
             });

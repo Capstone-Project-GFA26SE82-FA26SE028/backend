@@ -9,11 +9,12 @@ namespace Restaurant.DAL.Implements;
 
 public sealed class ReservationTransaction(IUnitOfWork unitOfWork) : IReservationTransaction
 {
-    public async Task<T> ExecuteAsync<T>(Func<Task<T>> action, CancellationToken ct)
+    public async Task<T> ExecuteAsync<T>(Func<Task<T>> action, CancellationToken ct,
+        IsolationLevel isolationLevel = IsolationLevel.Serializable)
     {
         try
         {
-            return await unitOfWork.ExecuteInTransactionAsync(action, IsolationLevel.Serializable, ct);
+            return await unitOfWork.ExecuteInTransactionAsync(action, isolationLevel, ct);
         }
         catch (DbUpdateConcurrencyException)
         {

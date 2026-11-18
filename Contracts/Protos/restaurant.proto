@@ -331,3 +331,47 @@ message RestaurantStaffInfo {
 message RestaurantStaffListReply {
   repeated RestaurantStaffInfo items = 1;
 }
+
+// Dine-in payment requests are stored by Restaurant until a waiter receives them.
+service ServiceRequestGrpc {
+  rpc Create(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+  rpc GetById(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+  rpc GetCurrent(GuestAccessRequest) returns (PaymentServiceRequestInfo);
+  rpc GetAll(PaymentServiceRequestList) returns (PaymentServiceRequestPage);
+  rpc Acknowledge(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+}
+
+message PaymentServiceRequest {
+  string table_session_id = 1;
+  string service_request_id = 2;
+  string guest_token = 3;
+}
+
+message PaymentServiceRequestList {
+  string restaurant_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+message PaymentServiceRequestInfo {
+  string service_request_id = 1;
+  string table_session_id = 2;
+  string restaurant_id = 3;
+  string status = 4;
+  string requested_at = 5;
+  optional string acknowledged_at = 6;
+  optional string handled_by_ref = 7;
+  repeated PaymentServiceRequestTable tables = 8;
+}
+
+message PaymentServiceRequestTable {
+  string table_id = 1;
+  string table_code = 2;
+}
+
+message PaymentServiceRequestPage {
+  repeated PaymentServiceRequestInfo items = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}

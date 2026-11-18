@@ -232,7 +232,7 @@ Không sửa/xóa cột hoặc ràng buộc của bảng cũ; không thêm bản
 ### File SQL, Database First và trạng thái áp dụng
 
 - Schema database mới: docker/sql/schema/BillingDb.sql và docker/sql/schema/OrderingDb.sql, chỉ bổ sung DDL hai bảng.
-- Database đang dùng: docker/sql/upgrades/BillingCheckout.sql và docker/sql/upgrades/OrderingCheckout.sql. Mỗi script có transaction, không xóa dữ liệu, kiểm tra shape bảng/index trước khi chấp nhận chạy lại; không tự sửa một bảng trùng tên nhưng khác cấu trúc.
+- Ở đợt checkout trước, database đang dùng được nâng cấp bằng `BillingCheckout.sql` và `OrderingCheckout.sql`. Hai script đã được gỡ khỏi backend mới vì chỉ chấp nhận cấu trúc cũ chưa có `RestaurantId`. Schema hiện tại nằm trong `docker/sql/schema`. Việc gỡ file không thay đổi bảng, khóa, index, ERD hoặc dữ liệu đang dùng.
 - docker/sql/init.sh gọi hai upgrade cho database Docker đã khởi tạo và cho database mới. Không dùng schema tạo mới để reset database hiện có.
 - Đã áp dụng lên BillingDb và OrderingDb của SQL Server Docker hiện tại; đã chạy lại upgrade hai lần và kiểm tra. Không áp dụng thay cho các database trên máy thành viên khác. Không chỉnh/push repository Database-SQLServer riêng trong đợt này.
 - Đã scaffold từ SQL Server bằng dotnet-ef 8.0.24, đồng phiên bản EF Core của DAL; chỉ nhập model BillCheckout/CheckoutLock, mapping DbContext liên quan và navigation Bill.BillCheckouts. Cập nhật danh sách bảng trong hai efpt.config.json. Không tạo migration hoặc ghi connection string vào model.

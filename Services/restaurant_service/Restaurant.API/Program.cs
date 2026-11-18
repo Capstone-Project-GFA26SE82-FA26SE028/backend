@@ -21,6 +21,8 @@ builder.Services.AddScoped<Restaurant.BLL.Interfaces.IReservationExpirationServi
 builder.Services.AddHostedService<Restaurant.API.Reservations.ReservationExpirationWorker>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableSessionOrderAccess, Restaurant.API.Management.IdentityTableSessionOrderAccess>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IGuestAccessService, Restaurant.BLL.Implements.GuestAccessService>();
+builder.Services.Configure<Restaurant.Common.Settings.ServiceRequestSettings>(builder.Configuration.GetSection("ServiceRequests"));
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IServiceRequestService, Restaurant.BLL.Implements.ServiceRequestService>();
 builder.Services.AddOptions<Restaurant.Common.Settings.GuestAccessSettings>()
     .Bind(builder.Configuration.GetSection("GuestAccess"))
     .Validate(x => double.IsFinite(x.LifetimeHours) && x.LifetimeHours > 0 && x.LifetimeHours <= 8760,
@@ -79,6 +81,7 @@ app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantStaffGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantAccessGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.BillingSessionGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.GuestAccessGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.ServiceRequestGrpcService>();
 
 app.MapGet("/health/live", () =>
 {
