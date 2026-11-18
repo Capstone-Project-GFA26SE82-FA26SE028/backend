@@ -76,6 +76,12 @@ public static class BillingServiceExtensions
             options.Address = uri;
         });
         services.AddScoped<IPaymentReviewClient, PaymentReviewClient>();
+        services.AddGrpcClient<PaidSessionClosureGrpc.PaidSessionClosureGrpcClient>(options =>
+        {
+            options.Address = uri;
+        });
+        services.AddScoped<IPaidSessionClosureClient, PaidSessionClosureClient>();
+        services.AddScoped<IPaymentSettlementService, PaymentSettlementService>();
         services.AddScoped<IPaymentSubmissionService, PaymentSubmissionService>();
         services.AddGrpcClient<Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient>(options =>
         {

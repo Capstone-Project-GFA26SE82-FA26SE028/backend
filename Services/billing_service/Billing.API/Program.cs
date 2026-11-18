@@ -30,6 +30,7 @@ app.MapGrpcService<CashShiftGrpcService>();
 app.MapGrpcService<BillGrpcService>();
 app.MapGrpcService<ShiftReportGrpcService>();
 app.MapGrpcService<PaymentGrpcService>();
+app.MapGrpcService<PaymentSettlementGrpcService>();
 app.MapGrpcService<CashHandoverGrpcService>();
 app.MapGrpcService<PayOsPaymentGrpcService>();
 app.MapGrpcService<OnlinePaymentGrpcService>();

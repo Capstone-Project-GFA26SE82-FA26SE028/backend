@@ -108,6 +108,8 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal(HttpStatusCode.Conflict, (await cashier.PostAsJsonAsync(confirm, new { confirmedAmount = 31000 })).StatusCode);
         Assert.Equal("PendingHandover", (await db.Payments.AsNoTracking().SingleAsync()).Status);
         Assert.Empty(await db.CashMovements.AsNoTracking().ToListAsync());
+        Assert.Equal(HttpStatusCode.OK, (await guest.GetAsync(
+            $"/api/table-sessions/{presented.TableSessionId}/guest-access/me")).StatusCode);
 
         var confirmations = await Task.WhenAll(
             cashier.PostAsJsonAsync(confirm, new { confirmedAmount = received }),

@@ -332,7 +332,7 @@ public sealed class CashPaymentServiceTests
                 }), Options.Create(new CashPaymentSettings
                 {
                     MethodCode = "Cash"
-                }), TimeProvider.System);
+                }), TimeProvider.System, new TestPaidSessionClosureClient());
             try
             {
                 var result = await handover.Create(Bill.BillId, Key, new CreateCashHandoverDTO
@@ -369,6 +369,11 @@ public sealed class CashPaymentServiceTests
 
     private sealed class PresentedBillReview(Guid restaurantId) : IPaymentReviewClient
     {
+        public Task<Guid> GetResultRestaurantAsync(Guid sessionId, Guid requestId, CancellationToken ct)
+        {
+            return Task.FromResult(restaurantId);
+        }
+
         public Task<(Guid RestaurantId, int PendingOrderCount)> GetReviewAsync(Guid sessionId, Guid requestId, CancellationToken ct)
         {
             return Task.FromResult((restaurantId, 0));

@@ -115,6 +115,30 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
         return await orders.GetReviewAsync(sessionId, restaurantId, ct);
     }
 
+    public async Task<Guid> GetResultRestaurant(Guid sessionId, Guid id, CancellationToken ct)
+    {
+        var waiter = await GetWaiter(ct);
+        var session = await sessions.GetForBillingAsync(sessionId, ct)
+            ?? throw new ManagementException(404, "Không tìm thấy phiên bàn.");
+        var restaurantId = GetRestaurantId(session);
+        await RequireAssignment(restaurantId, waiter, ct);
+        var request = await Find(sessionId, id, ct);
+        if (request.HandledByRef != waiter)
+        {
+            throw new ManagementException(403, "Chỉ phục vụ phụ trách yêu cầu được xem kết quả thanh toán.");
+        }
+
+        if (!(session.Status == "Open" && session.ClosedAt is null && request.Status == PaymentRequestStatuses.Acknowledged
+                && request.CompletedAt is null)
+            && !(session.Status == "Closed" && session.ClosedAt.HasValue && request.Status == PaymentRequestStatuses.Completed
+                && request.CompletedAt.HasValue))
+        {
+            throw new ManagementException(409, "Yêu cầu chưa được tiếp nhận hoặc không còn hiệu lực.");
+        }
+
+        return restaurantId;
+    }
+
     public async Task<ServiceRequestDto> Acknowledge(Guid sessionId, Guid id, CancellationToken ct)
     {
         var waiter = await GetWaiter(ct);

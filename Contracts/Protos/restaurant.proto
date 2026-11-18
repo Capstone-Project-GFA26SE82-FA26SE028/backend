@@ -53,6 +53,23 @@ message CurrentRestaurantScopeReply {
 }
 option csharp_namespace = "Backend.Contracts.Restaurant";
 package restaurant;
+
+service PaidSessionClosureGrpc {
+  rpc CloseAfterPayment(PaidSessionClosureRequest) returns (PaidSessionClosureReply);
+}
+
+message PaidSessionClosureRequest {
+  string restaurant_id = 1;
+  string table_session_id = 2;
+}
+
+message PaidSessionClosureReply {
+  bool closed = 1;
+}
+
+message PaymentResultAccessInfo {
+  string restaurant_id = 1;
+}
 import "google/protobuf/empty.proto";
 
 message IdRequest { string id = 1; string version = 2; }
@@ -177,6 +194,7 @@ service TableSessionGrpc {
   rpc OpenForWaiter(IdRequest) returns (TableSessionScanReply);
   rpc Scan(QrTokenRequest) returns (TableSessionScanReply);
   rpc GetForOrdering(OrderSessionRequest) returns (OrderSessionReply);
+  rpc GetForServing(IdRequest) returns (OrderSessionReply);
 }
 
 message OrderSessionRequest {
@@ -190,6 +208,7 @@ message OrderSessionReply {
   optional string user_id = 3;
   optional string guest_access_id = 4;
   optional string expires_at = 5;
+  optional string paid_checkout_id = 6;
 }
 
 
@@ -334,6 +353,7 @@ message RestaurantStaffListReply {
 
 // Dine-in payment requests are stored by Restaurant until a waiter receives them.
 service ServiceRequestGrpc {
+  rpc GetResultAccess(PaymentServiceRequest) returns (PaymentResultAccessInfo);
   rpc Create(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
   rpc GetById(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
   rpc GetCurrent(GuestAccessRequest) returns (PaymentServiceRequestInfo);

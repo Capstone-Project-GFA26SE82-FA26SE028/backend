@@ -65,6 +65,16 @@ public sealed class ServiceRequestGrpcService(IServiceRequestService service) : 
         return reply;
     }
 
+    public override async Task<PaymentResultAccessInfo> GetResultAccess(PaymentServiceRequest request, ServerCallContext context)
+    {
+        var restaurantId = await service.GetResultRestaurant(ParseId(request.TableSessionId),
+            ParseId(request.ServiceRequestId), context.CancellationToken);
+        return new PaymentResultAccessInfo
+        {
+            RestaurantId = restaurantId.ToString()
+        };
+    }
+
     private static Guid ParseId(string value)
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)

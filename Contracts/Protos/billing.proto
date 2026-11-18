@@ -2,6 +2,19 @@ syntax = "proto3";
 
 option csharp_namespace = "Backend.Contracts.Billing";
 package billing;
+
+service PaymentSettlementGrpc {
+  rpc GetVerifiedCheckout(VerifiedCheckoutRequest) returns (VerifiedCheckoutReply);
+}
+
+message VerifiedCheckoutRequest {
+  string restaurant_id = 1;
+  string table_session_id = 2;
+}
+
+message VerifiedCheckoutReply {
+  optional string checkout_id = 1;
+}
 import "google/protobuf/empty.proto";
 service PaymentGrpc {
   rpc PayCash(PayCashRequest) returns (CashPaymentReply);

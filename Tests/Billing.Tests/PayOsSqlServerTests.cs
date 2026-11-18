@@ -266,7 +266,7 @@ public sealed class PayOsSqlServerTests : IAsyncLifetime
             }), Options.Create(new PayOsSettings
             {
                 Enabled = true
-            }), TimeProvider.System, new TestPaymentReviewClient());
+            }), TimeProvider.System, new TestPaymentReviewClient(), new TestPaidSessionClosureClient());
     }
 
     private static ShiftIdentity CashActor(BillServiceTests.BillSource source)
