@@ -14,6 +14,74 @@ namespace Billing.Tests;
 
 public sealed class TaxFeePolicyServiceTests
 {
+    [Theory]
+    [InlineData("admin")]
+    [InlineData("manager")]
+    public async Task PoliciesAndVersionHistoryAreIsolatedPerRestaurant(string role)
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<BillingDbContext>().UseSqlite(connection).Options;
+        var firstRestaurant = Guid.NewGuid();
+        var secondRestaurant = Guid.NewGuid();
+        Guid firstPolicy;
+        foreach (var restaurant in new[] { firstRestaurant, secondRestaurant })
+        {
+            var scope = new Shared.Persistence.RestaurantIsolation.RestaurantDataScope();
+            scope.Select(restaurant);
+            await using var db = new BillingDbContext(options, scope);
+            await db.Database.EnsureCreatedAsync();
+            var identity = new ShiftIdentity
+            {
+                Scope = new BillingAccessScope
+                {
+                    UserId = Guid.NewGuid(),
+                    RoleId = role,
+                    RestaurantIds = [restaurant]
+                }
+            };
+            var service = new TaxFeePolicyService(new TaxFeePolicyRepository(db), new UnitOfWork<BillingDbContext>(db),
+                identity, new PolicyClock(), scope);
+            var policy = await service.Create(Request(), default);
+            Assert.Equal(1, policy.Version);
+            var history = await service.GetAll(new TaxFeePolicyQueryDTO(), default);
+            Assert.Equal(1, history.TotalCount);
+            Assert.Equal(policy.TaxFeePolicyId, Assert.Single(history.Items).TaxFeePolicyId);
+            if (restaurant == secondRestaurant)
+            {
+                var foreign = await db.TaxFeePolicies.IgnoreQueryFilters().Where(item =>
+                    EF.Property<Guid?>(item, "RestaurantId") == firstRestaurant).SingleAsync();
+                firstPolicy = foreign.TaxFeePolicyId;
+                await Status(404, () => service.GetById(firstPolicy, default));
+            }
+        }
+    }
+
+    [Fact]
+    public async Task PlatformAdminCannotManagePoliciesEvenWhenAssigned()
+    {
+        await using var fixture = await PolicyFixture.Create();
+        fixture.Access.Scope.RoleId = "platform_admin";
+        fixture.Access.Scope.IsAdministrator = true;
+        fixture.Access.Scope.RestaurantIds = [Guid.NewGuid()];
+        await Status(403, () => fixture.Service.Create(Request(), default));
+        await Status(403, () => fixture.Service.GetAll(new TaxFeePolicyQueryDTO(), default));
+    }
+
+    [Fact]
+    public async Task SelectedRestaurantMustBelongToAdmin()
+    {
+        await using var fixture = await PolicyFixture.Create();
+        var scope = new Shared.Persistence.RestaurantIsolation.RestaurantDataScope();
+        scope.Select(Guid.NewGuid());
+        fixture.Access.Scope.RestaurantIds = [Guid.NewGuid()];
+        var service = new TaxFeePolicyService(new TaxFeePolicyRepository(fixture.Db),
+            new UnitOfWork<BillingDbContext>(fixture.Db), fixture.Access, fixture.Clock, scope);
+        await Status(403, () => service.Create(Request(), default));
+        await Status(403, () => service.GetAll(new TaxFeePolicyQueryDTO(), default));
+        await Status(403, () => service.GetById(Guid.NewGuid(), default));
+    }
+
     [Fact]
     public async Task RestaurantManagerCanCreatePolicy()
     {
@@ -26,7 +94,7 @@ public sealed class TaxFeePolicyServiceTests
     }
 
     [Fact]
-    public async Task AdministratorWithoutBranchAssignmentCreatesImmediatelyEffectivePolicy()
+    public async Task RestaurantAdminCreatesImmediatelyEffectivePolicy()
     {
         await using var fixture = await PolicyFixture.Create();
         var result = await fixture.Service.Create(Request(), default);
@@ -47,7 +115,7 @@ public sealed class TaxFeePolicyServiceTests
     [InlineData("waiter")]
     [InlineData("kitchen")]
     [InlineData("inventory")]
-    [InlineData("admin")]
+    [InlineData("platform_admin")]
     public async Task NonManagerWithoutAdministratorFlagCannotManagePolicies(string role)
     {
         await using var fixture = await PolicyFixture.Create();
@@ -278,7 +346,7 @@ public sealed class TaxFeePolicyServiceTests
             {
                 UserId = Guid.NewGuid(),
                 RoleId = "admin",
-                IsAdministrator = true
+                IsAdministrator = false
             }
         };
         public PolicyClock Clock { get; } = new();
@@ -352,7 +420,7 @@ public sealed class TaxFeePolicyServiceTests
             {
                 UserId = user,
                 RoleId = calls == 1 ? "admin" : "waiter",
-                IsAdministrator = calls == 1
+                IsAdministrator = false
             });
         }
     }

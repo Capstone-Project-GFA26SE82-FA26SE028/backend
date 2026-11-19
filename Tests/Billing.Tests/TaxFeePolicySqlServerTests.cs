@@ -140,7 +140,7 @@ public sealed class TaxFeePolicySqlServerTests : IAsyncLifetime
             {
                 UserId = Guid.NewGuid(),
                 RoleId = "admin",
-                IsAdministrator = true
+                IsAdministrator = false
             }
         };
         return new TaxFeePolicyService(new TaxFeePolicyRepository(db), new UnitOfWork<BillingDbContext>(db), identity, TimeProvider.System);

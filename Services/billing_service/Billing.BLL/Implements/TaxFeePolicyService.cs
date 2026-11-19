@@ -11,7 +11,7 @@ using Shared.Persistence.Interfaces;
 namespace Billing.BLL.Implements;
 
 public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitOfWork unitOfWork,
-    IBillingAccess access, TimeProvider clock) : ITaxFeePolicyService
+    IBillingAccess access, TimeProvider clock, Shared.Persistence.RestaurantIsolation.RestaurantDataScope? scope = null) : ITaxFeePolicyService
 {
     private static readonly string[] TimestampFormats =
     [
@@ -126,15 +126,26 @@ public sealed class TaxFeePolicyService(ITaxFeePolicyRepository policies, IUnitO
 
     private async Task<Guid> RequirePolicyManager(CancellationToken ct)
     {
-        var actor = await access.GetCurrentScopeAsync(null, ct);
+        var actor = await access.GetCurrentScopeAsync(scope?.RestaurantId, ct);
         if (actor.UserId == Guid.Empty)
         {
             throw new BillingException(401, "Yêu cầu phiên đăng nhập nhân viên hợp lệ.");
         }
 
-        if (!actor.IsAdministrator && actor.RoleId != "manager")
+        if (actor.IsAdministrator || actor.RoleId is not ("admin" or "manager"))
         {
-            throw new BillingException(403, "Chỉ quản lý nhà hàng hoặc quản trị viên mới được quản lý chính sách thuế và phí dịch vụ.");
+            throw new BillingException(403, "Chỉ admin nhà hàng hoặc manager được quản lý chính sách thuế và phí dịch vụ.");
+        }
+
+        if (scope is not null)
+        {
+            var restaurantId = scope.RestaurantId ?? (actor.RestaurantIds.Count == 1 ? actor.RestaurantIds[0] : (Guid?)null);
+            if (!restaurantId.HasValue || !actor.RestaurantIds.Contains(restaurantId.Value))
+            {
+                throw new BillingException(403, "Bạn không được quản lý cấu hình thuế của nhà hàng này.");
+            }
+
+            scope.Select(restaurantId.Value);
         }
 
         return actor.UserId;
