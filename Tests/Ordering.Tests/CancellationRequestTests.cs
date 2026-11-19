@@ -262,6 +262,133 @@ public sealed class CancellationRequestTests
         Assert.Equal(0, task.OrderItem.CancelledQuantity);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task StaffCancellationUpdatesFoodAndHistoryOnce(int quantity)
+    {
+        using var f = new OrderingFlowTests.Fixture();
+        var order = await StaffOrder(f);
+        f.Staff = true;
+        var service = Service(f);
+        var id = Guid.NewGuid();
+        var itemId = order.Items[0].OrderItemId;
+        var result = await service.CancelByStaff(f.Session, id, itemId, quantity, "Hết nguyên liệu", default);
+        Assert.True(result.Created);
+        Assert.Equal("Staff", result.Result.Source);
+        Assert.Equal("Approved", result.Result.Status);
+        Assert.Equal(f.User, result.Result.RequestedByRef);
+        Assert.Equal(f.User, result.Result.DecidedByRef);
+        Assert.Equal("Hết nguyên liệu", result.Result.DecisionReason);
+        Assert.NotNull(result.Result.DecidedAt);
+        Assert.False((await service.CancelByStaff(f.Session, id, itemId, quantity, "Hết nguyên liệu", default)).Created);
+        f.Db.ChangeTracker.Clear();
+        var line = await f.Db.OrderItems.SingleAsync();
+        Assert.Equal(quantity, line.CancelledQuantity);
+        var task = await f.Db.KitchenTasks.SingleAsync();
+        Assert.Equal(quantity == 2 ? "Cancelled" : "Pending", task.Status);
+        if (quantity == 1)
+        {
+            Assert.Equal(1, task.Quantity);
+        }
+
+        var response = await f.Orders.GetById(f.Session, order.OrderId, "", default);
+        Assert.Equal(order.TotalAmount * (2 - quantity) / 2, response.TotalAmount);
+        f.Staff = false;
+        Assert.Equal("Staff", (await service.GetById(f.Session, id, "guest", default)).Source);
+        Assert.Equal(409, (await Assert.ThrowsAsync<OrderingException>(() =>
+            service.Create(f.Session, id, itemId, quantity, "Hết nguyên liệu", "guest", default))).StatusCode);
+    }
+
+    [Fact]
+    public async Task StaffCancellationRequiresEmployeeReasonQuantityAndCorrectSession()
+    {
+        using var f = new OrderingFlowTests.Fixture();
+        var order = await StaffOrder(f);
+        var service = Service(f);
+        var itemId = order.Items[0].OrderItemId;
+        Assert.Equal(403, (await Assert.ThrowsAsync<OrderingException>(() =>
+            service.CancelByStaff(f.Session, Guid.NewGuid(), itemId, 1, "Reason", default))).StatusCode);
+        f.Staff = true;
+        Assert.Equal(400, (await Assert.ThrowsAsync<OrderingException>(() =>
+            service.CancelByStaff(f.Session, Guid.NewGuid(), itemId, 1, " ", default))).StatusCode);
+        Assert.Equal(400, (await Assert.ThrowsAsync<OrderingException>(() =>
+            service.CancelByStaff(f.Session, Guid.NewGuid(), itemId, 0, "Reason", default))).StatusCode);
+        Assert.Equal(409, (await Assert.ThrowsAsync<OrderingException>(() =>
+            service.CancelByStaff(f.Session, Guid.NewGuid(), itemId, 3, "Reason", default))).StatusCode);
+        Assert.Equal(404, (await Assert.ThrowsAsync<OrderingException>(() =>
+            service.CancelByStaff(Guid.NewGuid(), Guid.NewGuid(), itemId, 1, "Reason", default))).StatusCode);
+        f.Closed = true;
+        Assert.Equal(409, (await Assert.ThrowsAsync<OrderingException>(() =>
+            service.CancelByStaff(f.Session, Guid.NewGuid(), itemId, 1, "Reason", default))).StatusCode);
+        Assert.Empty(await f.Db.CancellationRequests.ToListAsync());
+    }
+
+    [Fact]
+    public async Task StaffCannotBypassGuestRequestOrReuseAnotherOperationKey()
+    {
+        using var f = new OrderingFlowTests.Fixture();
+        var order = await StaffOrder(f);
+        var service = Service(f);
+        var id = Guid.NewGuid();
+        var itemId = order.Items[0].OrderItemId;
+        await service.Create(f.Session, id, itemId, 1, "Guest reason", "guest", default);
+        f.Staff = true;
+        Assert.Equal(409, (await Assert.ThrowsAsync<OrderingException>(() =>
+            service.CancelByStaff(f.Session, Guid.NewGuid(), itemId, 1, "Staff reason", default))).StatusCode);
+        await service.Reject(f.Session, id, "Keep dish", default);
+        Assert.Equal(409, (await Assert.ThrowsAsync<OrderingException>(() =>
+            service.CancelByStaff(f.Session, id, itemId, 1, "Guest reason", default))).StatusCode);
+        var staffId = Guid.NewGuid();
+        await service.CancelByStaff(f.Session, staffId, itemId, 1, "Staff reason", default);
+        Assert.Equal(409, (await Assert.ThrowsAsync<OrderingException>(() =>
+            service.CancelByStaff(f.Session, staffId, itemId, 2, "Staff reason", default))).StatusCode);
+        Assert.Equal(1, (await f.Db.OrderItems.SingleAsync()).CancelledQuantity);
+    }
+
+    [Theory]
+    [InlineData("Cooking")]
+    [InlineData("Ready")]
+    [InlineData("Served")]
+    public async Task StaffCannotCancelPreparedQuantity(string status)
+    {
+        using var f = new OrderingFlowTests.Fixture();
+        var order = await StaffOrder(f);
+        var task = await f.Db.KitchenTasks.SingleAsync();
+        task.Status = status;
+        task.OrderItem.Status = status;
+        await f.Db.SaveChangesAsync();
+        f.Staff = true;
+        Assert.Equal(409, (await Assert.ThrowsAsync<OrderingException>(() =>
+            Service(f).CancelByStaff(f.Session, Guid.NewGuid(), order.Items[0].OrderItemId, 1, "Reason", default))).StatusCode);
+    }
+
+    [Fact]
+    public async Task StaffCannotCancelFrozenBillOrUseLegacyTaskCancellation()
+    {
+        using var f = new OrderingFlowTests.Fixture();
+        var order = await StaffOrder(f);
+        f.Staff = true;
+        var task = await f.Db.KitchenTasks.SingleAsync();
+        var kitchen = new KitchenTaskService(new KitchenTaskRepository(f.Db), Transaction(f),
+            new KitchenAccess(), new KitchenTaskTests.FakeCookingInventoryClient(), TimeProvider.System,
+            new CheckoutLockRepository(f.Db));
+        Assert.Equal(409, (await Assert.ThrowsAsync<OrderingException>(() =>
+            kitchen.SetStatus(task.KitchenTaskId, "Cancelled", null, default))).StatusCode);
+        Assert.Equal("Pending", task.Status);
+        f.Db.CheckoutLocks.Add(new CheckoutLock
+        {
+            CheckoutId = Guid.NewGuid(),
+            TableSessionRef = f.Session,
+            Status = "Frozen",
+            CreatedAt = DateTime.UtcNow
+        });
+        await f.Db.SaveChangesAsync();
+        Assert.Equal(409, (await Assert.ThrowsAsync<OrderingException>(() =>
+            Service(f).CancelByStaff(f.Session, Guid.NewGuid(), order.Items[0].OrderItemId, 1, "Reason", default))).StatusCode);
+        Assert.Equal(0, task.OrderItem.CancelledQuantity);
+    }
+
     private static async Task<OrderDTO> StaffOrder(OrderingFlowTests.Fixture f)
     {
         f.Staff = true;

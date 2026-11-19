@@ -19,6 +19,16 @@ public sealed class CancellationRequestGrpcService(ICancellationRequestService s
         };
     }
 
+    public override async Task<CancellationCreateReply> CancelByStaff(CancellationWriteRequest request, ServerCallContext context)
+    {
+        var result = await service.CancelByStaff(Id(request.Access?.TableSessionId), Id(request.IdempotencyKey),
+            Id(request.OrderItemId), request.Quantity, request.Reason, context.CancellationToken);
+        return new CancellationCreateReply
+        {
+            Result = Map(result.Result),
+            Created = result.Created
+        };
+    }
 
     public override async Task<CancellationInfo> GetById(CancellationDecisionRequest request, ServerCallContext context)
     {
@@ -73,6 +83,7 @@ public sealed class CancellationRequestGrpcService(ICancellationRequestService s
             ItemName = value.ItemName,
             Quantity = value.Quantity,
             Reason = value.Reason,
+            Source = value.Source,
             RequestedByRef = value.RequestedByRef.ToString(),
             Status = value.Status,
             RequestedAt = DateTime.SpecifyKind(value.RequestedAt, DateTimeKind.Utc).ToString("O")

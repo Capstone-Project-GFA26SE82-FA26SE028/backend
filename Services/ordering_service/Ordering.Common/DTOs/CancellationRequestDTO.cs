@@ -10,6 +10,7 @@ public sealed class CancellationRequestDTO
     public string ItemName { get; set; } = "";
     public int Quantity { get; set; }
     public string Reason { get; set; } = "";
+    public string Source { get; set; } = "";
     public Guid RequestedByRef { get; set; }
     public Guid? DecidedByRef { get; set; }
     public string Status { get; set; } = "";

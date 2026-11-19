@@ -32,7 +32,7 @@ public sealed class CancellationRequestService(ICancellationRequestRepository re
             var existing = await repository.GetByIdAsync(id, ct);
             if (existing is not null)
             {
-                if (existing.OrderItem.Order.TableSessionRef != sessionId || existing.OrderItemId != itemId
+                if (existing.Source != "Customer" || existing.OrderItem.Order.TableSessionRef != sessionId || existing.OrderItemId != itemId
                     || existing.RequestedByRef != actor.GuestId || existing.Quantity != quantity || existing.Reason != reason)
                 {
                     throw new OrderingException(409, "Idempotency-Key đã dùng cho yêu cầu khác.");
@@ -66,6 +66,67 @@ public sealed class CancellationRequestService(ICancellationRequestRepository re
         }, ct);
     }
 
+    public async Task<(CancellationRequestDTO Result, bool Created)> CancelByStaff(Guid sessionId, Guid id,
+        Guid itemId, int quantity, string reason, CancellationToken ct)
+    {
+        var actor = await access.RequireAsync(sessionId, null, "", ct);
+        if (actor.IsGuest || !actor.UserId.HasValue)
+        {
+            throw new OrderingException(403, "Chỉ nhân viên phục vụ trong nhà hàng được chủ động hủy món.");
+        }
+
+        reason = ValidateReason(reason);
+        if (id == Guid.Empty || itemId == Guid.Empty || quantity < 1)
+        {
+            throw new OrderingException(400, "Cần Idempotency-Key dạng UUID, mã món và số lượng hủy lớn hơn 0.");
+        }
+
+        return await transaction.ExecuteAsync(async () =>
+        {
+            await checkouts.LockSessionAsync(sessionId, ct);
+            var existing = await repository.GetByIdAsync(id, ct);
+            if (existing is not null)
+            {
+                if (existing.Source != "Staff" || existing.OrderItem.Order.TableSessionRef != sessionId
+                    || existing.OrderItemId != itemId || existing.RequestedByRef != actor.UserId
+                    || existing.Quantity != quantity || existing.Reason != reason)
+                {
+                    throw new OrderingException(409, "Idempotency-Key đã dùng cho thao tác khác.");
+                }
+
+                return (Map(existing), false);
+            }
+
+            await RequireUnfrozen(sessionId, ct);
+            var item = await FindItem(sessionId, itemId, ct);
+            if (await repository.HasPendingAsync(itemId, ct))
+            {
+                throw new OrderingException(409, "Món đang có yêu cầu hủy của khách. Vui lòng duyệt hoặc từ chối yêu cầu đó trước.");
+            }
+
+            RequireCancellable(item, quantity);
+            await access.RequireAsync(sessionId, null, "", ct);
+            ApplyCancellation(item, quantity, actor.UserId.Value);
+            var now = clock.GetUtcNow().UtcDateTime;
+            var request = new CancellationRequest
+            {
+                CancellationRequestId = id,
+                OrderItemId = itemId,
+                OrderItem = item,
+                Quantity = quantity,
+                Reason = reason,
+                Source = "Staff",
+                RequestedByRef = actor.UserId.Value,
+                DecidedByRef = actor.UserId.Value,
+                Status = "Approved",
+                RequestedAt = now,
+                DecidedAt = now,
+                DecisionReason = reason
+            };
+            repository.Create(request);
+            return (Map(request), true);
+        }, ct);
+    }
 
     public async Task<CancellationRequestDTO> GetById(Guid sessionId, Guid id, string guestToken, CancellationToken ct)
     {
@@ -278,6 +339,7 @@ public sealed class CancellationRequestService(ICancellationRequestRepository re
             ItemName = request.OrderItem.NameSnapshot,
             Quantity = request.Quantity,
             Reason = request.Reason,
+            Source = request.Source,
             RequestedByRef = request.RequestedByRef,
             DecidedByRef = request.DecidedByRef,
             Status = request.Status,

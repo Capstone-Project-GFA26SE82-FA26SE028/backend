@@ -185,11 +185,7 @@ public sealed class KitchenTaskService(
                     throw new OrderingException(400, $"Không thể hủy nhiệm vụ bếp ở trạng thái '{task.Status}'. Chỉ có thể hủy nhiệm vụ đang ở trạng thái 'Pending'.");
                 }
 
-                task.Status = "Cancelled";
-                if (task.OrderItem is not null)
-                {
-                    task.OrderItem.Status = "Cancelled";
-                }
+                throw new OrderingException(409, "Vui lòng dùng API hủy món của nhà hàng và cung cấp số lượng, lý do hủy.");
             }
             else
             {

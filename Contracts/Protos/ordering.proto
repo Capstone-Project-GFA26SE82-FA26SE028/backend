@@ -275,6 +275,7 @@ message KitchenAssignmentPage {
 }
 
 service CancellationRequestGrpc {
+  rpc CancelByStaff(CancellationWriteRequest) returns (CancellationCreateReply);
   rpc Create(CancellationWriteRequest) returns (CancellationCreateReply);
   rpc GetAll(CancellationListRequest) returns (CancellationPage);
   rpc GetById(CancellationDecisionRequest) returns (CancellationInfo);
@@ -288,6 +289,7 @@ message CancellationWriteRequest {
 message CancellationDecisionRequest { OrderingAccess access = 1; string id = 2; string reason = 3; }
 message CancellationListRequest { OrderingAccess access = 1; string status = 2; int32 page = 3; int32 page_size = 4; }
 message CancellationInfo {
+  string source = 15;
   string cancellation_request_id = 1; string table_session_id = 2; string order_id = 3; string order_number = 4;
   string order_item_id = 5; string item_name = 6; int32 quantity = 7; string reason = 8;
   string requested_by_ref = 9; optional string decided_by_ref = 10; string status = 11;

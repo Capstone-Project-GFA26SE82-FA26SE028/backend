@@ -31,6 +31,25 @@ public sealed class CancellationRequestController(CancellationRequestGrpc.Cancel
         }, ct);
     }
 
+    [HttpPost("staff")]
+    [RequireBearerToken]
+    public Task<IActionResult> CancelByStaff(Guid sessionId, CreateCancellationRequestDTO body,
+        [FromHeader(Name = "Idempotency-Key")] Guid key, CancellationToken ct)
+    {
+        return Execute(async () =>
+        {
+            var reply = await client.CancelByStaffAsync(new CancellationWriteRequest
+            {
+                Access = Access(sessionId),
+                IdempotencyKey = key.ToString(),
+                OrderItemId = body.OrderItemId.ToString(),
+                Quantity = body.Quantity,
+                Reason = body.Reason ?? ""
+            }, Options(ct));
+            return Result(Map(reply.Result), reply.Created ? 201 : 200);
+        }, ct);
+    }
+
     [HttpGet]
     public Task<IActionResult> GetAll(Guid sessionId, CancellationToken ct, string? status = null, int page = 1, int pageSize = 20)
     {
@@ -119,6 +138,7 @@ public sealed class CancellationRequestController(CancellationRequestGrpc.Cancel
             value.ItemName,
             value.Quantity,
             value.Reason,
+            value.Source,
             value.RequestedByRef,
             DecidedByRef = value.HasDecidedByRef ? value.DecidedByRef : null,
             value.Status,

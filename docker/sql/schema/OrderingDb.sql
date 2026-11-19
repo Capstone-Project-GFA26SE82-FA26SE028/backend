@@ -8,6 +8,7 @@ CREATE TABLE dbo.[CancellationRequest]
     [OrderItemId] uniqueidentifier NOT NULL,
     [Quantity] int NOT NULL,
     [Reason] nvarchar(1000) NOT NULL,
+    [Source] varchar(20) NOT NULL CONSTRAINT [DF_CancellationRequest_Source] DEFAULT ('Customer'),
     [RequestedByRef] uniqueidentifier NOT NULL,
     [DecidedByRef] uniqueidentifier NULL,
     [DecidedAt] datetime NULL,

@@ -53,6 +53,7 @@ public partial class OrderingDbContext : Shared.Persistence.RestaurantIsolation.
         modelBuilder.Entity<CancellationRequest>(entity =>
         {
             entity.ToTable("CancellationRequest");
+            entity.Property(e => e.Source).IsRequired().HasMaxLength(20).IsUnicode(false).HasDefaultValue("Customer");
             entity.HasIndex(e => e.OrderItemId).IsUnique()
                 .HasDatabaseName("UX_CancellationRequest_PendingItem").HasFilter("[Status] = 'Pending'");
 

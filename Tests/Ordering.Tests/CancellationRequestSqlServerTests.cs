@@ -196,6 +196,10 @@ public sealed class CancellationRequestSqlServerTests : IAsyncLifetime
         {
             await service.Approve(session, id, default);
         }));
+        Assert.Equal(404, await Status(async () =>
+        {
+            await service.CancelByStaff(session, Guid.NewGuid(), itemId, 1, "Reason", default);
+        }));
     }
 
     [CancellationSqlFact]
@@ -296,6 +300,44 @@ public sealed class CancellationRequestSqlServerTests : IAsyncLifetime
         {
             return Task.FromResult(Guid.NewGuid());
         }
+    }
+
+    [CancellationSqlFact]
+    public async Task StaffCancellationReplayCannotDoubleReduceQuantity()
+    {
+        var id = Guid.NewGuid();
+        var result = await Task.WhenAll(Enumerable.Range(0, 2).Select(async _ =>
+        {
+            await using var db = Db();
+            return await Service(db).CancelByStaff(session, id, itemId, 1, "Hết nguyên liệu", default);
+        }));
+        Assert.Single(result, value => value.Created);
+        Assert.Single(result, value => !value.Created);
+        await using var final = Db();
+        Assert.Equal(1, (await final.OrderItems.SingleAsync()).CancelledQuantity);
+        Assert.Equal(1, (await final.KitchenTasks.SingleAsync()).Quantity);
+        var history = await final.CancellationRequests.SingleAsync();
+        Assert.Equal("Staff", history.Source);
+        Assert.Equal("Hết nguyên liệu", history.Reason);
+    }
+
+    [CancellationSqlFact]
+    public async Task ConcurrentFullStaffCancellationsCannotOverCancel()
+    {
+        var result = await Task.WhenAll(Enumerable.Range(0, 2).Select(async _ =>
+        {
+            await using var db = Db();
+            return await Status(async () =>
+            {
+                await Service(db).CancelByStaff(session, Guid.NewGuid(), itemId, 2, "Unavailable", default);
+            });
+        }));
+        Assert.Single(result, code => code == 200);
+        Assert.Single(result, code => code == 409);
+        await using var final = Db();
+        Assert.Equal(2, (await final.OrderItems.SingleAsync()).CancelledQuantity);
+        Assert.Equal("Cancelled", (await final.KitchenTasks.SingleAsync()).Status);
+        Assert.Equal(1, await final.CancellationRequests.CountAsync());
     }
 
     private OrderingDbContext Db(Guid? tenant = null)
