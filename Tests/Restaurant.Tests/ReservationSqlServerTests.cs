@@ -71,6 +71,7 @@ public sealed partial class ReservationSqlServerTests : IAsyncLifetime
         _identity = new WebApplicationFactory<IdentityMarker>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
+            builder.UseSetting("Notifications:ServiceKey", "");
             builder.UseSetting("ConnectionStrings:DefaultConnection", _identityConnection);
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -131,6 +132,7 @@ public sealed partial class ReservationSqlServerTests : IAsyncLifetime
         _restaurant = new WebApplicationFactory<RestaurantMarker>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
+            builder.UseSetting("Notifications:ServiceKey", "");
             builder.UseSetting("ConnectionStrings:DefaultConnection", _restaurantConnection);
             builder.UseSetting("GrpcServices:Identity", "http://identity.test");
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
@@ -163,6 +165,7 @@ public sealed partial class ReservationSqlServerTests : IAsyncLifetime
         _gateway = new WebApplicationFactory<ApiGateway.ApiAssembly>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
+            builder.UseSetting("Notifications:ServiceKey", "");
             builder.UseSetting("Swagger:Enabled", "true");
             builder.UseSetting("GrpcServices:Identity", "http://identity.test");
             builder.UseSetting("GrpcServices:Restaurant", "http://restaurant.test");

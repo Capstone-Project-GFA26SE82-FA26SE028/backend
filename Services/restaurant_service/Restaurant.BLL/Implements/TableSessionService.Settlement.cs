@@ -109,6 +109,7 @@ public sealed partial class TableSessionService
             current.ClosedAt = now;
             request.Status = PaymentRequestStatuses.Completed;
             request.CompletedAt = now;
+            await requests.CancelPendingStaffCallsAsync(sessionId, now, ct);
             foreach (var link in activeLinks)
             {
                 link.ReleasedAt = now;

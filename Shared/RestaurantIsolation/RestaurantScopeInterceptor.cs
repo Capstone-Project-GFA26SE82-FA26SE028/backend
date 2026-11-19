@@ -15,7 +15,7 @@ public sealed class RestaurantScopeInterceptor(RestaurantAccessGrpc.RestaurantAc
         // These entry points establish scope after checking their service key or webhook signature.
         if (context.Method is "/billing.OnlinePaymentGrpc/Execute" or "/billing.PaymentWebhookGrpc/Process"
             or "/billing.PaymentSettlementGrpc/GetVerifiedCheckout"
-            or "/customer.FeedbackGrpc/Submit")
+            or "/customer.FeedbackGrpc/Submit" or "/ordering.StaffTransferGuardGrpc/Check")
         {
             return await continuation(request, context);
         }
@@ -35,6 +35,7 @@ public sealed class RestaurantScopeInterceptor(RestaurantAccessGrpc.RestaurantAc
             || method.StartsWith("/catalog.OrderValidationGrpc/", StringComparison.Ordinal)
             || method.StartsWith("/ordering.CartGrpc/", StringComparison.Ordinal)
             || method.StartsWith("/ordering.OrderGrpc/", StringComparison.Ordinal)
+            || method.StartsWith("/ordering.CancellationRequestGrpc/", StringComparison.Ordinal)
             || method == "/ordering.CheckoutLockGrpc/Verify"
             || method is "/billing.BillCheckoutGrpc/Request" or "/billing.BillCheckoutGrpc/GetCurrent";
         var session = Text(access, "table_session_id");

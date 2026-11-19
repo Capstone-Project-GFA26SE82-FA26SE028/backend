@@ -10,7 +10,7 @@ namespace Restaurant.BLL.Implements;
 
 public sealed class RestaurantStaffService(IManagementAccess access, IStaffIdentity identity,
     IRestaurantStaffRepository staff, IRestaurantRepository restaurants, IReservationTransaction transaction,
-    IOptions<RestaurantStaffSettings> settings) : IRestaurantStaffService
+    IOptions<RestaurantStaffSettings> settings, IStaffProfiles? profiles = null) : IRestaurantStaffService
 {
     public async Task<IReadOnlyList<RestaurantStaffDto>> GetNotificationRecipients(Guid restaurantId, CancellationToken ct)
     {
@@ -89,9 +89,21 @@ public sealed class RestaurantStaffService(IManagementAccess access, IStaffIdent
 
     public async Task<IReadOnlyList<RestaurantStaffDto>> GetAll(Guid restaurantId, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        var actor = await identity.GetCurrentAsync(ct);
+        if (!actor.IsAdministrator && (actor.RoleId != "admin" || actor.RestaurantId != restaurantId
+            || !await staff.IsActiveAsync(restaurantId, actor.UserId, ct)))
+        {
+            throw new ManagementException(403, "Bạn không có quyền xem phân công của nhà hàng này.");
+        }
+
         await RequireRestaurant(restaurantId, ct);
-        return (await staff.GetAllAsync(restaurantId, ct)).Select(Map).ToArray();
+        var result = (await staff.GetAllAsync(restaurantId, ct)).Select(Map).ToArray();
+        if (profiles is not null && result.Length > 0)
+        {
+            await profiles.FillAsync(restaurantId, result, ct);
+        }
+
+        return result;
     }
 
     public async Task<RestaurantStaffDto> Delete(Guid restaurantId, Guid userId, CancellationToken ct)

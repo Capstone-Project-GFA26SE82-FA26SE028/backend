@@ -1,3 +1,5 @@
+using Shared.Common.Notifications;
+using Shared.Persistence.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Restaurant.Common.Constants;
 using Restaurant.DAL.Interfaces;
@@ -32,7 +34,14 @@ public sealed class ServiceRequestRepository(RestaurantDbContext db)
     public async Task<(IReadOnlyList<ServiceRequest> Items, int Total)> GetPaymentPageAsync(
         Guid restaurantId, int page, int pageSize, CancellationToken ct)
     {
-        var query = PendingPayments().AsNoTracking().Where(request =>
+        return await GetPageAsync(restaurantId, PaymentRequestStatuses.Type, page, pageSize, ct);
+    }
+
+    public async Task<(IReadOnlyList<ServiceRequest> Items, int Total)> GetPageAsync(
+        Guid restaurantId, string type, int page, int pageSize, CancellationToken ct)
+    {
+        var query = _context.ServiceRequests.Where(request => request.Type == type && request.CompletedAt == null)
+            .AsNoTracking().Where(request =>
             request.TableSession.Status == "Open" && request.TableSession.ClosedAt == null
             && request.TableSession.SessionTables.Any(link => link.ReleasedAt == null && link.Table.Area.RestaurantId == restaurantId)
             && !request.TableSession.SessionTables.Any(link => link.ReleasedAt == null && link.Table.Area.RestaurantId != restaurantId));
@@ -60,6 +69,42 @@ public sealed class ServiceRequestRepository(RestaurantDbContext db)
                     .OrderBy(link => link.TableId).Select(link => link.Table.Area.RestaurantId).FirstOrDefault()
             }).Skip(offset).Take(size).ToListAsync(ct);
         return rows.Select(value => (value.RestaurantId, value.SessionId)).ToArray();
+    }
+
+    public Task<ServiceRequest?> GetPendingAsync(Guid sessionId, string type, CancellationToken ct)
+    {
+        return _context.ServiceRequests.AsNoTracking().SingleOrDefaultAsync(request =>
+            request.TableSessionId == sessionId && request.Type == type && request.CompletedAt == null, ct);
+    }
+
+    public Task<bool> HasUnfinishedForStaffAsync(Guid userId, CancellationToken ct)
+    {
+        return _context.ServiceRequests.AnyAsync(item => item.HandledByRef == userId && item.CompletedAt == null
+            && item.TableSession.Status == "Open", ct);
+    }
+
+    public async Task CancelPendingStaffCallsAsync(Guid sessionId, DateTime closedAt, CancellationToken ct)
+    {
+        var pending = await _context.ServiceRequests.Where(request => request.TableSessionId == sessionId
+            && request.Type == "StaffCall" && request.CompletedAt == null).ToListAsync(ct);
+        foreach (var request in pending)
+        {
+            request.Status = "Cancelled";
+            request.CompletedAt = closedAt;
+        }
+    }
+
+    public Task EnqueueCreatedNotificationAsync(ServiceRequest request, Guid restaurantId, CancellationToken ct)
+    {
+        var type = request.Type == ServiceRequestKind.StaffCall.ToString()
+            ? "StaffCallRequested" : "PaymentRequestSubmitted";
+        return NotificationOutboxModel.Enqueue(_context, new NotificationEvent
+        {
+            EventKey = $"Restaurant:{type}:{request.ServiceRequestId:N}",
+            Type = type,
+            RestaurantId = restaurantId,
+            EntityId = request.ServiceRequestId
+        }, ct);
     }
 
     private IQueryable<ServiceRequest> PendingPayments()

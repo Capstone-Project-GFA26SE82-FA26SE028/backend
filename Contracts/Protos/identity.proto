@@ -77,9 +77,11 @@ message UserInfo {
   google.protobuf.Timestamp updated_at = 10;
   string restaurant_id = 11;
   bool provisioning_pending = 12;
+  optional string restaurant_name = 13;
 }
 
 service UserGrpc {
+  rpc GetStaffProfiles(StaffProfilesRequest) returns (UserListReply);
   rpc UpdateUser (UpdateUserRequest) returns (UserReply);
   rpc CreateUser (CreateUserRequest) returns (UserReply);
   rpc ListRoles (ListRolesRequest) returns (RoleListReply);
@@ -154,9 +156,14 @@ message ActivityListRequest {
   optional string status = 7;
   google.protobuf.Timestamp from_utc = 8;
   google.protobuf.Timestamp to_utc = 9;
+  optional string action = 10;
 }
 
 message AuditLogInfo {
+  optional string full_name = 10;
+  optional string user_name = 11;
+  optional string email = 12;
+  optional string avatar_url = 13;
   string audit_log_id = 1;
   optional string user_id = 2;
   optional string action = 3;
@@ -248,4 +255,28 @@ message UpdateUserRequest {
   string full_name = 4;
   optional string phone_number = 5;
   optional string avatar_url = 6;
+}
+message StaffProfilesRequest { string restaurant_id = 1; repeated string user_ids = 2; }
+
+service StaffTransferGrpc {
+  rpc Create(CreateStaffTransferRequest) returns (StaffTransferReply);
+  rpc GetById(StaffTransferIdRequest) returns (StaffTransferReply);
+}
+message CreateStaffTransferRequest { string transfer_id = 1; string user_id = 2; string target_restaurant_id = 3; }
+message StaffTransferIdRequest { string transfer_id = 1; }
+message StaffTransferReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  StaffTransferInfo result = 4;
+}
+message StaffTransferInfo {
+  string id = 1;
+  string user_id = 2;
+  string source_restaurant_id = 3;
+  string target_restaurant_id = 4;
+  string status = 5;
+  string message = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp completed_at = 8;
 }

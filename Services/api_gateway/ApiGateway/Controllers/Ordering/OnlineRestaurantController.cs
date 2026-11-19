@@ -9,15 +9,16 @@ namespace ApiGateway.Controllers.Ordering;
 public sealed class OnlineRestaurantController(RestaurantGrpc.RestaurantGrpcClient restaurants) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct, int page = 1, int pageSize = 20)
+    public async Task<IActionResult> GetAll(CancellationToken ct, int page = 1, int pageSize = 20, string? search = null)
     {
-        if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue)
+        if (search?.Length > 255 || page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue)
         {
             return BadRequest(new ResponseDTO("Thông tin phân trang không hợp lệ.", 400));
         }
 
         var reply = await restaurants.BrowseAsync(new ListRequest
         {
+            Search = search?.Trim() ?? "",
             Page = page,
             PageSize = pageSize
         }, deadline: DateTime.UtcNow.AddSeconds(10), cancellationToken: ct);

@@ -125,6 +125,9 @@ public sealed class ServiceRequestController(ServiceRequestGrpc.ServiceRequestGr
             TableSessionId = Guid.Parse(value.TableSessionId),
             RestaurantId = Guid.Parse(value.RestaurantId),
             value.Status,
+            value.Type,
+            CompletedAt = value.HasCompletedAt
+                ? DateTimeOffset.Parse(value.CompletedAt, CultureInfo.InvariantCulture) : (DateTimeOffset?)null,
             RequestedAt = DateTimeOffset.Parse(value.RequestedAt, CultureInfo.InvariantCulture),
             AcknowledgedAt = value.HasAcknowledgedAt
                 ? DateTimeOffset.Parse(value.AcknowledgedAt, CultureInfo.InvariantCulture) : (DateTimeOffset?)null,

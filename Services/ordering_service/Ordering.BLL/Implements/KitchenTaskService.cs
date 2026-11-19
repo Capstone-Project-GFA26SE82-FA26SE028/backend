@@ -80,8 +80,15 @@ public sealed class KitchenTaskService(
             throw new OrderingException(400, "Trạng thái là bắt buộc.");
         }
 
+        // Acquire session locks before loading mutable task/order state or deducting inventory.
+        var sessions = await repository.GetSessionIdsAsync([id], ct);
         return await transaction.ExecuteAsync(async () =>
         {
+            foreach (var session in sessions)
+            {
+                await checkouts.LockSessionAsync(session, ct);
+            }
+
             var task = await repository.GetByIdForUpdateAsync(id, ct)
                 ?? throw new OrderingException(404, "Không tìm thấy nhiệm vụ bếp.");
 
@@ -104,6 +111,7 @@ public sealed class KitchenTaskService(
                 }
             }
 
+            RequireNoPendingCancellation(task);
             var now = clock.GetUtcNow().UtcDateTime;
             var fromStatus = task.Status;
             var eventId = Guid.NewGuid();
@@ -152,7 +160,7 @@ public sealed class KitchenTaskService(
                     if (task.OrderItem.Order is not null)
                     {
                         var allReady = task.OrderItem.Order.OrderItems.All(
-                            i => i.Status == "Ready" || i.Status == "Served");
+                            i => i.Status == "Ready" || i.Status == "Served" || i.Status == "Cancelled");
 
                         if (allReady)
                         {
@@ -177,11 +185,7 @@ public sealed class KitchenTaskService(
                     throw new OrderingException(400, $"Không thể hủy nhiệm vụ bếp ở trạng thái '{task.Status}'. Chỉ có thể hủy nhiệm vụ đang ở trạng thái 'Pending'.");
                 }
 
-                task.Status = "Cancelled";
-                if (task.OrderItem is not null)
-                {
-                    task.OrderItem.Status = "Cancelled";
-                }
+                throw new OrderingException(409, "Vui lòng dùng API hủy món của nhà hàng và cung cấp số lượng, lý do hủy.");
             }
             else
             {
@@ -299,8 +303,15 @@ public sealed class KitchenTaskService(
             throw new OrderingException(400, "Cung cấp ít nhất một mã nhiệm vụ bếp để bắt đầu chế biến.");
         }
 
+        // Acquire session locks before loading mutable task/order state or deducting inventory.
+        var sessions = await repository.GetSessionIdsAsync(taskIds, ct);
         return await transaction.ExecuteAsync(async () =>
         {
+            foreach (var session in sessions)
+            {
+                await checkouts.LockSessionAsync(session, ct);
+            }
+
             var tasks = await repository.GetByIdsForUpdateAsync(taskIds, ct);
             var pendingTasks = tasks
                 .Where(t => string.Equals(t.Status, "Pending", StringComparison.OrdinalIgnoreCase))
@@ -313,6 +324,7 @@ public sealed class KitchenTaskService(
 
             foreach (var task in pendingTasks)
             {
+                RequireNoPendingCancellation(task);
                 RequireOnlineKitchen(task, "Cooking");
             }
 
@@ -361,8 +373,15 @@ public sealed class KitchenTaskService(
             throw new OrderingException(400, "Cung cấp ít nhất một mã nhiệm vụ bếp để hoàn thành.");
         }
 
+        // Acquire session locks before loading mutable task/order state or deducting inventory.
+        var sessions = await repository.GetSessionIdsAsync(taskIds, ct);
         return await transaction.ExecuteAsync(async () =>
         {
+            foreach (var session in sessions)
+            {
+                await checkouts.LockSessionAsync(session, ct);
+            }
+
             var tasks = await repository.GetByIdsForUpdateAsync(taskIds, ct);
             var now = clock.GetUtcNow().UtcDateTime;
             int count = 0;
@@ -372,6 +391,7 @@ public sealed class KitchenTaskService(
                 if (string.Equals(task.Status, "Cooking", StringComparison.OrdinalIgnoreCase)
                     || string.Equals(task.Status, "Pending", StringComparison.OrdinalIgnoreCase))
                 {
+                    RequireNoPendingCancellation(task);
                     RequireOnlineKitchen(task, "Ready");
                     var fromStatus = task.Status;
                     task.Status = "Ready";
@@ -545,6 +565,15 @@ public sealed class KitchenTaskService(
     private static bool IsOnline(KitchenTask task)
     {
         return task.OrderItem?.Order is { Channel: "Takeaway", CustomerUserRef: not null, TableSessionRef: null };
+    }
+
+    private static void RequireNoPendingCancellation(KitchenTask task)
+    {
+        if (task.Status is "Pending" or "Hold"
+            && task.OrderItem.CancellationRequests.Any(request => request.Status == "Pending"))
+        {
+            throw new OrderingException(409, "Món đang có yêu cầu hủy; cần xử lý trước khi tiếp tục chế biến.");
+        }
     }
 
     private static void RequireOnlineKitchen(KitchenTask task, string target)

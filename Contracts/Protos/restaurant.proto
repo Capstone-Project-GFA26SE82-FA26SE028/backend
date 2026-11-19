@@ -97,6 +97,7 @@ message RestaurantInfo {
 }
 message RestaurantPage { repeated RestaurantInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
 service RestaurantGrpc {
+  rpc GetNames(RestaurantNamesRequest) returns (RestaurantNamesReply);
   rpc Browse(ListRequest) returns (RestaurantPage);
   rpc GetAll(ListRequest) returns (RestaurantPage);
   rpc GetById(IdRequest) returns (RestaurantInfo);
@@ -342,6 +343,11 @@ message RestaurantStaffListRequest {
 }
 
 message RestaurantStaffInfo {
+  optional string full_name = 4;
+  optional string user_name = 5;
+  optional string email = 6;
+  optional string role_id = 7;
+  optional string avatar_url = 8;
   string restaurant_id = 1;
   string user_id_ref = 2;
   bool is_active = 3;
@@ -353,6 +359,13 @@ message RestaurantStaffListReply {
 
 // Dine-in payment requests are stored by Restaurant until a waiter receives them.
 service ServiceRequestGrpc {
+  rpc CreateStaffCall(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+  rpc GetStaffCallById(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+  rpc GetCurrentStaffCall(GuestAccessRequest) returns (PaymentServiceRequestInfo);
+  rpc GetStaffCalls(PaymentServiceRequestList) returns (PaymentServiceRequestPage);
+  rpc GetStaffCallForStaff(StaffCallAccessRequest) returns (PaymentServiceRequestInfo);
+  rpc AcknowledgeStaffCall(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+  rpc CompleteStaffCall(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
   rpc GetResultAccess(PaymentServiceRequest) returns (PaymentResultAccessInfo);
   rpc Create(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
   rpc GetById(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
@@ -360,6 +373,11 @@ service ServiceRequestGrpc {
   rpc GetAll(PaymentServiceRequestList) returns (PaymentServiceRequestPage);
   rpc Acknowledge(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
   rpc GetReview(PaymentServiceRequest) returns (PaymentRequestReviewInfo);
+}
+
+message StaffCallAccessRequest {
+  string restaurant_id = 1;
+  string service_request_id = 2;
 }
 
 message PaymentServiceRequest {
@@ -383,6 +401,8 @@ message PaymentServiceRequestInfo {
   optional string acknowledged_at = 6;
   optional string handled_by_ref = 7;
   repeated PaymentServiceRequestTable tables = 8;
+  optional string completed_at = 9;
+  string type = 10;
 }
 
 message PaymentRequestReviewInfo {
@@ -410,3 +430,17 @@ message PaymentServiceRequestPage {
   int32 page = 3;
   int32 page_size = 4;
 }
+
+message RestaurantNamesRequest { repeated string restaurant_ids = 1; }
+message RestaurantNamesReply { map<string, string> names = 1; }
+
+service StaffTransferReceiptGrpc {
+  rpc Apply(StaffAssignmentTransferRequest) returns (StaffAssignmentTransferReply);
+}
+message StaffAssignmentTransferRequest {
+  string transfer_id = 1;
+  string user_id = 2;
+  string source_restaurant_id = 3;
+  string target_restaurant_id = 4;
+}
+message StaffAssignmentTransferReply { string status = 1; string message = 2; }

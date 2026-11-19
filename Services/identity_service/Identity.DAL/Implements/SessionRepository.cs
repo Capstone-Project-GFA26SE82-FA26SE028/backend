@@ -5,6 +5,22 @@ namespace Identity.DAL.Implements;
 
 public sealed class SessionRepository(IdentityDbContext context) : ISessionRepository
 {
+    public async Task RevokeForTransferAsync(Guid userId, Guid actorId, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var sessions = await context.UserSessions.Where(item => item.UserId == userId && item.RevokedAt == null).ToListAsync(ct);
+        foreach (var session in sessions)
+        {
+            session.RevokedAt = now;
+            context.RecordAudit(actorId, "REVOKE_SESSION", "UserSession", session.UserSessionId.ToString(), null,
+                new
+                {
+                    Reason = "RESTAURANT_TRANSFER",
+                    RevokedAt = now
+                });
+        }
+    }
+
     public async Task<bool> CreateExclusiveAsync(UserSession session, string passwordHash, string roleId)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);

@@ -309,6 +309,14 @@ public partial class RestaurantDbContext : DbContext
                 .HasConstraintName("FK_TableSession_Reservation");
         });
 
+        Shared.Persistence.Notifications.NotificationOutboxModel.Configure(modelBuilder);
+        modelBuilder.Entity<StaffTransferReceipt>(entity =>
+        {
+            entity.ToTable("StaffTransferReceipt");
+            entity.HasKey(item => item.StaffTransferReceiptId);
+            entity.Property(item => item.Status).HasMaxLength(20);
+            entity.Property(item => item.Message).HasMaxLength(500);
+        });
         OnModelCreatingPartial(modelBuilder);
     }
 

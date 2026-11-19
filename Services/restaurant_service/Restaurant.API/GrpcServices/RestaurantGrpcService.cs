@@ -9,6 +9,18 @@ namespace Restaurant.API.GrpcServices;
 
 public sealed class RestaurantGrpcService(IRestaurantService service) : RestaurantGrpc.RestaurantGrpcBase
 {
+    public override async Task<RestaurantNamesReply> GetNames(RestaurantNamesRequest request, ServerCallContext context)
+    {
+        var names = await service.GetNames(request.RestaurantIds.Select(ManagementMapping.Id).ToArray(), context.CancellationToken);
+        var reply = new RestaurantNamesReply();
+        foreach (var item in names)
+        {
+            reply.Names.Add(item.Key.ToString(), item.Value);
+        }
+
+        return reply;
+    }
+
     public override async Task<RestaurantPage> Browse(ListRequest request, ServerCallContext context)
     {
         var page = await service.Browse(ManagementMapping.ToDto(request), context.CancellationToken);

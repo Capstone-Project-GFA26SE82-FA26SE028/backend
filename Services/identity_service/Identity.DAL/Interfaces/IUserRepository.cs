@@ -10,6 +10,9 @@ namespace Identity.DAL.Interfaces
 {
     public interface IUserRepository : IGenericRepository<User>
     {
+        Task<List<User>> GetStaffProfilesAsync(Guid restaurantId, Guid[] ids, CancellationToken ct);
+        Task<User?> LockAsync(Guid userId, CancellationToken ct);
+        Task<bool> HasPendingTransferAsync(Guid userId, CancellationToken ct);
         Task<bool> CreateCustomerAsync(User user, CancellationToken ct);
 
         Task<bool> LoginExistsAsync(Guid exceptId, string name, string email, CancellationToken ct);

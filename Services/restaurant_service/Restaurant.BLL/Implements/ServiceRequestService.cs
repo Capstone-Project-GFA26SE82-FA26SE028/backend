@@ -16,7 +16,7 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
     IRestaurantStaffRepository staff, IOptions<ServiceRequestSettings> settings, TimeProvider clock,
     IPaymentRequestOrderClient orders) : IServiceRequestService
 {
-    public async Task<ServiceRequestDto> Create(Guid sessionId, Guid id, string guestToken, CancellationToken ct)
+    public async Task<ServiceRequestDto> Create(Guid sessionId, Guid id, string guestToken, CancellationToken ct, ServiceRequestKind kind = ServiceRequestKind.Payment)
     {
         await guests.GetMe(sessionId, guestToken, ct);
         // The session lock serializes competing requests for this table through commit.
@@ -30,7 +30,7 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
             var existing = await requests.GetByIdAsync(id, ct);
             if (existing is not null)
             {
-                if (existing.TableSessionId != sessionId || existing.Type != PaymentRequestStatuses.Type)
+                if (existing.TableSessionId != sessionId || existing.Type != kind.ToString())
                 {
                     throw new ManagementException(409, "Mã yêu cầu đã được sử dụng. Vui lòng dùng mã khác.");
                 }
@@ -38,41 +38,42 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
                 return Map(existing, restaurantId, includeHandler: false);
             }
 
-            if (await requests.HasPendingPaymentAsync(sessionId, ct))
+            if (await requests.GetPendingAsync(sessionId, kind.ToString(), ct) is not null)
             {
-                throw new ManagementException(409, "Phiên bàn đã có yêu cầu thanh toán đang được xử lý.");
+                throw new ManagementException(409, "Phiên bàn đã có yêu cầu cùng loại đang được xử lý.");
             }
 
             var request = new ServiceRequest
             {
                 ServiceRequestId = id,
                 TableSessionId = sessionId,
-                Type = PaymentRequestStatuses.Type,
+                Type = kind.ToString(),
                 Status = PaymentRequestStatuses.Requested,
                 RequestedAt = UtcNow()
             };
             requests.Add(request);
+            await requests.EnqueueCreatedNotificationAsync(request, restaurantId, ct);
             return Map(request, restaurantId, includeHandler: false);
         }, ct, IsolationLevel.ReadCommitted);
     }
 
-    public async Task<ServiceRequestDto> GetById(Guid sessionId, Guid id, string guestToken, CancellationToken ct)
+    public async Task<ServiceRequestDto> GetById(Guid sessionId, Guid id, string guestToken, CancellationToken ct, ServiceRequestKind kind = ServiceRequestKind.Payment)
     {
         await guests.GetMe(sessionId, guestToken, ct);
         var restaurantId = await GetRestaurantId(sessionId, ct);
-        return Map(await Find(sessionId, id, ct), restaurantId, includeHandler: false);
+        return Map(await Find(sessionId, id, ct, kind), restaurantId, includeHandler: false);
     }
 
-    public async Task<ServiceRequestDto> GetCurrent(Guid sessionId, string guestToken, CancellationToken ct)
+    public async Task<ServiceRequestDto> GetCurrent(Guid sessionId, string guestToken, CancellationToken ct, ServiceRequestKind kind = ServiceRequestKind.Payment)
     {
         await guests.GetMe(sessionId, guestToken, ct);
         var restaurantId = await GetRestaurantId(sessionId, ct);
-        var request = await requests.GetPendingPaymentAsync(sessionId, ct)
-            ?? throw new ManagementException(404, "Phiên bàn chưa có yêu cầu thanh toán đang xử lý.");
+        var request = await requests.GetPendingAsync(sessionId, kind.ToString(), ct)
+            ?? throw new ManagementException(404, "Phiên bàn chưa có yêu cầu cùng loại đang xử lý.");
         return Map(request, restaurantId, includeHandler: false);
     }
 
-    public async Task<PageResult<ServiceRequestDto>> GetAll(Guid restaurantId, int page, int pageSize, CancellationToken ct)
+    public async Task<PageResult<ServiceRequestDto>> GetAll(Guid restaurantId, int page, int pageSize, CancellationToken ct, ServiceRequestKind kind = ServiceRequestKind.Payment)
     {
         if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue)
         {
@@ -81,7 +82,7 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
 
         var waiter = await GetWaiter(ct);
         await RequireAssignment(restaurantId, waiter, ct);
-        var result = await requests.GetPaymentPageAsync(restaurantId, page, pageSize, ct);
+        var result = await requests.GetPageAsync(restaurantId, kind.ToString(), page, pageSize, ct);
         return new PageResult<ServiceRequestDto>
         {
             Items = result.Items.Select(request =>
@@ -139,7 +140,7 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
         return restaurantId;
     }
 
-    public async Task<ServiceRequestDto> Acknowledge(Guid sessionId, Guid id, CancellationToken ct)
+    public async Task<ServiceRequestDto> Acknowledge(Guid sessionId, Guid id, CancellationToken ct, ServiceRequestKind kind = ServiceRequestKind.Payment)
     {
         var waiter = await GetWaiter(ct);
         return await transaction.ExecuteAsync(async () =>
@@ -153,7 +154,7 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
             }
 
             RequireOpenSession(session);
-            var request = await Find(sessionId, id, ct);
+            var request = await Find(sessionId, id, ct, kind);
             if (request.CompletedAt is null && request.Status == PaymentRequestStatuses.Acknowledged
                 && request.HandledByRef == waiter)
             {
@@ -162,12 +163,68 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
 
             if (request.CompletedAt.HasValue || request.Status != PaymentRequestStatuses.Requested || request.HandledByRef.HasValue)
             {
-                throw new ManagementException(409, "Yêu cầu thanh toán không còn chờ tiếp nhận.");
+                throw new ManagementException(409, "Yêu cầu không còn chờ tiếp nhận.");
             }
 
             request.Status = PaymentRequestStatuses.Acknowledged;
             request.HandledByRef = waiter;
             request.AcknowledgedAt = UtcNow();
+            return Map(request, restaurantId, includeHandler: true, tables: session.SessionTables);
+        }, ct, IsolationLevel.ReadCommitted);
+    }
+
+    public async Task<ServiceRequestDto> GetStaffCall(Guid restaurantId, Guid id, CancellationToken ct)
+    {
+        var waiter = await GetWaiter(ct);
+        await RequireAssignment(restaurantId, waiter, ct);
+        var request = await requests.GetByIdAsync(id, ct);
+        if (request is null || request.Type != ServiceRequestKind.StaffCall.ToString())
+        {
+            throw new ManagementException(404, "Không tìm thấy yêu cầu gọi nhân viên.");
+        }
+
+        var session = await sessions.GetForBillingAsync(request.TableSessionId, ct)
+            ?? throw new ManagementException(404, "Không tìm thấy phiên bàn.");
+        if (GetRestaurantId(session) != restaurantId)
+        {
+            throw new ManagementException(404, "Không tìm thấy yêu cầu gọi nhân viên tại nhà hàng này.");
+        }
+
+        return Map(request, restaurantId, includeHandler: true, tables: session.SessionTables);
+    }
+
+    public async Task<ServiceRequestDto> CompleteStaffCall(Guid sessionId, Guid id, CancellationToken ct)
+    {
+        var waiter = await GetWaiter(ct);
+        return await transaction.ExecuteAsync(async () =>
+        {
+            var session = await LockSession(sessionId, ct);
+            var restaurantId = GetRestaurantId(session);
+            var assignment = await staff.LockAsync(restaurantId, waiter, ct);
+            if (assignment?.IsActive != true)
+            {
+                throw new ManagementException(403, "Yêu cầu phân công đang hoạt động tại nhà hàng này.");
+            }
+
+            var request = await Find(sessionId, id, ct, ServiceRequestKind.StaffCall);
+            if (request.HandledByRef != waiter)
+            {
+                throw new ManagementException(403, "Chỉ nhân viên đã tiếp nhận được hoàn thành yêu cầu.");
+            }
+
+            if (request.Status == PaymentRequestStatuses.Completed && request.CompletedAt.HasValue)
+            {
+                return Map(request, restaurantId, includeHandler: true, tables: session.SessionTables);
+            }
+
+            RequireOpenSession(session);
+            if (request.Status != PaymentRequestStatuses.Acknowledged || request.CompletedAt.HasValue)
+            {
+                throw new ManagementException(409, "Yêu cầu phải được tiếp nhận trước khi hoàn thành.");
+            }
+
+            request.Status = PaymentRequestStatuses.Completed;
+            request.CompletedAt = UtcNow();
             return Map(request, restaurantId, includeHandler: true, tables: session.SessionTables);
         }, ct, IsolationLevel.ReadCommitted);
     }
@@ -178,7 +235,7 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
         if (actor.UserId == Guid.Empty || actor.IsAdministrator
             || !settings.Value.WaiterRoleIds.Contains(actor.RoleId, StringComparer.Ordinal))
         {
-            throw new ManagementException(403, "Chỉ nhân viên phục vụ được tiếp nhận yêu cầu thanh toán.");
+            throw new ManagementException(403, "Chỉ nhân viên phục vụ được tiếp nhận yêu cầu.");
         }
 
         return actor.UserId;
@@ -192,12 +249,12 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
         }
     }
 
-    private async Task<ServiceRequest> Find(Guid sessionId, Guid id, CancellationToken ct)
+    private async Task<ServiceRequest> Find(Guid sessionId, Guid id, CancellationToken ct, ServiceRequestKind kind = ServiceRequestKind.Payment)
     {
         var request = await requests.GetByIdAsync(id, ct);
-        if (request is null || request.TableSessionId != sessionId || request.Type != PaymentRequestStatuses.Type)
+        if (request is null || request.TableSessionId != sessionId || request.Type != kind.ToString())
         {
-            throw new ManagementException(404, "Không tìm thấy yêu cầu thanh toán trong phiên bàn này.");
+            throw new ManagementException(404, "Không tìm thấy yêu cầu đúng loại trong phiên bàn này.");
         }
 
         return request;
@@ -254,6 +311,8 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
             TableSessionId = request.TableSessionId,
             RestaurantId = restaurantId,
             Status = request.Status,
+            Type = request.Type,
+            CompletedAt = request.CompletedAt is { } completedAt ? DateTime.SpecifyKind(completedAt, DateTimeKind.Utc) : null,
             RequestedAt = DateTime.SpecifyKind(request.RequestedAt, DateTimeKind.Utc),
             AcknowledgedAt = request.AcknowledgedAt is DateTime acknowledgedAt
                 ? DateTime.SpecifyKind(acknowledgedAt, DateTimeKind.Utc) : null,

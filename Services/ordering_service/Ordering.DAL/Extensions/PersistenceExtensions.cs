@@ -23,6 +23,7 @@ public static class PersistenceExtensions
         services.AddScoped<Ordering.DAL.Interfaces.IKitchenStationRepository, Ordering.DAL.Implements.KitchenStationRepository>();
         services.AddScoped<Shared.Persistence.Notifications.NotificationOutboxRepository<OrderingDbContext>>();
         services.AddScoped<IUnitOfWork, UnitOfWork<OrderingDbContext>>();
+        services.AddScoped<ICancellationRequestRepository, CancellationRequestRepository>();
         services.AddScoped<Ordering.DAL.Interfaces.ICartRepository, Ordering.DAL.Implements.CartRepository>();
         services.AddScoped<Ordering.DAL.Interfaces.IOrderRepository, Ordering.DAL.Implements.OrderRepository>();
         services.AddScoped<Ordering.DAL.Interfaces.IKitchenTaskRepository, Ordering.DAL.Implements.KitchenTaskRepository>();

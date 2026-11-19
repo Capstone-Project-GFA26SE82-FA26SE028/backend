@@ -124,6 +124,8 @@ public sealed class OrderLineDTO
     public Guid? RecipeVersionId { get; set; }
     public string NameSnapshot { get; set; } = string.Empty;
     public int Quantity { get; set; }
+    public int CancelledQuantity { get; set; }
+    public int RemainingQuantity { get; set; }
     public decimal UnitPriceSnapshot { get; set; }
     public decimal LineTotal { get; set; }
     public string? Note { get; set; }

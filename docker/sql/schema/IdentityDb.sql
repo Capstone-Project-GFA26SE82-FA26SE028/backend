@@ -147,3 +147,19 @@ CREATE TABLE dbo.NotificationSetting (
     CONSTRAINT PK_NotificationSetting PRIMARY KEY (RestaurantId, Type)
 );
 GO
+
+CREATE TABLE dbo.StaffTransfer (
+    StaffTransferId uniqueidentifier NOT NULL CONSTRAINT PK_StaffTransfer PRIMARY KEY,
+    UserId uniqueidentifier NOT NULL,
+    SourceRestaurantId uniqueidentifier NOT NULL,
+    TargetRestaurantId uniqueidentifier NOT NULL,
+    RequestedBy uniqueidentifier NOT NULL,
+    WasActive bit NOT NULL,
+    CompletedAt datetime2 NULL,
+    Status nvarchar(20) NOT NULL,
+    Message nvarchar(500) NULL,
+    CreatedAt datetime2 NOT NULL
+);
+GO
+CREATE INDEX IX_StaffTransfer_UserId_Status ON dbo.StaffTransfer(UserId, Status);
+GO

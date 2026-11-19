@@ -9,6 +9,16 @@ namespace Restaurant.BLL.Implements;
 
 public sealed class RestaurantService(IRestaurantRepository repository, IManagementTransaction transaction, IManagementAccess access) : IRestaurantService
 {
+    public Task<Dictionary<Guid, string>> GetNames(Guid[] ids, CancellationToken ct)
+    {
+        if (ids.Length > 100 || ids.Any(id => id == Guid.Empty))
+        {
+            throw new ManagementException(400, "Chỉ tra cứu tối đa 100 mã nhà hàng hợp lệ.");
+        }
+
+        return repository.GetNamesAsync(ids.Distinct().ToArray(), ct);
+    }
+
     public async Task<PageResult<RestaurantDto>> Browse(ListQuery query, CancellationToken ct)
     {
         ManagementValidation.Query(query);

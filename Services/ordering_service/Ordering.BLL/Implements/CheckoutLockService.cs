@@ -51,6 +51,12 @@ public sealed class CheckoutLockService(ICheckoutLockRepository locks, IOrderRep
             }
 
             var source = await orders.GetForBillingAsync(sessionId, ct);
+            if (source.SelectMany(order => order.OrderItems).SelectMany(item => item.CancellationRequests)
+                .Any(request => request.Status == "Pending"))
+            {
+                throw new OrderingException(409, "Còn yêu cầu hủy món đang chờ xử lý. Vui lòng duyệt hoặc từ chối trước khi chốt thanh toán.");
+            }
+
             if (source.All(order => order.Status != "PendingConfirmation"))
             {
                 value.SourceHash = Hash(source);

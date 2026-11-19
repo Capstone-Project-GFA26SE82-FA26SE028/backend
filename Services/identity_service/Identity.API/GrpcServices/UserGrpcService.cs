@@ -8,8 +8,34 @@ using Identity.Common.DTOs;
 
 namespace Identity.API.GrpcServices;
 
-public sealed class UserGrpcService(IUserService users, IRoleService roles) : UserGrpc.UserGrpcBase
+public sealed class UserGrpcService(IUserService users, IRoleService roles, IConfiguration? configuration = null) : UserGrpc.UserGrpcBase
 {
+    public override async Task<UserListReply> GetStaffProfiles(StaffProfilesRequest request, ServerCallContext context)
+    {
+        var expected = configuration?["StaffProvisioning:ServiceKey"];
+        var supplied = context.RequestHeaders.GetValue("x-staff-provisioning-key");
+        if (string.IsNullOrEmpty(expected) || expected.Length < 32 || string.IsNullOrEmpty(supplied)
+            || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                System.Text.Encoding.UTF8.GetBytes(expected), System.Text.Encoding.UTF8.GetBytes(supplied)))
+        {
+            throw new RpcException(new Status(StatusCode.PermissionDenied, "Không có quyền tra cứu hồ sơ nhân viên nội bộ."));
+        }
+
+        if (request.UserIds.Count > 100)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Chỉ tra cứu tối đa 100 nhân viên mỗi lần."));
+        }
+
+        var reply = new UserListReply
+        {
+            StatusCode = 200,
+            IsSuccess = true
+        };
+        reply.Items.AddRange((await users.GetStaffProfiles(ParseId(request.RestaurantId),
+            request.UserIds.Select(ParseId).ToArray(), context.CancellationToken)).Select(MapUser));
+        return reply;
+    }
+
     public override async Task<UserReply> UpdateUser(UpdateUserRequest request, ServerCallContext context)
     {
         var actor = await GrpcAuthentication.RequireUser(context);
@@ -134,6 +160,11 @@ public sealed class UserGrpcService(IUserService users, IRoleService roles) : Us
             IsActive = user.IsActive,
             CreatedAt = Timestamp.FromDateTime(DateTime.SpecifyKind(user.CreatedAt, DateTimeKind.Utc))
         };
+        if (user.RestaurantName is not null)
+        {
+            info.RestaurantName = user.RestaurantName;
+        }
+
         if (user.FullName is not null)
         {
             info.FullName = user.FullName;

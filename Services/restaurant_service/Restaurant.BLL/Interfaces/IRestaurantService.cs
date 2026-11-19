@@ -4,6 +4,8 @@ namespace Restaurant.BLL.Interfaces;
 
 public interface IRestaurantService
 {
+    Task<Dictionary<Guid, string>> GetNames(Guid[] ids, CancellationToken ct);
+
     Task<PageResult<RestaurantDto>> Browse(ListQuery query, CancellationToken ct);
 
     Task<PageResult<RestaurantDto>> GetAll(ListQuery query, CancellationToken ct);

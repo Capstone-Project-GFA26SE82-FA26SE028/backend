@@ -14,6 +14,7 @@ builder.Services.AddScoped<Restaurant.BLL.Interfaces.IBillingSessionService, Res
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.Configure<Restaurant.Common.Settings.ReservationSettings>(builder.Configuration.GetSection("Reservations"));
 builder.Services.Configure<Restaurant.Common.Settings.RestaurantStaffSettings>(builder.Configuration.GetSection("RestaurantStaff"));
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IStaffProfiles, Restaurant.API.Management.StaffProfilesClient>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IStaffIdentity, Restaurant.API.Management.IdentityStaffAccess>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IReservationAccess, Restaurant.BLL.Implements.ReservationAccess>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IReservationService, Restaurant.BLL.Implements.ReservationService>();
@@ -30,6 +31,7 @@ builder.Services.AddOptions<Restaurant.Common.Settings.GuestAccessSettings>()
     .ValidateOnStart();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IManagementAccess, Restaurant.API.Management.IdentityManagementAccess>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantService, Restaurant.BLL.Implements.RestaurantService>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.ILayoutManagementAccess, Restaurant.BLL.Implements.LayoutManagementAccess>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IAreaService, Restaurant.BLL.Implements.AreaService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableService, Restaurant.BLL.Implements.TableService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IQrService, Restaurant.BLL.Implements.QrService>();
@@ -83,7 +85,25 @@ builder.Services.AddRestaurantPersistence(connectionString);
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantStaffService, Restaurant.BLL.Implements.RestaurantStaffService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ICurrentRestaurantScopeService, Restaurant.BLL.Implements.CurrentRestaurantScopeService>();
 
+builder.Services.AddScoped<Shared.Persistence.RestaurantIsolation.RestaurantDataScope>();
+builder.Services.AddScoped<Shared.Persistence.Notifications.NotificationOutboxRepository<RestaurantDbContext>>();
+builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationGrpc.NotificationGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Identity."));
+});
+builder.Services.AddHostedService<RestaurantIsolation.NotificationOutboxWorker<RestaurantDbContext>>();
+
+builder.Services.AddScoped<Restaurant.DAL.Interfaces.IStaffTransferReceiptRepository, Restaurant.DAL.Implements.StaffTransferReceiptRepository>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IStaffTransferReceiptService, Restaurant.BLL.Implements.StaffTransferReceiptService>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IStaffTransferGuard, Restaurant.API.Management.StaffTransferGuardClient>();
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.StaffTransferGuardGrpc.StaffTransferGuardGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
+});
 var app = builder.Build();
+app.MapGrpcService<Restaurant.API.GrpcServices.StaffTransferReceiptGrpcService>();
 
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.AreaGrpcService>();

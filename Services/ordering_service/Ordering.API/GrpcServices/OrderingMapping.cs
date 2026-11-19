@@ -120,6 +120,8 @@ internal static class OrderingMapping
             ItemId = value.ItemId.ToString(),
             NameSnapshot = value.NameSnapshot,
             Quantity = value.Quantity,
+            CancelledQuantity = value.CancelledQuantity,
+            RemainingQuantity = value.RemainingQuantity,
             UnitPriceSnapshot = value.UnitPriceSnapshot.ToString(CultureInfo.InvariantCulture),
             LineTotal = value.LineTotal.ToString(CultureInfo.InvariantCulture),
             Status = value.Status

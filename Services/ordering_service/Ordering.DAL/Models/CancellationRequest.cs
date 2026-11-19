@@ -15,6 +15,8 @@ public partial class CancellationRequest
 
     public string Reason { get; set; }
 
+    public string Source { get; set; } = "Customer";
+
     public Guid RequestedByRef { get; set; }
 
     public Guid? DecidedByRef { get; set; }
@@ -22,6 +24,10 @@ public partial class CancellationRequest
     public string Status { get; set; }
 
     public DateTime RequestedAt { get; set; }
+
+    public DateTime? DecidedAt { get; set; }
+
+    public string DecisionReason { get; set; }
 
     public virtual OrderItem OrderItem { get; set; }
 }

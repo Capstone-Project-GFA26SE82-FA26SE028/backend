@@ -8,6 +8,11 @@ builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, relo
     .AddEnvironmentVariables().AddCommandLine(args);
 ApiGateway.Extensions.AIServiceExtensions.AddAssistantClients(builder.Services, builder.Configuration);
 ApiGateway.Extensions.BillingServiceExtensions.AddBillingClients(builder.Services, builder.Configuration);
+builder.Services.AddGrpcClient<Backend.Contracts.Identity.StaffTransferGrpc.StaffTransferGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Identity."));
+});
 builder.Services.AddGrpcClient<Backend.Contracts.Inventory.StockLotGrpc.StockLotGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Inventory"]!);
@@ -53,6 +58,16 @@ builder.Services.AddGrpcClient<Backend.Contracts.Ordering.OrderGrpc.OrderGrpcCli
         ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
 });
 builder.Services.AddGrpcClient<Backend.Contracts.Ordering.KitchenStationGrpc.KitchenStationGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.KitchenAssignmentGrpc.KitchenAssignmentGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.CancellationRequestGrpc.CancellationRequestGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
         ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
