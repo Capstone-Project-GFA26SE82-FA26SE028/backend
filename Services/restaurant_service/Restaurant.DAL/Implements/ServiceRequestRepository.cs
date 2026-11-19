@@ -1,3 +1,5 @@
+using Shared.Common.Notifications;
+using Shared.Persistence.Notifications;
 using Microsoft.EntityFrameworkCore;
 using Restaurant.Common.Constants;
 using Restaurant.DAL.Interfaces;
@@ -87,6 +89,18 @@ public sealed class ServiceRequestRepository(RestaurantDbContext db)
         }
     }
 
+    public Task EnqueueCreatedNotificationAsync(ServiceRequest request, Guid restaurantId, CancellationToken ct)
+    {
+        var type = request.Type == ServiceRequestKind.StaffCall.ToString()
+            ? "StaffCallRequested" : "PaymentRequestSubmitted";
+        return NotificationOutboxModel.Enqueue(_context, new NotificationEvent
+        {
+            EventKey = $"Restaurant:{type}:{request.ServiceRequestId:N}",
+            Type = type,
+            RestaurantId = restaurantId,
+            EntityId = request.ServiceRequestId
+        }, ct);
+    }
 
     private IQueryable<ServiceRequest> PendingPayments()
     {

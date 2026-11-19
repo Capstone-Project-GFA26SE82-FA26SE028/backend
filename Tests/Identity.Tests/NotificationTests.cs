@@ -61,6 +61,27 @@ public sealed class NotificationTests : IDisposable
         settings = new NotificationSettingService(settingRepository, access, work);
     }
 
+    [Theory]
+    [InlineData("StaffCallRequested")]
+    [InlineData("PaymentRequestSubmitted")]
+    public async Task TableRequestsNotifyOnlyAssignedWaitersInTheirRestaurant(string type)
+    {
+        var request = Event(type);
+        request.CustomerId = null;
+        request.KitchenUserId = null;
+        await notifications.Publish(request, default);
+        await notifications.Publish(request, default);
+        var notification = await db.Notifications.SingleAsync();
+        Assert.Equal("ServiceRequest", notification.EntityType);
+        Assert.Equal(request.EntityId, notification.EntityId);
+        var recipients = await db.NotificationRecipients.Select(item => item.UserId).ToListAsync();
+        Assert.Equal(2, recipients.Count);
+        Assert.Contains(waiter, recipients);
+        Assert.Contains(secondWaiter, recipients);
+        Assert.DoesNotContain(foreignWaiter, recipients);
+        Assert.DoesNotContain(cashier, recipients);
+    }
+
     private void AddUser(Guid id, string role, Guid? restaurantId)
     {
         db.Users.Add(new User

@@ -52,6 +52,7 @@ public sealed class ServiceRequestService(IServiceRequestRepository requests, IT
                 RequestedAt = UtcNow()
             };
             requests.Add(request);
+            await requests.EnqueueCreatedNotificationAsync(request, restaurantId, ct);
             return Map(request, restaurantId, includeHandler: false);
         }, ct, IsolationLevel.ReadCommitted);
     }

@@ -309,6 +309,7 @@ public partial class RestaurantDbContext : DbContext
                 .HasConstraintName("FK_TableSession_Reservation");
         });
 
+        Shared.Persistence.Notifications.NotificationOutboxModel.Configure(modelBuilder);
         OnModelCreatingPartial(modelBuilder);
     }
 

@@ -19,4 +19,8 @@
     <Protobuf Include="../../../Contracts/Protos/ordering.proto" Link="Protos\ordering.proto" GrpcServices="Client" />
     <Protobuf Include="../../../Contracts/Protos/billing.proto" Link="Protos\billing.proto" GrpcServices="Client" />
   </ItemGroup>
+  <ItemGroup>
+    <Protobuf Include="../../../Contracts/Protos/notifications.proto" GrpcServices="Client" />
+    <Compile Include="../../../Shared/RestaurantIsolation/NotificationOutboxWorker.cs" Link="Notifications/NotificationOutboxWorker.cs" />
+  </ItemGroup>
 </Project>

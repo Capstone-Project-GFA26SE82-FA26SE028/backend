@@ -296,3 +296,18 @@ GO
 CREATE INDEX [IX_Reservation_RequestedAreaId]
     ON [dbo].[Reservation] ([RequestedAreaId]);
 GO
+
+CREATE TABLE dbo.NotificationOutbox (
+    NotificationOutboxId uniqueidentifier NOT NULL CONSTRAINT PK_NotificationOutbox PRIMARY KEY,
+    RestaurantId uniqueidentifier NOT NULL,
+    EventKey nvarchar(200) NOT NULL,
+    Payload nvarchar(max) NOT NULL,
+    CreatedAt datetime2 NOT NULL,
+    NextAttemptAt datetime2 NOT NULL,
+    ProcessedAt datetime2 NULL,
+    Attempts int NOT NULL,
+    LastError nvarchar(100) NULL
+);
+CREATE UNIQUE INDEX IX_NotificationOutbox_EventKey ON dbo.NotificationOutbox(EventKey);
+CREATE INDEX IX_NotificationOutbox_ProcessedAt_NextAttemptAt ON dbo.NotificationOutbox(ProcessedAt, NextAttemptAt);
+GO

@@ -52,6 +52,8 @@ public static class NotificationCatalog
     public static readonly string[] StaffRoles = ["manager", "waiter", "cashier", "kitchen", "inventory"];
     public static readonly IReadOnlyDictionary<string, NotificationDefinition> Types = new Dictionary<string, NotificationDefinition>(StringComparer.Ordinal)
     {
+        ["StaffCallRequested"] = new("Khách gọi nhân viên", "Khách cần hỗ trợ tại bàn. Vui lòng tiếp nhận yêu cầu.", "ServiceRequest", false, ["waiter"]),
+        ["PaymentRequestSubmitted"] = new("Khách yêu cầu thanh toán", "Khách muốn thanh toán tại bàn. Vui lòng tiếp nhận và kiểm tra các món.", "ServiceRequest", false, ["waiter"]),
         ["DineInOrderSubmitted"] = new("Có đơn tại bàn chờ duyệt", "Khách vừa gửi món mới. Vui lòng kiểm tra đơn hàng.", "Order", false, ["waiter"]),
         ["KitchenOrderAccepted"] = new("Có món cần chế biến", "Món đã được xác nhận và chuyển đến trạm bếp phụ trách.", "Order", false, ["kitchen"]),
         ["DineInItemReady"] = new("Món đã sẵn sàng phục vụ", "Bếp đã hoàn tất món. Vui lòng kiểm tra đơn để phục vụ khách.", "Order", false, ["waiter"]),
