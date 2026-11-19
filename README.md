@@ -70,7 +70,7 @@ Content-Type: application/json
 {"limit":3}
 ```
 
-AI excludes **all option variants by ItemId**, only offers `CanOrder == true` items with verified prices, and rereads guest/cart/menu before returning cards. Cart changes during inference return 409. Required options must still be selected via the existing cart workflow. AI never calls cart Create/Update/Delete.
+Cart recommendation messages and controlled reasons are always Vietnamese. Quick add uses the existing cart PUT API with the latest cart version, the complete intended cart and required option selections. Ordering validates current Catalog prices and sellability before accepting the update. AI excludes **all option variants by ItemId**, only offers `CanOrder == true` items with verified prices, and rereads guest/cart/menu before returning cards. Cart changes during inference return 409. Required options must still be selected via the existing cart workflow. AI never calls cart Create/Update/Delete.
 
 Missing verified ingredient/allergy/diet/spice facts: the assistant directs the customer to ask staff; it does not contact staff itself. There is currently no suitable public Restaurant-info RPC, so restaurant contact/hours/policy answers use the same missing-information approach. Both AI endpoints use the restaurant resolved from the verified table session. Catalog reads and cart checks stay within that restaurant. Catalog's `CanOrder` covers menu availability, price, active recipe and required options. Ingredient stock is checked by Inventory when the kitchen starts cooking.
 

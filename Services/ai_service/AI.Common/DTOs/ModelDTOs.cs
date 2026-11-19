@@ -53,8 +53,8 @@ public static class RecommendationReasons
 {
     public static IReadOnlyList<string> Allowed { get; } = Array.AsReadOnly(new[]
     {
-        "A suggested accompaniment to your current selection.",
-        "An additional menu choice to consider with your meal.",
-        "A suggestion based on the dishes in your cart."
+        "Món ăn kèm để bạn cân nhắc cùng các món trong giỏ.",
+        "Một lựa chọn thêm cho bữa ăn của bạn.",
+        "Gợi ý dựa trên các món hiện có trong giỏ của bạn."
     });
 }
