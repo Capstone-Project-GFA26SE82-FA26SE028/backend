@@ -252,3 +252,32 @@ service StaffTransferGuardGrpc { rpc Check(StaffTransferGuardRequest) returns (S
 message StaffTransferGuardRequest { string user_id = 1; }
 
 message StaffTransferGuardReply { bool has_kitchen_assignment = 1; }
+
+service KitchenAssignmentGrpc {
+  rpc GetAll(KitchenAssignmentListRequest) returns (KitchenAssignmentPage);
+  rpc GetEmployees(google.protobuf.Empty) returns (KitchenEmployeeList);
+  rpc GetById(KitchenAssignmentRequest) returns (KitchenAssignmentInfo);
+  rpc Create(KitchenAssignmentRequest) returns (KitchenAssignmentInfo);
+  rpc Update(KitchenAssignmentRequest) returns (KitchenAssignmentInfo);
+  rpc Delete(KitchenAssignmentRequest) returns (google.protobuf.Empty);
+}
+
+message KitchenAssignmentListRequest { int32 page = 1; int32 page_size = 2; }
+
+message KitchenAssignmentRequest { string station_id = 1; string user_id = 2; string expected_user_id = 3; }
+
+message KitchenEmployeeInfo {
+  string user_id = 1; string full_name = 2; string user_name = 3; string email = 4;
+  string avatar_url = 5; string role_id = 6; bool is_active = 7;
+}
+
+message KitchenEmployeeList { repeated KitchenEmployeeInfo items = 1; }
+
+message KitchenAssignmentInfo {
+  string kitchen_station_id = 1; string kitchen_station_code = 2; string kitchen_station_name = 3;
+  bool station_active = 4; string user_id = 5; KitchenEmployeeInfo employee = 6;
+}
+
+message KitchenAssignmentPage {
+  repeated KitchenAssignmentInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4;
+}

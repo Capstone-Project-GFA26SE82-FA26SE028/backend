@@ -120,6 +120,7 @@ services:
       dockerfile: Services/ordering_service/Ordering.API/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Docker
+      StaffProvisioning__ServiceKey: ${STAFF_PROVISIONING_SERVICE_KEY:-${JWT_SECRET_KEY}}
       Notifications__ServiceKey: ${NOTIFICATION_SERVICE_KEY:-${JWT_SECRET_KEY}}
       GrpcServices__Identity: http://identity:5001
       Takeaway__ServiceKey: ${TAKEAWAY_SERVICE_KEY:-}

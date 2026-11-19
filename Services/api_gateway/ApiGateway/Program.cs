@@ -243,6 +243,11 @@ builder.Services.AddGrpcClient<Backend.Contracts.Identity.StaffTransferGrpc.Staf
     options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]
         ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Identity."));
 });
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.KitchenAssignmentGrpc.KitchenAssignmentGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
+});
 var app = builder.Build();
 
 

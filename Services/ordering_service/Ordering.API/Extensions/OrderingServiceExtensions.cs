@@ -26,6 +26,12 @@ public static class OrderingServiceExtensions
         });
         services.AddScoped<IKitchenStationAccess, IdentityKitchenStationAccess>();
         services.AddScoped<IKitchenStationService, KitchenStationService>();
+        services.AddScoped<IKitchenAssignmentService, KitchenAssignmentService>();
+        services.AddScoped<IKitchenAssignmentAccess, KitchenAssignmentAccess>();
+        services.AddGrpcClient<RestaurantStaffGrpc.RestaurantStaffGrpcClient>(options =>
+        {
+            options.Address = Address(configuration, "Restaurant");
+        });
         services.AddScoped<IKitchenTaskService, KitchenTaskService>();
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddOptions<OrderingSettings>().Bind(configuration.GetSection("Ordering"))
