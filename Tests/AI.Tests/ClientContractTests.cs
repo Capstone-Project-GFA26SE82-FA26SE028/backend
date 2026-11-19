@@ -10,6 +10,9 @@ using Backend.Contracts.Ordering;
 using Backend.Contracts.Restaurant;
 using Grpc.Core;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace AI.Tests;
 
@@ -47,7 +50,7 @@ public sealed class ClientContractTests
             };
         });
         var client = new GuestAccessClient(new GuestAccessGrpc.GuestAccessGrpcClient(invoker),
-            new RestaurantAccessGrpc.RestaurantAccessGrpcClient(invoker), Options.Create(context.Settings), TimeProvider.System);
+            new RestaurantAccessGrpc.RestaurantAccessGrpcClient(invoker), Options.Create(context.Settings), TimeProvider.System, NullLogger<GuestAccessClient>.Instance);
         var guest = await client.VerifyAsync(context.Guest, default);
         Assert.Equal(context.RestaurantId, guest.RestaurantId);
     }
@@ -71,7 +74,7 @@ public sealed class ClientContractTests
                 ExpiresAt = DateTimeOffset.UtcNow.AddHours(1).ToString("O")
             };
         });
-        var client = new OrderingCartClient(new CartGrpc.CartGrpcClient(invoker), Options.Create(context.Settings));
+        var client = new OrderingCartClient(new CartGrpc.CartGrpcClient(invoker), Options.Create(context.Settings), NullLogger<OrderingCartClient>.Instance);
         var result = await client.GetByIdAsync(context.Guest, context.RestaurantId, context.Cart.CartId, default);
         Assert.Equal("actual-version", result.Version);
         Assert.DoesNotContain("quote", JsonSerializer.Serialize(result), StringComparison.OrdinalIgnoreCase);
@@ -104,7 +107,7 @@ public sealed class ClientContractTests
                 }
             };
         });
-        var client = new CatalogMenuClient(new MenuGrpc.MenuGrpcClient(invoker), Options.Create(context.Settings));
+        var client = new CatalogMenuClient(new MenuGrpc.MenuGrpcClient(invoker), Options.Create(context.Settings), NullLogger<CatalogMenuClient>.Instance);
         var error = await Assert.ThrowsAsync<AIException>(() => client.GetByIdAsync(context.Guest, context.RestaurantId, "DineIn", context.Menu[0].ItemId, default));
         Assert.Equal(503, error.StatusCode);
     }
@@ -124,7 +127,7 @@ public sealed class ClientContractTests
             return new MenuListReply { IsSuccess = true, StatusCode = 200 };
         });
 
-        var client = new CatalogMenuClient(new MenuGrpc.MenuGrpcClient(invoker), Options.Create(context.Settings));
+        var client = new CatalogMenuClient(new MenuGrpc.MenuGrpcClient(invoker), Options.Create(context.Settings), NullLogger<CatalogMenuClient>.Instance);
         var page = await client.GetAllAsync(context.Guest, context.RestaurantId, "DineIn", 1, 50, default);
         Assert.Empty(page.Items);
     }
@@ -196,11 +199,47 @@ public sealed class ClientContractTests
             Assert.Equal("m0", Assert.Single(allowed.EnumerateArray()).GetString());
             return Completed(JsonSerializer.Serialize(new
             {
-                suggestions = new[] { new { key = "m0", reason = RecommendationReasons.Allowed[0] } }
+                suggestions = new[] { new { key = "m0", reason = "side" } }
             }));
         }));
         var choice = Assert.Single(await Model(http, capacity, context).RecommendAsync(data, default));
         Assert.Equal("m0", choice.Key);
+        Assert.Equal(RecommendationReasons.Allowed[0], choice.Reason);
+    }
+
+    [Theory]
+    [InlineData("side", 0)]
+    [InlineData("extra", 1)]
+    [InlineData("cart", 2)]
+    public async Task CompactReasonCodesAreRenderedAsControlledVietnamese(string reason, int expected)
+    {
+        var context = new AssistantTestContext();
+        using var capacity = new ModelCapacity(Options.Create(context.Settings));
+        using var http = Http(new Handler((_, _) => Task.FromResult(Completed(JsonSerializer.Serialize(new
+        {
+            suggestions = new[] { new { key = "m0", reason } }
+        })))));
+
+        var result = await Model(http, capacity, context).RecommendAsync(
+            new RecommendationModelRequestDTO([], [new ModelItemDTO("m0", "Tea", "Drinks", null, 10000, true)], 1), default);
+
+        Assert.Equal(RecommendationReasons.Allowed[expected], Assert.Single(result).Reason);
+    }
+
+    [Theory]
+    [InlineData("{\"suggestions\":[{\"key\":\"m0\",\"reason\":\"invented advice\"}]}")]
+    [InlineData("{\"suggestions\":[null]}")]
+    public async Task InvalidCompactRecommendationReasonFailsWithoutReturningModelContent(string json)
+    {
+        var context = new AssistantTestContext();
+        using var capacity = new ModelCapacity(Options.Create(context.Settings));
+        using var http = Http(new Handler((_, _) => Task.FromResult(Completed(json))));
+
+        var error = await Assert.ThrowsAsync<AIException>(() => Model(http, capacity, context).RecommendAsync(
+            new RecommendationModelRequestDTO([], [new ModelItemDTO("m0", "Tea", "Drinks", null, 10000, true)], 1), default));
+
+        Assert.Equal(502, error.StatusCode);
+        Assert.DoesNotContain("invented advice", error.Message);
     }
 
     [Fact]
@@ -211,7 +250,7 @@ public sealed class ClientContractTests
         using var http = Http(new Handler((_, _) => throw new InvalidOperationException("HTTP must not be called")));
         var settings = ModelSettings();
         settings.ApiKey = string.Empty;
-        var client = new GeminiModelClient(http, capacity, Options.Create(settings), Options.Create(context.Settings));
+        var client = new GeminiModelClient(http, capacity, Options.Create(settings), Options.Create(context.Settings), NullLogger<GeminiModelClient>.Instance);
 
         Assert.Equal(new ModelStatusDTO(false, "ApiKeyMissing"), await client.GetStatusAsync(default));
         var error = await Assert.ThrowsAsync<AIException>(() =>
@@ -220,10 +259,11 @@ public sealed class ClientContractTests
     }
 
     [Theory]
-    [InlineData(401, 503)]
-    [InlineData(429, 429)]
-    [InlineData(503, 503)]
-    public async Task GeminiHttpErrorIsControlledAndDoesNotRetry(int providerStatus, int expectedStatus)
+    [InlineData(401, 503, 1)]
+    [InlineData(429, 429, 1)]
+    [InlineData(500, 503, 1)]
+    [InlineData(503, 503, 2)]
+    public async Task GeminiHttpErrorIsControlledAndOnly503RetriesOnce(int providerStatus, int expectedStatus, int expectedCalls)
     {
         var context = new AssistantTestContext();
         var calls = 0;
@@ -238,8 +278,212 @@ public sealed class ClientContractTests
             client.ChatAsync(new ChatModelRequestDTO("Hello", [], []), default));
 
         Assert.Equal(expectedStatus, error.StatusCode);
-        Assert.Equal(1, calls);
+        Assert.Equal(expectedCalls, calls);
         Assert.DoesNotContain("private", error.Message);
+    }
+
+    [Fact]
+    public async Task Transient503RetriesOnceWithFreshRequestAndSamePayload()
+    {
+        var context = new AssistantTestContext();
+        var requests = new List<HttpRequestMessage>();
+        var payloads = new List<string>();
+        using var capacity = new ModelCapacity(Options.Create(context.Settings));
+        using var http = Http(new Handler(async (request, ct) =>
+        {
+            requests.Add(request);
+            payloads.Add(await request.Content!.ReadAsStringAsync(ct));
+            return requests.Count == 1 ? Response("private", HttpStatusCode.ServiceUnavailable) : Completed("{\"suggestions\":[]}");
+        }));
+
+        var result = await Model(http, capacity, context).RecommendAsync(new RecommendationModelRequestDTO([], [], 1), default);
+
+        Assert.Empty(result);
+        Assert.Equal(2, requests.Count);
+        Assert.NotSame(requests[0], requests[1]);
+        Assert.Equal(payloads[0], payloads[1]);
+        Assert.True(capacity.TryEnter(default));
+        capacity.Exit();
+    }
+
+    [Fact]
+    public async Task RetryCanBeDisabledWithoutChanging503Response()
+    {
+        var context = new AssistantTestContext();
+        var calls = 0;
+        var settings = ModelSettings();
+        settings.RetryServiceUnavailable = false;
+        using var capacity = new ModelCapacity(Options.Create(context.Settings));
+        using var http = Http(new Handler((_, _) =>
+        {
+            calls++;
+            return Task.FromResult(Response("private", HttpStatusCode.ServiceUnavailable));
+        }));
+        var client = new GeminiModelClient(http, capacity, Options.Create(settings), Options.Create(context.Settings), NullLogger<GeminiModelClient>.Instance);
+
+        var error = await Assert.ThrowsAsync<AIException>(() => client.ChatAsync(new ChatModelRequestDTO("Hello", [], []), default));
+
+        Assert.Equal(503, error.StatusCode);
+        Assert.Equal(1, calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RetryAfterBeyondRemainingBudgetReturns503WithoutWaitingOrRetrying(bool useDate)
+    {
+        var context = new AssistantTestContext();
+        var calls = 0;
+        using var capacity = new ModelCapacity(Options.Create(context.Settings));
+        using var http = Http(new Handler((_, _) =>
+        {
+            calls++;
+            var response = Response("private", HttpStatusCode.ServiceUnavailable);
+            response.Headers.RetryAfter = useDate
+                ? new System.Net.Http.Headers.RetryConditionHeaderValue(DateTimeOffset.UtcNow.AddMinutes(1))
+                : new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromMinutes(1));
+            return Task.FromResult(response);
+        }));
+
+        var error = await Assert.ThrowsAsync<AIException>(() => Model(http, capacity, context)
+            .ChatAsync(new ChatModelRequestDTO("Hello", [], []), default).WaitAsync(TimeSpan.FromSeconds(3)));
+
+        Assert.Equal(503, error.StatusCode);
+        Assert.Equal(1, calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RetryAfterWithinBudgetIsHonoredBeforeSecondAttempt(bool useDate)
+    {
+        var context = new AssistantTestContext();
+        var calls = 0;
+        var watch = Stopwatch.StartNew();
+        TimeSpan? secondAttemptAt = null;
+        using var capacity = new ModelCapacity(Options.Create(context.Settings));
+        using var http = Http(new Handler((_, _) =>
+        {
+            calls++;
+            if (calls == 1)
+            {
+                var response = Response("private", HttpStatusCode.ServiceUnavailable);
+                response.Headers.RetryAfter = useDate
+                    ? new System.Net.Http.Headers.RetryConditionHeaderValue(DateTimeOffset.UtcNow.AddSeconds(1))
+                    : new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(1));
+                return Task.FromResult(response);
+            }
+
+            secondAttemptAt = watch.Elapsed;
+            return Task.FromResult(Completed("{\"suggestions\":[]}"));
+        }));
+
+        await Model(http, capacity, context).RecommendAsync(new RecommendationModelRequestDTO([], [], 1), default)
+            .WaitAsync(TimeSpan.FromSeconds(4));
+
+        Assert.Equal(2, calls);
+        Assert.NotNull(secondAttemptAt);
+        Assert.True(secondAttemptAt >= TimeSpan.FromMilliseconds(900));
+    }
+
+    [Fact]
+    public async Task ModelBudgetIsSharedByAttemptsAndBackoffAndReleasesCapacity()
+    {
+        var context = new AssistantTestContext();
+        var settings = ModelSettings();
+        settings.RequestTimeoutSeconds = 2;
+        settings.RetryDelayMilliseconds = 1000;
+        var tokens = new List<CancellationToken>();
+        using var capacity = new ModelCapacity(Options.Create(context.Settings));
+        using var http = Http(new Handler(async (_, ct) =>
+        {
+            tokens.Add(ct);
+            if (tokens.Count == 1)
+            {
+                await Task.Delay(600, ct);
+                return Response("private", HttpStatusCode.ServiceUnavailable);
+            }
+
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return Completed("{}");
+        }));
+        var client = new GeminiModelClient(http, capacity, Options.Create(settings), Options.Create(context.Settings), NullLogger<GeminiModelClient>.Instance);
+
+        var watch = Stopwatch.StartNew();
+        var error = await Assert.ThrowsAsync<AIException>(() => client.ChatAsync(new ChatModelRequestDTO("Hello", [], []), default)
+            .WaitAsync(TimeSpan.FromSeconds(4)));
+
+        Assert.Equal(504, error.StatusCode);
+        Assert.Equal(2, tokens.Count);
+        Assert.InRange(watch.Elapsed, TimeSpan.FromSeconds(1.5), TimeSpan.FromSeconds(3));
+        Assert.True(capacity.TryEnter(default));
+        capacity.Exit();
+    }
+
+    [Fact]
+    public async Task CallerCancellationDuringBackoffPreventsSecondAttemptAndReleasesCapacity()
+    {
+        var context = new AssistantTestContext();
+        var settings = ModelSettings();
+        settings.RetryDelayMilliseconds = 1000;
+        var calls = 0;
+        using var capacity = new ModelCapacity(Options.Create(context.Settings));
+        using var http = Http(new Handler((_, _) =>
+        {
+            calls++;
+            return Task.FromResult(Response("private", HttpStatusCode.ServiceUnavailable));
+        }));
+        var client = new GeminiModelClient(http, capacity, Options.Create(settings), Options.Create(context.Settings), NullLogger<GeminiModelClient>.Instance);
+        using var cancellation = new CancellationTokenSource();
+        var pending = client.ChatAsync(new ChatModelRequestDTO("Hello", [], []), cancellation.Token);
+        var busy = await Assert.ThrowsAsync<AIException>(() => client.ChatAsync(new ChatModelRequestDTO("Hello", [], []), default));
+        cancellation.Cancel();
+
+        Assert.Equal(429, busy.StatusCode);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        Assert.Equal(1, calls);
+        Assert.True(capacity.TryEnter(default));
+        capacity.Exit();
+    }
+
+    [Fact]
+    public async Task ModelBudgetAlsoCancelsResponseBodyBuffering()
+    {
+        var context = new AssistantTestContext();
+        var settings = ModelSettings();
+        settings.RequestTimeoutSeconds = 1;
+        using var capacity = new ModelCapacity(Options.Create(context.Settings));
+        using var http = Http(new Handler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new DelayedContent()
+        })));
+        var client = new GeminiModelClient(http, capacity, Options.Create(settings), Options.Create(context.Settings), NullLogger<GeminiModelClient>.Instance);
+
+        var error = await Assert.ThrowsAsync<AIException>(() => client.ChatAsync(new ChatModelRequestDTO("Hello", [], []), default)
+            .WaitAsync(TimeSpan.FromSeconds(4)));
+
+        Assert.Equal(504, error.StatusCode);
+        Assert.True(capacity.TryEnter(default));
+        capacity.Exit();
+    }
+
+    private sealed class DelayedContent : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        {
+            throw new InvalidOperationException("The HTTP body must receive cancellation.");
+        }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken ct)
+        {
+            return Task.Delay(Timeout.InfiniteTimeSpan, ct);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
     }
 
     [Theory]
@@ -325,7 +569,7 @@ public sealed class ClientContractTests
             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O")
         });
         var client = new GuestAccessClient(new GuestAccessGrpc.GuestAccessGrpcClient(invoker),
-            new RestaurantAccessGrpc.RestaurantAccessGrpcClient(invoker), Options.Create(context.Settings), TimeProvider.System);
+            new RestaurantAccessGrpc.RestaurantAccessGrpcClient(invoker), Options.Create(context.Settings), TimeProvider.System, NullLogger<GuestAccessClient>.Instance);
         var error = await Assert.ThrowsAsync<AIException>(() => client.VerifyAsync(context.Guest, default));
         Assert.Equal(401, error.StatusCode);
     }
@@ -352,9 +596,67 @@ public sealed class ClientContractTests
             };
         });
         var client = new GuestAccessClient(new GuestAccessGrpc.GuestAccessGrpcClient(invoker),
-            new RestaurantAccessGrpc.RestaurantAccessGrpcClient(invoker), Options.Create(context.Settings), TimeProvider.System);
+            new RestaurantAccessGrpc.RestaurantAccessGrpcClient(invoker), Options.Create(context.Settings), TimeProvider.System, NullLogger<GuestAccessClient>.Instance);
         var error = await Assert.ThrowsAsync<AIException>(() => client.VerifyAsync(context.Guest, default));
         Assert.Equal(503, error.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("{\"promptTokenCount\":120,\"candidatesTokenCount\":30,\"totalTokenCount\":150}", "120", "30", "150")]
+    [InlineData("null", "unknown", "unknown", "unknown")]
+    [InlineData("{\"promptTokenCount\":-1,\"candidatesTokenCount\":\"private\",\"totalTokenCount\":1.5}", "unknown", "unknown", "unknown")]
+    public async Task UsageLoggingReportsProviderCountsWithoutContentOrInventedZeros(
+        string metadata, string expectedPrompt, string expectedOutput, string expectedTotal)
+    {
+        var context = new AssistantTestContext();
+        var logger = new UsageLogger();
+        using var activity = new Activity("acceptance").SetIdFormat(ActivityIdFormat.W3C).Start();
+        using var capacity = new ModelCapacity(Options.Create(context.Settings));
+        using var http = Http(new Handler(async (_, ct) =>
+        {
+            using var completed = Completed("{\"suggestions\":[]}");
+            var json = await completed.Content.ReadAsStringAsync(ct);
+            return Response(json[..^1] + ",\"usageMetadata\":" + metadata + "}");
+        }));
+        var client = new GeminiModelClient(http, capacity, Options.Create(ModelSettings()), Options.Create(context.Settings), logger);
+
+        await client.RecommendAsync(new RecommendationModelRequestDTO([], [], 1), default);
+
+        var message = Assert.Single(logger.Messages, value => value.StartsWith("GeminiUsage ", StringComparison.Ordinal));
+        Assert.Contains("TraceId=" + activity.TraceId, message);
+        Assert.Contains("Operation=Recommendation", message);
+        Assert.Contains("PromptTokens=" + expectedPrompt, message);
+        Assert.Contains("OutputTokens=" + expectedOutput, message);
+        Assert.Contains("TotalTokens=" + expectedTotal, message);
+        Assert.Contains("ThoughtTokens=unknown", message);
+        Assert.DoesNotContain("fixture-key", message);
+        Assert.DoesNotContain("private", message);
+        Assert.DoesNotContain("suggestions", message);
+        var timing = Assert.Single(logger.Messages, value => value.StartsWith("AITiming ", StringComparison.Ordinal));
+        Assert.Contains("TraceId=" + activity.TraceId, timing);
+        Assert.Contains("Stage=Gemini", timing);
+        Assert.DoesNotContain("fixture-key", timing);
+        Assert.DoesNotContain("private", timing);
+    }
+
+    private sealed class UsageLogger : ILogger<GeminiModelClient>
+    {
+        public List<string> Messages { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        {
+            return null;
+        }
+
+        public bool IsEnabled(LogLevel logLevel)
+        {
+            return true;
+        }
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Messages.Add(formatter(state, exception));
+        }
     }
 
     private static GeminiSettings ModelSettings()
@@ -366,13 +668,16 @@ public sealed class ClientContractTests
             ApiKey = "fixture-key",
             MaximumOutputTokens = 512,
             MaximumPromptCharacters = 5000,
-            ReadinessTimeoutSeconds = 5
+            ReadinessTimeoutSeconds = 5,
+            RequestTimeoutSeconds = 20,
+            RetryServiceUnavailable = true,
+            RetryDelayMilliseconds = 250
         };
     }
 
     private static GeminiModelClient Model(HttpClient http, ModelCapacity capacity, AssistantTestContext context)
     {
-        return new GeminiModelClient(http, capacity, Options.Create(ModelSettings()), Options.Create(context.Settings));
+        return new GeminiModelClient(http, capacity, Options.Create(ModelSettings()), Options.Create(context.Settings), NullLogger<GeminiModelClient>.Instance);
     }
 
     private static HttpClient Http(HttpMessageHandler handler)

@@ -32,6 +32,9 @@ public sealed class ConfigurationTests
         var gemini = provider.GetRequiredService<IOptions<GeminiSettings>>().Value;
         Assert.Equal("gemini-3.1-flash-lite", gemini.Model);
         Assert.Equal(5, gemini.ReadinessTimeoutSeconds);
+        Assert.Equal(20, gemini.RequestTimeoutSeconds);
+        Assert.True(gemini.RetryServiceUnavailable);
+        Assert.Equal(250, gemini.RetryDelayMilliseconds);
         using var scope = provider.CreateScope();
         Assert.IsType<GeminiModelClient>(scope.ServiceProvider.GetRequiredService<IAssistantModelClient>());
     }
@@ -43,6 +46,10 @@ public sealed class ConfigurationTests
     [InlineData("Gemini:Endpoint", "https://user@generativelanguage.googleapis.com", true)]
     [InlineData("Gemini:Endpoint", "https://generativelanguage.googleapis.com/?query=secret", true)]
     [InlineData("Gemini:ReadinessTimeoutSeconds", "6", true)]
+    [InlineData("Gemini:RequestTimeoutSeconds", "0", true)]
+    [InlineData("Gemini:RequestTimeoutSeconds", "21", true)]
+    [InlineData("Gemini:RetryDelayMilliseconds", "0", true)]
+    [InlineData("Gemini:RetryDelayMilliseconds", "1001", true)]
     [InlineData("Gemini:Model", "gemini-../escape", true)]
     [InlineData("AI:MaximumConcurrentInferences", "0", false)]
     [InlineData("AI:RequestTimeoutSeconds", "91", false)]

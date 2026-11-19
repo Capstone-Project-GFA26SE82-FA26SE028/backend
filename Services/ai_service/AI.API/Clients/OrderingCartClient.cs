@@ -1,4 +1,5 @@
 using System.Globalization;
+using AI.API.Diagnostics;
 using AI.BLL.Interfaces;
 using AI.Common.DTOs;
 using AI.Common.Exceptions;
@@ -9,10 +10,11 @@ using Microsoft.Extensions.Options;
 
 namespace AI.API.Clients;
 
-public sealed class OrderingCartClient(CartGrpc.CartGrpcClient client, IOptions<AISettings> settings) : ICartClient
+public sealed class OrderingCartClient(CartGrpc.CartGrpcClient client, IOptions<AISettings> settings, ILogger<OrderingCartClient> logger) : ICartClient
 {
     public async Task<CartContextDTO> GetByIdAsync(GuestContext guest, Guid restaurantId, Guid cartId, CancellationToken ct)
     {
+        using var timing = new AssistantTiming(logger, "CartRead");
         var reply = await client.GetByIdAsync(new CartIdRequest
         {
             Access = new OrderingAccess

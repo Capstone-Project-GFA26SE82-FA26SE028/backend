@@ -8,4 +8,7 @@ public sealed class GeminiSettings
     public int MaximumOutputTokens { get; set; }
     public int MaximumPromptCharacters { get; set; }
     public int ReadinessTimeoutSeconds { get; set; }
+    public int RequestTimeoutSeconds { get; set; }
+    public bool RetryServiceUnavailable { get; set; }
+    public int RetryDelayMilliseconds { get; set; }
 }

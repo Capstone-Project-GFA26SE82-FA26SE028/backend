@@ -1,0 +1,83 @@
+-- Test data only. Run explicitly in an isolated Compose demo database seeded
+-- by docker/sql/seed. Never run this fixture against a shared or production DB.
+-- No schema changes. Reruns restore the same acceptance menu.
+SET XACT_ABORT ON;
+USE CatalogDb;
+BEGIN TRANSACTION;
+IF NOT EXISTS (SELECT 1 FROM dbo.Item WHERE ItemId = '20000000-0000-0000-0000-000000000051')
+    THROW 50001, 'The isolated demo seed is required.', 1;
+
+UPDATE dbo.Item SET ItemName = 'Iced Tea', Availability = 'Available', Description = 'Served chilled over ice.'
+WHERE ItemId = '20000000-0000-0000-0000-000000000052';
+UPDATE dbo.Price SET Amount = 10000 WHERE PriceId = '20000000-0000-0000-0000-000000000062';
+DELETE FROM dbo.ItemOptionGroup WHERE ItemId = '20000000-0000-0000-0000-000000000052';
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Item WHERE ItemId = '20000000-0000-0000-0000-000000000053')
+    INSERT dbo.Item (RestaurantRef, ItemId, CategoryId, ItemCode, ItemName, Availability, Description)
+    VALUES ('20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000053', '20000000-0000-0000-0000-000000000041', 'PORRIDGE-A5', 'Chicken Porridge', 'Available', 'Served hot. A light meal.');
+IF NOT EXISTS (SELECT 1 FROM dbo.Item WHERE ItemId = '20000000-0000-0000-0000-000000000054')
+    INSERT dbo.Item (RestaurantRef, ItemId, CategoryId, ItemCode, ItemName, Availability, Description)
+    VALUES ('20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000054', '20000000-0000-0000-0000-000000000041', 'SOUP-A5', 'Pumpkin Soup', 'Available', 'Served hot.');
+UPDATE dbo.Item SET Availability = 'Available'
+WHERE ItemId IN ('20000000-0000-0000-0000-000000000053', '20000000-0000-0000-0000-000000000054');
+IF NOT EXISTS (SELECT 1 FROM dbo.Price WHERE PriceId = '20000000-0000-0000-0000-000000000063')
+    INSERT dbo.Price (RestaurantId, PriceId, ItemId, Channel, Amount, EffectiveFrom)
+    VALUES ('20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000063', '20000000-0000-0000-0000-000000000053', 'AllChannels', 52000, '20200101');
+IF NOT EXISTS (SELECT 1 FROM dbo.Price WHERE PriceId = '20000000-0000-0000-0000-000000000064')
+    INSERT dbo.Price (RestaurantId, PriceId, ItemId, Channel, Amount, EffectiveFrom)
+    VALUES ('20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000064', '20000000-0000-0000-0000-000000000054', 'AllChannels', 75000, '20200101');
+IF NOT EXISTS (SELECT 1 FROM dbo.RecipeVersion WHERE RecipeVersionId = '20000000-0000-0000-0000-000000000084')
+    INSERT dbo.RecipeVersion (RestaurantId, RecipeVersionId, ItemId, OptionId, Version, EffectiveFrom)
+    VALUES ('20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000084', '20000000-0000-0000-0000-000000000053', NULL, 1, '20200101');
+IF NOT EXISTS (SELECT 1 FROM dbo.RecipeVersion WHERE RecipeVersionId = '20000000-0000-0000-0000-000000000085')
+    INSERT dbo.RecipeVersion (RestaurantId, RecipeVersionId, ItemId, OptionId, Version, EffectiveFrom)
+    VALUES ('20000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000085', '20000000-0000-0000-0000-000000000054', NULL, 1, '20200101');
+COMMIT TRANSACTION;
+
+-- Second independent restaurant. Same dish name, different ID and price.
+USE RestaurantDb;
+BEGIN TRANSACTION;
+IF NOT EXISTS (SELECT 1 FROM dbo.Restaurant WHERE RestaurantId = '30000000-0000-0000-0000-000000000001')
+    INSERT dbo.Restaurant (RestaurantId, RestaurantName, Address, TimeZone)
+    VALUES ('30000000-0000-0000-0000-000000000001', 'Acceptance B', 'Synthetic test address', 'Asia/Ho_Chi_Minh');
+IF NOT EXISTS (SELECT 1 FROM dbo.Area WHERE AreaId = '30000000-0000-0000-0000-000000000002')
+    INSERT dbo.Area (AreaId, RestaurantId, AreaCode, AreaName, ServiceType, SpaceType, IsActive)
+    VALUES ('30000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', 'A5', 'Acceptance', 'DineIn', 'Indoor', 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.[Table] WHERE TableId = '30000000-0000-0000-0000-000000000011')
+    INSERT dbo.[Table] (TableId, AreaId, TableCode, Capacity, IsActive, CleaningStatus)
+    VALUES ('30000000-0000-0000-0000-000000000011', '30000000-0000-0000-0000-000000000002', 'A5-B', 4, 1, 'Clean');
+IF NOT EXISTS (SELECT 1 FROM dbo.RestaurantStaff WHERE RestaurantId = '30000000-0000-0000-0000-000000000001' AND UserIdRef = '30000000-0000-0000-0000-000000000003')
+    INSERT dbo.RestaurantStaff (RestaurantId, UserIdRef, IsActive)
+    VALUES ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000003', 1);
+COMMIT TRANSACTION;
+
+USE IdentityDb;
+IF NOT EXISTS (SELECT 1 FROM dbo.[User] WHERE UserId = '30000000-0000-0000-0000-000000000003')
+    INSERT dbo.[User] (UserId, RoleId, UserName, Email, FullName, PasswordHash, IsActive, CreatedAt, RestaurantId)
+    SELECT '30000000-0000-0000-0000-000000000003', 'waiter', 'waiter-a5-b', 'waiter-a5-b@example.test', 'Acceptance waiter B', PasswordHash, 1, GETUTCDATE(), '30000000-0000-0000-0000-000000000001'
+    FROM dbo.[User] WHERE UserId = '10000000-0000-0000-0000-000000000003';
+
+USE CatalogDb;
+BEGIN TRANSACTION;
+IF NOT EXISTS (SELECT 1 FROM dbo.Category WHERE CategoryId = '30000000-0000-0000-0000-000000000042')
+    INSERT dbo.Category (RestaurantId, CategoryId, CategoryCode, CategoryName, IsActive)
+    VALUES ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000042', 'DRINK-A5-B', 'Drinks B', 1);
+IF NOT EXISTS (SELECT 1 FROM dbo.Item WHERE ItemId = '30000000-0000-0000-0000-000000000052')
+    INSERT dbo.Item (RestaurantRef, ItemId, CategoryId, ItemCode, ItemName, Availability, Description)
+    VALUES ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000052', '30000000-0000-0000-0000-000000000042', 'TEA-A5-B', 'Iced Tea', 'Available', 'Served chilled over ice.');
+IF NOT EXISTS (SELECT 1 FROM dbo.Price WHERE PriceId = '30000000-0000-0000-0000-000000000062')
+    INSERT dbo.Price (RestaurantId, PriceId, ItemId, Channel, Amount, EffectiveFrom)
+    VALUES ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000062', '30000000-0000-0000-0000-000000000052', 'AllChannels', 37000, '20200101');
+IF NOT EXISTS (SELECT 1 FROM dbo.RecipeVersion WHERE RecipeVersionId = '30000000-0000-0000-0000-000000000082')
+    INSERT dbo.RecipeVersion (RestaurantId, RecipeVersionId, ItemId, OptionId, Version, EffectiveFrom)
+    VALUES ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000082', '30000000-0000-0000-0000-000000000052', NULL, 1, '20200101');
+IF NOT EXISTS (SELECT 1 FROM dbo.Item WHERE ItemId = '30000000-0000-0000-0000-000000000051')
+    INSERT dbo.Item (RestaurantRef, ItemId, CategoryId, ItemCode, ItemName, Availability, Description)
+    VALUES ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000051', '30000000-0000-0000-0000-000000000042', 'RICE-A5-B', 'Rice B', 'Available', 'Served hot.');
+IF NOT EXISTS (SELECT 1 FROM dbo.Price WHERE PriceId = '30000000-0000-0000-0000-000000000061')
+    INSERT dbo.Price (RestaurantId, PriceId, ItemId, Channel, Amount, EffectiveFrom)
+    VALUES ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000061', '30000000-0000-0000-0000-000000000051', 'AllChannels', 64000, '20200101');
+IF NOT EXISTS (SELECT 1 FROM dbo.RecipeVersion WHERE RecipeVersionId = '30000000-0000-0000-0000-000000000081')
+    INSERT dbo.RecipeVersion (RestaurantId, RecipeVersionId, ItemId, OptionId, Version, EffectiveFrom)
+    VALUES ('30000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000081', '30000000-0000-0000-0000-000000000051', NULL, 1, '20200101');
+COMMIT TRANSACTION;

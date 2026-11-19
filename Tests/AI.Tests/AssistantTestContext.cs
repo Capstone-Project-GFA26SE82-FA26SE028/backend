@@ -48,6 +48,7 @@ public sealed class AssistantTestContext : IGuestAccessClient, ICatalogMenuClien
     public int CartReads { get; private set; }
     public int ModelCalls { get; private set; }
     public Action? AfterModel { get; set; }
+    public Action? AfterMenuRead { get; set; }
     public Func<ModelItemDTO, bool> Select { get; set; } = _ => true;
     public IReadOnlyList<ModelSuggestionDTO>? ForcedSuggestions { get; set; }
     public RecommendationModelRequestDTO? ModelRequest { get; private set; }
@@ -100,6 +101,7 @@ public sealed class AssistantTestContext : IGuestAccessClient, ICatalogMenuClien
         Assert.Equal(Guest, guest);
         Assert.Equal(RestaurantId, restaurantId);
         Assert.Equal("DineIn", channel);
+        AfterMenuRead?.Invoke();
         return Task.FromResult(new MenuPageDTO(Menu.Skip((page - 1) * pageSize).Take(pageSize).ToArray(), Menu.Count));
     }
 

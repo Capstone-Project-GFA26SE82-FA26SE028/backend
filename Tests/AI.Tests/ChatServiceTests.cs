@@ -6,6 +6,161 @@ namespace AI.Tests;
 public sealed class ChatServiceTests
 {
     [Theory]
+    [InlineData("Iced Tea giá bao nhiêu và có đặt được không?", "10.000")]
+    [InlineData("How much is Iced Tea and can I order it?", "10000.00")]
+    [InlineData("Giá Iced Tea bao nhiêu?", "10.000")]
+    public async Task ExactPriceQuestionReadsCatalogAndRechecksGuestWithoutCallingModel(string question, string amount)
+    {
+        var context = new AssistantTestContext();
+        context.Menu[0].ItemName = "Iced Tea";
+        context.Menu[0].Price = 10000;
+
+        var result = await context.Chat().Chat(context.Question(question), default);
+
+        Assert.Equal(context.Menu[0].ItemId, Assert.Single(result.Items).ItemId);
+        Assert.Contains(amount, result.Answer);
+        Assert.Equal(0, context.ModelCalls);
+        Assert.Equal(2, context.GuestReads);
+    }
+
+    [Theory]
+    [InlineData("Iced Tea", "(Iced Tea) giá bao nhiêu?")]
+    [InlineData("Coca-Cola", "Coca-Cola giá bao nhiêu?")]
+    [InlineData("Giá", "Giá của Giá bao nhiêu?")]
+    public async Task DirectPriceSupportsCommonPunctuationAndDishNamesMatchingPriceWords(string name, string question)
+    {
+        var context = new AssistantTestContext();
+        context.Menu[0].ItemName = name;
+        context.Menu[0].Price = 10000;
+
+        var result = await context.Chat().Chat(context.Question(question), default);
+
+        Assert.Equal(context.Menu[0].ItemId, Assert.Single(result.Items).ItemId);
+        Assert.Contains("10.000", result.Answer);
+        Assert.Equal(0, context.ModelCalls);
+        Assert.Equal(2, context.GuestReads);
+    }
+
+    [Fact]
+    public async Task DirectPriceAnswerUsesRefreshedPriceAndUnavailableStatus()
+    {
+        var context = new AssistantTestContext();
+        context.Menu[0].ItemName = "Iced Tea";
+        context.Refresh = id =>
+        {
+            var item = context.Menu.Single(item => item.ItemId == id);
+            item.Price = 99000;
+            item.Availability = "OutOfStock";
+            item.CanOrder = false;
+            return item;
+        };
+
+        var result = await context.Chat().Chat(context.Question("Iced Tea giá bao nhiêu?"), default);
+
+        Assert.Equal(99000, Assert.Single(result.Items).Price);
+        Assert.False(result.Items[0].CanOrder);
+        Assert.Contains("99.000", result.Answer);
+        Assert.Contains("không thể đặt", result.Answer);
+        Assert.Equal(0, context.ModelCalls);
+    }
+
+    [Fact]
+    public async Task DirectPriceFollowUpUsesTheProtectedPreviouslyPresentedDish()
+    {
+        var context = new AssistantTestContext();
+        var first = await context.Chat().Chat(context.Question("Giá Beef rice bao nhiêu?"), default);
+        var next = await context.Chat().Chat(context.Question("Món đó bao nhiêu tiền?") with
+        {
+            ConversationContext = first.ConversationContext
+        }, default);
+
+        Assert.Equal(first.Items[0].ItemId, Assert.Single(next.Items).ItemId);
+        Assert.Equal(0, context.ModelCalls);
+        Assert.Equal(4, context.GuestReads);
+    }
+
+    [Fact]
+    public async Task DirectPriceRouteRejectsGuestRevokedDuringMenuRead()
+    {
+        var context = new AssistantTestContext();
+        context.AfterMenuRead = () => context.DenyGuest = true;
+
+        var error = await Assert.ThrowsAsync<AIException>(() => context.Chat().Chat(context.Question("Giá Beef rice bao nhiêu?"), default));
+
+        Assert.Equal(401, error.StatusCode);
+        Assert.Equal(0, context.ModelCalls);
+        Assert.Equal(2, context.GuestReads);
+    }
+
+    [Fact]
+    public async Task EarlierAllergyConcernKeepsPriceFollowUpOnTheExistingModelPath()
+    {
+        var context = new AssistantTestContext
+        {
+            Plan = new ChatPlanDTO
+            {
+                Intent = "menu",
+                NeedsFoodVerification = true,
+                InformationKeys = ["m0"]
+            }
+        };
+        var allergy = await context.Chat().Chat(context.Question("Tôi dị ứng đậu phộng."), default);
+
+        var result = await context.Chat().Chat(context.Question("Giá Beef rice bao nhiêu?") with
+        {
+            ConversationContext = allergy.ConversationContext
+        }, default);
+
+        Assert.Equal(1, context.ModelCalls);
+        Assert.Contains("nhân viên", result.Answer);
+    }
+
+    [Theory]
+    [InlineData("Iced Tea giá bao nhiêu và có chứa đậu phộng không?", "nhân viên")]
+    [InlineData("How much is Iced Tea? Certain foods make me feel funny.", "staff")]
+    [InlineData("How much is Iced Tea? 🥜⚠️", "staff")]
+    [InlineData("(Iced Tea) giá bao nhiêu (ăn xong tôi bị khó thở)?", "nhân viên")]
+    [InlineData("How much is (Iced Tea) - certain foods make me feel funny?", "staff")]
+    public async Task MixedPriceAndFoodConcernStillUsesModelAndVerifiedFoodWarning(string question, string expected)
+    {
+        var context = new AssistantTestContext
+        {
+            Plan = new ChatPlanDTO
+            {
+                Intent = "menu",
+                NeedsFoodVerification = true,
+                InformationKeys = ["m0"]
+            }
+        };
+        context.Menu[0].ItemName = "Iced Tea";
+
+        var result = await context.Chat().Chat(context.Question(question), default);
+
+        Assert.Equal(1, context.ModelCalls);
+        Assert.Contains(expected, result.Answer);
+    }
+
+    [Theory]
+    [InlineData("Sushi giá bao nhiêu?")]
+    [InlineData("アイスティーはいくらですか？")]
+    public async Task UnknownDishOrUnsupportedQuestionIsNotRoutedAsAnExactPriceQuery(string question)
+    {
+        var context = new AssistantTestContext
+        {
+            Plan = new ChatPlanDTO
+            {
+                Intent = "clarify",
+                Language = "other"
+            }
+        };
+
+        var result = await context.Chat().Chat(context.Question(question), default);
+
+        Assert.Equal(1, context.ModelCalls);
+        Assert.Empty(result.Items);
+    }
+
+    [Theory]
     [InlineData("Is this safe for my peanut allergy?")]
     [InlineData("Is this vegetarian?")]
     [InlineData("Does this contain gluten?")]
@@ -328,6 +483,126 @@ public sealed class ChatServiceTests
         Assert.Equal(3, result.Items.Count);
         Assert.Contains("45.000", result.Answer);
         Assert.Contains("Gợi ý thêm", result.Answer);
+    }
+
+    [Theory]
+    [InlineData("Iced Tea giá bao nhiêu, còn đặt được không? Gợi ý thêm một món nóng nhé.")]
+    [InlineData("Iced Tea giá bao nhiêu? Cho tôi thêm một món nóng nhé.")]
+    [InlineData("How much is Iced Tea? Please suggest something warm.")]
+    public async Task AdditionalSuggestionInSeparateSentenceAppendsOnlyVerifiedHotDishes(string question)
+    {
+        var context = new AssistantTestContext
+        {
+            Plan = new ChatPlanDTO
+            {
+                Intent = "menu",
+                RecommendationKeys = ["m0", "m1", "m2"]
+            }
+        };
+        context.Menu[0].ItemName = "Iced Tea";
+        context.Menu[0].Price = 10000;
+        context.Menu[0].Description = "Served chilled.";
+        context.Menu[1].ItemName = "Chicken Porridge";
+        context.Menu[1].Price = 52000;
+        context.Menu[1].Description = "Served hot.";
+        context.Menu[2].Description = "Served chilled.";
+
+        var response = await context.Chat().Chat(context.Question(question), default);
+
+        Assert.Equal(2, response.Items.Count);
+        Assert.Equal("Iced Tea", response.Items[0].ItemName);
+        Assert.Equal("Chicken Porridge", response.Items[1].ItemName);
+        Assert.Contains("Chicken Porridge", response.Answer);
+        Assert.Contains(question.StartsWith("How") ? "10000.00" : "10.000", response.Answer);
+        Assert.DoesNotContain(response.Items, item => item.ItemId == context.Menu[2].ItemId);
+    }
+
+    [Theory]
+    [InlineData("Iced Tea giá bao nhiêu và còn đặt được không?")]
+    [InlineData("Iced Tea giá bao nhiêu? Đừng gợi ý thêm món khác.")]
+    [InlineData("How much is Iced Tea? Do not suggest anything else.")]
+    public async Task FactQuestionWithoutAdditionalRequestDoesNotAppendModelSuggestions(string question)
+    {
+        var context = new AssistantTestContext
+        {
+            Plan = new ChatPlanDTO
+            {
+                Intent = "menu",
+                RecommendationKeys = ["m0", "m1", "m2"]
+            }
+        };
+        context.Menu[0].ItemName = "Iced Tea";
+
+        var response = await context.Chat().Chat(context.Question(question), default);
+
+        Assert.Equal(context.Menu[0].ItemId, Assert.Single(response.Items).ItemId);
+    }
+
+    [Theory]
+    [InlineData("Tôi không muốn Iced Tea nữa, gợi ý món khác.")]
+    [InlineData("Tôi không muốn uống Iced Tea nữa, gợi ý món khác.")]
+    [InlineData("Tôi không muốn món Iced Tea nữa, gợi ý món khác.")]
+    public async Task NaturalDishExclusionIsRememberedUntilExplicitlyRestored(string exclusion)
+    {
+        var context = new AssistantTestContext
+        {
+            Plan = new ChatPlanDTO
+            {
+                Intent = "recommendation",
+                RecommendationKeys = ["m0", "m1", "m2"]
+            }
+        };
+        context.Menu[0].ItemName = "Iced Tea";
+        var first = await context.Chat().Chat(context.Question("Gợi ý đồ uống cho tôi."), default);
+        Assert.Contains(first.Items, item => item.ItemId == context.Menu[0].ItemId);
+
+        var excluded = await context.Chat().Chat(context.Question(exclusion) with
+        {
+            ConversationContext = first.ConversationContext
+        }, default);
+        Assert.DoesNotContain(excluded.Items, item => item.ItemId == context.Menu[0].ItemId);
+
+        var continued = await context.Chat().Chat(context.Question("Gợi ý tiếp đi.") with
+        {
+            ConversationContext = excluded.ConversationContext
+        }, default);
+        Assert.DoesNotContain(continued.Items, item => item.ItemId == context.Menu[0].ItemId);
+        var excludedKey = context.ChatModelRequest!.Menu.Single(item => item.Name == "Iced Tea").Key;
+        Assert.Contains(excludedKey, context.ChatModelRequest.ExcludedItems);
+        Assert.Contains("iced tea", context.ChatModelRequest.ExcludedTerms);
+
+        var restored = await context.Chat().Chat(context.Question("Cho lại Iced Tea cho tôi.") with
+        {
+            ConversationContext = continued.ConversationContext
+        }, default);
+        Assert.Contains(restored.Items, item => item.ItemId == context.Menu[0].ItemId);
+        Assert.Empty(context.ChatModelRequest!.ExcludedItems);
+        Assert.Empty(context.ChatModelRequest.ExcludedTerms);
+    }
+
+    [Fact]
+    public async Task NaturalExclusionOfDishGroupAlsoFiltersUnmentionedVariants()
+    {
+        var context = new AssistantTestContext
+        {
+            Plan = new ChatPlanDTO
+            {
+                Intent = "recommendation",
+                RecommendationKeys = ["m0", "m1", "m2"]
+            }
+        };
+        context.Menu[0].ItemName = "Cháo gà";
+        context.Menu[1].ItemName = "Cháo nấm";
+        context.Menu[2].ItemName = "Súp bí đỏ";
+
+        var excluded = await context.Chat().Chat(context.Question("Tôi không muốn ăn cháo nữa."), default);
+        var next = await context.Chat().Chat(context.Question("Gợi ý tiếp đi.") with
+        {
+            ConversationContext = excluded.ConversationContext
+        }, default);
+
+        Assert.Equal(context.Menu[2].ItemId, Assert.Single(next.Items).ItemId);
+        Assert.Contains("chao", context.ChatModelRequest!.ExcludedTerms);
     }
 
     [Fact]
