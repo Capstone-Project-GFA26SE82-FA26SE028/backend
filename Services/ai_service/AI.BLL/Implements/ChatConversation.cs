@@ -11,13 +11,14 @@ internal static class ChatConversation
     private const int MaximumPriorItems = 3;
     private const string RestoreVietnamese = @"(?:goi y lai|cho lai|co the chon lai)";
     private const string RestoreEnglish = @"(?:include|allow|suggest)(?=\s+[\p{L}\p{N} ]+\s+again\b)";
+    private const string UnwantedVietnamese = @"khong muon(?: (?:an|uong|dung))?";
 
     private static readonly Regex Ordinal = Pattern(@"\b(?:mon (?:thu |so )?(?<vi>mot|hai|ba|nhat|cuoi|tu|bon|nam|[0-9]+)|(?<en>first|second|third|last) (?:one|dish|item)|(?:the|your) (?<en>first|second|third|last)|(?:dish|item) (?:number )?(?<vi>[0-9]+))\b");
     private static readonly Regex SingularReference = Pattern(@"\b(?:mon (?:do|ay|nay|(?:(?:ban|ai) )?vua (?:noi|goi y|gioi thieu))|(?:that|this) (?:dish|one|item)|you (?:just )?(?:suggested|recommended|mentioned)|(?:does|is|was|order|costs?) it)\b");
     private static readonly Regex ShortReference = Pattern(@"^\s*(?:vay |the )?(?:con khong|con hang khong|gia bao nhieu|bao nhieu|dat duoc khong|how much|still available|in stock)\s*\??\s*$");
     private static readonly Regex MultipleReference = Pattern(@"\b(?:ca hai mon|hai mon do|nhung mon do|both (?:ones|dishes|items)|those (?:dishes|items))\b");
-    private static readonly Regex Drop = Pattern(@"\b(?:bo (?:mon|no|di)|dung (?:goi y|chon)|khong muon (?:mon|an)|remove|exclude|avoid|skip|don.t suggest)\b");
-    private static readonly Regex DishGroup = Pattern($@"\b(?:{RestoreVietnamese}|{RestoreEnglish}|dung goi y|khong goi y|tranh|bo|exclude|avoid|skip|don.t suggest)\s+(?:cac mon |nhung mon |mon |any )?(?<name>[\p{{L}}\p{{N}} ]+?)(?=\s+(?:nua|anymore|any more|again|please|for me|cho minh|cho toi|giup minh|va|nhung)\b|[.!?,;]|$)");
+    private static readonly Regex Drop = Pattern($@"\b(?:bo (?:mon|no|di)|dung (?:goi y|chon)|{UnwantedVietnamese}|remove|exclude|avoid|skip|don.t suggest)\b");
+    private static readonly Regex DishGroup = Pattern($@"\b(?:{RestoreVietnamese}|{RestoreEnglish}|dung goi y|khong goi y|{UnwantedVietnamese}|tranh|bo|exclude|avoid|skip|don.t suggest)\s+(?:cac mon |nhung mon |mon |any )?(?<name>[\p{{L}}\p{{N}} ]+?)(?=\s+(?:nua|anymore|any more|again|please|for me|cho minh|cho toi|giup minh|va|nhung)\b|[.!?,;]|$)");
     private static readonly Regex PresentedLine = Pattern(@"^.+:\s*(?:[0-9]|price not available|chua co gia)");
     private static readonly Regex Restore = Pattern($@"\b(?:{RestoreVietnamese}|{RestoreEnglish})\b");
     private static readonly Regex ClearBudget = Pattern(@"\b(?:khong (?:gioi han|can gioi han) gia|bo gioi han (?:gia|ngan sach)|ngan sach khong gioi han|no (?:price limit|budget limit)|any price|remove the budget)\b");
@@ -41,7 +42,9 @@ internal static class ChatConversation
     private static readonly Regex PriceQuery = Pattern(@"\b(?:gia|bao nhieu|duoi|re hon|price|cost|how much|under|below|cheaper)\b");
     private static readonly Regex AvailabilityQuery = Pattern(@"\b(?:con khong|con (?:hang|dat|ban)|het hang|dat duoc|available|in stock|sold out|can i order)\b");
     private static readonly Regex SelectionQuery = Pattern(@"\b(?:goi y|tim mon|mon nao|co mon|mon gi|lua chon|what .+ (?:order|choose)|recommend|suggest|show (?:me )?(?:dishes|meals|options)|anything|something|alternatives?)\b");
-    private static readonly Regex AdditionalSelection = Pattern(@"\b(?:va|roi|dong thoi) (?:goi y|cho minh them|cho toi them)\b|\b(?:and|then|also) (?:recommend|suggest|find me)\b");
+    private static readonly Regex AdditionalSelection = Pattern(
+        @"\b(?:va|roi|dong thoi) (?:goi y|cho minh them|cho toi them)\b|\b(?:and|then|also) (?:recommend|suggest|find me)\b"
+        + @"|(?:^|[.!?;,])\s*(?:(?:ban |vui long )?(?:goi y them|cho minh them|cho toi them)|(?:please )?(?:recommend|suggest|find me))\b");
     private static readonly Regex Alternatives = Pattern(@"\b(?:goi y (?:mon )?khac|mon khac|thay the|thay vao do|instead|alternative|other (?:dish|option))\b");
     private static readonly Regex Cheaper = Pattern(@"\b(?:re hon|cheaper|less expensive)\b");
     private static readonly Regex Vietnamese = Pattern(@"\b(?:xin chao|cam on|tiep di|minh|chao ban|goi y|mon (?:do|ay|nay|thu|gi|nao|an|nong|nhe)|gia bao nhieu|bao nhieu|con hang|con khong|an gi|am bung|am nguoi|nhe bung|it cay|khong cay|khong an|dau phong|di ung|phuc vu|thuc don|nha hang|duoi|dat duoc|ke chuyen|viet cho|cho hoi)\b");

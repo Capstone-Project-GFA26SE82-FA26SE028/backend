@@ -14,7 +14,7 @@ For GitHub Actions deployment, store credentials in repository/environment Secre
 
 # Restaurant backend and AI assistant
 
-The AI service calls Gemini API (`gemini-3.1-flash-lite` by default) for menu chat and cart-based recommendations. It sends only the information needed for the request and keeps the existing QR and Catalog checks.
+The AI service calls Gemini API (`gemini-3.1-flash-lite` by default) for menu reasoning and cart-based recommendations. A small allowlist of exact price questions about one resolved dish is answered directly from a fresh Catalog read after checking QR access again. Questions needing interpretation continue through Gemini. It sends only the information needed for the request and keeps the existing QR and Catalog checks.
 
 ## Run with Docker Compose
 
@@ -43,6 +43,9 @@ Set the Restaurant, Catalog and Ordering gRPC addresses in local configuration i
 - `/health/ready` checks the key and model access through Gemini's model metadata, with a five-second budget. It does not run inference. Missing key or unavailable Gemini produces 503 on readiness without preventing Gateway and other backend services from starting.
 - `docker compose exec -T ai dotnet AI.API.dll --check-ready` runs the container readiness check. Use `docker compose logs ai` to inspect startup. Use `docker compose config --quiet` to validate configuration without outputting secrets.
 - AI requests have a 90-second total budget and the Restaurant, Catalog and Ordering RPCs have at most 10 seconds each within that budget. One inference runs per AI instance with no waiting queue. Busy or Gemini rate-limited requests return 429, unavailable provider 503, deadline 504, invalid model output 502 and missing QR credentials 401.
+- `Gemini:RequestTimeoutSeconds` defaults to 20 and caps the complete generation operation, including response-body buffering, backoff and both attempts, within the remaining overall budget. `Gemini:RetryServiceUnavailable` defaults to true and permits exactly one extra HTTP attempt only after upstream 503. `Gemini:RetryDelayMilliseconds` defaults to 250. A longer `Retry-After` is honored when it fits the remaining model budget; otherwise the service returns 503 without retrying. HTTP 429, other errors, network failures, timeouts and invalid model output are not retried. Caller cancellation stops the backoff/request. The inference slot stays held across the retry and is released on every completion/error path. A retry can consume additional provider quota; missing usage metadata is not counted as zero tokens.
+- Model deadline exhaustion returns HTTP 504 with a controlled message directing the guest to retry or ask staff. It does not return a fabricated successful chat reply. Cancellation limits local waiting; the provider may already have processed or billed the attempt. Settings come from the same configuration priority described above; no Gateway route or database changes are needed.
+- Exact supported price lookups and local missing-food-information replies do not require inference. They can still respond when Gemini is unconfigured or busy, with QR and Catalog checks remaining in force. This is request routing before inference; failed Gemini calls do not fall back to another provider.
 
 ## Chat and recommendations through Gateway
 
@@ -85,6 +88,80 @@ These tests use test data and simulated dependencies. To test Gemini with Docker
 ```powershell
 .\scripts\Test-AI.ps1 -Gateway http://localhost:5000 -SessionId <session-guid> -CartId <cart-guid> -CookieFile <private-cookie-json>
 ```
+
+### A5 acceptance, response time and tokens
+
+Use PowerShell 7 (`pwsh`) and an **isolated development Compose project** with the synthetic Docker seed. Keep the normal development stack and its volumes unchanged. Build the AI image from the current working tree. Give the test project a separate Gateway port and separate image tags when both stacks are running. No local model is required.
+
+For example, create an ignored override with separate application images, then start the required services. Choose a free port if 62102 is occupied. Compose continues to read credentials from the existing ignored `.env`.
+
+```powershell
+New-Item -ItemType Directory -Force .ai/a5 | Out-Null
+$override = "services:`n"
+foreach ($service in @('ai', 'gateway', 'identity', 'restaurant', 'catalog', 'ordering')) {
+    $override += "  ${service}:`n    image: ai-a5-${service}:verify`n"
+}
+$override | Set-Content -Encoding utf8 .ai/a5/compose.verify.yaml
+$env:COMPOSE_FILE = 'compose.yaml;compose.override.yaml;.ai/a5/compose.verify.yaml'
+$env:GATEWAY_HTTP_PORT = '62102'
+$gateway = 'http://127.0.0.1:62102'
+docker compose -p ai-a5 config --quiet
+docker compose -p ai-a5 up -d --build ai gateway
+docker compose -p ai-a5 ps
+```
+
+The explicit test fixture `scripts/ai/acceptance-menu.sql` prepares two independent restaurants, with Iced Tea priced at 10,000 VND in A and 37,000 VND in B. It also prepares a hot/light Chicken Porridge at 52,000 VND and hot Pumpkin Soup at 75,000 VND in A. **The fixture changes test data. It is not a schema upgrade and must never be applied to a shared database.** Its recipes support menu tests; they do not establish real ingredient availability or kitchen readiness.
+
+After starting the isolated stack, apply the fixture only to its SQL container. The command below uses the password already present inside that container and does not print it. Replace `ai-a5-sqlserver-1` with the verified test container name.
+
+```powershell
+docker inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' ai-a5-sqlserver-1
+docker cp scripts/ai/acceptance-menu.sql ai-a5-sqlserver-1:/tmp/acceptance-menu.sql
+docker exec ai-a5-sqlserver-1 sh -c 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -i /tmp/acceptance-menu.sql'
+```
+
+Prepare the session and cart through Gateway, using the synthetic Waiter account from the development seed. For restaurant A use table `20000000-0000-0000-0000-000000000011`. Open it through the existing Waiter endpoint, join through the existing guest-access endpoint and populate a cart with one rice item `20000000-0000-0000-0000-000000000051`, quantity 1, no options. Keep the guest `WebRequestSession` from join as `$web`. Save only its guest cookie in an ignored file as follows. This does not bypass QR validation.
+
+```powershell
+$login = Invoke-RestMethod "$gateway/api/auth/login" -Method Post -ContentType application/json -Body '{"email":"waiter@gmail.com","password":"123"}'
+$opened = Invoke-RestMethod "$gateway/api/table-sessions/tables/20000000-0000-0000-0000-000000000011/open" -Method Post -Headers @{ Authorization = 'Bearer ' + $login.result.accessToken }
+$sessionId = $opened.result.tableSessionId
+$web = [Microsoft.PowerShell.Commands.WebRequestSession]::new()
+$null = Invoke-RestMethod "$gateway/api/table-sessions/$sessionId/guest-access/join" -Method Post -WebSession $web -ContentType application/json -Body '{"phoneOrCode":"123"}'
+$cart = Invoke-RestMethod "$gateway/api/table-sessions/$sessionId/carts" -Method Post -WebSession $web
+$cartId = $cart.result.cartId
+$body = @{ version = $cart.result.version; items = @(@{ itemId = '20000000-0000-0000-0000-000000000051'; quantity = 1; options = @() }) }
+$null = Invoke-RestMethod "$gateway/api/table-sessions/$sessionId/carts/$cartId" -Method Put -WebSession $web -ContentType application/json -Body ($body | ConvertTo-Json -Depth 8)
+$cookies = @{}
+foreach ($cookie in $web.Cookies.GetCookies([Uri]"$gateway/api")) {
+    if ($cookie.Name.StartsWith('guest_access_')) { $cookies[$cookie.Name] = $cookie.Value }
+}
+New-Item -ItemType Directory -Force .ai/a5 | Out-Null
+$cookies | ConvertTo-Json | Set-Content -Encoding utf8 .ai/a5/guest-cookie.json
+pwsh -NoProfile -File scripts/Test-AIAcceptance.ps1 `
+    -Gateway $gateway -SessionId $sessionId -CartId $cartId `
+    -CookieFile .ai/a5/guest-cookie.json -AiContainer ai-a5-ai-1
+```
+
+The versioned dataset has 23 scenarios covering price and availability, combined questions, implicit preferences, budget, conversation references/exclusions, dietary uncertainty, prompt injection, unsupported language, cart recommendations and invalid access. To add the 24th scenario, join the same table as a second guest, create that guest's cart and pass its ID with `-OtherGuestCartId`. Access must return 404 without revealing the cart. The benchmark does not mutate either cart.
+
+For restaurant B use the synthetic `waiter-a5-b@example.test` account (the same development password), table `30000000-0000-0000-0000-000000000011`, rice item `30000000-0000-0000-0000-000000000051` and a separately joined guest. Run again with `-Dataset scripts/ai/acceptance-tenant-b.json -OutputFile .ai/a5/tenant-b.json`. Both functions must use B's menu and tea price. Never reuse A's cookie as B's credentials.
+
+The script writes questions, actual answers, cards, expected assertions, failures, trace IDs, image ID and measurements into `.ai/a5/acceptance.json`, which Git ignores. It excludes guest cookies and protected conversation tokens. It exits 1 when any assertion fails. `-Repetitions 3` repeats the full dataset, resetting conversation contexts between runs; it consumes additional API quota. Do not discard failed runs or tune prompts against this dataset and then describe it as a blind evaluation.
+
+Gemini numeric `usageMetadata` is logged as `GeminiUsage`, correlated with the Gateway request's W3C trace ID. No prompt, answer or API key is logged by this metric. Missing/invalid counts are `unknown`, never an invented zero. `totalTokenCount` comes from Gemini. Missing thought counts remain unknown; cache-token breakdown is not collected. The benchmark validates price/status and option requirements against Catalog immediately after each response. This is a static acceptance comparison, not proof against all concurrent menu changes; mutation races are also covered by the AI and Ordering dependency-simulation tests.
+
+`AITiming` records correlated durations for GuestAccess, MenuRead, MenuRefresh, CartRead, Gemini and Total. Repeated calls to a stage are summed per request in the report. Total measures the AI gRPC handler. Gemini measures the complete outbound HTTP call including response buffering, not pure provider inference time. HTTP latency minus Total includes client, Gateway and transport work and cannot be assigned to one component from these logs alone. In the tested Windows environment, some `localhost` calls had roughly two seconds outside AI while IPv4 calls had only milliseconds. Use the same host and timeout settings before/after comparison; switching to IPv4 corrects this measurement condition and is not a backend speed improvement.
+
+Cases C01, C02 and C15 now require zero model responses because their complete text matches the supported price-question grammar and identifies exactly one dish. All price/status/card assertions stay unchanged. Compound questions, uncertain food information, existing dietary concerns, ambiguous subjects and text outside that grammar continue through the model path. Prices and sellability are refreshed, never cached. Recommendation inference uses short internal reason codes; the client maps them to the same controlled Vietnamese API reasons and rejects unknown codes.
+
+The price grammar accepts ordinary parentheses and ASCII hyphens. It matches the resolved dish name inside a complete question pattern, so a dish named “Giá” does not replace the price-question keywords. Unrecognized symbols such as allergy-warning emoji and extra clauses still keep the request on the model path. `GeminiRetry` logs only the trace ID, attempt number and delay. The acceptance report distinguishes HTTP attempts, retry events and successful responses carrying usage metadata; a failed HTTP attempt may have no measurable token count. Retry/timeout tests with simulated HTTP do not prove that a live provider failure will recover.
+
+Reported latency is the complete Gateway HTTP request/response time, excluding subsequent assertion calls. The report separates successful chat, recommendations and responses with observed inference, and uses nearest-rank p50/p95. Three seconds is an evaluation target, not a service guarantee. The first request and later requests are separated; cloud model loading state is not observable. Sequential timings do not measure maximum throughput. Case pass rate is an assertion-based software acceptance score, not general model accuracy/F1 or a human usability score. No user study or independent frozen quality dataset is established by these scripts.
+
+The original A5 run recorded failures C03 (additional suggestion after a separate sentence) and C17 (remembering “không muốn Iced Tea nữa”). Both remain in the dataset as regression cases after the focused conversation-recognition fix. Keep the original results separately when rerunning. Unit tests also cover English/Vietnamese sentence variants, explicit restoration, excluded dish groups, filtering cold suggestions from a warm request, and not adding suggestions to a plain or explicitly limited facts request. Passing unit tests alone does not establish that the real-model conversation cases pass; rerun the Gateway benchmark against the rebuilt AI image.
+
+After testing, `docker compose -p ai-a5 down` stops this isolated stack and preserves its test volumes. Remove the process-level `COMPOSE_FILE` and `GATEWAY_HTTP_PORT` overrides before returning to the normal Compose project. Do not use `down -v` to reset shared data.
 
 ## Checkout before payment
 

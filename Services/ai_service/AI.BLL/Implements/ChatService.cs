@@ -50,6 +50,17 @@ public sealed class ChatService(
             return Reply(ChatText.MissingFoodFacts(language), [], false, state, guest);
         }
 
+        var referenced = references.Count == 1 ? source.Items.FirstOrDefault(item => item.ItemId == references[0]) : null;
+        if (!ambiguous && !foodFacts && !state.HasAllergyConcern && !state.HasDietaryRestriction && referenced is not null
+            && ChatPriceQuestion.TryGetLanguage(question, referenced.ItemName, out var directLanguage))
+        {
+            AssistantRules.RequireSameGuest(guest, await guests.VerifyAsync(request.Guest, ct));
+            state = state with { Language = directLanguage };
+            var directItems = await ReadSelected(request, guest, references, state, false, null, ct);
+            var searchLimited = source.TotalCount > source.Items.Count;
+            return Reply(Answer(directItems, directLanguage, state, false, false, searchLimited), directItems, searchLimited, state, guest);
+        }
+
         var candidates = await Candidates(request, guest, source.Items, state, references, ct);
         var keyed = AssistantRules.Keyed(candidates);
         var modelRequest = ModelRequest(request, state, keyed, references);

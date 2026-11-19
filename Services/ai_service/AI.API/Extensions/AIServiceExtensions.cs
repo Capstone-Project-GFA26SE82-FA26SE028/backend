@@ -27,7 +27,9 @@ public static class AIServiceExtensions
             .Validate(value => IsGeminiAddress(value.Endpoint) && IsGeminiModel(value.Model)
                 && value.MaximumOutputTokens is >= 128 and <= 512
                 && value.MaximumPromptCharacters is >= 1000 and <= 6000
-                && value.ReadinessTimeoutSeconds is > 0 and <= 5, "Invalid Gemini configuration.")
+                && value.ReadinessTimeoutSeconds is > 0 and <= 5
+                && value.RequestTimeoutSeconds is > 0 and <= 20
+                && value.RetryDelayMilliseconds is >= 100 and <= 1000, "Invalid Gemini configuration.")
             .ValidateOnStart();
 
         services.TryAddSingleton(TimeProvider.System);

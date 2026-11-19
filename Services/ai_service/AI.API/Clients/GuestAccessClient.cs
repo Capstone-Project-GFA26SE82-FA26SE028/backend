@@ -1,4 +1,5 @@
 using System.Globalization;
+using AI.API.Diagnostics;
 using AI.BLL.Interfaces;
 using AI.Common.DTOs;
 using AI.Common.Exceptions;
@@ -12,10 +13,12 @@ public sealed class GuestAccessClient(
     GuestAccessGrpc.GuestAccessGrpcClient client,
     RestaurantAccessGrpc.RestaurantAccessGrpcClient restaurants,
     IOptions<AISettings> settings,
-    TimeProvider clock) : IGuestAccessClient
+    TimeProvider clock,
+    ILogger<GuestAccessClient> logger) : IGuestAccessClient
 {
     public async Task<VerifiedGuest> VerifyAsync(GuestContext guest, CancellationToken ct)
     {
+        using var timing = new AssistantTiming(logger, "GuestAccess");
         var deadline = DateTime.UtcNow.AddSeconds(settings.Value.DependencyTimeoutSeconds);
         var reply = await client.GetMeAsync(new GuestAccessRequest
         {
