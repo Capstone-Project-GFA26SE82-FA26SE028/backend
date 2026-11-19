@@ -2,11 +2,11 @@ namespace AI.Common.DTOs;
 
 public sealed record GuestContext(Guid TableSessionId, string Token);
 
-public sealed record VerifiedGuest(Guid TableSessionId, Guid GuestAccessId, DateTimeOffset ExpiresAt);
+public sealed record VerifiedGuest(Guid TableSessionId, Guid GuestAccessId, Guid RestaurantId, DateTimeOffset ExpiresAt);
 
 public sealed record ConversationTurn(string Role, string Content);
 
-public sealed record ChatRequestDTO(GuestContext Guest, string Message, IReadOnlyList<ConversationTurn> History);
+public sealed record ChatRequestDTO(GuestContext Guest, string Message, IReadOnlyList<ConversationTurn> History, string? ConversationContext = null);
 
 public sealed record RecommendationRequestDTO(GuestContext Guest, Guid CartId, int Limit);
 
@@ -35,13 +35,14 @@ public sealed record CartLineDTO(Guid ItemId, int Quantity);
 public sealed record CartContextDTO(
     Guid CartId,
     Guid TableSessionId,
+    Guid RestaurantId,
     DateTimeOffset ExpiresAt,
     string Version,
     IReadOnlyList<CartLineDTO> Items);
 
 public sealed record SuggestedItemDTO(MenuItemDTO Item, string Reason);
 
-public sealed record ChatResponseDTO(string Answer, IReadOnlyList<MenuItemDTO> Items, bool SearchLimited, DateTimeOffset EvaluatedAt);
+public sealed record ChatResponseDTO(string Answer, IReadOnlyList<MenuItemDTO> Items, bool SearchLimited, DateTimeOffset EvaluatedAt, string ConversationContext);
 
 public sealed record RecommendationResponseDTO(
     Guid CartId,

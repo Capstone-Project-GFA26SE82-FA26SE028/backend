@@ -21,6 +21,9 @@ public sealed class ChatRequestDTO
 
     [MaxLength(6)]
     public List<ConversationTurnDTO> History { get; set; } = [];
+
+    [StringLength(4096)]
+    public string? ConversationContext { get; set; }
 }
 
 public sealed class RecommendationRequestDTO
@@ -47,7 +50,7 @@ public sealed class MenuCardDTO
     public bool RequiresOptionSelection { get; set; }
 }
 
-public sealed record ChatResponseDTO(string Answer, IReadOnlyList<MenuCardDTO> Items, bool SearchLimited, DateTimeOffset EvaluatedAt);
+public sealed record ChatResponseDTO(string Answer, IReadOnlyList<MenuCardDTO> Items, bool SearchLimited, DateTimeOffset EvaluatedAt, string ConversationContext);
 
 public sealed record SuggestedItemDTO(MenuCardDTO Item, string Reason);
 

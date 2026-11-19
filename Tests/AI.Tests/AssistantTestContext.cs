@@ -1,8 +1,10 @@
+using AI.API.Clients;
 using AI.BLL.Implements;
 using AI.BLL.Interfaces;
 using AI.Common.DTOs;
 using AI.Common.Exceptions;
 using AI.Common.Settings;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 
 namespace AI.Tests;
@@ -24,7 +26,11 @@ public sealed class AssistantTestContext : IGuestAccessClient, ICatalogMenuClien
         MaximumHistoryTurns = 4
     };
 
+    private readonly ChatContextToken tokens = new(new EphemeralDataProtectionProvider(), TimeProvider.System);
+
     public GuestContext Guest { get; } = new(Guid.NewGuid(), new string('a', 64));
+    public Guid RestaurantId { get; set; } = Guid.NewGuid();
+    private Guid GuestAccessId { get; } = Guid.NewGuid();
     public List<MenuItemDTO> Menu { get; } =
     [
         Dish("Beef rice", "Main dishes", 45000),
@@ -50,13 +56,13 @@ public sealed class AssistantTestContext : IGuestAccessClient, ICatalogMenuClien
 
     public AssistantTestContext()
     {
-        Cart = new CartContextDTO(Guid.NewGuid(), Guest.TableSessionId, DateTimeOffset.UtcNow.AddHours(1), "v1", [new CartLineDTO(Menu[0].ItemId, 1)]);
+        Cart = new CartContextDTO(Guid.NewGuid(), Guest.TableSessionId, RestaurantId, DateTimeOffset.UtcNow.AddHours(1), "v1", [new CartLineDTO(Menu[0].ItemId, 1)]);
     }
 
     public ChatService Chat(IAssistantModelClient? model = null)
     {
         var options = Options.Create(Settings);
-        return new ChatService(this, new MenuContextReader(this, options), model ?? this, options, TimeProvider.System);
+        return new ChatService(this, new MenuContextReader(this, options), model ?? this, tokens, options, TimeProvider.System);
     }
 
     public RecommendationService Recommendations(IAssistantModelClient? model = null)
@@ -85,29 +91,32 @@ public sealed class AssistantTestContext : IGuestAccessClient, ICatalogMenuClien
             throw new AIException(401, "QR guest access is invalid or expired.");
         }
 
-        return Task.FromResult(new VerifiedGuest(guest.TableSessionId, Guid.NewGuid(), DateTimeOffset.UtcNow.AddHours(1)));
+        return Task.FromResult(new VerifiedGuest(guest.TableSessionId, GuestAccessId, RestaurantId, DateTimeOffset.UtcNow.AddHours(1)));
     }
 
-    public Task<MenuPageDTO> GetAllAsync(GuestContext guest, string channel, int page, int pageSize, CancellationToken ct)
+    public Task<MenuPageDTO> GetAllAsync(GuestContext guest, Guid restaurantId, string channel, int page, int pageSize, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         Assert.Equal(Guest, guest);
+        Assert.Equal(RestaurantId, restaurantId);
         Assert.Equal("DineIn", channel);
         return Task.FromResult(new MenuPageDTO(Menu.Skip((page - 1) * pageSize).Take(pageSize).ToArray(), Menu.Count));
     }
 
-    public Task<MenuItemDTO?> GetByIdAsync(GuestContext guest, string channel, Guid itemId, CancellationToken ct)
+    public Task<MenuItemDTO?> GetByIdAsync(GuestContext guest, Guid restaurantId, string channel, Guid itemId, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         Assert.Equal(Guest, guest);
+        Assert.Equal(RestaurantId, restaurantId);
         return Task.FromResult(Refresh is null ? Menu.Find(item => item.ItemId == itemId) : Refresh(itemId));
     }
 
-    public Task<CartContextDTO> GetByIdAsync(GuestContext guest, Guid cartId, CancellationToken ct)
+    public Task<CartContextDTO> GetByIdAsync(GuestContext guest, Guid restaurantId, Guid cartId, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         CartReads++;
         Assert.Equal(Guest, guest);
+        Assert.Equal(RestaurantId, restaurantId);
         return Task.FromResult(Cart);
     }
 

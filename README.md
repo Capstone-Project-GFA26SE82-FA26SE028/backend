@@ -14,104 +14,41 @@ For GitHub Actions deployment, store credentials in repository/environment Secre
 
 # Restaurant backend and AI assistant
 
-The backend keeps its existing .NET 9 services, Gateway and SQL Server workflow. AI adds UC1 (cart-based suggestions) and UC2 (customer menu chat), using only `qwen3:4b-instruct-2507-q4_K_M`, context 2048, through Ollama. No cloud fallback, training, automatic cart writes, orders, reservations or payments.
+The AI service calls Gemini API (`gemini-3.1-flash-lite` by default) for menu chat and cart-based recommendations. It sends only the information needed for the request and keeps the existing QR and Catalog checks.
 
-## Windows: one command with the existing Docker backend
+## Run with Docker Compose
 
-Requirements: Windows 10 22H2+/11 x64, Docker Desktop running **Linux containers**, Internet for the first image/model download, enough disk for Docker/SQL and the 2.5 GB model. Recommend at least 16 GB host RAM and 8 GB allocated to Docker. No GPU is required; CPU inference may take longer. The script checks .NET; Docker uses the repository's .NET 9 SDK images, so the host SDK is optional in this mode.
-
-From the cloned repository root:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-AI.ps1
-```
-
-This validates Compose and starts the existing backend/Gateway first. It then starts/reuses its Ollama service, builds AI, downloads the approved model **only if missing**, checks Qwen3/4B/Q4_K_M metadata, runs a `READY` smoke test with context 2048, and starts AI. The model setup may take up to 30 minutes for a first download; temporary registry failures are retried at most three times using cached layers, and smoke inference is bounded to 90 seconds. An AI setup failure does not stop already-started backend services. It does not change existing SQL scripts or demo seed data. Existing `db-init` initializes new Docker databases as described in [the Docker guide](docs/docker.md).
-
-Gateway: `http://localhost:5000/swagger` unless `GATEWAY_HTTP_PORT` is changed. Database creation and service startup can take longer than AI setup: check `docker compose ps` and logs if a dependency is still starting.
-
-Native Windows Ollama and Compose Ollama are separate runtimes/model stores. Docker mode reuses the Compose runtime and persistent volume; it never replaces the native installation or silently reconfigures it to expose a network port. To reuse a native Ollama installation/model, use Local mode below.
-
-Optional NVIDIA acceleration, if Docker Desktop GPU passthrough and NVIDIA drivers are already working:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-AI.ps1 -Gpu
-```
-
-The model is identical in CPU/GPU modes. Omit `-Gpu` if the driver/runtime is unavailable. A GPU failure never selects a different model.
-
-Setup/warm up without starting backend applications:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-AI.ps1 -SetupOnly
-```
-
-Run the same command again after a restart. Installed models are reused; the smoke test runs again. Weights persist in the `<project>_ai-models` volume. `docker compose -f compose.yaml -f compose.ai.yaml down` keeps data/models; **do not use `down -v`** to retain them. Existing images/runtimes are not automatically upgraded. `-ProjectName name` selects an isolated Compose project; use the same name on subsequent commands.
-
-## Keep the normal .NET local workflow
-
-Start/configure Identity, Restaurant, Catalog, Ordering and Gateway as usual in Visual Studio or `dotnet run`. Their databases and authentication remain unchanged. Then run:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-AI.ps1 -Mode Local
-```
-
-Local mode requires a .NET **9 SDK**. It reuses an existing reachable Ollama runtime without replacing, upgrading or changing its settings. If no installation exists, it downloads the Windows x64 standalone archive from the official [Ollama GitHub releases](https://github.com/ollama/ollama/releases), verifies its published SHA-256 digest and extracts into `%LOCALAPPDATA%\RestaurantAI\Ollama\<version>`. Unsupported architecture or an unverifiable archive produces a specific manual-install instruction; no arbitrary third-party installer is used. Official Windows guidance: [Ollama on Windows](https://docs.ollama.com/windows).
-
-When needed, the script starts `ollama serve` in the background and stores logs under ignored `.ai/`. It respects the existing `OLLAMA_MODELS` location, otherwise Ollama uses its normal user profile model directory. It does not change user/machine environment settings or install a Windows service. Ctrl+C stops the foreground AI service; Ollama may remain running for reuse. Exit Ollama normally if needed; model files remain on disk.
-
-## Automatic setup during normal startup
-
-After configuring the ignored root `.env` and starting Docker Desktop, the ordinary command now includes AI through the automatically loaded `compose.override.yaml`:
+Set `GEMINI_API_KEY` in the ignored root `.env` (see `.env.example`). Then run this from the repository root:
 
 ```powershell
 docker compose up -d --build
+docker compose ps ai gateway
 ```
 
-Compose starts Ollama, runs the model preparation container before AI, and stores weights in the persistent `ai-models` volume. Existing weights are reused. Core backend services do not wait for AI readiness. Compose itself cannot install Docker Desktop or generate missing backend credentials; use `Start-AI.ps1` above for prerequisite checks and initial environment setup. To explicitly run only the original backend without the AI override, use `docker compose -f compose.yaml up -d --build`.
+On Windows, `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-AI.ps1` checks Docker Engine and runs the same startup command. When changing the key, recreate the AI container with `docker compose up -d --force-recreate ai`. To run only the core backend, use `docker compose -f compose.yaml up -d --build`.
 
-On Windows, F5 with the `AI.API` project selected, or the following command, automatically prepares the native Ollama runtime and model before starting the AI server:
+## Run the .NET 9 service directly
+
+Set `Gemini__ApiKey` in the process environment, or copy `Services/ai_service/AI.API/appsettings.Local.json.example` to `appsettings.Local.json` in the same directory and fill in `Gemini:ApiKey`. The local JSON is ignored by Git and excluded from Docker build. The effective priority is command line, environment variables, local JSON, environment-specific appsettings, then shared appsettings. This native launch uses .NET configuration rather than the Compose `.env` file.
 
 ```powershell
-dotnet run --project Services/ai_service/AI.API/AI.API.csproj
+dotnet run --project Services/ai_service/AI.API
 ```
 
-The supplied launch profile selects Development. Setup uses the effective Ollama endpoint configuration, reuses an existing installation, installs the official runtime only if absent, and downloads the approved model only if missing. The first startup can take several minutes. It runs once at application startup, never during build or a customer request, and never recursively starts another AI server. Starting Gateway or another service alone does not trigger native AI setup. The .NET 9 SDK must already be installed to run/build C# code.
-
-Native automatic setup runs only in Development. It is disabled in Docker/Production and during the standalone `--prepare-model` / `--check-ready` commands. To disable it locally, set `DevelopmentBootstrap:Enabled` to `false` in ignored `AI.API/appsettings.Local.json`, or set `DevelopmentBootstrap__Enabled=false` in the environment. If setup fails, diagnostics identify the missing dependency; AI still starts and returns controlled dependency errors until it is ready. Other backend applications remain independent.
-
-## Shared and machine configuration
-
-Shared settings are in `Services/ai_service/AI.API/appsettings.json`; container addresses are in `appsettings.Docker.json`. Defaults are local service addresses, not a developer's drive path. Gateway has `GrpcServices:AI` and `AIClient:TimeoutSeconds`.
-
-For Local mode, copy `Services/ai_service/AI.API/appsettings.Local.json.example` to `appsettings.Local.json` in the same folder and adjust only necessary values. Gateway can also load its own `appsettings.Local.json`, for example:
-
-```json
-{
-  "GrpcServices": { "AI": "http://localhost:5008" }
-}
-```
-
-Both applications explicitly load configuration in this order (last wins): shared `appsettings.json`, environment-specific settings, Development User Secrets if the project has them, **appsettings.Local.json**, environment variables, command-line values. Local files are Git-ignored and excluded from Docker context; they are never copied into images. Runtime model/token/secret files and GGUF weights must not be committed.
-
-Compose and Start-AI.ps1 explicitly read `.env`. Create it from `.env.example` and fill in credentials. Preserve it with the database volume: changing the file does not change the SQL password stored in an existing volume.
+Set the Restaurant, Catalog and Ordering gRPC addresses in local configuration if they differ from the defaults. For a native Gateway, set `GrpcServices:AI` to `http://localhost:5008`.
 
 ## Readiness and errors
 
-AI has gRPC on local port 5008 and HTTP health on 5009 (Docker health port is internal):
+- `/health/live` confirms the AI process can respond. Native health uses port 5009.
+- `/health/ready` checks the key and model access through Gemini's model metadata, with a five-second budget. It does not run inference. Missing key or unavailable Gemini produces 503 on readiness without preventing Gateway and other backend services from starting.
+- `docker compose exec -T ai dotnet AI.API.dll --check-ready` runs the container readiness check. Use `docker compose logs ai` to inspect startup. Use `docker compose config --quiet` to validate configuration without outputting secrets.
+- AI requests have a 90-second total budget and the Restaurant, Catalog and Ordering RPCs have at most 10 seconds each within that budget. One inference runs per AI instance with no waiting queue. Busy or Gemini rate-limited requests return 429, unavailable provider 503, deadline 504, invalid model output 502 and missing QR credentials 401.
 
-- `/health/live`: AI process is alive.
-- `/health/ready`: Ollama responds, the approved model is installed and loaded with Q4_K_M/context 2048. Returns 503 with a status such as `ModelMissing`, `ModelNotLoadedWithConfiguredContext` or `RuntimeUnavailableOrIncompatible` otherwise. Ollama being alive alone is insufficient.
+## Chat and recommendations through Gateway
 
-After the five-minute keep-alive expires, readiness reports cold/not loaded. Rerun setup to warm up. A normal AI inference can also load the installed model within the request budget; a missing/offline model returns a controlled 503. Docker does not restart applications solely because a health check is unhealthy. Gateway/other backend functions do **not** depend on AI/model health at startup.
+Use the existing QR flow: resolve/scan QR, join the table session using its real join code, then use the **HttpOnly** `guest_access_<sessionId without dashes>` cookie set by `POST /api/table-sessions/{sessionId}/guest-access/join`. Staff bearer tokens do not replace QR access for AI. Browser requests must include credentials; the token is never included in the AI JSON body or sent to Gemini.
 
-AI request budget: **90 seconds total**, including dependency reads and inference. Other service RPCs: at most 10 seconds each, also bounded by the remaining request time. Ollama is not capped at 10 seconds. One inference per AI process; no waiting queue. Busy returns HTTP 429, unavailable 503, deadline 504, unverified model output 502, invalid QR 401. Cancellation reaches model/dependency calls. There is no model download/installation in a controller or build.
-
-## UC1/UC2 requests through Gateway
-
-Use the existing QR flow: resolve/scan QR, join the table session using its real join code, then use the **HttpOnly** `guest_access_<sessionId without dashes>` cookie set by `POST /api/table-sessions/{sessionId}/guest-access/join`. Staff bearer tokens do not replace QR access for AI. Browser requests must include credentials; the token is never included in the AI JSON body or sent to Ollama.
-
-UC2:
+Menu chat:
 
 ```http
 POST /api/ai/table-sessions/{sessionId}/chat
@@ -120,9 +57,11 @@ Content-Type: application/json
 {"message":"What drinks can I order?","history":[]}
 ```
 
-Optional history contains only `{"role":"user|assistant","content":"..."}` turns. AI's configured limits are authoritative: 500 characters per message/turn, four history turns by default. Messages are answered in English; dish names/descriptions retain verified Catalog data.
+Optional history contains only `{"role":"user|assistant","content":"..."}` turns (500 characters per message/turn, four history turns by default). Chat defaults to Vietnamese. Explicit English questions receive English replies, and short neutral replies retain the conversation language. To continue, pass `result.conversationContext` from the last reply as `conversationContext` on the next chat request. The opaque context preserves the actual order of presented dishes, budget, supported preferences and exclusions for the same QR guest, for up to 30 minutes per reply. Start a new chat by omitting the context and history. Older clients can still send bounded history with the assistant's previous answer as returned by the API.
 
-UC1, after creating/populating the real cart through existing Ordering endpoints:
+Example follow-up: `{"message":"Món thứ hai dưới 80.000 không? Mình không ăn cay nhé.","conversationContext":"<value-from-previous-response>"}`. The assistant rereads that dish from Catalog, compares its current price and directs the guest to staff for unverified dietary information. Warm, cool or light meal suggestions require supporting Catalog descriptions. Combined warm/cool and light preferences remain effective together. Excluding a dish group by name (for example, cháo) also applies to matching dishes on later turns until restored. If a dish disappears, its previous position is retained for follow-up references. Compose stores the context protection keys in the `ai-chat-keys` volume.
+
+Cart recommendations, after creating/populating the real cart through existing Ordering endpoints:
 
 ```http
 POST /api/ai/table-sessions/{sessionId}/carts/{cartId}/recommendations
@@ -133,71 +72,19 @@ Content-Type: application/json
 
 AI excludes **all option variants by ItemId**, only offers `CanOrder == true` items with verified prices, and rereads guest/cart/menu before returning cards. Cart changes during inference return 409. Required options must still be selected via the existing cart workflow. AI never calls cart Create/Update/Delete.
 
-Missing verified ingredient/allergy/diet/spice facts: the assistant directs the customer to ask staff; it does not contact staff itself. There is currently no suitable public Restaurant-info RPC, so restaurant contact/hours/policy answers use the same missing-information approach. Catalog's `CanOrder` is **not proof of sufficient ingredient stock**; its public menu is not branch-filtered. No restaurant permissions or database were expanded to hide these gaps.
+Missing verified ingredient/allergy/diet/spice facts: the assistant directs the customer to ask staff; it does not contact staff itself. There is currently no suitable public Restaurant-info RPC, so restaurant contact/hours/policy answers use the same missing-information approach. Both AI endpoints use the restaurant resolved from the verified table session. Catalog reads and cart checks stay within that restaurant. Catalog's `CanOrder` covers menu availability, price, active recipe and required options. Ingredient stock is checked by Inventory when the kitchen starts cooking.
 
-## Tests and reproducibility
+## Verify the AI integration
 
 ```powershell
 dotnet test Tests/AI.Tests/AI.Tests.csproj
 ```
 
-AI projects/tests are registered in `Backend.sln`, so the existing GitHub Actions solution test step discovers them. Default tests use client fakes and an in-process Gateway; they do not install/download/call a real model. An optional model benchmark is explicitly separate:
+These tests use test data and simulated dependencies. To test Gemini with Docker, start Compose, join an active QR test session through Gateway, and add at least one item to the test cart while leaving another orderable menu item available. Use the real guest cookie with the two requests above. The existing smoke script can run both requests and check that the cart version stays unchanged:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-AI.ps1 -Mode Local -SetupOnly
-$env:RUN_LOCAL_AI_TESTS='1'
-dotnet test Tests/AI.Tests/AI.Tests.csproj --filter FullyQualifiedName~LocalQwenTests
-Remove-Item Env:RUN_LOCAL_AI_TESTS
+.\scripts\Test-AI.ps1 -Gateway http://localhost:5000 -SessionId <session-guid> -CartId <cart-guid> -CookieFile <private-cookie-json>
 ```
-
-To exercise the **real** running stack, keep an existing session/cart and export its cookie into an ignored JSON file (property name is the actual cookie name). This script only reads the cart and calls AI; it does not provision or alter restaurant data:
-
-```powershell
-.\scripts\Test-AI.ps1 -Gateway http://localhost:5000 -SessionId <session-guid> -CartId <cart-guid> -CookieFile .\.ai\guest-cookie.json -OutputFile .\.ai\gateway-ai-result.json
-```
-
-The cart needs at least one dish and the real menu must have another orderable suggestion. The test checks chat, recommendations, cart exclusion, allergy fallback, off-topic refusal and an unchanged cart version. Do not share cookie/credential files. Actual timings include model load state and hardware; neither a model smoke test nor fake-client tests establish end-to-end performance below three seconds.
-
-## Troubleshooting
-
-- **Docker unavailable:** start Docker Desktop Linux engine; inspect `docker info`. The script does not silently install a hypervisor or change Windows settings.
-- **Native SDK missing:** install .NET 9 SDK, restart the shell, run `dotnet --list-sdks`.
-- **Download failure/disk full:** keep the persistent model store, free space/check HTTPS access to official GitHub/Ollama registry, rerun. Never substitute a different model.
-- **Ollama port occupied by another application:** inspect `.ai/ollama.stderr.log`; stop that application or configure a different native endpoint. Existing installations are not overwritten.
-- **Invalid model metadata:** inspect `ollama show qwen3:4b-instruct-2507-q4_K_M`. Setup refuses incompatible weights; it does not overwrite them automatically.
-- **503/timeout/OOM:** inspect `docker compose -f compose.yaml -f compose.ai.yaml logs ai ai-model-init ollama`; check allocated RAM/GPU and rerun setup. Stop unrelated workloads if needed. CPU mode can exceed the latency target.
-- **401/409:** rejoin a real open QR session / refresh the real cart. Do not bypass access checks or seed fake credentials.
-- **Gateway route missing:** rebuild/restart Gateway after pulling; AI running alone does not update an already-running old Gateway binary.
-
-### Verified on 23 October 2026
-
-The procedure was exercised on a **new local clone of HEAD with the uncommitted candidate changes applied**, without copying `.ai/`, native model files, build output, User Secrets or `appsettings.Local.json`. The source ran from a separate temporary checkout, not the original developer workspace. This verifies the candidate source; the remote repository will only contain it after these changes are committed/pushed.
-
-Executed from that checkout:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Start-AI.ps1 -ProjectName ai-verify-20261023
-```
-
-- Fresh official Compose Ollama/runtime and a new persistent model volume: approved model downloaded, metadata verified, smoke returned `READY`, AI healthy. An initial registry EOF/HTTP 500 was diagnosed; rerunning resumed cached layers. Setup now also retries temporary failures at most three times.
-- Repeated setup: printed `Approved model already installed; skipping download.` Existing databases/model volume were reused.
-- Native Windows `-Mode Local -SetupOnly`: reused the existing native Ollama/model without upgrading, and returned `READY`. The native **missing-installation ZIP branch was not tested on a pristine Windows machine**.
-- Automatic-start follow-up: plain `dotnet run --project Services/ai_service/AI.API/AI.API.csproj` prepared the cached native model and returned `ready: true` from `/health/ready`. Ordinary Compose startup with only `-p ai-verify-20261023` added automatically (no explicit AI file) ran the model initializer successfully and started a healthy AI container. These follow-up checks used the working checkout and existing test model stores. Updated Windows AI tests: **68 passed, 1 opt-in benchmark skipped, 0 failed**.
-- Windows Release solution run: **533 passed, 37 conditional tests skipped, 0 failed**. A physical Windows reboot was not performed; model persistence is provided by the retained native model directory / Docker named volume.
-- Real Gateway → AI → real Restaurant/Catalog/Ordering → real Ollama, using the existing QR join/cart APIs against isolated Docker demo databases: UC1 suggested **Iced Tea, price 10000**, excluding Steamed Rice already in the cart. UC2 returned **Iced Tea: 10000.00. Available to order.** Allergy fallback and unrelated-question refusal passed. Cart version was unchanged.
-- Real missing-cookie test: HTTP **401**. Two simultaneous real AI requests: **200 + 429**.
-- Docker CPU timing through Gateway: corrected UC2 cold chat **23.93 s**, warm chat **3.88 s**; UC1 measured **4.55 s**. This hardware/configuration **does not meet the under-three-second target**. Cold readiness probe failed as expected before inference loaded the model.
-- AI fake-client/in-process Gateway tests in a clean Linux .NET 9 SDK container: **61 passed, 1 opt-in real-model benchmark skipped**. GitHub Actions itself was not triggered from this task.
-
-An automated approval check blocked the additional command that would temporarily stop AI to test other live endpoints during the outage; that live outage experiment was not performed. HTTP 503 mapping was instead verified through the separate fake-client Gateway test. No unavailable dependency was replaced by fabricated production data.
-
-Test models/data persist in the isolated `ai-verify-20261023` project. If that project is still running on port 5000, reuse that project name or stop it manually before starting a different project on the same port:
-
-```powershell
-docker compose -p ai-verify-20261023 -f compose.yaml -f compose.ai.yaml down
-```
-
-This keeps SQL/model volumes. Do not append `-v` unless you intend to delete them.
 
 ## Checkout before payment
 

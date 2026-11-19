@@ -11,6 +11,7 @@ message ChatRequest {
   GuestAccess access = 1;
   string message = 2;
   repeated ConversationTurn history = 3;
+  optional string conversation_context = 4;
 }
 message RecommendationRequest {
   GuestAccess access = 1;
@@ -39,6 +40,7 @@ message ChatReply {
   repeated MenuCard items = 2;
   bool search_limited = 3;
   string evaluated_at = 4;
+  string conversation_context = 5;
 }
 message RecommendationReply {
   string cart_id = 1;

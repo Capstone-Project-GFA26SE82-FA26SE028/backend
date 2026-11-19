@@ -11,7 +11,7 @@ namespace AI.API.Clients;
 
 public sealed class CatalogMenuClient(MenuGrpc.MenuGrpcClient client, IOptions<AISettings> settings) : ICatalogMenuClient
 {
-    public async Task<MenuPageDTO> GetAllAsync(GuestContext guest, string channel, int page, int pageSize, CancellationToken ct)
+    public async Task<MenuPageDTO> GetAllAsync(GuestContext guest, Guid restaurantId, string channel, int page, int pageSize, CancellationToken ct)
     {
         var reply = await client.GetAllAsync(new MenuListRequest
         {
@@ -19,12 +19,15 @@ public sealed class CatalogMenuClient(MenuGrpc.MenuGrpcClient client, IOptions<A
             Channel = channel,
             Page = page,
             PageSize = pageSize
+        }, headers: new Metadata
+        {
+            { "x-restaurant-id", restaurantId.ToString() }
         }, deadline: Deadline(), cancellationToken: ct);
         RequireSuccess(reply.IsSuccess, reply.StatusCode);
         return new MenuPageDTO(reply.Items.Select(item => Map(item, channel)).ToArray(), reply.TotalCount);
     }
 
-    public async Task<MenuItemDTO?> GetByIdAsync(GuestContext guest, string channel, Guid itemId, CancellationToken ct)
+    public async Task<MenuItemDTO?> GetByIdAsync(GuestContext guest, Guid restaurantId, string channel, Guid itemId, CancellationToken ct)
     {
         try
         {
@@ -33,6 +36,9 @@ public sealed class CatalogMenuClient(MenuGrpc.MenuGrpcClient client, IOptions<A
                 Access = Access(guest),
                 Channel = channel,
                 ItemId = itemId.ToString()
+            }, headers: new Metadata
+            {
+                { "x-restaurant-id", restaurantId.ToString() }
             }, deadline: Deadline(), cancellationToken: ct);
             if (reply.StatusCode == 404)
             {

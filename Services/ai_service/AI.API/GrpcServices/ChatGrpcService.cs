@@ -11,12 +11,14 @@ public sealed class ChatGrpcService(IChatService service) : ChatGrpc.ChatGrpcBas
     {
         var result = await service.Chat(new ChatRequestDTO(
             AIGrpcMapping.Guest(request.Access), request.Message,
-            request.History.Select(turn => new AI.Common.DTOs.ConversationTurn(turn.Role, turn.Content)).ToArray()), AIInterceptor.Cancellation(context));
+            request.History.Select(turn => new AI.Common.DTOs.ConversationTurn(turn.Role, turn.Content)).ToArray(),
+            request.HasConversationContext ? request.ConversationContext : null), AIInterceptor.Cancellation(context));
         var reply = new ChatReply
         {
             Answer = result.Answer,
             SearchLimited = result.SearchLimited,
-            EvaluatedAt = result.EvaluatedAt.ToString("O")
+            EvaluatedAt = result.EvaluatedAt.ToString("O"),
+            ConversationContext = result.ConversationContext
         };
         reply.Items.AddRange(result.Items.Select(AIGrpcMapping.Card));
         return reply;
