@@ -107,6 +107,14 @@ namespace Identity.DAL.Implements
         }
 
 
+        public Task<List<User>> GetStaffProfilesAsync(Guid restaurantId, Guid[] ids, CancellationToken ct)
+        {
+            return _context.Users.AsNoTracking().Where(user => ids.Contains(user.UserId)
+                && (user.RestaurantId == restaurantId || user.RestaurantId == null)
+                && user.RoleId != "customer" && user.RoleId != "platform_admin").ToListAsync(ct);
+        }
+
+
         public async Task<User?> FindByEmailAsync(string email)
         {
             if (string.IsNullOrWhiteSpace(email))

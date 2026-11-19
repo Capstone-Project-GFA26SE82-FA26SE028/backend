@@ -45,7 +45,12 @@ public sealed class RestaurantStaffController(RestaurantStaffGrpc.RestaurantStaf
         {
             RestaurantId = Guid.Parse(value.RestaurantId),
             UserIdRef = Guid.Parse(value.UserIdRef),
-            IsActive = value.IsActive
+            IsActive = value.IsActive,
+            FullName = value.HasFullName ? value.FullName : null,
+            UserName = value.HasUserName ? value.UserName : null,
+            Email = value.HasEmail ? value.Email : null,
+            RoleId = value.HasRoleId ? value.RoleId : null,
+            AvatarUrl = value.HasAvatarUrl ? value.AvatarUrl : null
         };
     }
 }

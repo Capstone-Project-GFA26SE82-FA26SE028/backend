@@ -42,6 +42,12 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
         return await IsAdmin(actorId, ct) ? null : (await unitOfWork.UserRepo.FindUserAsync(actorId, ct))?.RestaurantId;
     }
 
+    public async Task<IReadOnlyList<UserDTO>> GetStaffProfiles(Guid restaurantId, Guid[] ids, CancellationToken ct)
+    {
+        return (await unitOfWork.UserRepo.GetStaffProfilesAsync(restaurantId, ids, ct)).Select(Map).ToArray();
+    }
+
+
     public async Task ProvisionPending(CancellationToken ct)
     {
         if (provisioner?.IsConfigured != true)

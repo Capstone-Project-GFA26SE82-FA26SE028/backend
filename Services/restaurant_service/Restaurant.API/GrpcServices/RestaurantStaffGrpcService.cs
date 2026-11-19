@@ -66,11 +66,37 @@ public sealed class RestaurantStaffGrpcService(IRestaurantStaffService service, 
 
     private static RestaurantStaffInfo Map(RestaurantStaffDto value)
     {
-        return new RestaurantStaffInfo
+        var reply = new RestaurantStaffInfo
         {
             RestaurantId = value.RestaurantId.ToString(),
             UserIdRef = value.UserIdRef.ToString(),
             IsActive = value.IsActive
         };
+        if (value.FullName is not null)
+        {
+            reply.FullName = value.FullName;
+        }
+
+        if (value.UserName is not null)
+        {
+            reply.UserName = value.UserName;
+        }
+
+        if (value.Email is not null)
+        {
+            reply.Email = value.Email;
+        }
+
+        if (value.RoleId is not null)
+        {
+            reply.RoleId = value.RoleId;
+        }
+
+        if (value.AvatarUrl is not null)
+        {
+            reply.AvatarUrl = value.AvatarUrl;
+        }
+
+        return reply;
     }
 }

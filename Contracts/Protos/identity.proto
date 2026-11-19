@@ -80,6 +80,7 @@ message UserInfo {
 }
 
 service UserGrpc {
+  rpc GetStaffProfiles(StaffProfilesRequest) returns (UserListReply);
   rpc UpdateUser (UpdateUserRequest) returns (UserReply);
   rpc CreateUser (CreateUserRequest) returns (UserReply);
   rpc ListRoles (ListRolesRequest) returns (RoleListReply);
@@ -249,3 +250,4 @@ message UpdateUserRequest {
   optional string phone_number = 5;
   optional string avatar_url = 6;
 }
+message StaffProfilesRequest { string restaurant_id = 1; repeated string user_ids = 2; }

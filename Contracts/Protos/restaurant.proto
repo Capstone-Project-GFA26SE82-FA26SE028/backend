@@ -342,6 +342,11 @@ message RestaurantStaffListRequest {
 }
 
 message RestaurantStaffInfo {
+  optional string full_name = 4;
+  optional string user_name = 5;
+  optional string email = 6;
+  optional string role_id = 7;
+  optional string avatar_url = 8;
   string restaurant_id = 1;
   string user_id_ref = 2;
   bool is_active = 3;

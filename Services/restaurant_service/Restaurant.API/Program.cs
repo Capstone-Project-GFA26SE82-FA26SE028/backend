@@ -92,6 +92,7 @@ builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationGrpc.
 });
 builder.Services.AddHostedService<RestaurantIsolation.NotificationOutboxWorker<RestaurantDbContext>>();
 
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IStaffProfiles, Restaurant.API.Management.StaffProfilesClient>();
 var app = builder.Build();
 
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantGrpcService>();
