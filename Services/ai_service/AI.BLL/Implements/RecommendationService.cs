@@ -33,7 +33,7 @@ public sealed class RecommendationService(
         AssistantRules.ValidateCart(cart, request.CartId, guest, clock.GetUtcNow());
         if (cart.Items.Count == 0)
         {
-            return Result(cart, "Add a dish to your cart before requesting suggestions.", [], false);
+            return Result(cart, "Bạn hãy thêm món vào giỏ để nhận gợi ý món ăn kèm hoặc đồ uống.", [], false);
         }
 
         var source = await menu.Read(request.Guest, guest.RestaurantId, ct);
@@ -45,7 +45,7 @@ public sealed class RecommendationService(
                 ?? await menu.Refresh(request.Guest, guest.RestaurantId, line.ItemId, ct);
             if (item is null)
             {
-                throw new AIException(409, "A dish in your cart is no longer in the public menu. Please refresh your cart.");
+                throw new AIException(409, "Một món trong giỏ không còn trong thực đơn hiện tại. Bạn vui lòng làm mới giỏ.");
             }
 
             cartContext.Add(new ModelCartLineDTO(item.ItemName, item.CategoryName, line.Quantity));
@@ -56,7 +56,7 @@ public sealed class RecommendationService(
         var limited = source.TotalCount > source.Items.Count || eligible.Length > candidates.Count;
         if (candidates.Count == 0)
         {
-            return Result(cart, "No additional orderable suggestions are available in the current menu search.", [], limited);
+            return Result(cart, "Chưa có món ăn kèm hoặc đồ uống phù hợp có thể đặt trong phần thực đơn hiện tại.", [], limited);
         }
 
         var keyed = AssistantRules.Keyed(candidates);
@@ -73,7 +73,7 @@ public sealed class RecommendationService(
         AssistantRules.ValidateCart(refreshedCart, request.CartId, guest, clock.GetUtcNow());
         if (refreshedCart.Version != cart.Version || !SameItems(cart.Items, refreshedCart.Items))
         {
-            throw new AIException(409, "Your cart changed while suggestions were generated. Please request fresh suggestions.");
+            throw new AIException(409, "Giỏ hàng đã thay đổi trong lúc tạo gợi ý. Bạn vui lòng lấy gợi ý mới.");
         }
 
         var selected = new List<SuggestedItemDTO>();
@@ -88,8 +88,8 @@ public sealed class RecommendationService(
         }
 
         return Result(refreshedCart, selected.Count == 0
-            ? "The suggested dishes are no longer orderable. Please refresh and try again."
-            : "Suggestions are ready. Choose any required options before adding a dish through your cart.", selected, limited);
+            ? "Chưa có gợi ý phù hợp có thể đặt. Bạn vui lòng làm mới giỏ để xem lại."
+            : "Bạn có thể thêm các món gợi ý vào giỏ. Hãy chọn đủ tùy chọn bắt buộc trước khi thêm.", selected, limited);
     }
 
     private static bool SameItems(IReadOnlyList<CartLineDTO> first, IReadOnlyList<CartLineDTO> second)
