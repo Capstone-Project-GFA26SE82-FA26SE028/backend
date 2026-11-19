@@ -32,7 +32,14 @@ public sealed class ServiceRequestRepository(RestaurantDbContext db)
     public async Task<(IReadOnlyList<ServiceRequest> Items, int Total)> GetPaymentPageAsync(
         Guid restaurantId, int page, int pageSize, CancellationToken ct)
     {
-        var query = PendingPayments().AsNoTracking().Where(request =>
+        return await GetPageAsync(restaurantId, PaymentRequestStatuses.Type, page, pageSize, ct);
+    }
+
+    public async Task<(IReadOnlyList<ServiceRequest> Items, int Total)> GetPageAsync(
+        Guid restaurantId, string type, int page, int pageSize, CancellationToken ct)
+    {
+        var query = _context.ServiceRequests.Where(request => request.Type == type && request.CompletedAt == null)
+            .AsNoTracking().Where(request =>
             request.TableSession.Status == "Open" && request.TableSession.ClosedAt == null
             && request.TableSession.SessionTables.Any(link => link.ReleasedAt == null && link.Table.Area.RestaurantId == restaurantId)
             && !request.TableSession.SessionTables.Any(link => link.ReleasedAt == null && link.Table.Area.RestaurantId != restaurantId));
@@ -61,6 +68,25 @@ public sealed class ServiceRequestRepository(RestaurantDbContext db)
             }).Skip(offset).Take(size).ToListAsync(ct);
         return rows.Select(value => (value.RestaurantId, value.SessionId)).ToArray();
     }
+
+    public Task<ServiceRequest?> GetPendingAsync(Guid sessionId, string type, CancellationToken ct)
+    {
+        return _context.ServiceRequests.AsNoTracking().SingleOrDefaultAsync(request =>
+            request.TableSessionId == sessionId && request.Type == type && request.CompletedAt == null, ct);
+    }
+
+
+    public async Task CancelPendingStaffCallsAsync(Guid sessionId, DateTime closedAt, CancellationToken ct)
+    {
+        var pending = await _context.ServiceRequests.Where(request => request.TableSessionId == sessionId
+            && request.Type == "StaffCall" && request.CompletedAt == null).ToListAsync(ct);
+        foreach (var request in pending)
+        {
+            request.Status = "Cancelled";
+            request.CompletedAt = closedAt;
+        }
+    }
+
 
     private IQueryable<ServiceRequest> PendingPayments()
     {

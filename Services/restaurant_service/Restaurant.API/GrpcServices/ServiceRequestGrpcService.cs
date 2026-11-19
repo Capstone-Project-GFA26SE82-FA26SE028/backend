@@ -1,4 +1,5 @@
 using System.Globalization;
+using Restaurant.Common.Constants;
 using Backend.Contracts.Restaurant;
 using Grpc.Core;
 using Restaurant.BLL.Interfaces;
@@ -9,6 +10,54 @@ namespace Restaurant.API.GrpcServices;
 
 public sealed class ServiceRequestGrpcService(IServiceRequestService service) : ServiceRequestGrpc.ServiceRequestGrpcBase
 {
+    public override async Task<PaymentServiceRequestInfo> CreateStaffCall(PaymentServiceRequest request, ServerCallContext context)
+    {
+        return Map(await service.Create(ParseId(request.TableSessionId), ParseId(request.ServiceRequestId),
+            request.GuestToken, context.CancellationToken, ServiceRequestKind.StaffCall));
+    }
+
+    public override async Task<PaymentServiceRequestInfo> GetStaffCallById(PaymentServiceRequest request, ServerCallContext context)
+    {
+        return Map(await service.GetById(ParseId(request.TableSessionId), ParseId(request.ServiceRequestId),
+            request.GuestToken, context.CancellationToken, ServiceRequestKind.StaffCall));
+    }
+
+    public override async Task<PaymentServiceRequestInfo> GetCurrentStaffCall(GuestAccessRequest request, ServerCallContext context)
+    {
+        return Map(await service.GetCurrent(ParseId(request.TableSessionId), request.Token,
+            context.CancellationToken, ServiceRequestKind.StaffCall));
+    }
+
+    public override async Task<PaymentServiceRequestInfo> GetStaffCallForStaff(StaffCallAccessRequest request, ServerCallContext context)
+    {
+        return Map(await service.GetStaffCall(ParseId(request.RestaurantId), ParseId(request.ServiceRequestId), context.CancellationToken));
+    }
+
+    public override async Task<PaymentServiceRequestPage> GetStaffCalls(PaymentServiceRequestList request, ServerCallContext context)
+    {
+        var result = await service.GetAll(ParseId(request.RestaurantId), request.Page,
+            request.PageSize, context.CancellationToken, ServiceRequestKind.StaffCall);
+        var reply = new PaymentServiceRequestPage
+        {
+            TotalCount = result.TotalCount,
+            Page = result.Page,
+            PageSize = result.PageSize
+        };
+        reply.Items.AddRange(result.Items.Select(Map));
+        return reply;
+    }
+
+    public override async Task<PaymentServiceRequestInfo> AcknowledgeStaffCall(PaymentServiceRequest request, ServerCallContext context)
+    {
+        return Map(await service.Acknowledge(ParseId(request.TableSessionId), ParseId(request.ServiceRequestId),
+            context.CancellationToken, ServiceRequestKind.StaffCall));
+    }
+
+    public override async Task<PaymentServiceRequestInfo> CompleteStaffCall(PaymentServiceRequest request, ServerCallContext context)
+    {
+        return Map(await service.CompleteStaffCall(ParseId(request.TableSessionId), ParseId(request.ServiceRequestId), context.CancellationToken));
+    }
+
     public override async Task<PaymentServiceRequestInfo> Create(PaymentServiceRequest request, ServerCallContext context)
     {
         return Map(await service.Create(ParseId(request.TableSessionId), ParseId(request.ServiceRequestId),
@@ -79,7 +128,7 @@ public sealed class ServiceRequestGrpcService(IServiceRequestService service) : 
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)
         {
-            throw new ManagementException(400, "Yêu cầu mã nhà hàng, phiên bàn và yêu cầu thanh toán hợp lệ.");
+            throw new ManagementException(400, "Yêu cầu mã nhà hàng, phiên bàn và yêu cầu hợp lệ.");
         }
 
         return id;
@@ -93,11 +142,17 @@ public sealed class ServiceRequestGrpcService(IServiceRequestService service) : 
             TableSessionId = request.TableSessionId.ToString(),
             RestaurantId = request.RestaurantId.ToString(),
             Status = request.Status,
+            Type = request.Type,
             RequestedAt = request.RequestedAt.ToString("O", CultureInfo.InvariantCulture)
         };
         if (request.AcknowledgedAt.HasValue)
         {
             reply.AcknowledgedAt = request.AcknowledgedAt.Value.ToString("O", CultureInfo.InvariantCulture);
+        }
+
+        if (request.CompletedAt.HasValue)
+        {
+            reply.CompletedAt = request.CompletedAt.Value.ToString("O", CultureInfo.InvariantCulture);
         }
 
         if (request.HandledByRef.HasValue)

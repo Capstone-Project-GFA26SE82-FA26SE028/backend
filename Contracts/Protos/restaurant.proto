@@ -353,6 +353,13 @@ message RestaurantStaffListReply {
 
 // Dine-in payment requests are stored by Restaurant until a waiter receives them.
 service ServiceRequestGrpc {
+  rpc CreateStaffCall(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+  rpc GetStaffCallById(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+  rpc GetCurrentStaffCall(GuestAccessRequest) returns (PaymentServiceRequestInfo);
+  rpc GetStaffCalls(PaymentServiceRequestList) returns (PaymentServiceRequestPage);
+  rpc GetStaffCallForStaff(StaffCallAccessRequest) returns (PaymentServiceRequestInfo);
+  rpc AcknowledgeStaffCall(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
+  rpc CompleteStaffCall(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
   rpc GetResultAccess(PaymentServiceRequest) returns (PaymentResultAccessInfo);
   rpc Create(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
   rpc GetById(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
@@ -360,6 +367,11 @@ service ServiceRequestGrpc {
   rpc GetAll(PaymentServiceRequestList) returns (PaymentServiceRequestPage);
   rpc Acknowledge(PaymentServiceRequest) returns (PaymentServiceRequestInfo);
   rpc GetReview(PaymentServiceRequest) returns (PaymentRequestReviewInfo);
+}
+
+message StaffCallAccessRequest {
+  string restaurant_id = 1;
+  string service_request_id = 2;
 }
 
 message PaymentServiceRequest {
@@ -383,6 +395,8 @@ message PaymentServiceRequestInfo {
   optional string acknowledged_at = 6;
   optional string handled_by_ref = 7;
   repeated PaymentServiceRequestTable tables = 8;
+  optional string completed_at = 9;
+  string type = 10;
 }
 
 message PaymentRequestReviewInfo {
