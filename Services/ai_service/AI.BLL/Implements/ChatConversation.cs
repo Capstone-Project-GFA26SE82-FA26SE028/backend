@@ -9,15 +9,17 @@ internal static class ChatConversation
 {
     private const int MaximumExclusions = 24;
     private const int MaximumPriorItems = 3;
+    private const string RestoreVietnamese = @"(?:goi y lai|cho lai|co the chon lai)";
+    private const string RestoreEnglish = @"(?:include|allow|suggest)(?=\s+[\p{L}\p{N} ]+\s+again\b)";
 
     private static readonly Regex Ordinal = Pattern(@"\b(?:mon (?:thu |so )?(?<vi>mot|hai|ba|nhat|cuoi|tu|bon|nam|[0-9]+)|(?<en>first|second|third|last) (?:one|dish|item)|(?:the|your) (?<en>first|second|third|last)|(?:dish|item) (?:number )?(?<vi>[0-9]+))\b");
     private static readonly Regex SingularReference = Pattern(@"\b(?:mon (?:do|ay|nay|(?:(?:ban|ai) )?vua (?:noi|goi y|gioi thieu))|(?:that|this) (?:dish|one|item)|you (?:just )?(?:suggested|recommended|mentioned)|(?:does|is|was|order|costs?) it)\b");
     private static readonly Regex ShortReference = Pattern(@"^\s*(?:vay |the )?(?:con khong|con hang khong|gia bao nhieu|bao nhieu|dat duoc khong|how much|still available|in stock)\s*\??\s*$");
     private static readonly Regex MultipleReference = Pattern(@"\b(?:ca hai mon|hai mon do|nhung mon do|both (?:ones|dishes|items)|those (?:dishes|items))\b");
     private static readonly Regex Drop = Pattern(@"\b(?:bo (?:mon|no|di)|dung (?:goi y|chon)|khong muon (?:mon|an)|remove|exclude|avoid|skip|don.t suggest)\b");
-    private static readonly Regex DishGroup = Pattern(@"\b(?:dung goi y|khong goi y|tranh|bo|goi y lai|cho lai|exclude|avoid|skip|don.t suggest)\s+(?:cac mon |nhung mon |mon |any )?(?<name>[\p{L}\p{N} ]+?)(?=\s+(?:nua|cho minh|cho toi|giup minh|va|nhung)\b|[.!?,;]|$)");
+    private static readonly Regex DishGroup = Pattern($@"\b(?:{RestoreVietnamese}|{RestoreEnglish}|dung goi y|khong goi y|tranh|bo|exclude|avoid|skip|don.t suggest)\s+(?:cac mon |nhung mon |mon |any )?(?<name>[\p{{L}}\p{{N}} ]+?)(?=\s+(?:nua|anymore|any more|again|please|for me|cho minh|cho toi|giup minh|va|nhung)\b|[.!?,;]|$)");
     private static readonly Regex PresentedLine = Pattern(@"^.+:\s*(?:[0-9]|price not available|chua co gia)");
-    private static readonly Regex Restore = Pattern(@"\b(?:goi y lai|cho lai mon|co the chon lai|include .+ again|allow .+ again)\b");
+    private static readonly Regex Restore = Pattern($@"\b(?:{RestoreVietnamese}|{RestoreEnglish})\b");
     private static readonly Regex ClearBudget = Pattern(@"\b(?:khong (?:gioi han|can gioi han) gia|bo gioi han (?:gia|ngan sach)|ngan sach khong gioi han|no (?:price limit|budget limit)|any price|remove the budget)\b");
     private static readonly Regex Budget = Pattern(@"\b(?<op>duoi|toi da|khong qua|khong vuot qua|tam|khoang|ngan sach(?: la)?|under|below|less than|up to|at most|budget(?: of| is)?|around|about)\s*(?<amount>[0-9]+(?:[.,][0-9]{3})*)(?:\s*(?<scale>k|nghin|ngan|thousand))?\b");
     private static readonly Regex FoodFacts = Pattern(@"\b(?:allerg\w*|vegan|vegetarian|halal|kosher|gluten|spicy|spice|ingredient\w*|nut.free|dairy.free|di ung|an chay|thuan chay|(?:it|khong|do|mon|co) cay|cay khong|mon chay|thanh phan|nguyen lieu|co (?:chua |dung )?(?:dau phong|lac|hai san|sua|trung)|moi sung|sung moi|noi me day|noi man|noi ban|kho tho|khong an duoc|cannot eat|can.t eat|throat (?:closes|swells)|lips? swell|break out|food reaction)\b");
@@ -29,7 +31,9 @@ internal static class ChatConversation
     private static readonly Regex AvoidWarm = Pattern(@"\b(?:(?:khong muon|khong thich|tranh|dung (?:goi y|chon)) (?:an |uong )?(?:mon |do uong )?nong|(?:avoid|no|don.t want(?: any)?|don.t suggest) (?:anything |a )?(?:hot|warm)(?: food| dishes| drinks| meals)?)\b");
     private static readonly Regex AvoidCool = Pattern(@"\b(?:(?:khong muon|khong thich|tranh|dung (?:goi y|chon)) (?:an |uong )?(?:mon |do uong )?(?:lanh|mat)|(?:avoid|no|don.t want(?: any)?|don.t suggest) (?:anything |a )?(?:cold|chilled)(?: food| dishes| drinks| meals)?)\b");
     private static readonly Regex Light = Pattern(@"\b(?:nhe bung|an nhe|mon nhe|thanh dam|light (?:meal|dish)|something light)\b");
-    private static readonly Regex ClearPreference = Pattern(@"\b(?:mon nao cung duoc|khong can (?:mon )?(?:nong|lanh|mat|nhe) nua|any kind of dish|doesn.t have to be (?:hot|warm|cold|chilled|light))\b");
+    private static readonly Regex ClearAllPreferences = Pattern(@"\b(?:mon nao cung duoc|any kind of dish)\b");
+    private static readonly Regex ClearTemperaturePreference = Pattern(@"\b(?:khong can (?:mon )?(?:nong|lanh|mat) nua|doesn.t have to be (?:hot|warm|cold|chilled))\b");
+    private static readonly Regex ClearLightPreference = Pattern(@"\b(?:khong can (?:mon )?nhe(?: bung)? nua|doesn.t have to be light)\b");
     private static readonly Regex WarmDescription = Pattern(@"\b(?:phuc vu nong|dung nong|an nong|nong hoi|boc khoi|served hot|served warm|piping hot|hot soup|warm broth)\b");
     private static readonly Regex CoolDescription = Pattern(@"\b(?:phuc vu (?:lanh|mat|nguoi)|dung lanh|uong lanh|da lanh|served (?:cold|chilled|cool|at room temperature)|served over ice)\b");
     private static readonly Regex NegatedServingTemperature = Pattern(@"\b(?:khong (?:duoc )?(?:phuc vu|dung|an|uong) (?:nong|lanh|mat|nguoi)|(?:not|never) served (?:hot|warm|cold|chilled|cool))\b");
@@ -73,9 +77,14 @@ internal static class ChatConversation
 
     public static string? RequestedPreference(string question)
     {
-        if (ClearPreference.IsMatch(question))
+        if (ClearAllPreferences.IsMatch(question) || ClearTemperaturePreference.IsMatch(question))
         {
             return "none";
+        }
+
+        if (ClearLightPreference.IsMatch(question))
+        {
+            return null;
         }
 
         if (AvoidWarm.IsMatch(question) || (Cool.IsMatch(question) && !AvoidCool.IsMatch(question)))
@@ -304,9 +313,13 @@ internal static class ChatConversation
             preference = state.Preference;
         }
 
-        if (ClearPreference.IsMatch(question))
+        if (ClearAllPreferences.IsMatch(question) || ClearLightPreference.IsMatch(question))
         {
             lightMeal = false;
+            if (preference == "light")
+            {
+                preference = "none";
+            }
         }
 
         return state with
