@@ -27,6 +27,7 @@ app.MapGrpcService<Ordering.API.GrpcServices.StaffTransferGuardGrpcService>();
 
 app.MapGrpcService<Ordering.API.GrpcServices.KitchenStationGrpcService>();
 app.MapGrpcService<Ordering.API.GrpcServices.KitchenAssignmentGrpcService>();
+app.MapGrpcService<Ordering.API.GrpcServices.CancellationRequestGrpcService>();
 app.MapGrpcService<Ordering.API.GrpcServices.KitchenTaskGrpcService>();
 
 app.MapGrpcService<Ordering.API.GrpcServices.CartGrpcService>();

@@ -12,6 +12,8 @@ public interface IKitchenTaskRepository
 
     void Create(KitchenTask task);
 
+    Task<List<Guid>> GetSessionIdsAsync(IEnumerable<Guid> ids, CancellationToken ct);
+
     Task<(List<KitchenTask> Items, int Total)> GetPageAsync(
         int page,
         int pageSize,

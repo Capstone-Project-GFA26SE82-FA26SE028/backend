@@ -53,11 +53,15 @@ public partial class OrderingDbContext : Shared.Persistence.RestaurantIsolation.
         modelBuilder.Entity<CancellationRequest>(entity =>
         {
             entity.ToTable("CancellationRequest");
+            entity.HasIndex(e => e.OrderItemId).IsUnique()
+                .HasDatabaseName("UX_CancellationRequest_PendingItem").HasFilter("[Status] = 'Pending'");
 
             entity.Property(e => e.CancellationRequestId).ValueGeneratedNever();
             entity.Property(e => e.Reason)
                 .IsRequired()
-                .IsUnicode(false);
+                .HasMaxLength(1000);
+            entity.Property(e => e.DecidedAt).HasColumnType("datetime");
+            entity.Property(e => e.DecisionReason).HasMaxLength(1000);
             entity.Property(e => e.RequestedAt).HasColumnType("datetime");
             entity.Property(e => e.Status)
                 .IsRequired()

@@ -15,9 +15,17 @@ public sealed class KitchenTaskRepository(OrderingDbContext db) : IKitchenTaskRe
 
     private IQueryable<KitchenTask> ScopedTasks()
     {
-        return db.KitchenTasks.Where(task => task.OrderItem.Order.CustomerUserRef == null
+        return db.KitchenTasks.Include(task => task.OrderItem).ThenInclude(item => item.CancellationRequests)
+            .Where(task => task.OrderItem.Order.CustomerUserRef == null
             || (task.OrderItem.Order.RestaurantRef.HasValue
                 && onlineRestaurants.Contains(task.OrderItem.Order.RestaurantRef.Value)));
+    }
+
+    public Task<List<Guid>> GetSessionIdsAsync(IEnumerable<Guid> ids, CancellationToken ct)
+    {
+        return ScopedTasks().AsNoTracking().Where(task => ids.Contains(task.KitchenTaskId)
+                && task.OrderItem.Order.TableSessionRef.HasValue)
+            .Select(task => task.OrderItem.Order.TableSessionRef!.Value).Distinct().OrderBy(id => id).ToListAsync(ct);
     }
 
     public async Task<Guid?> GetOnlyActiveStationAsync(CancellationToken ct)

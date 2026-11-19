@@ -7,9 +7,11 @@ CREATE TABLE dbo.[CancellationRequest]
     [CancellationRequestId] uniqueidentifier NOT NULL,
     [OrderItemId] uniqueidentifier NOT NULL,
     [Quantity] int NOT NULL,
-    [Reason] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [Reason] nvarchar(1000) NOT NULL,
     [RequestedByRef] uniqueidentifier NOT NULL,
     [DecidedByRef] uniqueidentifier NULL,
+    [DecidedAt] datetime NULL,
+    [DecisionReason] nvarchar(1000) NULL,
     [Status] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [RequestedAt] datetime NOT NULL,
     [RestaurantId] uniqueidentifier NULL
@@ -293,4 +295,7 @@ CREATE TABLE dbo.NotificationOutbox (
 );
 CREATE UNIQUE INDEX IX_NotificationOutbox_EventKey ON dbo.NotificationOutbox(EventKey);
 CREATE INDEX IX_NotificationOutbox_ProcessedAt_NextAttemptAt ON dbo.NotificationOutbox(ProcessedAt, NextAttemptAt);
+GO
+
+CREATE UNIQUE NONCLUSTERED INDEX [UX_CancellationRequest_PendingItem] ON dbo.[CancellationRequest] ([OrderItemId]) WHERE [Status] = 'Pending';
 GO

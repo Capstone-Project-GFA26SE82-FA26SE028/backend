@@ -72,7 +72,7 @@ service CartGrpc {
 message CreateOrderRequest { OrderingAccess access = 1; string idempotency_key = 2; optional string cart_id = 3; optional string cart_version = 4; optional string table_id = 5; repeated SelectionInfo items = 6; optional string channel = 7; }
 message OrderIdRequest { OrderingAccess access = 1; string order_id = 2; string version = 3; }
 message OrderListRequest { OrderingAccess access = 1; int32 page = 2; int32 page_size = 3; }
-message OrderLineInfo { string order_item_id = 1; string item_id = 2; optional string recipe_version_id = 3; string name_snapshot = 4; int32 quantity = 5; string unit_price_snapshot = 6; string line_total = 7; optional string note = 8; string status = 9; repeated QuotedOptionInfo options = 10; }
+message OrderLineInfo { int32 cancelled_quantity = 11; int32 remaining_quantity = 12; string order_item_id = 1; string item_id = 2; optional string recipe_version_id = 3; string name_snapshot = 4; int32 quantity = 5; string unit_price_snapshot = 6; string line_total = 7; optional string note = 8; string status = 9; repeated QuotedOptionInfo options = 10; }
 message OrderInfo { string order_id = 1; string order_number = 2; string table_session_id = 3; string source = 4; string status = 5; string version = 6; optional string created_by = 7; string created_at = 8; optional string confirmed_by = 9; optional string confirmed_at = 10; string total_amount = 11; repeated OrderLineInfo items = 12; optional string channel = 13; string restaurant_id = 14;
   string pickup_name = 15; string pickup_phone = 16; reserved 17; reserved "pickup_at"; string pickup_code = 18;
   string payment_status = 19; string checkout_url = 20; string cancellation_reason = 21;
@@ -248,9 +248,7 @@ message RefundAccountInfo {
 }
 
 service StaffTransferGuardGrpc { rpc Check(StaffTransferGuardRequest) returns (StaffTransferGuardReply); }
-
 message StaffTransferGuardRequest { string user_id = 1; }
-
 message StaffTransferGuardReply { bool has_kitchen_assignment = 1; }
 
 service KitchenAssignmentGrpc {
@@ -261,23 +259,39 @@ service KitchenAssignmentGrpc {
   rpc Update(KitchenAssignmentRequest) returns (KitchenAssignmentInfo);
   rpc Delete(KitchenAssignmentRequest) returns (google.protobuf.Empty);
 }
-
 message KitchenAssignmentListRequest { int32 page = 1; int32 page_size = 2; }
-
 message KitchenAssignmentRequest { string station_id = 1; string user_id = 2; string expected_user_id = 3; }
-
 message KitchenEmployeeInfo {
   string user_id = 1; string full_name = 2; string user_name = 3; string email = 4;
   string avatar_url = 5; string role_id = 6; bool is_active = 7;
 }
-
 message KitchenEmployeeList { repeated KitchenEmployeeInfo items = 1; }
-
 message KitchenAssignmentInfo {
   string kitchen_station_id = 1; string kitchen_station_code = 2; string kitchen_station_name = 3;
   bool station_active = 4; string user_id = 5; KitchenEmployeeInfo employee = 6;
 }
-
 message KitchenAssignmentPage {
   repeated KitchenAssignmentInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4;
 }
+
+service CancellationRequestGrpc {
+  rpc Create(CancellationWriteRequest) returns (CancellationCreateReply);
+  rpc GetAll(CancellationListRequest) returns (CancellationPage);
+  rpc GetById(CancellationDecisionRequest) returns (CancellationInfo);
+  rpc Approve(CancellationDecisionRequest) returns (CancellationInfo);
+  rpc Reject(CancellationDecisionRequest) returns (CancellationInfo);
+}
+message CancellationWriteRequest {
+  OrderingAccess access = 1; string idempotency_key = 2; string order_item_id = 3;
+  int32 quantity = 4; string reason = 5;
+}
+message CancellationDecisionRequest { OrderingAccess access = 1; string id = 2; string reason = 3; }
+message CancellationListRequest { OrderingAccess access = 1; string status = 2; int32 page = 3; int32 page_size = 4; }
+message CancellationInfo {
+  string cancellation_request_id = 1; string table_session_id = 2; string order_id = 3; string order_number = 4;
+  string order_item_id = 5; string item_name = 6; int32 quantity = 7; string reason = 8;
+  string requested_by_ref = 9; optional string decided_by_ref = 10; string status = 11;
+  string requested_at = 12; optional string decided_at = 13; optional string decision_reason = 14;
+}
+message CancellationCreateReply { CancellationInfo result = 1; bool created = 2; }
+message CancellationPage { repeated CancellationInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }

@@ -61,6 +61,8 @@ public static class OrderingServiceExtensions
         services.AddScoped<ICatalogOrderClient, CatalogOrderClient>();
         services.AddScoped<ICartService, CartService>();
         services.AddScoped<IOrderService, OrderService>();
+        services.AddScoped<ICancellationRequestService, CancellationRequestService>();
+        services.AddScoped<ICancellationRequestStaffAccess, CancellationRequestStaffAccess>();
         services.AddScoped<ITakeawayAccess, TakeawayAccess>();
         services.AddScoped<ITakeawayPaymentClient, TakeawayPaymentClient>();
         services.AddHostedService<Ordering.API.Workers.TakeawayReconciliationWorker>();

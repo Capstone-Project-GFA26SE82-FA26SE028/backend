@@ -10,6 +10,7 @@ public sealed class OrderRepository(OrderingDbContext db) : IOrderRepository
     {
         return db.Orders.AsNoTracking().Where(order => order.TableSessionRef == sessionId)
             .Include(order => order.OrderItems).ThenInclude(item => item.OrderItemOptions)
+            .Include(order => order.OrderItems).ThenInclude(item => item.CancellationRequests)
             .OrderBy(order => order.OrderId).ToListAsync(ct);
     }
 
@@ -63,6 +64,7 @@ public sealed class OrderRepository(OrderingDbContext db) : IOrderRepository
     private static IQueryable<Order> Details(IQueryable<Order> query)
     {
         return query
+            .Include(order => order.OrderItems).ThenInclude(item => item.CancellationRequests)
             .Include(order => order.OrderItems)
                 .ThenInclude(item => item.OrderItemOptions)
             .Include(order => order.OrderItems)

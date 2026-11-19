@@ -35,6 +35,7 @@ public sealed class RestaurantScopeInterceptor(RestaurantAccessGrpc.RestaurantAc
             || method.StartsWith("/catalog.OrderValidationGrpc/", StringComparison.Ordinal)
             || method.StartsWith("/ordering.CartGrpc/", StringComparison.Ordinal)
             || method.StartsWith("/ordering.OrderGrpc/", StringComparison.Ordinal)
+            || method.StartsWith("/ordering.CancellationRequestGrpc/", StringComparison.Ordinal)
             || method == "/ordering.CheckoutLockGrpc/Verify"
             || method is "/billing.BillCheckoutGrpc/Request" or "/billing.BillCheckoutGrpc/GetCurrent";
         var session = Text(access, "table_session_id");

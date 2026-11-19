@@ -271,10 +271,16 @@ public sealed partial class OrderService(
                 throw new OrderingException(409, "Đơn hàng không còn ở trạng thái chờ duyệt hoặc dữ liệu đã bị thay đổi.");
             }
 
-            var lines = found.OrderItems.OrderBy(item => item.OrderItemId).Select(item => new SelectionDTO
+            if (found.OrderItems.SelectMany(item => item.CancellationRequests).Any(request => request.Status == "Pending"))
+            {
+                throw new OrderingException(409, "Cần xử lý yêu cầu hủy món trước khi xác nhận đơn.");
+            }
+
+            var lines = found.OrderItems.Where(item => item.Quantity > item.CancelledQuantity)
+                .OrderBy(item => item.OrderItemId).Select(item => new SelectionDTO
             {
                 ItemId = item.ItemRef,
-                Quantity = item.Quantity,
+                Quantity = item.Quantity - item.CancelledQuantity,
                 Options = item.OrderItemOptions.Select(option => new OptionSelectionDTO
                 {
                     OptionId = option.OptionRef,
@@ -302,7 +308,7 @@ public sealed partial class OrderService(
             found.Status = "Confirmed";
             found.ConfirmedAt = now;
             found.ConfirmedByRef = actor.UserId;
-            foreach (var item in found.OrderItems)
+            foreach (var item in found.OrderItems.Where(item => item.Quantity > item.CancelledQuantity))
             {
                 var (initialStatus, priority) = DetermineCourseAndPriority(item.NameSnapshot, found.Channel);
                 item.Status = initialStatus;
@@ -427,7 +433,7 @@ public sealed partial class OrderService(
             OrderItem = item,
             OrderItemId = item.OrderItemId,
             BatchNumber = 1,
-            Quantity = item.Quantity,
+            Quantity = item.Quantity - item.CancelledQuantity,
             Status = status,
             Priority = priority,
             EstimatedMinutes = estimatedMinutes,
@@ -507,8 +513,10 @@ public sealed partial class OrderService(
             RecipeVersionId = item.RecipeVersionRef,
             NameSnapshot = item.NameSnapshot,
             Quantity = item.Quantity,
+            CancelledQuantity = item.CancelledQuantity,
+            RemainingQuantity = item.Status == "Cancelled" ? 0 : item.Quantity - item.CancelledQuantity,
             UnitPriceSnapshot = item.UnitPriceSnapshot,
-            LineTotal = (item.UnitPriceSnapshot + item.OrderItemOptions.Sum(option => option.ExtraPriceSnapshot * option.Quantity)) * item.Quantity,
+            LineTotal = (item.UnitPriceSnapshot + item.OrderItemOptions.Sum(option => option.ExtraPriceSnapshot * option.Quantity)) * (item.Status == "Cancelled" ? 0 : item.Quantity - item.CancelledQuantity),
             Note = item.Note,
             Status = item.Status,
             Options = item.OrderItemOptions.OrderBy(option => option.OptionRef).Select(option => new QuotedOptionDTO

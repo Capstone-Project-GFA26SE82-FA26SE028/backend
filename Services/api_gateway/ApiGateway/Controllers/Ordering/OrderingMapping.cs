@@ -97,6 +97,8 @@ internal static class OrderingMapping
             RecipeVersionId = value.HasRecipeVersionId ? Guid.Parse(value.RecipeVersionId) : null,
             NameSnapshot = value.NameSnapshot,
             Quantity = value.Quantity,
+            CancelledQuantity = value.CancelledQuantity,
+            RemainingQuantity = value.RemainingQuantity,
             UnitPriceSnapshot = decimal.Parse(value.UnitPriceSnapshot, CultureInfo.InvariantCulture),
             LineTotal = decimal.Parse(value.LineTotal, CultureInfo.InvariantCulture),
             Note = value.HasNote ? value.Note : null,
