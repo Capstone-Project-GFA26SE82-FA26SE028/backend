@@ -7,7 +7,7 @@ using Entity = Restaurant.DAL.Models.Table;
 namespace Restaurant.BLL.Implements;
 
 public sealed class TableService(ITableRepository repository, IAreaRepository areas,
-    IManagementTransaction transaction, IManagementAccess access, ITableSessionOrderAccess waiterAccess,
+    IManagementTransaction transaction, ILayoutManagementAccess access, ITableSessionOrderAccess waiterAccess,
     IRestaurantStaffRepository staff) : ITableService
 {
     public async Task<PageResult<ServiceTableDto>> GetServiceTables(ListQuery query, CancellationToken ct)
@@ -41,8 +41,9 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
 
     public async Task<PageResult<TableDto>> GetAll(ListQuery query, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        await access.RequireManager(ct);
         ManagementValidation.Query(query);
+        query.RestaurantId = await access.RequireRestaurant(query.RestaurantId, ct);
         var page = await repository.GetPageAsync(query, ct);
         return new PageResult<TableDto>
         {
@@ -55,7 +56,7 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
 
     public async Task<TableDto> GetById(Guid id, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        await access.RequireManager(ct);
         return Map(await Find(id, ct));
     }
 
@@ -71,7 +72,7 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
 
     private async Task<TableDto> Save(Guid? id, TableWriteDto body, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        await access.RequireManager(ct);
         var code = ManagementValidation.Required(body.TableCode, 50, "Mã bàn");
         if (body.Capacity <= 0 || !ValidPosition(body.PositionX) || !ValidPosition(body.PositionY))
         {
@@ -122,7 +123,7 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
 
     public async Task<TableDto> AssignArea(Guid id, AssignAreaDto body, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        await access.RequireManager(ct);
         var entity = await transaction.ExecuteAsync(async () =>
         {
             var item = await Find(id, ct);
@@ -148,7 +149,7 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
 
     public async Task<TableDto> SetStatus(Guid id, StatusDto body, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        await access.RequireManager(ct);
         var entity = await transaction.ExecuteAsync(async () =>
         {
             var item = await Find(id, ct);
@@ -170,7 +171,7 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
 
     public async Task Delete(Guid id, string version, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        await access.RequireManager(ct);
         await transaction.ExecuteAsync(async () =>
         {
             var item = await Find(id, ct);
@@ -187,12 +188,15 @@ public sealed class TableService(ITableRepository repository, IAreaRepository ar
 
     private async Task<Entity> Find(Guid id, CancellationToken ct)
     {
-        return await repository.GetByIdAsync(id, ct) ?? throw new ManagementException(404, "Không tìm thấy bàn.");
+        var table = await repository.GetByIdAsync(id, ct) ?? throw new ManagementException(404, "Không tìm thấy bàn.");
+        await access.RequireRestaurant(table.Area.RestaurantId, ct);
+        return table;
     }
 
     private async Task<global::Restaurant.DAL.Models.Area> ActiveArea(Guid id, CancellationToken ct)
     {
         var area = await areas.GetByIdAsync(id, ct) ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
+        await access.RequireRestaurant(area.RestaurantId, ct);
         if (!area.IsActive)
         {
             throw new ManagementException(409, "Khu vực đang ngừng hoạt động.");

@@ -36,6 +36,7 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
         _restaurant = new WebApplicationFactory<RestaurantMarker>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
+            builder.UseSetting("Notifications:ServiceKey", "");
             // Program reads these before ConfigureAppConfiguration callbacks run.
             builder.UseSetting("ConnectionStrings:DefaultConnection", "Server=unused;Database=unused");
             builder.UseSetting("GrpcServices:Identity", "http://identity.test");
@@ -56,6 +57,8 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 services.AddSingleton<TimeProvider>(_reservationClock);
                 services.RemoveAll<IManagementAccess>();
                 services.AddScoped<IManagementAccess, TestAccess>();
+                services.RemoveAll<ILayoutManagementAccess>();
+                services.AddScoped<ILayoutManagementAccess, TestAccess>();
                 services.RemoveAll<IStaffIdentity>();
                 services.AddScoped<IStaffIdentity, TestStaffIdentity>();
                 services.RemoveAll<restaurantapi::Backend.Contracts.Identity.UserGrpc.UserGrpcClient>();
@@ -70,6 +73,7 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
         _gateway = new WebApplicationFactory<ApiGateway.ApiAssembly>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
+            builder.UseSetting("Notifications:ServiceKey", "");
             builder.UseSetting("GrpcServices:Identity", "http://identity.test");
             builder.UseSetting("GrpcServices:Restaurant", "http://restaurant.test");
             builder.ConfigureTestServices(services =>
@@ -375,8 +379,20 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
         }
     }
 
-    private sealed class TestAccess(IHttpContextAccessor accessor) : IManagementAccess
+    private sealed class TestAccess(IHttpContextAccessor accessor) : IManagementAccess, ILayoutManagementAccess
     {
+        // Existing CRUD fixtures stub authorization; LayoutManagementAccessTests cover the real policy.
+        public async Task RequireManager(CancellationToken ct)
+        {
+            await RequireAdmin(ct);
+        }
+
+        public async Task<Guid> RequireRestaurant(Guid? restaurantId, CancellationToken ct)
+        {
+            await RequireManager(ct);
+            return restaurantId ?? Guid.Empty;
+        }
+
         public Task<Guid> RequireAdmin(CancellationToken ct)
         {
             var auth = accessor.HttpContext!.Request.Headers.Authorization.ToString();

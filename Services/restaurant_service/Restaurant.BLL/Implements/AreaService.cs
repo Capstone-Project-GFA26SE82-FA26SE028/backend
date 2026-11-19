@@ -7,12 +7,13 @@ using Restaurant.DAL.Interfaces;
 namespace Restaurant.BLL.Implements;
 
 public sealed class AreaService(IAreaRepository repository, IRestaurantRepository restaurants,
-    IManagementTransaction transaction, IManagementAccess access) : IAreaService
+    IManagementTransaction transaction, ILayoutManagementAccess access) : IAreaService
 {
     public async Task<PageResult<AreaDto>> GetAll(ListQuery query, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        await access.RequireManager(ct);
         ManagementValidation.Query(query);
+        query.RestaurantId = await access.RequireRestaurant(query.RestaurantId, ct);
         var page = await repository.GetPageAsync(query, ct);
         return new PageResult<AreaDto>
         {
@@ -25,7 +26,7 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
 
     public async Task<AreaDto> GetById(Guid id, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        await access.RequireManager(ct);
         return Map(await Find(id, ct));
     }
 
@@ -41,13 +42,15 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
 
     private async Task<AreaDto> Save(Guid? id, AreaWriteDto body, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        await access.RequireManager(ct);
+        await access.RequireRestaurant(body.RestaurantId, ct);
         var code = ManagementValidation.Required(body.AreaCode, 50, "Mã khu vực");
         var name = ManagementValidation.Required(body.AreaName, 100, "Tên khu vực");
         var serviceType = ManagementValidation.Required(body.ServiceType, 50, "ServiceType");
         var spaceType = ManagementValidation.Required(body.SpaceType, 50, "SpaceType");
         var entity = await transaction.ExecuteAsync(async () =>
         {
+            await access.RequireRestaurant(body.RestaurantId, ct);
             if (await restaurants.GetByIdAsync(body.RestaurantId, ct) is null)
             {
                 throw new ManagementException(404, "Không tìm thấy nhà hàng.");
@@ -85,7 +88,7 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
 
     public async Task<AreaDto> SetStatus(Guid id, bool active, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        await access.RequireManager(ct);
         return Map(await transaction.ExecuteAsync(async () =>
         {
             var entity = await Find(id, ct);
@@ -101,7 +104,7 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
 
     public async Task Delete(Guid id, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        await access.RequireManager(ct);
         await transaction.ExecuteAsync(async () =>
         {
             var entity = await Find(id, ct);
@@ -117,7 +120,9 @@ public sealed class AreaService(IAreaRepository repository, IRestaurantRepositor
 
     private async Task<Area> Find(Guid id, CancellationToken ct)
     {
-        return await repository.GetByIdAsync(id, ct) ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
+        var area = await repository.GetByIdAsync(id, ct) ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
+        await access.RequireRestaurant(area.RestaurantId, ct);
+        return area;
     }
 
     internal static AreaDto Map(Area item)
