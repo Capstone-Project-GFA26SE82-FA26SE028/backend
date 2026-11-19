@@ -94,6 +94,29 @@ public sealed class RecommendationServiceTests
     }
 
     [Fact]
+    public async Task CartFromAnotherRestaurantIsRejectedEvenWhenSessionMatches()
+    {
+        var context = new AssistantTestContext();
+        context.Cart = context.Cart with { RestaurantId = Guid.NewGuid() };
+        var error = await Assert.ThrowsAsync<AIException>(() => context.Recommendations().Recommend(context.Request(), default));
+        Assert.Equal(503, error.StatusCode);
+        Assert.Equal(0, context.ModelCalls);
+    }
+
+    [Fact]
+    public async Task RecommendationsUseControlledVietnameseMessagesAndReasons()
+    {
+        var context = new AssistantTestContext();
+        var result = await context.Recommendations().Recommend(context.Request(), default);
+        Assert.Contains("Bạn có thể thêm", result.Message);
+        Assert.All(result.Items, item => Assert.Contains(item.Reason, RecommendationReasons.Allowed));
+        Assert.All(result.Items, item => Assert.DoesNotContain("suggest", item.Reason, StringComparison.OrdinalIgnoreCase));
+        context.Cart = context.Cart with { Items = [] };
+        var empty = await context.Recommendations().Recommend(context.Request(), default);
+        Assert.Contains("Bạn hãy thêm món", empty.Message);
+    }
+
+    [Fact]
     public async Task ExpiredCartIsRejected()
     {
         var context = new AssistantTestContext();

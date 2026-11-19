@@ -49,7 +49,7 @@ public abstract class AssistantControllerBase(IOptions<AIClientSettings> setting
             {
                 429 => "The assistant is busy. Please try again shortly.",
                 503 => "The assistant or a required service is not ready. Please try again or ask a staff member.",
-                504 => "The assistant request exceeded its time limit. Please try again.",
+                504 => "Trợ lý đang phản hồi chậm. Bạn vui lòng thử lại hoặc hỏi nhân viên phục vụ.",
                 502 => "The assistant could not produce a verified response.",
                 _ => error.Status.Detail
             };
@@ -57,7 +57,7 @@ public abstract class AssistantControllerBase(IOptions<AIClientSettings> setting
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return StatusCode(504, new ResponseDTO("The assistant request exceeded its time limit.", 504));
+            return StatusCode(504, new ResponseDTO("Trợ lý đang phản hồi chậm. Bạn vui lòng thử lại hoặc hỏi nhân viên phục vụ.", 504));
         }
     }
 

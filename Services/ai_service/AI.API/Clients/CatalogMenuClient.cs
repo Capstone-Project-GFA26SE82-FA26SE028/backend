@@ -1,4 +1,5 @@
 using System.Globalization;
+using AI.API.Diagnostics;
 using AI.BLL.Interfaces;
 using AI.Common.DTOs;
 using AI.Common.Exceptions;
@@ -9,23 +10,28 @@ using Microsoft.Extensions.Options;
 
 namespace AI.API.Clients;
 
-public sealed class CatalogMenuClient(MenuGrpc.MenuGrpcClient client, IOptions<AISettings> settings) : ICatalogMenuClient
+public sealed class CatalogMenuClient(MenuGrpc.MenuGrpcClient client, IOptions<AISettings> settings, ILogger<CatalogMenuClient> logger) : ICatalogMenuClient
 {
-    public async Task<MenuPageDTO> GetAllAsync(GuestContext guest, string channel, int page, int pageSize, CancellationToken ct)
+    public async Task<MenuPageDTO> GetAllAsync(GuestContext guest, Guid restaurantId, string channel, int page, int pageSize, CancellationToken ct)
     {
+        using var timing = new AssistantTiming(logger, "MenuRead");
         var reply = await client.GetAllAsync(new MenuListRequest
         {
             Access = Access(guest),
             Channel = channel,
             Page = page,
             PageSize = pageSize
+        }, headers: new Metadata
+        {
+            { "x-restaurant-id", restaurantId.ToString() }
         }, deadline: Deadline(), cancellationToken: ct);
         RequireSuccess(reply.IsSuccess, reply.StatusCode);
         return new MenuPageDTO(reply.Items.Select(item => Map(item, channel)).ToArray(), reply.TotalCount);
     }
 
-    public async Task<MenuItemDTO?> GetByIdAsync(GuestContext guest, string channel, Guid itemId, CancellationToken ct)
+    public async Task<MenuItemDTO?> GetByIdAsync(GuestContext guest, Guid restaurantId, string channel, Guid itemId, CancellationToken ct)
     {
+        using var timing = new AssistantTiming(logger, "MenuRefresh");
         try
         {
             var reply = await client.GetByIdAsync(new MenuItemRequest
@@ -33,6 +39,9 @@ public sealed class CatalogMenuClient(MenuGrpc.MenuGrpcClient client, IOptions<A
                 Access = Access(guest),
                 Channel = channel,
                 ItemId = itemId.ToString()
+            }, headers: new Metadata
+            {
+                { "x-restaurant-id", restaurantId.ToString() }
             }, deadline: Deadline(), cancellationToken: ct);
             if (reply.StatusCode == 404)
             {
