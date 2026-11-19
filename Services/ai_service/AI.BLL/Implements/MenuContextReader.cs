@@ -9,14 +9,14 @@ namespace AI.BLL.Implements;
 
 public sealed class MenuContextReader(ICatalogMenuClient catalog, IOptions<AISettings> options)
 {
-    public async Task<MenuPageDTO> Read(GuestContext guest, CancellationToken ct)
+    public async Task<MenuPageDTO> Read(GuestContext guest, Guid restaurantId, CancellationToken ct)
     {
         var settings = options.Value;
         var items = new List<MenuItemDTO>();
         var total = 0;
         for (var page = 1; items.Count < settings.MaximumMenuItems; page++)
         {
-            var result = await catalog.GetAllAsync(guest, settings.Channel, page, settings.MenuPageSize, ct);
+            var result = await catalog.GetAllAsync(guest, restaurantId, settings.Channel, page, settings.MenuPageSize, ct);
             total = result.TotalCount;
             if (total < 0 || result.Items.Any(item => item.ItemId == Guid.Empty || item.Channel != settings.Channel))
             {
@@ -44,9 +44,9 @@ public sealed class MenuContextReader(ICatalogMenuClient catalog, IOptions<AISet
             .ThenBy(item => item.ItemId).Take(options.Value.ModelCandidateCount).ToArray();
     }
 
-    public async Task<MenuItemDTO?> Refresh(GuestContext guest, Guid itemId, CancellationToken ct)
+    public async Task<MenuItemDTO?> Refresh(GuestContext guest, Guid restaurantId, Guid itemId, CancellationToken ct)
     {
-        var item = await catalog.GetByIdAsync(guest, options.Value.Channel, itemId, ct);
+        var item = await catalog.GetByIdAsync(guest, restaurantId, options.Value.Channel, itemId, ct);
         if (item is not null && (item.ItemId != itemId || item.Channel != options.Value.Channel))
         {
             throw new AIException(503, "The refreshed menu response does not match the requested item.");

@@ -3,16 +3,13 @@ extern alias Gateway;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using AI.API.Clients;
 using AI.BLL.Interfaces;
 using AI.Common.DTOs;
-using AI.Common.Settings;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using GatewayAI = Gateway::Backend.Contracts.AI;
 
 namespace AI.Tests;
@@ -69,6 +66,23 @@ public sealed class GatewayFlowTests
     }
 
     [Fact]
+    public async Task GuestRestaurantChangingDuringInferenceRejectsTheReply()
+    {
+        var data = new AssistantTestContext();
+        data.AfterModel = () => data.RestaurantId = Guid.NewGuid();
+        await using var ai = await GrpcFlowTests.Start(data);
+        await using var gateway = await Start(ai);
+        using var client = gateway.GetTestClient();
+        client.DefaultRequestHeaders.Add("Cookie", $"guest_access_{data.Guest.TableSessionId:N}={data.Guest.Token}");
+
+        using var result = await client.PostAsJsonAsync($"/api/ai/table-sessions/{data.Guest.TableSessionId}/chat",
+            new { message = "Is beef rice available?" });
+        Assert.Equal(HttpStatusCode.Forbidden, result.StatusCode);
+        Assert.Equal(1, data.ModelCalls);
+        Assert.DoesNotContain("Beef rice", await result.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task NullHistoryAndOversizedRequestAreRejectedBeforeModel()
     {
         var data = new AssistantTestContext();
@@ -80,43 +94,21 @@ public sealed class GatewayFlowTests
     }
 
     [Fact]
-    public async Task ReadinessDistinguishesRuntimeMissingModelAndLoadedModel()
-    {
-        foreach (var installed in new[] { false, true })
-        {
-            foreach (var loaded in new[] { false, true })
-            {
-                var data = new AssistantTestContext();
-                using var capacity = new OllamaCapacity(Options.Create(data.Settings));
-                using var http = new HttpClient(new StatusHandler(installed, loaded))
-                {
-                    BaseAddress = new Uri("http://localhost:11434/")
-                };
-                var model = new OllamaModelClient(http, capacity, Options.Create(ClientContractTests.ModelSettings()), Options.Create(data.Settings));
-                var status = await model.GetStatusAsync(default);
-                Assert.True(status.RuntimeAvailable);
-                Assert.Equal(installed, status.Installed);
-                Assert.Equal(installed && loaded, status.Ready);
-            }
-        }
-    }
-
-    [Fact]
     public void EnvironmentOverridesLocalFileWhichOverridesSharedConfiguration()
     {
         var path = Path.Combine(Path.GetTempPath(), $"ai-config-{Guid.NewGuid():N}.json");
         try
         {
-            File.WriteAllText(path, "{\"Ollama\":{\"Endpoint\":\"http://local-file:11434\"}}");
-            var key = "AI_CONFIG_TEST_Ollama__Endpoint";
-            Environment.SetEnvironmentVariable(key, "http://environment:11434");
+            File.WriteAllText(path, "{\"Gemini\":{\"ApiKey\":\"local-file-test-key\"}}");
+            var key = "AI_CONFIG_TEST_Gemini__ApiKey";
+            Environment.SetEnvironmentVariable(key, "environment-test-key");
             try
             {
                 var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["Ollama:Endpoint"] = "http://shared:11434"
+                    ["Gemini:ApiKey"] = "shared-test-key"
                 }).AddJsonFile(path).AddEnvironmentVariables("AI_CONFIG_TEST_").Build();
-                Assert.Equal("http://environment:11434", config["Ollama:Endpoint"]);
+                Assert.Equal("environment-test-key", config["Gemini:ApiKey"]);
             }
             finally
             {
@@ -146,27 +138,6 @@ public sealed class GatewayFlowTests
         app.MapControllers();
         await app.StartAsync();
         return app;
-    }
-
-    private sealed class StatusHandler(bool installed, bool loaded) : HttpMessageHandler
-    {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
-        {
-            var present = request.RequestUri!.AbsolutePath == "/api/tags" ? installed : loaded;
-            var models = present ? new[]
-            {
-                new
-                {
-                    name = "qwen3:4b-instruct-2507-q4_K_M",
-                    context_length = 2048,
-                    details = new { quantization_level = "Q4_K_M" }
-                }
-            } : [];
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = JsonContent.Create(new { models })
-            });
-        }
     }
 
     private sealed class UnavailableGuest : IGuestAccessClient

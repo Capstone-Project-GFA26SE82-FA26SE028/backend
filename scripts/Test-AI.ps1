@@ -16,8 +16,9 @@ $web = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 $cookies = Get-Content -LiteralPath $CookieFile -Raw | ConvertFrom-Json
 $name = 'guest_access_' + $SessionId.ToString('N')
 if (-not $cookies.$name) { throw "Cookie file must contain $name from the existing guest-access join API. Do not commit it. This test does not create a QR session or cart." }
-$web.Cookies.Add($Gateway, (New-Object System.Net.Cookie($name, $cookies.$name, '/api')))
 $base = $Gateway.AbsoluteUri.TrimEnd('/')
+$apiUri = [Uri]($base + '/api')
+$web.Cookies.Add($apiUri, [System.Net.Cookie]::new($name, $cookies.$name, '/api'))
 function Post-AI {
     param([string]$Path, [object]$Body)
     $watch = [Diagnostics.Stopwatch]::StartNew()
@@ -50,7 +51,7 @@ $report = [ordered]@{
     allergy = $allergy
     refusal = $refusal
     cartUnchanged = $true
-    scope = 'Real Gateway, AI, Catalog, Restaurant, Ordering and configured Ollama. No AI data-write endpoint was invoked.'
+    scope = 'Real Gateway, AI, Catalog, Restaurant, Ordering and Gemini API. No AI data-write endpoint was invoked.'
 }
 $json = $report | ConvertTo-Json -Depth 15
 if ($OutputFile) { [IO.File]::WriteAllText($OutputFile, $json) }

@@ -94,6 +94,16 @@ public sealed class RecommendationServiceTests
     }
 
     [Fact]
+    public async Task CartFromAnotherRestaurantIsRejectedEvenWhenSessionMatches()
+    {
+        var context = new AssistantTestContext();
+        context.Cart = context.Cart with { RestaurantId = Guid.NewGuid() };
+        var error = await Assert.ThrowsAsync<AIException>(() => context.Recommendations().Recommend(context.Request(), default));
+        Assert.Equal(503, error.StatusCode);
+        Assert.Equal(0, context.ModelCalls);
+    }
+
+    [Fact]
     public async Task ExpiredCartIsRejected()
     {
         var context = new AssistantTestContext();

@@ -28,21 +28,21 @@ public sealed class RecommendationService(
             throw new AIException(503, "Configure the approved ItemId recommendation duplicate policy.");
         }
 
-        await guests.VerifyAsync(request.Guest, ct);
-        var cart = await carts.GetByIdAsync(request.Guest, request.CartId, ct);
-        AssistantRules.ValidateCart(cart, request, clock.GetUtcNow());
+        var guest = await guests.VerifyAsync(request.Guest, ct);
+        var cart = await carts.GetByIdAsync(request.Guest, guest.RestaurantId, request.CartId, ct);
+        AssistantRules.ValidateCart(cart, request.CartId, guest, clock.GetUtcNow());
         if (cart.Items.Count == 0)
         {
             return Result(cart, "Add a dish to your cart before requesting suggestions.", [], false);
         }
 
-        var source = await menu.Read(request.Guest, ct);
+        var source = await menu.Read(request.Guest, guest.RestaurantId, ct);
         var excluded = cart.Items.Select(line => line.ItemId).ToHashSet();
         var cartContext = new List<ModelCartLineDTO>();
         foreach (var line in cart.Items)
         {
             var item = source.Items.FirstOrDefault(item => item.ItemId == line.ItemId)
-                ?? await menu.Refresh(request.Guest, line.ItemId, ct);
+                ?? await menu.Refresh(request.Guest, guest.RestaurantId, line.ItemId, ct);
             if (item is null)
             {
                 throw new AIException(409, "A dish in your cart is no longer in the public menu. Please refresh your cart.");
@@ -68,9 +68,9 @@ public sealed class RecommendationService(
             throw new AIException(502, "The model returned invalid or duplicate recommendations.");
         }
 
-        await guests.VerifyAsync(request.Guest, ct);
-        var refreshedCart = await carts.GetByIdAsync(request.Guest, request.CartId, ct);
-        AssistantRules.ValidateCart(refreshedCart, request, clock.GetUtcNow());
+        AssistantRules.RequireSameGuest(guest, await guests.VerifyAsync(request.Guest, ct));
+        var refreshedCart = await carts.GetByIdAsync(request.Guest, guest.RestaurantId, request.CartId, ct);
+        AssistantRules.ValidateCart(refreshedCart, request.CartId, guest, clock.GetUtcNow());
         if (refreshedCart.Version != cart.Version || !SameItems(cart.Items, refreshedCart.Items))
         {
             throw new AIException(409, "Your cart changed while suggestions were generated. Please request fresh suggestions.");
@@ -79,7 +79,7 @@ public sealed class RecommendationService(
         var selected = new List<SuggestedItemDTO>();
         foreach (var suggestion in suggestions)
         {
-            var item = await menu.Refresh(request.Guest, keyed[suggestion.Key].ItemId, ct);
+            var item = await menu.Refresh(request.Guest, guest.RestaurantId, keyed[suggestion.Key].ItemId, ct);
             if (item is not null && AssistantRules.CanRecommend(item) && !excluded.Contains(item.ItemId)
                 && selected.All(choice => choice.Item.ItemId != item.ItemId))
             {

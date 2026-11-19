@@ -4,13 +4,14 @@ using AI.Common.DTOs;
 using AI.Common.Exceptions;
 using AI.Common.Settings;
 using Backend.Contracts.Ordering;
+using Grpc.Core;
 using Microsoft.Extensions.Options;
 
 namespace AI.API.Clients;
 
 public sealed class OrderingCartClient(CartGrpc.CartGrpcClient client, IOptions<AISettings> settings) : ICartClient
 {
-    public async Task<CartContextDTO> GetByIdAsync(GuestContext guest, Guid cartId, CancellationToken ct)
+    public async Task<CartContextDTO> GetByIdAsync(GuestContext guest, Guid restaurantId, Guid cartId, CancellationToken ct)
     {
         var reply = await client.GetByIdAsync(new CartIdRequest
         {
@@ -20,13 +21,17 @@ public sealed class OrderingCartClient(CartGrpc.CartGrpcClient client, IOptions<
                 GuestToken = guest.Token
             },
             CartId = cartId.ToString()
+        }, headers: new Metadata
+        {
+            { "x-restaurant-id", restaurantId.ToString() }
         }, deadline: DateTime.UtcNow.AddSeconds(settings.Value.DependencyTimeoutSeconds), cancellationToken: ct);
         if (!Guid.TryParse(reply.CartId, out var returnedCartId) || returnedCartId != cartId
             || !Guid.TryParse(reply.TableSessionId, out var sessionId) || sessionId != guest.TableSessionId
+            || !Guid.TryParse(reply.RestaurantId, out var cartRestaurantId) || cartRestaurantId != restaurantId
             || !DateTimeOffset.TryParse(reply.ExpiresAt, CultureInfo.InvariantCulture, DateTimeStyles.None, out var expiresAt)
             || string.IsNullOrEmpty(reply.Version))
         {
-            throw new AIException(503, "The cart response does not match the requested session and cart.");
+            throw new AIException(503, "The cart response does not match the requested restaurant, session and cart.");
         }
 
         var lines = new List<CartLineDTO>();
@@ -40,6 +45,6 @@ public sealed class OrderingCartClient(CartGrpc.CartGrpcClient client, IOptions<
             lines.Add(new CartLineDTO(itemId, item.Quantity));
         }
 
-        return new CartContextDTO(returnedCartId, sessionId, expiresAt, reply.Version, lines);
+        return new CartContextDTO(returnedCartId, sessionId, cartRestaurantId, expiresAt, reply.Version, lines);
     }
 }
