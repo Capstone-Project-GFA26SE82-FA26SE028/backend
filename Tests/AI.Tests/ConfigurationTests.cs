@@ -1,4 +1,6 @@
+using AI.API.Clients;
 using AI.API.Extensions;
+using AI.BLL.Interfaces;
 using AI.Common.Settings;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,25 +29,41 @@ public sealed class ConfigurationTests
         Assert.Equal(10, limits.DependencyTimeoutSeconds);
         Assert.Equal(1, limits.MaximumConcurrentInferences);
         Assert.Equal("ItemId", limits.DuplicatePolicy);
-        Assert.Equal("qwen3:4b-instruct-2507-q4_K_M", provider.GetRequiredService<IOptions<OllamaSettings>>().Value.Model);
+        var gemini = provider.GetRequiredService<IOptions<GeminiSettings>>().Value;
+        Assert.Equal("gemini-3.1-flash-lite", gemini.Model);
+        Assert.Equal(5, gemini.ReadinessTimeoutSeconds);
+        Assert.Equal(20, gemini.RequestTimeoutSeconds);
+        Assert.True(gemini.RetryServiceUnavailable);
+        Assert.Equal(250, gemini.RetryDelayMilliseconds);
+        using var scope = provider.CreateScope();
+        Assert.IsType<GeminiModelClient>(scope.ServiceProvider.GetRequiredService<IAssistantModelClient>());
     }
 
     [Theory]
-    [InlineData("Ollama:Model", "different-model", true)]
-    [InlineData("Ollama:Endpoint", "file:///tmp/model", true)]
+    [InlineData("Gemini:Model", "different-model", true)]
+    [InlineData("Gemini:Endpoint", "file:///tmp/model", true)]
+    [InlineData("Gemini:Endpoint", "https://other.example", true)]
+    [InlineData("Gemini:Endpoint", "https://user@generativelanguage.googleapis.com", true)]
+    [InlineData("Gemini:Endpoint", "https://generativelanguage.googleapis.com/?query=secret", true)]
+    [InlineData("Gemini:ReadinessTimeoutSeconds", "6", true)]
+    [InlineData("Gemini:RequestTimeoutSeconds", "0", true)]
+    [InlineData("Gemini:RequestTimeoutSeconds", "21", true)]
+    [InlineData("Gemini:RetryDelayMilliseconds", "0", true)]
+    [InlineData("Gemini:RetryDelayMilliseconds", "1001", true)]
+    [InlineData("Gemini:Model", "gemini-../escape", true)]
     [InlineData("AI:MaximumConcurrentInferences", "0", false)]
     [InlineData("AI:RequestTimeoutSeconds", "91", false)]
     [InlineData("AI:DuplicatePolicy", "ItemAndOptions", false)]
-    public void InvalidConfigurationFailsClearly(string key, string value, bool ollama)
+    public void InvalidConfigurationFailsClearly(string key, string value, bool gemini)
     {
         var services = new ServiceCollection().AddLogging();
         services.AddAssistant(Configuration((key, value)));
         using var provider = services.BuildServiceProvider();
         Assert.Throws<OptionsValidationException>(() =>
         {
-            if (ollama)
+            if (gemini)
             {
-                _ = provider.GetRequiredService<IOptions<OllamaSettings>>().Value;
+                _ = provider.GetRequiredService<IOptions<GeminiSettings>>().Value;
             }
             else
             {

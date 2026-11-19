@@ -12,7 +12,27 @@ docker compose ps -a
 
 Mở http://localhost:5000/swagger. FE gọi API tại `http://localhost:5000` (HTTP). Gateway local cũng dùng cổng 5000, nên dừng Gateway local trước khi chạy Docker.
 
-Compose gồm SQL Server, một container `db-init` chạy một lần và 8 container ứng dụng. SQL Server phải healthy, sau đó `db-init` tạo đủ 7 database và seed thành công thì các service mới chạy. `db-init` có trạng thái `Exited (0)` là bình thường.
+Compose cơ sở gồm SQL Server, `db-init` và 8 container ứng dụng. Sau khi SQL Server báo healthy, `db-init` tạo schema cho 7 database. `db-init` có trạng thái `Exited (0)` là bình thường. Dùng lệnh seed bên dưới cho môi trường demo.
+
+## Chạy và kiểm tra Billing
+
+Dùng Compose cơ sở để chạy backend và Billing.
+
+```powershell
+docker compose -f compose.yaml config --quiet
+docker compose -f compose.yaml up -d --build
+docker compose -f compose.yaml ps -a
+```
+
+Trên database thử nghiệm mới, chạy seed demo sau khi `db-init` hoàn tất.
+
+```powershell
+docker compose -f compose.yaml run --rm --no-deps --entrypoint /bin/bash db-init /init/seed.sh
+```
+
+Trong Swagger của Gateway, dùng Manager demo tạo chính sách thuế thử nghiệm và Cashier mở ca. Khách yêu cầu thanh toán, Waiter chuyển yêu cầu cho Cashier chốt hóa đơn, rồi đưa hóa đơn và ghi nhận thu hộ. Cashier xác nhận bàn giao rồi kiểm tra `GET /api/cash-shifts/{cashShiftId}/reconciliation` và `POST /api/cash-shifts/{cashShiftId}/close`. Khoản đang chờ bàn giao chặn đóng ca. Sau xác nhận, số tiền hóa đơn được ghi một lần vào sổ quỹ.
+
+Docker của Billing cần `CashRegisterAccess:WaiterRoleIds` trong cấu hình Docker. Compose giữ khóa mã hóa cấu hình PayOS trong volume `payment-keys`.
 
 ## Dữ liệu có sẵn
 
@@ -66,4 +86,4 @@ docker compose logs --tail 100 gateway identity restaurant catalog ordering
 - Swagger lên nhưng API chưa đáp ứng ngay: chờ service hoàn tất startup và kiểm tra logs.
 - Các service Restaurant/Catalog/Ordering/Customer/Inventory/Billing có `/health/ready` trên cổng HTTP/2 nội bộ. Readiness chỉ kiểm tra kết nối DB.
 
-Inventory có API nguyên liệu, nhập kho và lịch sử tồn; xem [hướng dẫn Inventory](inventory.md). Customer và Billing hiện có nền tảng persistence/health; Docker chạy được các service không có nghĩa tất cả API nghiệp vụ đã được triển khai.
+Inventory có API nguyên liệu, nhập kho và lịch sử tồn. Xem [hướng dẫn Inventory](inventory.md).

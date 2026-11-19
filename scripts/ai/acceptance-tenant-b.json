@@ -1,0 +1,4 @@
+[
+  {"id": "B01", "function": "chat", "message": "Iced Tea giá bao nhiêu và có đặt được không?", "requiredItems": ["30000000-0000-0000-0000-000000000052"], "allowedItems": ["30000000-0000-0000-0000-000000000052"], "answerPatterns": ["37\\.000", "có thể đặt"], "minimumItems": 1, "model": false},
+  {"id": "B02", "function": "recommendation", "requiredItems": ["30000000-0000-0000-0000-000000000052"], "allowedItems": ["30000000-0000-0000-0000-000000000052"], "minimumItems": 1, "model": true}
+]

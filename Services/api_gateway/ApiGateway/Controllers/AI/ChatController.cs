@@ -25,13 +25,18 @@ public sealed class ChatController(ChatGrpc.ChatGrpcClient client, IOptions<AICl
                 Access = Access(sessionId),
                 Message = body.Message
             };
+            if (body.ConversationContext is not null)
+            {
+                request.ConversationContext = body.ConversationContext;
+            }
+
             request.History.AddRange(body.History.Select(turn => new ConversationTurn
             {
                 Role = turn.Role,
                 Content = turn.Content
             }));
             var result = await client.ChatAsync(request, options);
-            return new ChatResponseDTO(result.Answer, result.Items.Select(Card).ToArray(), result.SearchLimited, DateTimeOffset.Parse(result.EvaluatedAt, System.Globalization.CultureInfo.InvariantCulture));
+            return new ChatResponseDTO(result.Answer, result.Items.Select(Card).ToArray(), result.SearchLimited, DateTimeOffset.Parse(result.EvaluatedAt, System.Globalization.CultureInfo.InvariantCulture), result.ConversationContext);
         }, ct);
     }
 }

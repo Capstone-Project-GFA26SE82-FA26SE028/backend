@@ -1,4 +1,5 @@
 using AI.Common.Exceptions;
+using AI.API.Diagnostics;
 using AI.Common.Settings;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
@@ -17,6 +18,7 @@ public sealed class AIInterceptor(IOptions<AISettings> settings, ILogger<AIInter
 
     public override async Task<TResponse> UnaryServerHandler<TRequest, TResponse>(TRequest request, ServerCallContext context, UnaryServerMethod<TRequest, TResponse> continuation)
     {
+        using var timing = new AssistantTiming(logger, "Total");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(settings.Value.RequestTimeoutSeconds));
         context.UserState[RequestCancellation] = timeout.Token;
