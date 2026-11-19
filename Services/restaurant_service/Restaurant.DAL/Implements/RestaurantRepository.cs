@@ -29,6 +29,11 @@ public sealed class RestaurantRepository(RestaurantDbContext db) : GenericReposi
         };
     }
 
+    public Task<Dictionary<Guid, string>> GetNamesAsync(Guid[] ids, CancellationToken ct)
+    {
+        return _context.Restaurants.AsNoTracking().Where(item => ids.Contains(item.RestaurantId))
+            .ToDictionaryAsync(item => item.RestaurantId, item => item.RestaurantName, ct);
+    }
 
     public override IQueryable<Entity> GetAll()
     {

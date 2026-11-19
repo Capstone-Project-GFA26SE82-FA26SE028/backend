@@ -56,6 +56,11 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<ISessionRepository, SessionRepository>();
 builder.Services.AddAuthorization();
 
+builder.Services.AddScoped<IRestaurantNames, Identity.API.Clients.RestaurantNamesClient>();
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantGrpc.RestaurantGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Restaurant"] ?? "http://localhost:5002");
+});
 var app = builder.Build();
 
 app.MapGrpcService<Identity.API.GrpcServices.NotificationGrpcService>();

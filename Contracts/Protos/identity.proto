@@ -77,6 +77,7 @@ message UserInfo {
   google.protobuf.Timestamp updated_at = 10;
   string restaurant_id = 11;
   bool provisioning_pending = 12;
+  optional string restaurant_name = 13;
 }
 
 service UserGrpc {

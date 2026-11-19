@@ -189,6 +189,7 @@ public sealed class UserController(UserGrpc.UserGrpcClient client) : IdentityCon
             UserId = user.UserId,
             RestaurantId = Guid.TryParse(user.RestaurantId, out var restaurantId) ? restaurantId : null,
             ProvisioningPending = user.ProvisioningPending,
+            RestaurantName = user.HasRestaurantName ? user.RestaurantName : null,
             RoleId = user.RoleId,
             UserName = user.UserName,
             Email = user.Email,

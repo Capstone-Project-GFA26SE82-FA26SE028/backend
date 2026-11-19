@@ -160,6 +160,11 @@ public sealed class UserGrpcService(IUserService users, IRoleService roles, ICon
             IsActive = user.IsActive,
             CreatedAt = Timestamp.FromDateTime(DateTime.SpecifyKind(user.CreatedAt, DateTimeKind.Utc))
         };
+        if (user.RestaurantName is not null)
+        {
+            info.RestaurantName = user.RestaurantName;
+        }
+
         if (user.FullName is not null)
         {
             info.FullName = user.FullName;

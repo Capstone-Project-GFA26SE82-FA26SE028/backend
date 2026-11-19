@@ -10,7 +10,7 @@ using Microsoft.Extensions.Options;
 namespace Identity.BLL.Implements;
 
 public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementSettings> settings,
-    IUserRestaurantAccess? restaurants = null, IStaffProvisioner? provisioner = null) : IUserService
+    IUserRestaurantAccess? restaurants = null, IStaffProvisioner? provisioner = null, IRestaurantNames? restaurantNames = null) : IUserService
 {
     private static readonly string[] StaffRoles = ["manager", "waiter", "cashier", "kitchen", "inventory"];
 
@@ -46,7 +46,6 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
     {
         return (await unitOfWork.UserRepo.GetStaffProfilesAsync(restaurantId, ids, ct)).Select(Map).ToArray();
     }
-
 
     public async Task ProvisionPending(CancellationToken ct)
     {
@@ -156,7 +155,9 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
         }
 
         var (items, count) = await unitOfWork.UserRepo.GetAllAsync(page, pageSize, search?.Trim(), ct, filter, await ManagedRestaurant(actorId, ct), StaffRoles);
-        return new("Thành công.", 200, true, new PagedResult<UserDTO>(items.Select(Map).ToList(), count, page, pageSize));
+        var results = items.Select(Map).ToList();
+        await FillRestaurantNames(results, ct);
+        return new("Thành công.", 200, true, new PagedResult<UserDTO>(results, count, page, pageSize));
     }
 
     public async Task<ResponseDTO> GetById(Guid actorId, Guid userId, CancellationToken ct)
@@ -166,7 +167,13 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             return Forbidden();
         }
 
-        return await GetMe(userId, ct);
+        var response = await GetMe(userId, ct);
+        if (response.Result is UserDTO user)
+        {
+            await FillRestaurantNames([user], ct);
+        }
+
+        return response;
     }
 
     public async Task<ResponseDTO> SetStatus(Guid actorId, Guid userId, bool isActive, CancellationToken ct)
@@ -341,6 +348,21 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             409 => new("Tài khoản đang chờ phân công hoặc đây là quản trị nền tảng đang hoạt động cuối cùng.", 409),
             _ => new("Vai trò không tồn tại.", 400)
         };
+    }
+
+    private async Task FillRestaurantNames(IReadOnlyList<UserDTO> users, CancellationToken ct)
+    {
+        if (restaurantNames is null)
+        {
+            return;
+        }
+
+        var ids = users.Where(user => user.RestaurantId.HasValue).Select(user => user.RestaurantId!.Value).Distinct().ToArray();
+        var names = await restaurantNames.GetAsync(ids, ct);
+        foreach (var user in users)
+        {
+            user.RestaurantName = user.RestaurantId.HasValue ? names.GetValueOrDefault(user.RestaurantId.Value) : null;
+        }
     }
 
     private static UserDTO Map(User user)

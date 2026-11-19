@@ -9,5 +9,7 @@ public interface IRestaurantRepository : IGenericRepository<global::Restaurant.D
 {
     Task<PageResult<global::Restaurant.DAL.Models.Restaurant>> GetPageAsync(ListQuery query, CancellationToken ct);
 
+    Task<Dictionary<Guid, string>> GetNamesAsync(Guid[] ids, CancellationToken ct);
+
     void ReplaceOpeningHours(Entity entity, IEnumerable<OpeningHour> hours);
 }
