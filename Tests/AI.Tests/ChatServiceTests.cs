@@ -454,6 +454,85 @@ public sealed class ChatServiceTests
         Assert.Equal("Beef rice", Assert.Single(next.Items).ItemName);
     }
 
+    [Theory]
+    [InlineData("Include porridge again.", "porridge")]
+    [InlineData("Allow porridge again.", "porridge")]
+    [InlineData("Suggest porridge again.", "porridge")]
+    [InlineData("Cho lại cháo cho mình.", "cháo")]
+    [InlineData("Có thể chọn lại cháo.", "cháo")]
+    public async Task DishGroupRestoreVariantsRemoveTheExclusion(string restore, string group)
+    {
+        var context = new AssistantTestContext
+        {
+            Plan = new ChatPlanDTO { Intent = "recommendation", RecommendationKeys = ["m0", "m1", "m2"] }
+        };
+        context.Menu[0].ItemName = "Chicken Porridge";
+        context.Menu[1].ItemName = "Mushroom Porridge";
+        context.Menu[2].ItemName = "Pumpkin Soup";
+        context.Menu[0].ItemName = group == "cháo" ? "Cháo gà" : "Chicken Porridge";
+        context.Menu[1].ItemName = group == "cháo" ? "Cháo nấm" : "Mushroom Porridge";
+        var excluded = await context.Chat().Chat(context.Question($"Exclude {group}."), default);
+        Assert.Equal("Pumpkin Soup", Assert.Single(excluded.Items).ItemName);
+
+        var restored = await context.Chat().Chat(context.Question(restore) with
+        {
+            ConversationContext = excluded.ConversationContext
+        }, default);
+        Assert.Contains(restored.Items, item => item.ItemId == context.Menu[0].ItemId);
+        Assert.Contains(restored.Items, item => item.ItemId == context.Menu[1].ItemId);
+        Assert.Empty(context.ChatModelRequest!.ExcludedTerms);
+    }
+
+    [Theory]
+    [InlineData("Don't suggest porridge anymore.")]
+    [InlineData("Don't suggest porridge any more.")]
+    [InlineData("Don’t suggest porridge anymore.")]
+    public async Task EnglishExclusionSuffixDoesNotBecomePartOfTheDishGroup(string exclusion)
+    {
+        var context = new AssistantTestContext
+        {
+            Plan = new ChatPlanDTO { Intent = "recommendation", RecommendationKeys = ["m0", "m1", "m2"] }
+        };
+        context.Menu[0].ItemName = "Chicken Porridge";
+        context.Menu[1].ItemName = "Mushroom Porridge";
+        context.Menu[2].ItemName = "Pumpkin Soup";
+        var excluded = await context.Chat().Chat(context.Question(exclusion), default);
+        var next = await context.Chat().Chat(context.Question("Recommend something else.") with
+        {
+            ConversationContext = excluded.ConversationContext
+        }, default);
+        Assert.Equal("Pumpkin Soup", Assert.Single(next.Items).ItemName);
+        Assert.Equal("porridge", Assert.Single(context.ChatModelRequest!.ExcludedTerms));
+    }
+
+    [Theory]
+    [InlineData("Không cần món nóng nữa", true, "none", 2)]
+    [InlineData("Doesn't have to be hot", true, "none", 2)]
+    [InlineData("Không cần nhẹ bụng nữa", false, "warm", 2)]
+    [InlineData("Doesn't have to be light", false, "warm", 2)]
+    [InlineData("Món nào cũng được", false, "none", 3)]
+    public async Task ClearingOnePreferencePreservesTheOther(
+        string change, bool light, string preference, int count)
+    {
+        var context = new AssistantTestContext
+        {
+            Plan = new ChatPlanDTO { Intent = "recommendation", Preference = "warm", RecommendationKeys = ["m0", "m1", "m2"] }
+        };
+        context.Menu[0].Description = "Served hot. A light meal.";
+        context.Menu[1].Description = "Served chilled. A light meal.";
+        context.Menu[2].Description = "Served hot. A rich meal.";
+        var first = await context.Chat().Chat(context.Question("Vừa ấm bụng vừa nhẹ bụng."), default);
+        Assert.Single(first.Items);
+
+        var next = await context.Chat().Chat(context.Question(change) with
+        {
+            ConversationContext = first.ConversationContext
+        }, default);
+        Assert.Equal(count, next.Items.Count);
+        Assert.Equal(light, context.ChatModelRequest!.RequiresLightMeal);
+        Assert.Equal(preference, context.ChatModelRequest.Preference);
+    }
+
     [Fact]
     public async Task UnsupportedLanguageDoesNotReturnDishContent()
     {
