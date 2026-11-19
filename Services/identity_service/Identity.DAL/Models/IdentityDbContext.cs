@@ -131,6 +131,14 @@ public partial class IdentityDbContext : DbContext
                 .HasConstraintName("FK_UserSession_User");
         });
 
+        modelBuilder.Entity<StaffTransfer>(entity =>
+        {
+            entity.ToTable("StaffTransfer");
+            entity.HasKey(item => item.StaffTransferId);
+            entity.Property(item => item.Status).HasMaxLength(20);
+            entity.Property(item => item.Message).HasMaxLength(500);
+            entity.HasIndex(item => new { item.UserId, item.Status });
+        });
         OnModelCreatingPartial(modelBuilder);
     }
 

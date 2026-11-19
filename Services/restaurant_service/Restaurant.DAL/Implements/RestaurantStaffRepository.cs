@@ -8,6 +8,14 @@ namespace Restaurant.DAL.Implements;
 public sealed class RestaurantStaffRepository(RestaurantDbContext db)
     : GenericRepository<RestaurantStaff, RestaurantDbContext>(db), IRestaurantStaffRepository
 {
+    public Task<List<RestaurantStaff>> LockUserAssignmentsAsync(Guid userId, CancellationToken ct)
+    {
+        var query = _context.Database.IsSqlServer()
+            ? _context.RestaurantStaffs.FromSqlInterpolated($"SELECT * FROM dbo.RestaurantStaff WITH (UPDLOCK, HOLDLOCK) WHERE UserIdRef = {userId}")
+            : _context.RestaurantStaffs.Where(item => item.UserIdRef == userId);
+        return query.ToListAsync(ct);
+    }
+
     public Task<RestaurantStaff?> LockAsync(Guid restaurantId, Guid userId, CancellationToken ct)
     {
         if (_context.Database.CurrentTransaction is null)

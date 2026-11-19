@@ -20,7 +20,10 @@ builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationGrpc.
 builder.Services.AddHostedService<RestaurantIsolation.NotificationOutboxWorker<Ordering.DAL.Models.OrderingDbContext>>();
 builder.Services.AddScoped<RestaurantIsolation.INotificationEventEnricher, Ordering.API.Clients.NotificationEventEnricher>();
 
+builder.Services.AddScoped<Ordering.DAL.Interfaces.IKitchenAssignmentRepository, Ordering.DAL.Implements.KitchenAssignmentRepository>();
+builder.Services.AddScoped<Ordering.BLL.Interfaces.IStaffTransferGuardService, Ordering.BLL.Implements.StaffTransferGuardService>();
 var app = builder.Build();
+app.MapGrpcService<Ordering.API.GrpcServices.StaffTransferGuardGrpcService>();
 
 app.MapGrpcService<Ordering.API.GrpcServices.KitchenStationGrpcService>();
 app.MapGrpcService<Ordering.API.GrpcServices.KitchenTaskGrpcService>();

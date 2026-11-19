@@ -5,6 +5,7 @@ namespace Restaurant.DAL.Interfaces;
 
 public interface IRestaurantStaffRepository : IGenericRepository<RestaurantStaff>
 {
+    Task<List<RestaurantStaff>> LockUserAssignmentsAsync(Guid userId, CancellationToken ct);
     Task<RestaurantStaff?> LockAsync(Guid restaurantId, Guid userId, CancellationToken ct);
     Task<bool> IsActiveAsync(Guid restaurantId, Guid userId, CancellationToken ct);
     Task<IReadOnlyList<Guid>> GetRestaurantIdsAsync(Guid userId, CancellationToken ct);

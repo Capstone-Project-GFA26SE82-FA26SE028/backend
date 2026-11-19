@@ -7,6 +7,7 @@ public interface IServiceRequestRepository : IGenericRepository<ServiceRequest>
 {
     Task<ServiceRequest?> GetPendingAsync(Guid sessionId, string type, CancellationToken ct);
     Task<(IReadOnlyList<ServiceRequest> Items, int Total)> GetPageAsync(Guid restaurantId, string type, int page, int pageSize, CancellationToken ct);
+    Task<bool> HasUnfinishedForStaffAsync(Guid userId, CancellationToken ct);
     Task CancelPendingStaffCallsAsync(Guid sessionId, DateTime closedAt, CancellationToken ct);
     Task EnqueueCreatedNotificationAsync(ServiceRequest request, Guid restaurantId, CancellationToken ct);
     Task<IReadOnlyList<(Guid RestaurantId, Guid SessionId)>> GetClosureCandidatesAsync(int offset, int size, CancellationToken ct);

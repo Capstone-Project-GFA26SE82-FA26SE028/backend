@@ -432,5 +432,15 @@ message PaymentServiceRequestPage {
 }
 
 message RestaurantNamesRequest { repeated string restaurant_ids = 1; }
-
 message RestaurantNamesReply { map<string, string> names = 1; }
+
+service StaffTransferReceiptGrpc {
+  rpc Apply(StaffAssignmentTransferRequest) returns (StaffAssignmentTransferReply);
+}
+message StaffAssignmentTransferRequest {
+  string transfer_id = 1;
+  string user_id = 2;
+  string source_restaurant_id = 3;
+  string target_restaurant_id = 4;
+}
+message StaffAssignmentTransferReply { string status = 1; string message = 2; }

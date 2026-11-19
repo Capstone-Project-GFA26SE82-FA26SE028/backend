@@ -33,6 +33,11 @@ builder.Services.AddScoped<INotificationSettingService, NotificationSettingServi
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IRestaurantNames, Identity.API.Clients.RestaurantNamesClient>();
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantGrpc.RestaurantGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Restaurant"] ?? "http://localhost:5002");
+});
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantAccessGrpc.RestaurantAccessGrpcClient>(options =>
 {
@@ -56,12 +61,16 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<ISessionRepository, SessionRepository>();
 builder.Services.AddAuthorization();
 
-builder.Services.AddScoped<IRestaurantNames, Identity.API.Clients.RestaurantNamesClient>();
-builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantGrpc.RestaurantGrpcClient>(options =>
+builder.Services.AddScoped<IStaffTransferRepository, StaffTransferRepository>();
+builder.Services.AddScoped<IStaffTransferService, StaffTransferService>();
+builder.Services.AddScoped<IStaffTransferRemote, Identity.API.Clients.StaffTransferClient>();
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.StaffTransferReceiptGrpc.StaffTransferReceiptGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Restaurant"] ?? "http://localhost:5002");
 });
+builder.Services.AddHostedService<Identity.API.Workers.StaffTransferWorker>();
 var app = builder.Build();
+app.MapGrpcService<Identity.API.GrpcServices.StaffTransferGrpcService>();
 
 app.MapGrpcService<Identity.API.GrpcServices.NotificationGrpcService>();
 app.MapGrpcService<Identity.API.GrpcServices.AnnouncementGrpcService>();

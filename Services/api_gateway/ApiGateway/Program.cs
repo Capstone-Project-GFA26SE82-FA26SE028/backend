@@ -238,6 +238,11 @@ builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationSetti
     options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]!);
 });
 
+builder.Services.AddGrpcClient<Backend.Contracts.Identity.StaffTransferGrpc.StaffTransferGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Identity."));
+});
 var app = builder.Build();
 
 

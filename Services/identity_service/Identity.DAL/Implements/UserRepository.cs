@@ -114,6 +114,23 @@ namespace Identity.DAL.Implements
                 && user.RoleId != "customer" && user.RoleId != "platform_admin").ToListAsync(ct);
         }
 
+        public Task<User?> LockAsync(Guid userId, CancellationToken ct)
+        {
+            if (_context.Database.CurrentTransaction is null)
+            {
+                throw new InvalidOperationException("Cần giao dịch để khóa tài khoản.");
+            }
+
+            var query = _context.Database.IsSqlServer()
+                ? _context.Users.FromSqlInterpolated($"SELECT * FROM dbo.[User] WITH (UPDLOCK, HOLDLOCK) WHERE UserId = {userId}")
+                : _context.Users.Where(user => user.UserId == userId);
+            return query.SingleOrDefaultAsync(ct);
+        }
+
+        public Task<bool> HasPendingTransferAsync(Guid userId, CancellationToken ct)
+        {
+            return _context.Set<StaffTransfer>().AnyAsync(item => item.UserId == userId && item.Status == "Pending", ct);
+        }
 
         public async Task<User?> FindByEmailAsync(string email)
         {
@@ -215,7 +232,7 @@ namespace Identity.DAL.Implements
                 return (403, null);
             }
 
-            if (user.ProvisioningPending)
+            if (user.ProvisioningPending || await HasPendingTransferAsync(id, ct))
             {
                 return (409, null);
             }

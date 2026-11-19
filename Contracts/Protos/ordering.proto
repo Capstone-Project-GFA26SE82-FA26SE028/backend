@@ -246,3 +246,9 @@ message RefundAccountInfo {
   string account_number = 3;
   string account_holder = 4;
 }
+
+service StaffTransferGuardGrpc { rpc Check(StaffTransferGuardRequest) returns (StaffTransferGuardReply); }
+
+message StaffTransferGuardRequest { string user_id = 1; }
+
+message StaffTransferGuardReply { bool has_kitchen_assignment = 1; }

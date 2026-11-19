@@ -257,3 +257,26 @@ message UpdateUserRequest {
   optional string avatar_url = 6;
 }
 message StaffProfilesRequest { string restaurant_id = 1; repeated string user_ids = 2; }
+
+service StaffTransferGrpc {
+  rpc Create(CreateStaffTransferRequest) returns (StaffTransferReply);
+  rpc GetById(StaffTransferIdRequest) returns (StaffTransferReply);
+}
+message CreateStaffTransferRequest { string transfer_id = 1; string user_id = 2; string target_restaurant_id = 3; }
+message StaffTransferIdRequest { string transfer_id = 1; }
+message StaffTransferReply {
+  int32 status_code = 1;
+  string message = 2;
+  bool is_success = 3;
+  StaffTransferInfo result = 4;
+}
+message StaffTransferInfo {
+  string id = 1;
+  string user_id = 2;
+  string source_restaurant_id = 3;
+  string target_restaurant_id = 4;
+  string status = 5;
+  string message = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp completed_at = 8;
+}

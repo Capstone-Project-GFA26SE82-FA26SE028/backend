@@ -77,6 +77,11 @@ public sealed class ServiceRequestRepository(RestaurantDbContext db)
             request.TableSessionId == sessionId && request.Type == type && request.CompletedAt == null, ct);
     }
 
+    public Task<bool> HasUnfinishedForStaffAsync(Guid userId, CancellationToken ct)
+    {
+        return _context.ServiceRequests.AnyAsync(item => item.HandledByRef == userId && item.CompletedAt == null
+            && item.TableSession.Status == "Open", ct);
+    }
 
     public async Task CancelPendingStaffCallsAsync(Guid sessionId, DateTime closedAt, CancellationToken ct)
     {
