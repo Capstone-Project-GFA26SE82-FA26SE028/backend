@@ -13,7 +13,13 @@ public sealed class AuditLogGrpcService(IAuditLogService service) : AuditLogGrpc
     {
         var actor = await GrpcAuthentication.RequireUser(context);
         Guid? userId = request.HasUserId ? ParseId(request.UserId) : null;
-        var response = await service.GetAll(actor.UserId, request.Page, request.PageSize, userId, context.CancellationToken);
+        var response = await service.GetAll(actor.UserId, request.Page, request.PageSize, userId, context.CancellationToken, new AuditLogFilter
+        {
+            Search = request.HasSearch ? request.Search : null,
+            Action = request.HasAction ? request.Action : null,
+            FromUtc = request.FromUtc?.ToDateTime(),
+            ToUtc = request.ToUtc?.ToDateTime()
+        });
         var reply = new AuditLogListReply
         {
             StatusCode = response.StatusCode,
@@ -67,6 +73,26 @@ public sealed class AuditLogGrpcService(IAuditLogService service) : AuditLogGrpc
                 if (item.IpAddress is { } ipAddress)
                 {
                     info.IpAddress = ipAddress;
+                }
+
+                if (item.FullName is not null)
+                {
+                    info.FullName = item.FullName;
+                }
+
+                if (item.UserName is not null)
+                {
+                    info.UserName = item.UserName;
+                }
+
+                if (item.Email is not null)
+                {
+                    info.Email = item.Email;
+                }
+
+                if (item.AvatarUrl is not null)
+                {
+                    info.AvatarUrl = item.AvatarUrl;
                 }
 
                 reply.Items.Add(info);

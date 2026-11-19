@@ -156,9 +156,14 @@ message ActivityListRequest {
   optional string status = 7;
   google.protobuf.Timestamp from_utc = 8;
   google.protobuf.Timestamp to_utc = 9;
+  optional string action = 10;
 }
 
 message AuditLogInfo {
+  optional string full_name = 10;
+  optional string user_name = 11;
+  optional string email = 12;
+  optional string avatar_url = 13;
   string audit_log_id = 1;
   optional string user_id = 2;
   optional string action = 3;

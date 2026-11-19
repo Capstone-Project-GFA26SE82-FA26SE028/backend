@@ -5,5 +5,5 @@ namespace Identity.BLL.Interfaces;
 
 public interface IAuditLogService
 {
-    Task<ResponseDTO> GetAll(Guid actorId, int page, int pageSize, Guid? userId, CancellationToken ct);
+    Task<ResponseDTO> GetAll(Guid actorId, int page, int pageSize, Guid? userId, CancellationToken ct, Identity.Common.DTOs.AuditLogFilter? filter = null);
 }
