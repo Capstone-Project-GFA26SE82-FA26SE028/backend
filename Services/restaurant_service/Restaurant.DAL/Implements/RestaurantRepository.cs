@@ -14,7 +14,7 @@ public sealed class RestaurantRepository(RestaurantDbContext db) : GenericReposi
         var source = GetAll().AsNoTracking();
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            source = source.Where(x => x.RestaurantName.Contains(query.Search.Trim()));
+            source = source.Where(x => x.RestaurantName.Contains(query.Search.Trim()) || x.Address.Contains(query.Search.Trim()));
         }
 
         var count = await source.CountAsync(ct);
@@ -28,6 +28,7 @@ public sealed class RestaurantRepository(RestaurantDbContext db) : GenericReposi
             PageSize = query.PageSize
         };
     }
+
 
     public override IQueryable<Entity> GetAll()
     {
