@@ -184,7 +184,11 @@ New databases use the checkout tables from the current BillingDb and OrderingDb 
 3. Phục vụ phụ trách gọi `POST /api/table-sessions/{sessionId}/payment-requests/{id}/submit`, không gửi mã quầy. Đơn còn chờ xác nhận hoặc nhà hàng chưa có quầy mặc định sẽ trả `409`. Khi quầy đã tồn tại, yêu cầu gửi trong lúc đổi ca vẫn vào danh sách chờ. Thử lại cùng ID yêu cầu sẽ dùng lượt đã lưu.
 4. Thu ngân đang đứng ca xem `GET /api/restaurants/{restaurantId}/payment-requests/incoming`. Sau khi mở ca mới, danh sách hiện cả yêu cầu tồn từ ca trước, yêu cầu gửi giữa hai ca và bill chưa thanh toán có một phiên bàn xác định. Bill cũ có thể trả `billId` cùng `checkoutId: null` và `submittedAt: null`. Khoản đã thanh toán và lịch sử giao dịch vẫn thuộc ca gốc.
 
-Với BillingDb đã khởi tạo, áp dụng `docker/sql/upgrades/BillingCheckoutSubmission.sql` trước khi chạy bản mới. Compose khởi tạo database mới từ schema và giữ nguyên database đã có.
+Khi chạy `docker compose up -d --build`, `db-init` khởi tạo database mới từ schema hoặc giữ nguyên database có `DockerBootstrapVersion=2`, rồi tự chạy các upgrade Billing và dependency đã liệt kê trong `docker/sql/init.sh`. Các upgrade bao gồm quầy/bill theo nhà hàng, PayOS, phương thức tiền mặt, checkout/chuyển quầy/chốt bill, thu hộ, cấu hình provider, outbox, lock Ordering, cột tài khoản hoàn tiền và ảnh QR. Cuối bước này, initializer đối chiếu sự tồn tại của bảng/cột với schema Billing/Ordering/Catalog/Restaurant/Inventory/Identity và in `Billing and AI dependency schemas are ready.` khi đạt. Identity đang chỉ được kiểm tra, chưa tự nâng cấp database cũ; nếu thiếu cột User hoặc bảng thông báo, cần nâng cấp dependency đó trước.
+
+Script chạy lại được và không tự gán nhà hàng, quầy, nhân viên hoặc URL PayOS. Nếu dữ liệu cũ thiếu ánh xạ bắt buộc, có nhiều quầy một nhà hàng hoặc thiếu cấu hình provider cần quyết định, bước nâng cấp dừng và báo rõ để xử lý dữ liệu; không xóa hoặc đoán giá trị. Database không có marker hoặc có version khác 2 cần kiểm kê/nâng cấp riêng trước. Xem phần kiểm kê ngày 2026-11-21 trong [nhật ký SQL/ERD](docs/database-change-log.md). Không dùng `docker compose down -v` để khắc phục lỗi thiếu cột vì lệnh đó xóa volume database.
+
+Kiểm thử nâng cấp Docker bằng `pwsh -File scripts/Test-BillingDockerBootstrap.ps1` (cần Docker Engine chạy Linux containers). Script build image `db-init` từ source hiện tại và tạo SQL Server/network riêng, tái hiện schema cũ thiếu cột/bảng, kiểm tra nâng cấp lặp giữ dữ liệu, đối chiếu metadata Billing/Ordering và các ca phải dừng an toàn. Tài nguyên thử được dọn khi kết thúc; không dùng database của Compose đang chạy. Với môi trường đã tồn tại, có thể chạy `docker compose build db-init` rồi `docker compose run --rm db-init` để xem rõ kết quả nâng cấp trước khi khởi động lại các service.
 
 ### Chốt hóa đơn và xác nhận đã đưa khách
 
@@ -192,7 +196,7 @@ Với BillingDb đã khởi tạo, áp dụng `docker/sql/upgrades/BillingChecko
 2. Waiter phụ trách mở `GET /api/table-sessions/{sessionId}/payment-requests/{id}/bill` để lấy bill đưa khách kiểm tra.
 3. Khi đã đưa bill thật, Waiter gọi `POST /api/table-sessions/{sessionId}/payment-requests/{id}/present`. Hệ thống ghi `PresentedAt` một lần và chuyển checkout sang `Presented`.
 
-Hai trạng thái trên vẫn là bill `Unpaid`. Các API thu tiền của checkout cũ chưa xử lý được bill qua luồng này. BillingDb đang dùng cần áp dụng `BillingCheckoutSubmission.sql` rồi `BillingCheckoutPreparation.sql`. Bật đúng cấu hình chính sách VAT/phí trước khi lập bill mới.
+Hai trạng thái trên vẫn là bill `Unpaid`. Các API thu tiền của checkout cũ chưa xử lý được bill qua luồng này. Docker tự áp dụng hai script nâng cấp khi chạy `db-init` từ image mới; môi trường chạy ngoài Docker vẫn cần áp dụng `BillingCheckoutSubmission.sql` rồi `BillingCheckoutPreparation.sql`. Bật đúng cấu hình chính sách VAT/phí trước khi lập bill mới.
 
 
 
