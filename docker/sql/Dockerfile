@@ -4,6 +4,7 @@ COPY init.sh .
 COPY seed.sh .
 COPY schema/ schema/
 COPY seed/ seed/
+COPY upgrades/ upgrades/
 USER root
 RUN sed -i "s/\r$//" /init/init.sh /init/seed.sh
 USER mssql

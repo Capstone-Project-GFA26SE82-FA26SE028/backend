@@ -205,6 +205,7 @@ CREATE TABLE [dbo].[Qr](
 	[TokenHash] [varchar](255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[CreatedAt] [datetime] NOT NULL,
 	[RevokedAt] [datetime] NULL,
+	[ImageUrl] [varchar](2048) NULL,
  CONSTRAINT [PK_Qr] PRIMARY KEY CLUSTERED 
 (
 	[QrId] ASC
