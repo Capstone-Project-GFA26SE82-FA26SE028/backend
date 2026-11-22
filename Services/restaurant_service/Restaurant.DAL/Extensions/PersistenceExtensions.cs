@@ -18,6 +18,7 @@ public static class PersistenceExtensions
             options.UseSqlServer(connectionString);
         });
         services.AddScoped<IUnitOfWork, UnitOfWork<RestaurantDbContext>>();
+        services.AddScoped<Shared.Persistence.Notifications.NotificationOutboxRepository<RestaurantDbContext>>();
         services.AddScoped<Interfaces.IRestaurantRepository, Implements.RestaurantRepository>();
         services.AddScoped<Interfaces.IAreaRepository, Implements.AreaRepository>();
         services.AddScoped<Interfaces.ITableRepository, Implements.TableRepository>();
@@ -38,6 +39,7 @@ public static class PersistenceExtensions
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.Restaurant>>(provider => provider.GetRequiredService<Interfaces.IRestaurantRepository>());
         services.AddScoped<Interfaces.IServiceRequestRepository, Implements.ServiceRequestRepository>();
         services.AddScoped<IGenericRepository<ServiceRequest>>(provider => provider.GetRequiredService<Interfaces.IServiceRequestRepository>());
+        services.AddScoped<IGenericRepository<StaffTransferReceipt>, GenericRepository<StaffTransferReceipt, RestaurantDbContext>>();
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.SessionTable>>(provider => provider.GetRequiredService<Interfaces.ISessionTableRepository>());
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.Table>>(provider => provider.GetRequiredService<Interfaces.ITableRepository>());
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.TableSession>>(provider => provider.GetRequiredService<Interfaces.ITableSessionRepository>());

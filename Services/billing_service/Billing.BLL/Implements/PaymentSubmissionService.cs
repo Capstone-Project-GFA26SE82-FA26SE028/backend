@@ -6,7 +6,6 @@ using Billing.Common.Settings;
 using Billing.DAL.Interfaces;
 using Billing.DAL.Models;
 using Microsoft.Extensions.Options;
-using Shared.Common.Pagination;
 using Shared.Persistence.Interfaces;
 
 namespace Billing.BLL.Implements;
@@ -14,7 +13,7 @@ namespace Billing.BLL.Implements;
 public sealed class PaymentSubmissionService(IPaymentReviewClient reviews, IBillingAccess access,
     IBillRepository bills, IBillCheckoutRepository checkouts, ICashRegisterRepository registers,
     ICashShiftRepository shifts, IUnitOfWork unitOfWork, IOptions<CashRegisterAccessSettings> roles,
-    TimeProvider clock) : IPaymentSubmissionService
+    TimeProvider clock, IBillingSessionDisplayClient displays) : IPaymentSubmissionService
 {
     public async Task<PaymentSubmissionDTO> Submit(Guid sessionId, Guid requestId, CancellationToken ct)
     {
@@ -70,13 +69,20 @@ public sealed class PaymentSubmissionService(IPaymentReviewClient reviews, IBill
         }, ct);
     }
 
-    public async Task<PagedResult<PaymentSubmissionDTO>> GetIncoming(Guid restaurantId, int page, int pageSize, CancellationToken ct)
+    public Task<PaymentSubmissionPageDTO> GetIncoming(Guid restaurantId, PaymentSubmissionQueryDTO query, CancellationToken ct)
     {
-        if (restaurantId == Guid.Empty || !new PaginationRequest
-        {
-            Page = page,
-            PageSize = pageSize
-        }.IsValid())
+        return GetBoard(restaurantId, query, paid: false, ct);
+    }
+
+    public Task<PaymentSubmissionPageDTO> GetPaid(Guid restaurantId, PaymentSubmissionQueryDTO query, CancellationToken ct)
+    {
+        return GetBoard(restaurantId, query, paid: true, ct);
+    }
+
+    private async Task<PaymentSubmissionPageDTO> GetBoard(Guid restaurantId, PaymentSubmissionQueryDTO query,
+        bool paid, CancellationToken ct)
+    {
+        if (restaurantId == Guid.Empty || !query.IsValid())
         {
             throw new BillingException(400, "Yêu cầu nhà hàng và thông tin phân trang hợp lệ.");
         }
@@ -89,7 +95,7 @@ public sealed class PaymentSubmissionService(IPaymentReviewClient reviews, IBill
             throw new BillingException(403, "Chỉ thu ngân được phân công tại nhà hàng mới được xem yêu cầu đã chuyển.");
         }
 
-        return await unitOfWork.ExecuteInTransactionAsync(async () =>
+        var snapshot = await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
             var register = await DefaultCashRegister.LockAsync(registers, restaurantId, ct);
             var shift = await RequireActiveShift(register.CashRegisterId, ct);
@@ -98,8 +104,63 @@ public sealed class PaymentSubmissionService(IPaymentReviewClient reviews, IBill
                 throw new BillingException(403, "Chỉ thu ngân đang đứng ca mới được xem yêu cầu đã chuyển vào quầy.");
             }
 
-            return await checkouts.GetIncomingAsync(restaurantId, register.CashRegisterId, page, pageSize, ct);
+            if (query.CashShiftId.HasValue && query.CashShiftId != shift.CashShiftId)
+            {
+                throw new BillingException(403, "Màn thu ngân chỉ xem dữ liệu theo ca đang đứng quầy.");
+            }
+
+            var rows = paid
+                ? await checkouts.GetPaidCandidatesAsync(restaurantId, register.CashRegisterId, shift.CashShiftId, ct)
+                : await checkouts.GetIncomingCandidatesAsync(restaurantId, register.CashRegisterId, ct);
+            return (Rows: rows, ShiftId: shift.CashShiftId);
         }, ct);
+
+        // Resolve all candidates before filtering/counting; paging a partial result would lose matches.
+        var sessions = await displays.GetByIdsAsync(restaurantId,
+            snapshot.Rows.Select(row => row.TableSessionId).Distinct().ToArray(), ct);
+        var search = query.Search?.Trim();
+        var matched = new List<PaymentSubmissionDTO>();
+        foreach (var row in snapshot.Rows)
+        {
+            if (!sessions.TryGetValue(row.TableSessionId, out var session) || session.RestaurantId != restaurantId)
+            {
+                throw new BillingException(503, "Không lấy được đầy đủ thông tin bàn của các hóa đơn.");
+            }
+
+            var tablesInArea = session.Tables.Where(table => !query.AreaId.HasValue || table.AreaId == query.AreaId).ToArray();
+            if (tablesInArea.Length == 0)
+            {
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(search)
+                && row.BillCode?.Contains(search, StringComparison.OrdinalIgnoreCase) != true
+                && !tablesInArea.Any(table => table.TableCode.Contains(search, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            matched.Add(row with
+            {
+                Tables = session.Tables,
+                PartySize = session.PartySize,
+                OpenedAt = session.OpenedAt
+            });
+        }
+
+        var knownTotal = matched.Sum(row => row.TotalAmount ?? 0);
+        var unbilled = matched.Count(row => row.BillId == null);
+        return new PaymentSubmissionPageDTO
+        {
+            Items = matched.Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToArray(),
+            TotalCount = matched.Count,
+            Page = query.Page,
+            PageSize = query.PageSize,
+            CashShiftId = snapshot.ShiftId,
+            KnownTotalAmount = knownTotal,
+            TotalAmount = unbilled == 0 ? knownTotal : null,
+            UnbilledCount = unbilled
+        };
     }
 
     private async Task<CashShift> RequireActiveShift(Guid registerId, CancellationToken ct)

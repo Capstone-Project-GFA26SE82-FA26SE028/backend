@@ -86,7 +86,6 @@ builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantStaffService, Re
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ICurrentRestaurantScopeService, Restaurant.BLL.Implements.CurrentRestaurantScopeService>();
 
 builder.Services.AddScoped<Shared.Persistence.RestaurantIsolation.RestaurantDataScope>();
-builder.Services.AddScoped<Shared.Persistence.Notifications.NotificationOutboxRepository<RestaurantDbContext>>();
 builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationGrpc.NotificationGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]

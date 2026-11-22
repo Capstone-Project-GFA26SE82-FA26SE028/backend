@@ -190,6 +190,23 @@ Script chạy lại được và không tự gán nhà hàng, quầy, nhân viê
 
 Kiểm thử nâng cấp Docker bằng `pwsh -File scripts/Test-BillingDockerBootstrap.ps1` (cần Docker Engine chạy Linux containers). Script build image `db-init` từ source hiện tại và tạo SQL Server/network riêng, tái hiện schema cũ thiếu cột/bảng, kiểm tra nâng cấp lặp giữ dữ liệu, đối chiếu metadata Billing/Ordering và các ca phải dừng an toàn. Tài nguyên thử được dọn khi kết thúc; không dùng database của Compose đang chạy. Với môi trường đã tồn tại, có thể chạy `docker compose build db-init` rồi `docker compose run --rm db-init` để xem rõ kết quả nâng cấp trước khi khởi động lại các service.
 
+### Dữ liệu màn Bàn & hóa đơn của thu ngân
+
+- `GET /api/restaurants/{restaurantId}/payment-requests/incoming`: yêu cầu đã chuyển đến quầy và bill chưa thanh toán cần tiếp quản.
+- `GET /api/restaurants/{restaurantId}/payment-requests/paid`: bill đã Paid và có Payment Paid thuộc ca thu ngân đang đứng. Khoản Waiter vừa thu hộ hoặc PayOS chưa xác minh không thuộc tab này.
+- Hai API nhận `search` (mã bàn hoặc mã bill, tối đa 50 ký tự), `areaId`, `page` (mặc định 1), `pageSize` (mặc định 20, tối đa 100). `cashShiftId` là tùy chọn và phải khớp ca đang đứng; không cho client chọn ca người khác hoặc ca cũ qua hai API màn quầy. API đọc bill/report cũ giữ phạm vi quyền hiện có.
+- Mỗi thẻ có `tableSessionId`, `checkoutId`, `billId`, `billCode`, `totalAmount`, `status`, `partySize`, `openedAt`, `submittedAt`, `paidAt`, `tables[]`. `billCode` lấy từ `Bill.BillNumber`; chưa có bill thì mã và tổng bill là `null`, không dùng 0 thay thế. `openedAt` là giờ mở phiên, `submittedAt` là giờ chuyển quầy, `paidAt` là giờ bill được xác nhận Paid.
+- Một bàn: trả thêm `tableId`, `tableCode`, `areaId`, `areaName`. Nhiều bàn: giữ đủ `tables[]`, hai trường bàn đơn là `null`; khu vực đơn chỉ có khi tất cả bàn cùng khu vực. Phiên mở lấy các liên kết bàn chưa release; phiên đã đóng lấy nhóm liên kết được release cuối cùng. Tên/mã bàn lấy từ Restaurant hiện tại, không phải snapshot tên bàn bất biến trên hóa đơn.
+- Tìm kiếm/lọc, `totalCount` và tổng tiền tính trên toàn bộ tập kết quả trước phân trang. Với bộ lọc khu vực, tìm mã bàn chỉ xét bàn nằm trong khu vực đó; tìm mã bill vẫn phải đáp ứng khu vực. `knownTotalAmount` là tổng bill đã lập, `unbilledCount` là số thẻ chưa lập bill. `totalAmount` chỉ có khi không còn thẻ chưa lập bill; nếu còn, trả `null` để tránh coi phần chưa xác định là 0 đồng. Mỗi tab dùng `totalCount` từ chính API tương ứng và cùng bộ lọc.
+- Chọn thẻ chưa có bill: Cashier gọi `POST /api/table-sessions/{sessionId}/payment-requests/{checkoutId}/prepare`. Đã có bill: đọc `GET /api/bills/{billId}` để lấy món, giá snapshot, VAT, phí và tổng. Chỉ xem thẻ không tự lập bill hoặc ghi nhận thanh toán.
+- Cả hai API yêu cầu Cashier được phân công đúng nhà hàng và đang đứng ca. Billing lấy metadata phiên theo lô tối đa 200 ID từ RPC đọc `BillingSessionGrpc.GetDisplays` của Restaurant; không truy cập database chéo service. Không lấy được đầy đủ metadata thì báo lỗi, không âm thầm bỏ thẻ làm sai số lượng/tổng.
+
+Thay đổi này không đổi luồng BM04 F-WF02-06: khách yêu cầu → Waiter kiểm tra/chuyển quầy → Cashier chốt → Waiter đưa bill → thu hộ được Cashier xác nhận hoặc PayOS được backend xác minh → ghi Paid một lần và tự đóng phiên. Không thêm nghiệp vụ ưu đãi/tích điểm từ UI mẫu.
+
+Triển khai đồng bộ Gateway, Billing, Restaurant cùng commit bằng `docker compose up -d --build`; không chỉ cập nhật một container vì Billing dùng RPC đọc mới. Không có thay đổi schema hoặc SQL upgrade cho phần màn quầy này. Kiểm tra hồi quy bằng `dotnet test Tests/Billing.Tests` (SQL thật cần `BILLING_SQL_TEST_CONNECTION`) và `dotnet test Tests/Restaurant.Tests --filter FullyQualifiedName~PaymentSubmission` (cần `RESTAURANT_SQL_TEST_SERVER` cho SQL Server Windows/LocalDB cô lập). Những test đó dùng dữ liệu thử, không phải thao tác trên database đang dùng.
+
+Khi review độc lập, Gemini cần kiểm tra: (1) lọc trước phân trang và tổng trên toàn bộ kết quả, kể cả thẻ chưa lập bill; (2) đúng nhà hàng/ca và không nhân đôi bill nhiều dòng; (3) nhiều bàn hoặc phiên đã đóng vẫn có metadata đúng; (4) Waiter mới thu hộ chưa vào Paid, Cashier xác nhận/PayOS đã xác minh mới vào Paid; (5) API prepare/đọc bill vẫn cung cấp giá snapshot, VAT, phí và tổng; (6) không có SQL/schema hoặc quyền production thay đổi ngoài hợp đồng đọc đã nêu.
+
 ### Chốt hóa đơn và xác nhận đã đưa khách
 
 1. Cashier đang đứng ca tại quầy nhận gọi `POST /api/table-sessions/{sessionId}/payment-requests/{id}/prepare`. Hệ thống khóa lại tập món tại Ordering, kiểm tra đơn chờ xác nhận rồi lập hoặc cập nhật bill từ bản chụp. Sau khi đối chiếu, hệ thống ghi trạng thái checkout `Prepared`.
