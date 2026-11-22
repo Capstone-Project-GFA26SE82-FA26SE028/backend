@@ -24,9 +24,28 @@ service GuestAccessGrpc {
 
 service BillingSessionGrpc {
   rpc GetById(BillingSessionRequest) returns (BillingSessionReply);
+  rpc GetDisplays(BillingSessionDisplayRequest) returns (BillingSessionDisplayReply);
 }
 message BillingSessionRequest { string table_session_id = 1; }
 message BillingSessionReply { string table_session_id = 1; string restaurant_id = 2; }
+message BillingSessionDisplayRequest {
+  string restaurant_id = 1;
+  repeated string table_session_ids = 2;
+}
+message BillingTableDisplayInfo {
+  string table_id = 1;
+  string table_code = 2;
+  string area_id = 3;
+  string area_name = 4;
+}
+message BillingSessionDisplayInfo {
+  string table_session_id = 1;
+  string restaurant_id = 2;
+  int32 party_size = 3;
+  string opened_at = 4;
+  repeated BillingTableDisplayInfo tables = 5;
+}
+message BillingSessionDisplayReply { repeated BillingSessionDisplayInfo items = 1; }
 
 service RestaurantAccessGrpc {
   rpc GetCurrentScope(CurrentRestaurantScopeRequest) returns (CurrentRestaurantScopeReply);

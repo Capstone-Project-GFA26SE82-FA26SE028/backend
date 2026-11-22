@@ -6,6 +6,7 @@ namespace Restaurant.DAL.Interfaces;
 public interface ITableSessionRepository : IGenericRepository<TableSession>
 {
     Task<TableSession?> GetForBillingAsync(Guid id, CancellationToken ct);
+    Task<List<TableSession>> GetBillingDisplaysAsync(Guid restaurantId, IReadOnlyList<Guid> ids, CancellationToken ct);
 
     Task<TableSession?> GetForOrderingAsync(Guid id, CancellationToken ct);
 

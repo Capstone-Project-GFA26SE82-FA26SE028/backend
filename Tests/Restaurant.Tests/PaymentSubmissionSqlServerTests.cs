@@ -25,6 +25,7 @@ using BillingServiceRequest = billingapi::Backend.Contracts.Restaurant.ServiceRe
 using BillingOrderClient = billingapi::Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient;
 using BillingCheckoutLockClient = billingapi::Backend.Contracts.Ordering.CheckoutLockGrpc.CheckoutLockGrpcClient;
 using BillingClosureClient = billingapi::Backend.Contracts.Restaurant.PaidSessionClosureGrpc.PaidSessionClosureGrpcClient;
+using BillingDisplayClient = billingapi::Backend.Contracts.Restaurant.BillingSessionGrpc.BillingSessionGrpcClient;
 using PayOsClient = billingapi::Billing.API.Clients.PayOsClient;
 using OrderingDb = Ordering.DAL.Models.OrderingDbContext;
 using OrderingModels = Ordering.DAL.Models;
@@ -80,8 +81,8 @@ public sealed partial class ReservationSqlServerTests
 
     private async Task VerifyPaymentSubmission(PayOsScenario? payOsScenario = null, bool recoverClosure = false)
     {
-        var location = await Location();
-        var otherRestaurant = await Location(assignStaff: false);
+        var location = await BillingLocation();
+        var otherRestaurant = await BillingLocation(assignStaff: false);
         await AddSecondPaymentWaiter(otherRestaurant.RestaurantId);
         await AddPaymentStaff("nextCashier", "cashier", location.RestaurantId);
         await AddPaymentStaff("sameRestaurantWaiter", "waiter", location.RestaurantId);
@@ -214,6 +215,12 @@ public sealed partial class ReservationSqlServerTests
             Assert.Equal(opened.CashRegisterId, sent.CashRegisterId);
             Assert.Equal("Submitted", sent.Status);
             Assert.Equal(sent, Assert.Single((await Read<SubmissionPage>(await cashier.GetAsync(inbox))).Items));
+            var firstCard = Assert.Single((await Read<CashierBoardPage>(await cashier.GetAsync(inbox))).Items);
+            Assert.Equal(location.TableId, firstCard.TableId);
+            Assert.Equal(location.AreaId, firstCard.AreaId);
+            Assert.Null(firstCard.BillCode);
+            Assert.Null(firstCard.TotalAmount);
+            Assert.Equal(2, firstCard.PartySize);
             Assert.Equal(HttpStatusCode.Forbidden, (await nextCashier.GetAsync(inbox)).StatusCode);
             Assert.Equal(HttpStatusCode.Conflict, (await admin.PostAsJsonAsync("/api/cash-registers",
                 new { restaurantId = location.RestaurantId, code = "ANOTHER" })).StatusCode);
@@ -251,6 +258,7 @@ public sealed partial class ReservationSqlServerTests
             Assert.Equal("Unpaid", inherited.Status);
             Assert.Null(inherited.CheckoutId);
             Assert.DoesNotContain(pendingItems, value => value.BillId == paidBill);
+            await VerifyCashierBoardFilters(nextCashier, waiter, location, handoverSession, unpaidBill, reopened.CashShiftId);
             var previousReport = await Read<ShiftReportDTO>(await cashier.GetAsync($"/api/cash-shifts/{opened.CashShiftId}/report"));
             Assert.Equivalent(closedReport, previousReport, strict: true);
             var legacy = $"/api/table-sessions/{session}/checkout/{id}";
@@ -468,8 +476,19 @@ public sealed partial class ReservationSqlServerTests
 
     private async Task<Guid> PaymentSessionAtAnotherTable(LocationIds location, string code)
     {
-        var table = await Read<ApiGateway.DTOs.Restaurant.TableDto>(await Send(HttpMethod.Post, "/api/tables", "admin",
-            new { areaId = location.AreaId, tableCode = code, capacity = 4 }), HttpStatusCode.Created);
+        using var scope = _restaurant.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Restaurant.DAL.Models.RestaurantDbContext>();
+        var table = new Restaurant.DAL.Models.Table
+        {
+            TableId = Guid.NewGuid(),
+            AreaId = location.AreaId,
+            TableCode = code,
+            Capacity = 4,
+            IsActive = true,
+            CleaningStatus = "Clean"
+        };
+        db.Tables.Add(table);
+        await db.SaveChangesAsync();
         return await SeedOpenPaymentSession(location with { TableId = table.TableId });
     }
 
@@ -534,6 +553,8 @@ public sealed partial class ReservationSqlServerTests
                 services.AddGrpcClient<BillingRestaurantAccess>()
                     .ConfigurePrimaryHttpMessageHandler(() => restaurant.Server.CreateHandler());
                 services.AddGrpcClient<BillingServiceRequest>()
+                    .ConfigurePrimaryHttpMessageHandler(() => restaurant.Server.CreateHandler());
+                services.AddGrpcClient<BillingDisplayClient>()
                     .ConfigurePrimaryHttpMessageHandler(() => restaurant.Server.CreateHandler());
                 services.AddGrpcClient<BillingClosureClient>()
                     .ConfigurePrimaryHttpMessageHandler(() => recoverClosure

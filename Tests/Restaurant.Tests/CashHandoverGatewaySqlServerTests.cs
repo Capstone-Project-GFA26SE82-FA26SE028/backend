@@ -92,6 +92,10 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal(collected.PaymentId, Assert.Single(pending.Items).PaymentId);
 
         Assert.Equal("Unpaid", (await db.Bills.AsNoTracking().SingleAsync(bill => bill.BillId == billId)).Status);
+        Assert.Empty((await Read<CashierBoardPage>(await cashier.GetAsync(
+            $"/api/restaurants/{shift.RestaurantId}/payment-requests/paid"))).Items);
+        Assert.Contains((await Read<CashierBoardPage>(await cashier.GetAsync(
+            $"/api/restaurants/{shift.RestaurantId}/payment-requests/incoming"))).Items, card => card.BillId == billId);
         Assert.Equal("Presented", (await db.BillCheckouts.AsNoTracking().SingleAsync(value => value.CheckoutId == checkoutId)).Status);
         Assert.Empty(await db.CashMovements.AsNoTracking().ToListAsync());
         var before = await Read<ShiftReconciliationDTO>(await cashier.GetAsync(reconcile));
@@ -141,6 +145,7 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal(28517, sale.SignedAmount);
         Assert.Equal("Paid", (await db.Bills.AsNoTracking().SingleAsync(bill => bill.BillId == billId)).Status);
         Assert.Equal("Paid", (await db.BillCheckouts.AsNoTracking().SingleAsync(value => value.CheckoutId == checkoutId)).Status);
+        await AssertPaidCashierBoard(cashier, shift.RestaurantId, shift.CashShiftId, billId, presented.Bill.TotalAmount);
         var after = await Read<ShiftReconciliationDTO>(await cashier.GetAsync(reconcile));
         Assert.True(after.CanClose);
         Assert.Equal(28517m, after.SaleTotal);
