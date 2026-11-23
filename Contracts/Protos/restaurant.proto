@@ -209,6 +209,9 @@ message TableSessionScanReply {
   string status = 6;
   string opened_at = 7;
   bool is_new_session = 8;
+  string restaurant_name = 9;
+  string area_name = 10;
+  optional string logo_url = 11;
 }
 service TableSessionGrpc {
   rpc OpenForWaiter(IdRequest) returns (TableSessionScanReply);

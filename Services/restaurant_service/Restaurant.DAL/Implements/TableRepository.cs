@@ -79,6 +79,7 @@ public sealed class TableRepository(RestaurantDbContext db) : GenericRepository<
         if (table is not null)
         {
             await _context.Entry(table).Reference(value => value.Area).LoadAsync(ct);
+            await _context.Entry(table.Area).Reference(area => area.Restaurant).LoadAsync(ct);
         }
         return table;
     }

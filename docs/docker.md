@@ -45,6 +45,8 @@ Docker của Billing cần `CashRegisterAccess:WaiterRoleIds` trong cấu hình 
 
 Đăng nhập lại để lấy token của bộ Docker. Dùng Admin tạo QR cho bàn qua API; dùng Waiter mở phiên bàn hoặc khách quét QR và tham gia phiên, sau đó thử order. QR không được seed sẵn vì token và ảnh được tạo bởi backend.
 
+`POST /api/table-sessions/scan` nhận `{"token":"<QR token>"}` và không yêu cầu đăng nhập. Ngoài các trường phiên/bàn hiện có, `result` trả thêm `restaurantName`, `areaName` và `logoUrl` lấy từ nhà hàng/khu vực của bàn đã được QR xác thực. Khi nhà hàng chưa có logo, `logoUrl` là JSON `null`, không phải chuỗi rỗng. Không cần gọi API danh sách nhà hàng để lấy thông tin này. Quét QR chưa cấp quyền đặt món; khách vẫn phải tham gia phiên theo luồng hiện có. Cần rebuild cả Restaurant và Gateway để nạp contract bổ sung; không cần SQL upgrade cho thay đổi này.
+
 ID cố định của T01: `20000000-0000-0000-0000-000000000011`; T02/T03 kết thúc bằng `012`/`013`. Món cơm kết thúc bằng `051`, trà `052`, option `072`, trạm HOT `021`, BAR `022` (cùng tiền tố GUID). UnitRef demo kết thúc bằng `100`, đại diện gram với hệ số 1; hiện dự án chưa có bảng/API quản lý đơn vị.
 
 ## Cấu hình
