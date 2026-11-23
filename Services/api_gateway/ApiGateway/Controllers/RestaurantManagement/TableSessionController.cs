@@ -19,17 +19,7 @@ public sealed class TableSessionController(TableSessionGrpc.TableSessionGrpcClie
             {
                 Id = tableId.ToString()
             }, Options(ct));
-            return new TableSessionScanDto
-            {
-                TableSessionId = Guid.Parse(reply.TableSessionId),
-                TableId = Guid.Parse(reply.TableId),
-                TableCode = reply.TableCode,
-                AreaId = Guid.Parse(reply.AreaId),
-                RestaurantId = Guid.Parse(reply.RestaurantId),
-                Status = reply.Status,
-                OpenedAt = DateTime.Parse(reply.OpenedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-                IsNewSession = reply.IsNewSession
-            };
+            return MapScan(reply);
         }, ct);
     }
 
@@ -42,17 +32,25 @@ public sealed class TableSessionController(TableSessionGrpc.TableSessionGrpcClie
             {
                 Token = body.Token ?? ""
             }, Options(ct));
-            return new TableSessionScanDto
-            {
-                TableSessionId = Guid.Parse(reply.TableSessionId),
-                TableId = Guid.Parse(reply.TableId),
-                TableCode = reply.TableCode,
-                AreaId = Guid.Parse(reply.AreaId),
-                RestaurantId = Guid.Parse(reply.RestaurantId),
-                Status = reply.Status,
-                OpenedAt = DateTime.Parse(reply.OpenedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-                IsNewSession = reply.IsNewSession
-            };
+            return MapScan(reply);
         }, ct);
+    }
+
+    private static TableSessionScanDto MapScan(TableSessionScanReply reply)
+    {
+        return new TableSessionScanDto
+        {
+            TableSessionId = Guid.Parse(reply.TableSessionId),
+            TableId = Guid.Parse(reply.TableId),
+            TableCode = reply.TableCode,
+            AreaId = Guid.Parse(reply.AreaId),
+            RestaurantId = Guid.Parse(reply.RestaurantId),
+            RestaurantName = reply.RestaurantName,
+            AreaName = reply.AreaName,
+            LogoUrl = reply.HasLogoUrl ? reply.LogoUrl : null,
+            Status = reply.Status,
+            OpenedAt = DateTime.Parse(reply.OpenedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+            IsNewSession = reply.IsNewSession
+        };
     }
 }
