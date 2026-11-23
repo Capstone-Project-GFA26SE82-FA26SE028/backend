@@ -597,3 +597,36 @@ Billing đọc mã/tổng bill hiện có, Payment.CashShiftId/Status/PaidAt đ�
 Đã kiểm chứng: Billing 381/381 test (bao gồm 2 test SQL mới về ca Paid và chống nhân đôi); 6/6 test luồng PaymentSubmission qua Gateway TestServer/SQL Server LocalDB, có bổ sung bộ lọc và thẻ; kiểm tra lại riêng hai luồng tiền mặt/PayOS sau khi thêm assertion Paid. PayOS trong các test dùng HTTP fixture, không gọi cổng thanh toán thật. Fixture Billing seed sơ đồ trực tiếp vào database thử vì quyền API quản lý sơ đồ trên dev đã thay đổi; không đổi quyền production để phục vụ test.
 
 Compose thật dùng project/container/volume riêng và dữ liệu seed thử: đăng nhập Cashier, mở ca qua API, đọc incoming/tìm mã bill/tab Paid/chi tiết bill đều HTTP 200. Dataset có 2 thẻ chờ, 1 bill chưa lập, tổng bill đã lập 45.000 VND; tìm BOARD-UNPAID trả bàn T02/45.000 VND; tab Paid trả bàn T03 đã đóng phiên/90.000 VND theo ca. Đây là kiểm chứng API đọc bằng dữ liệu SQL thử, không phải kiểm chứng toàn luồng thu tiền thật trong Docker. Tài nguyên thử đã dọn, không reset database backend đang dùng.
+
+### 2026-11-23 — Upgrade Identity StaffTransfer và quyền QR theo nhà hàng
+
+Phạm vi: sửa lỗi đổi vai trò/trạng thái tài khoản khi database Docker cũ thiếu `dbo.StaffTransfer`; cho `admin` nhà hàng quản lý QR trong phân công đang hoạt động, giữ nguyên quyền `platform_admin`. Không thay đổi nghiệp vụ chuyển nhân viên hoặc quyền quản trị dùng chung.
+
+**SQL/ERD:** `StaffTransfer` đã tồn tại trong file tạo mới `docker/sql/schema/IdentityDb.sql` (từ chức năng chuyển nhân viên), không phải bảng nghiệp vụ mới do đợt QR tạo ra. Đợt này thêm `docker/sql/upgrades/IdentityStaffTransfer.sql` và gọi tại `docker/sql/init.sh` để bổ sung đối tượng còn thiếu trên database đang dùng. Không sửa baseline, model/DbContext hoặc dữ liệu User; không cần scaffold vì mô hình đã có đúng bảng này.
+
+| Database/bảng | Cột | Kiểu SQL đầy đủ | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| IdentityDb.dbo.StaffTransfer | StaffTransferId | uniqueidentifier | Không | Không |
+| IdentityDb.dbo.StaffTransfer | UserId | uniqueidentifier | Không | Không |
+| IdentityDb.dbo.StaffTransfer | SourceRestaurantId | uniqueidentifier | Không | Không |
+| IdentityDb.dbo.StaffTransfer | TargetRestaurantId | uniqueidentifier | Không | Không |
+| IdentityDb.dbo.StaffTransfer | RequestedBy | uniqueidentifier | Không | Không |
+| IdentityDb.dbo.StaffTransfer | WasActive | bit | Không | Không |
+| IdentityDb.dbo.StaffTransfer | CompletedAt | datetime2(7) | Có | Không |
+| IdentityDb.dbo.StaffTransfer | Status | nvarchar(20) | Không | Không |
+| IdentityDb.dbo.StaffTransfer | Message | nvarchar(500) | Có | Không |
+| IdentityDb.dbo.StaffTransfer | CreatedAt | datetime2(7) | Không | Không |
+
+Khóa/index: PK `PK_StaffTransfer(StaffTransferId)`; index không UNIQUE `IX_StaffTransfer_UserId_Status(UserId, Status)`. Không thêm FK, UNIQUE, CHECK hay DEFAULT; không xóa/sửa cột. Script kiểm tra cấu trúc hiện có, giữ nguyên dữ liệu và dừng/rollback nếu không tương thích; dùng transaction và application lock, chạy lặp an toàn.
+
+Dây ERD: User 1–n StaffTransfer qua UserId (nhân viên được chuyển); User 1–n StaffTransfer qua RequestedBy (người yêu cầu). Đây là tham chiếu logic, schema hiện tại không khai báo FK. Restaurant 1–n StaffTransfer qua từng vai trò SourceRestaurantId/TargetRestaurantId là tham chiếu logic sang RestaurantDb; không tạo FK xuyên database. Nếu ERD đã có bảng theo schema gốc thì không cần thêm bảng/dây lần nữa; nếu chưa có, bổ sung theo mô tả này. Phần QR không có thay đổi schema.
+
+Trạng thái áp dụng: đã chạy script hai lần trên `IdentityDb` trong container Docker hiện có `backend-sqlserver-1`; trước upgrade thiếu bảng, sau upgrade có đủ PK/index, User giữ 7 bản ghi trước/sau và StaffTransfer có 0 bản ghi (không seed chuyển nhân viên). Không xóa volume, không chạy lại schema/seed cho database này. Không thay đổi repo Database-SQLServer riêng vì đợt này chỉ thêm đường upgrade Docker cho định nghĩa đã có. Chưa commit/push.
+
+Kiểm chứng riêng: test SQL Server LocalDB tái hiện lỗi 208 khi bảng thiếu rồi đổi vai trò thành công sau upgrade; chạy lặp giữ User/lịch sử chuyển nhân viên, khôi phục index thiếu, từ chối schema không tương thích. Gateway TestServer dùng SQLite và Identity/Cloudinary giả lập kiểm tra tạo/tạo lại/tải ảnh đúng nhà hàng, lọc trước phân trang, chặn khác nhà hàng, phân công đã thu hồi và các vai trò không được cấp quyền; giữ regression Platform Admin và resolve QR công khai. Một test mới chạy với QrService cũ đã thất bại, chạy lại bản sửa đạt.
+
+Docker Compose project thử `identity-qr-check` build từ working tree: SQL Server, db-init, Identity, Restaurant, Gateway thật. Dùng seed thử riêng và tài khoản đăng nhập thật; thiếu bảng gây PATCH role HTTP 502, chạy lại initializer giữ 7 User và PATCH role HTTP 200. Admin nhà hàng GET /api/qr HTTP 200; truy cập QR của nhà hàng khác qua list/image/create/regenerate đều HTTP 403; Manager GET list HTTP 403. Upload/download ảnh Cloudinary thành công chỉ được kiểm tra bằng test image store trong TestServer, chưa dùng credential Cloudinary thật. Không thay đổi vai trò tài khoản trên database Docker chính để kiểm thử.
+
+Kết quả tổng hợp cuối lượt: build `Backend.sln -c Release --no-restore` đạt; test toàn solution `-c Release --no-build --no-restore` với `IDENTITY_SQL_TEST_CONNECTION` trỏ SQL Server LocalDB đạt 1.167, lỗi 0; 100 test SQL khác bị bỏ qua do chưa bật điều kiện riêng (không tính đạt). Identity 76/76 gồm 3 test SQL upgrade mới; Restaurant 141 đạt, 51 bỏ qua, gồm 8 test QR mới. Các test Gateway QR dùng nhận diện tài khoản/Cloudinary giả lập; kiểm chứng Docker bổ sung dùng Identity và Restaurant thật như mô tả trên. Chưa kiểm chứng upload/tải ảnh thành công với Cloudinary thật hoặc chạy lại GitHub Actions trên Ubuntu.
+
+Kiểm tra Docker sau rebuild Restaurant cuối cùng: lượt gọi ngay sau recreate chưa đạt assertion; kiểm tra lại khi service đã nhận request trả GET /api/qr?pageSize=1 HTTP 200, totalCount=1, chỉ bàn T01 của nhà hàng được phân công. Thu hồi phân công trong database thử làm cùng tài khoản/token nhận HTTP 403; đã khôi phục phân công thử sau test. Project thử đã dừng; không xóa container SQL chính hoặc bất kỳ volume database nào.

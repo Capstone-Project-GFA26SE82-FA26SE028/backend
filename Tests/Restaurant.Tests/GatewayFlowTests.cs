@@ -373,7 +373,7 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
             return Task.FromResult(new Restaurant.Common.DTOs.StaffActorDto
             {
                 UserId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-                RoleId = token.Replace("Bearer ", string.Empty),
+                RoleId = token == "Bearer restaurant-admin" ? "admin" : token.Replace("Bearer ", string.Empty),
                 IsAdministrator = token == "Bearer admin"
             });
         }

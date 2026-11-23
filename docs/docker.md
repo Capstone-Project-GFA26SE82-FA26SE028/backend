@@ -65,6 +65,17 @@ Schema tại `docker/sql/schema` được xuất từ 7 database hiện có, gi�
 
 Khởi động lại sẽ bỏ qua database đã khởi tạo, không reset tài khoản, menu hoặc đơn hàng đã test. Database có bảng nhưng chưa có dấu khởi tạo sẽ bị từ chối ghi đè. Thay đổi schema/seed trong repo không tự áp dụng vào volume đã khởi tạo; cần script nâng cấp riêng hoặc tạo môi trường Docker mới.
 
+Các script nâng cấp được liệt kê trong `docker/sql/init.sh` vẫn chạy trên database đã khởi tạo. Trong đó, `IdentityStaffTransfer.sql` bổ sung bảng `dbo.StaffTransfer` và index tra cứu khi thiếu, không thay đổi tài khoản hoặc lịch sử chuyển nhà hàng đã có. Script chạy lặp an toàn; cấu trúc hiện có không tương thích sẽ bị báo lỗi thay vì tự sửa dữ liệu. Bảng này cần cho cả kiểm tra đổi vai trò/trạng thái tài khoản, không chỉ thao tác chuyển nhà hàng.
+
+Sau khi lấy bản sửa schema Identity và quyền QR, với `.env` đã cấu hình:
+
+```powershell
+docker compose up -d --build db-init identity restaurant gateway
+docker compose logs db-init
+```
+
+Kiểm tra `db-init` kết thúc với mã 0 trước khi thử đổi vai trò. Không xóa volume để xử lý lỗi thiếu bảng. Admin nhà hàng được quản lý QR trong phân công đang hoạt động; `GET /api/qr` tự chọn khi chỉ có một nhà hàng, hoặc cần `restaurantId` khi có nhiều phân công. Quyền quản trị nền tảng và API resolve QR công khai giữ nguyên.
+
 ```powershell
 docker compose down
 docker compose up -d --build
