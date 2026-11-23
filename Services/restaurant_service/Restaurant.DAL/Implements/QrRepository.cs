@@ -48,6 +48,11 @@ public sealed class QrRepository(RestaurantDbContext db) : GenericRepository<glo
         return _context.Qrs.Include(x => x.Table).ThenInclude(x => x.Area);
     }
 
+    public override Task<Qr?> GetByIdAsync(Guid id, CancellationToken ct = default)
+    {
+        return GetAll().SingleOrDefaultAsync(qr => qr.QrId == id, ct);
+    }
+
     public Task<List<Qr>> GetActiveAsync(Guid tableId, CancellationToken ct)
     {
         return GetAll().Where(x => x.TableId == tableId && x.RevokedAt == null).ToListAsync(ct);

@@ -12,12 +12,27 @@ using Restaurant.DAL.Interfaces;
 namespace Restaurant.BLL.Implements;
 
 public sealed class QrService(IQrRepository repository, ITableRepository tables,
-    IManagementTransaction transaction, IManagementAccess access, IOptions<QrSettings> settings, IQrImageStore images) : IQrService
+    IManagementTransaction transaction, ICurrentRestaurantScopeService access, IOptions<QrSettings> settings, IQrImageStore images) : IQrService
 {
     public async Task<PageResult<QrDto>> GetAll(ListQuery query, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        var scope = await RequireAdministrator(ct);
         ManagementValidation.Query(query);
+        if (!scope.IsAdministrator && !query.RestaurantId.HasValue)
+        {
+            if (scope.RestaurantIds.Count != 1)
+            {
+                throw new ManagementException(400, "Vui lòng chọn nhà hàng được phân công để xem mã QR.");
+            }
+
+            query.RestaurantId = scope.RestaurantIds[0];
+        }
+
+        if (query.RestaurantId.HasValue)
+        {
+            RequireRestaurant(scope, query.RestaurantId.Value);
+        }
+
         var page = await repository.GetPageAsync(query, ct);
         return new PageResult<QrDto>
         {
@@ -30,13 +45,14 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
 
     public async Task<byte[]> GetImage(Guid id, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        var scope = await RequireAdministrator(ct);
         var qr = await repository.GetByIdAsync(id, ct);
         if (qr is null)
         {
             throw new ManagementException(404, "Không tìm thấy mã QR.");
         }
 
+        RequireRestaurant(scope, qr.Table.Area.RestaurantId);
         if (string.IsNullOrWhiteSpace(qr.ImageUrl))
         {
             throw new ManagementException(404, "Không có hình ảnh trên Cloudinary. Vui lòng tạo lại mã QR.");
@@ -62,7 +78,7 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
 
     private async Task<QrCreatedDto> Issue(Guid tableId, Guid? expectedQrId, CancellationToken ct)
     {
-        await access.RequireAdmin(ct);
+        await RequireAdministrator(ct);
         if (tableId == Guid.Empty)
         {
             throw new ManagementException(400, "Mã bàn không hợp lệ.");
@@ -80,7 +96,13 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
         {
             var table = await tables.GetByIdAsync(tableId, ct)
                 ?? throw new ManagementException(404, "Không tìm thấy bàn.");
-            if (!table.IsActive || table.Area is null || !table.Area.IsActive)
+            if (table.Area is null)
+            {
+                throw new ManagementException(409, "Bàn không có khu vực hợp lệ.");
+            }
+
+            RequireRestaurant(await RequireAdministrator(ct), table.Area.RestaurantId);
+            if (!table.IsActive || !table.Area.IsActive)
             {
                 throw new ManagementException(409, "Bàn và khu vực phải đang hoạt động.");
             }
@@ -128,6 +150,25 @@ public sealed class QrService(IQrRepository repository, ITableRepository tables,
                 Png = image
             };
         }, ct);
+    }
+
+    private async Task<CurrentRestaurantScopeDto> RequireAdministrator(CancellationToken ct)
+    {
+        var scope = await access.GetCurrentScope(null, ct);
+        if (!scope.IsAdministrator && (scope.RoleId != "admin" || scope.RestaurantIds.Count == 0))
+        {
+            throw new ManagementException(403, "Chỉ quản trị viên nền tảng hoặc admin được phân công tại nhà hàng mới được quản lý mã QR.");
+        }
+
+        return scope;
+    }
+
+    private static void RequireRestaurant(CurrentRestaurantScopeDto scope, Guid restaurantId)
+    {
+        if (!scope.IsAdministrator && !scope.RestaurantIds.Contains(restaurantId))
+        {
+            throw new ManagementException(403, "Bạn không được quản lý mã QR của nhà hàng này.");
+        }
     }
 
     public async Task<QrTableDto> Resolve(string token, CancellationToken ct)

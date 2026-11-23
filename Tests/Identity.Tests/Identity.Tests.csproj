@@ -7,4 +7,8 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.24" />
     <ProjectReference Include="../../Services/identity_service/Identity.BLL/Identity.BLL.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../docker/sql/schema/IdentityDb.sql" Link="Sql/IdentityDb.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../docker/sql/upgrades/IdentityStaffTransfer.sql" Link="Sql/IdentityStaffTransfer.sql" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

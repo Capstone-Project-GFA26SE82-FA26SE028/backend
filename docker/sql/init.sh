@@ -30,6 +30,9 @@ for database in IdentityDb RestaurantDb InventoryDb CatalogDb OrderingDb Custome
     echo "$database initialized."
 done
 
+echo "Applying IdentityDb upgrade: IdentityStaffTransfer.sql"
+"${sqlcmd[@]}" -d IdentityDb -i /init/upgrades/IdentityStaffTransfer.sql
+
 # Do not infer required restaurant mappings or payment configuration from old rows.
 for upgrade in BillingCashRegisterRestaurant.sql BillingBillRestaurant.sql BillingPayOs.sql \
     BillingCashMethod.sql BillingCheckoutTables.sql BillingCheckoutSubmission.sql BillingCheckoutPreparation.sql \
