@@ -4,6 +4,7 @@ namespace Ordering.DAL.Interfaces;
 
 public interface IOrderRepository
 {
+    Task<List<Order>> GetForTransferAsync(Guid sessionId, CancellationToken ct);
     Task<List<Order>> GetForBillingAsync(Guid sessionId, CancellationToken ct);
 
     Task<Order?> GetByIdAsync(Guid id, CancellationToken ct);

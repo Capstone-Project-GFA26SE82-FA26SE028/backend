@@ -334,9 +334,9 @@ public sealed partial class OrderService(
 
         var order = await transaction.ExecuteAsync(async () =>
         {
+            await checkouts.LockSessionAsync(sessionId, ct);
             if (actor.PaidCheckoutId.HasValue)
             {
-                await checkouts.LockSessionAsync(sessionId, ct);
                 var checkout = await checkouts.GetActiveAsync(sessionId, ct);
                 if (checkout is null || checkout.CheckoutId != actor.PaidCheckoutId.Value
                     || checkout.Status != "Frozen" || !checkout.BillIdRef.HasValue)

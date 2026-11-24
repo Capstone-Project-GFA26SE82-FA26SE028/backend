@@ -95,6 +95,11 @@ public sealed class BillingOrderReadTests
         public List<Order> Values { get; } = [];
         public int Writes { get; private set; }
 
+        public Task<List<Order>> GetForTransferAsync(Guid sessionId, CancellationToken ct)
+        {
+            return Task.FromResult(Values);
+        }
+
         public Task<List<Order>> GetForBillingAsync(Guid sessionId, CancellationToken ct)
         {
             return Task.FromResult(Values);

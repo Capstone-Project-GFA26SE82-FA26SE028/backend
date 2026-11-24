@@ -18,6 +18,7 @@ public sealed class CheckoutLockRepository(OrderingDbContext db) : ICheckoutLock
 
         if (!db.Database.IsSqlServer())
         {
+            await RequireNoTransferAsync(sessionId, ct);
             return;
         }
 
@@ -32,6 +33,16 @@ public sealed class CheckoutLockRepository(OrderingDbContext db) : ICheckoutLock
         if ((int)result.Value < 0)
         {
             throw new OrderingException(409, "Phiên phục vụ đang bận. Vui lòng thử lại cùng yêu cầu.");
+        }
+        await RequireNoTransferAsync(sessionId, ct);
+    }
+
+    private async Task RequireNoTransferAsync(Guid sessionId, CancellationToken ct)
+    {
+        if (await db.TableTransfers.AnyAsync(value => value.Status == "Applied"
+            && (value.SourceSessionId == sessionId || value.TargetSessionId == sessionId), ct))
+        {
+            throw new OrderingException(409, "Phiên bàn đang tách/gộp. Vui lòng hoàn tất thao tác trước.");
         }
     }
 

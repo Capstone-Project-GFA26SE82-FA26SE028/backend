@@ -92,6 +92,7 @@ public sealed class KitchenTaskService(
             var task = await repository.GetByIdForUpdateAsync(id, ct)
                 ?? throw new OrderingException(404, "Không tìm thấy nhiệm vụ bếp.");
 
+            RequireLockedSession(task, sessions);
             if (!string.IsNullOrEmpty(version))
             {
                 var expected = Convert.FromBase64String(version);
@@ -313,6 +314,10 @@ public sealed class KitchenTaskService(
             }
 
             var tasks = await repository.GetByIdsForUpdateAsync(taskIds, ct);
+            foreach (var current in tasks)
+            {
+                RequireLockedSession(current, sessions);
+            }
             var pendingTasks = tasks
                 .Where(t => string.Equals(t.Status, "Pending", StringComparison.OrdinalIgnoreCase))
                 .ToList();
@@ -383,6 +388,10 @@ public sealed class KitchenTaskService(
             }
 
             var tasks = await repository.GetByIdsForUpdateAsync(taskIds, ct);
+            foreach (var current in tasks)
+            {
+                RequireLockedSession(current, sessions);
+            }
             var now = clock.GetUtcNow().UtcDateTime;
             int count = 0;
 
@@ -445,11 +454,17 @@ public sealed class KitchenTaskService(
             throw new OrderingException(400, "Mã nhiệm vụ bếp không hợp lệ.");
         }
 
+        var sessions = await repository.GetSessionIdsAsync([id], ct);
         return await transaction.ExecuteAsync(async () =>
         {
+            foreach (var session in sessions)
+            {
+                await checkouts.LockSessionAsync(session, ct);
+            }
             var task = await repository.GetByIdForUpdateAsync(id, ct)
                 ?? throw new OrderingException(404, "Không tìm thấy nhiệm vụ bếp.");
 
+            RequireLockedSession(task, sessions);
             if (IsOnline(task))
             {
                 throw new OrderingException(409, "Luồng đặt mang đi online chưa hỗ trợ thao tác làm lại món.");
@@ -526,6 +541,7 @@ public sealed class KitchenTaskService(
 
         return await transaction.ExecuteAsync(async () =>
         {
+            await checkouts.LockSessionAsync(sessionId, ct);
             var holdTasks = await repository.GetHoldTasksAsync(sessionId, orderId, ct);
             var now = clock.GetUtcNow().UtcDateTime;
             int count = 0;
@@ -629,6 +645,14 @@ public sealed class KitchenTaskService(
                 Quantity = o.Quantity
             }).ToList() ?? []
         };
+    }
+
+    private static void RequireLockedSession(KitchenTask task, IReadOnlyCollection<Guid> sessions)
+    {
+        if (task.OrderItem?.Order?.TableSessionRef is Guid current && !sessions.Contains(current))
+        {
+            throw new OrderingException(409, "Món vừa được chuyển bàn. Vui lòng tải lại trước khi xử lý.");
+        }
     }
 }
 
