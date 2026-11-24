@@ -444,3 +444,12 @@ message StaffAssignmentTransferRequest {
   string target_restaurant_id = 4;
 }
 message StaffAssignmentTransferReply { string status = 1; string message = 2; }
+
+service TableTransferSessionGrpc {
+  rpc Prepare(TableTransferSessionRequest) returns (TableTransferSessionReply);
+  rpc Finish(TableTransferFinishRequest) returns (TableTransferSessionReply);
+  rpc Get(TableTransferFinishRequest) returns (TableTransferSessionReply);
+}
+message TableTransferSessionRequest { string payload = 1; }
+message TableTransferFinishRequest { string operation_id = 1; bool abort = 2; }
+message TableTransferSessionReply { string payload = 1; }

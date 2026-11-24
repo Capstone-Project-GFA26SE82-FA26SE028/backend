@@ -73,6 +73,7 @@ services:
       context: .
       dockerfile: Services/restaurant_service/Restaurant.API/Dockerfile
     environment:
+      TableTransfer__ServiceKey: ${TABLE_TRANSFER_SERVICE_KEY:-${JWT_SECRET_KEY}}
       ASPNETCORE_ENVIRONMENT: Docker
       Notifications__ServiceKey: ${NOTIFICATION_SERVICE_KEY:-${JWT_SECRET_KEY}}
       Cloudinary__CloudName: ${CLOUDINARY_CLOUD_NAME:-dworxzse0}
@@ -119,6 +120,7 @@ services:
       context: .
       dockerfile: Services/ordering_service/Ordering.API/Dockerfile
     environment:
+      TableTransfer__ServiceKey: ${TABLE_TRANSFER_SERVICE_KEY:-${JWT_SECRET_KEY}}
       ASPNETCORE_ENVIRONMENT: Docker
       StaffProvisioning__ServiceKey: ${STAFF_PROVISIONING_SERVICE_KEY:-${JWT_SECRET_KEY}}
       Notifications__ServiceKey: ${NOTIFICATION_SERVICE_KEY:-${JWT_SECRET_KEY}}
@@ -165,6 +167,7 @@ services:
       context: .
       dockerfile: Services/billing_service/Billing.API/Dockerfile
     environment:
+      TableTransfer__ServiceKey: ${TABLE_TRANSFER_SERVICE_KEY:-${JWT_SECRET_KEY}}
       ASPNETCORE_ENVIRONMENT: Docker
       Notifications__ServiceKey: ${NOTIFICATION_SERVICE_KEY:-${JWT_SECRET_KEY}}
       GrpcServices__Identity: http://identity:5001

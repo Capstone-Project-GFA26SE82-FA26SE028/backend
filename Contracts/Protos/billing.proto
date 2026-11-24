@@ -525,3 +525,9 @@ message WaiterPayOsPage {
   int32 page = 3;
   int32 page_size = 4;
 }
+
+service TableTransferBillingGrpc {
+  rpc Check(TableTransferBillingRequest) returns (TableTransferBillingReply);
+}
+message TableTransferBillingRequest { string source_session_id = 1; string target_session_id = 2; }
+message TableTransferBillingReply { bool allowed = 1; }
