@@ -16,6 +16,23 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
     IUnitOfWork unitOfWork, IBillingAccess access, IBillSourceClient source,
     IOptions<CashRegisterAccessSettings> roles, IOptions<BillSettings> settings, TimeProvider clock) : IBillService
 {
+    public Task<bool> CanTransfer(Guid source, Guid target, CancellationToken ct)
+    {
+        return unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            foreach (var id in new[] { source, target }.Order())
+            {
+                if (!await bills.LockSessionAsync(id, ct)
+                    || await bills.SessionHasBillAsync(id, ct)
+                    || await bills.GetActiveCheckoutAsync(id, ct) is not null)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }, ct);
+    }
+
     private const decimal MaximumMoney = 9999999999999999.99m;
 
     public Task<BillDTO> Create(Guid tableSessionId, CancellationToken ct)

@@ -15,6 +15,19 @@ namespace Billing.Tests;
 public sealed class BillServiceTests
 {
     [Fact]
+    public async Task TableTransferGuardBlocksEitherSessionOnceAnInvoiceExists()
+    {
+        await using var fixture = await BillFixture.Create();
+        var source = fixture.Source.Value.TableSessionId;
+        var target = Guid.NewGuid();
+        Assert.True(await fixture.Service.CanTransfer(source, target, default));
+        await fixture.Service.Create(source, default);
+        Assert.False(await fixture.Service.CanTransfer(source, target, default));
+        Assert.False(await fixture.Service.CanTransfer(target, source, default));
+    }
+
+
+    [Fact]
     public async Task CookingAndServingProgressDoesNotInvalidateFinancialSnapshot()
     {
         await using var fixture = await BillFixture.Create();

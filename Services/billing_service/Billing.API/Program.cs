@@ -24,6 +24,7 @@ builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationGrpc.
 builder.Services.AddHostedService<RestaurantIsolation.NotificationOutboxWorker<Billing.DAL.Models.BillingDbContext>>();
 
 var app = builder.Build();
+app.MapGrpcService<Billing.API.GrpcServices.TableTransferBillingGrpcService>();
 
 app.MapGrpcService<CashRegisterGrpcService>();
 app.MapGrpcService<CashShiftGrpcService>();
