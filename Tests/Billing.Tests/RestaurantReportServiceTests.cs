@@ -142,6 +142,23 @@ public sealed class RestaurantReportServiceTests
         Assert.Equal(DateTimeOffset.Parse(query.From), result.FromUtc);
     }
 
+    [Theory]
+    [InlineData("2026-11-25T00:00:00z")]
+    [InlineData("2026-11-25T00:00:00.1234567z")]
+    public async Task LowercaseUtcDesignatorMatchesUppercaseUtc(string from)
+    {
+        var context = new Context();
+        var service = new RestaurantReportService(context);
+        var lowercaseQuery = Query();
+        lowercaseQuery.From = from;
+        var uppercaseQuery = Query();
+        uppercaseQuery.From = from[..^1] + "Z";
+        var expected = await service.GetPeriod(context.RestaurantId, uppercaseQuery, default);
+        var actual = await service.GetPeriod(context.RestaurantId, lowercaseQuery, default);
+        Assert.Equal(expected, actual);
+        Assert.Equal(from, lowercaseQuery.From);
+    }
+
     private static ReportPeriodQueryDTO Query(string group = "day")
     {
         return new ReportPeriodQueryDTO

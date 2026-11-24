@@ -62,6 +62,11 @@ public sealed class RestaurantReportService(IRestaurantReportContextClient resta
             throw new BillingException(400, "Nhập thời gian ISO 8601 có Z hoặc offset, ví dụ 2026-11-25T00:00:00+07:00.");
         }
 
+        if (value.EndsWith('z'))
+        {
+            value = value[..^1] + "Z";
+        }
+
         var hasOffset = value.EndsWith('Z') || (value.Length >= 6
             && (value[^6] is '+' or '-') && value[^3] == ':');
         string[] formats = ["yyyy-MM-dd'T'HH:mm:ssK", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK"];

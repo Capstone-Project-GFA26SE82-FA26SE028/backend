@@ -730,3 +730,8 @@ Bằng chứng nghiệm thu cục bộ:
 ## 2026-11-25 — Quyền xem và kỳ báo cáo nhà hàng
 
 **Không có thay đổi schema.** Chỉ bổ sung contract gRPC, DTO, lớp kiểm tra ngữ cảnh/kỳ và API Gateway; không thêm/sửa/xóa bảng/cột/PK/FK/UNIQUE/CHECK/index, không đổi quan hệ/cardinality hoặc dây ERD. DTO mới không phải entity. Không sửa repo SQL riêng. Fixture Docker tách biệt dùng schema/seed hiện có để kiểm thử; không áp SQL hoặc đổi dữ liệu database dev của nhóm. Chi tiết file, test, giới hạn và review tại `docs/restaurant-performance-reports.md`, mục R1. Thay đổi đang để chưa commit/push trên `feature/restaurant-performance-reports`.
+
+
+## 2026-11-25 — Hoàn thiện định dạng thời gian sau review
+
+**Không có thay đổi schema.** Chỉ chuẩn hóa hậu tố UTC z thường trong validation kỳ báo cáo, bổ sung hướng dẫn encode URL trong Swagger và test. Không đổi bảng/cột/khóa/ràng buộc/index/quan hệ, không sửa SQL Docker hoặc repo SQL riêng, không áp thay đổi database nhóm. Kiểm chứng Docker dùng project và dữ liệu demo riêng. Bản sửa dựa trên commit 1a64b53, giữ nguyên lịch sử và chưa commit/push. Chi tiết trong `docs/restaurant-performance-reports.md`, mục hoàn thiện sau review R1.

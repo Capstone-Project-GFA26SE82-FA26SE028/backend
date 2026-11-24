@@ -165,6 +165,56 @@ public sealed partial class GatewayFlowTests
         Assert.DoesNotContain("invalid/restaurant-time-zone", await unavailable.Content.ReadAsStringAsync());
     }
 
+    [Theory]
+    [InlineData("2026-11-25T00:00:00Z", 200)]
+    [InlineData("2026-11-25T00:00:00z", 200)]
+    [InlineData("2026-11-25T00:00:00%2B07:00", 200)]
+    [InlineData("2026-11-25T00:00:00+07:00", 400)]
+    public async Task ReportPeriodTimestampEncodingRemainsStrict(string encodedFrom, int expected)
+    {
+        var restaurant = await CreateRestaurant();
+        await AssignReportManager(restaurant.RestaurantId);
+        await using var billing = ReportBillingHost();
+        await using var gateway = ReportGatewayHost(billing);
+        using var client = gateway.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", "manager");
+        var path = $"/api/restaurants/{restaurant.RestaurantId}/reports/period?from={encodedFrom}"
+            + "&to=2026-11-26T00:00:00Z";
+        using var response = await client.GetAsync(path);
+        Assert.Equal(expected, (int)response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        if (expected == 200)
+        {
+            var result = json.RootElement.GetProperty("result");
+            Assert.Equal("day", result.GetProperty("groupBy").GetString());
+            var expectedFrom = encodedFrom.Contains("%2B", StringComparison.Ordinal)
+                ? DateTimeOffset.Parse("2026-11-24T17:00:00Z")
+                : DateTimeOffset.Parse("2026-11-25T00:00:00Z");
+            Assert.Equal(expectedFrom, result.GetProperty("fromUtc").GetDateTimeOffset());
+        }
+        else
+        {
+            Assert.Equal(JsonValueKind.Null, json.RootElement.GetProperty("result").ValueKind);
+        }
+    }
+
+    [Fact]
+    public async Task ReportPeriodSwaggerDocumentsOffsetEncodingForBothBounds()
+    {
+        await using var gateway = _gateway.WithWebHostBuilder(builder => builder.UseSetting("Swagger:Enabled", "true"));
+        using var client = gateway.CreateClient();
+        using var response = await client.GetAsync("/swagger/v1/swagger.json");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var description = json.RootElement.GetProperty("paths")
+            .GetProperty("/api/restaurants/{restaurantId}/reports/period")
+            .GetProperty("get").GetProperty("description").GetString();
+        Assert.Contains("from", description);
+        Assert.Contains("to", description);
+        Assert.Contains("%2B", description);
+        Assert.Contains("UTC Z", description);
+    }
+
     private async Task AssignReportManager(Guid restaurantId)
     {
         using var scope = _restaurant.Services.CreateScope();

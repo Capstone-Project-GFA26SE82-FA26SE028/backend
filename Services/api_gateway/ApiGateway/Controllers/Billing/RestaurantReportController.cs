@@ -16,6 +16,7 @@ public sealed class RestaurantReportController(RestaurantReportGrpc.RestaurantRe
     IOptions<BillingClientSettings> settings) : BillingControllerBase(settings)
 {
     [HttpGet("period")]
+    [EndpointDescription("Cả from và to phải là ISO 8601 có Z/z hoặc offset. Khi viết query URL, encode dấu + thành %2B (ví dụ +07:00 thành %2B07:00), hoặc dùng UTC Z. Không gửi thời gian thiếu offset; máy chủ không tự sửa dấu cách thành dấu +.")]
     [ProducesResponseType(typeof(ResponseDTO<ReportPeriodDTO>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ResponseDTO), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ResponseDTO), StatusCodes.Status401Unauthorized)]

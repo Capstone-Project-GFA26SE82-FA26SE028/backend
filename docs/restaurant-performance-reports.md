@@ -1,5 +1,7 @@
 # Báo cáo hiệu quả hoạt động nhà hàng
 
+Trạng thái cập nhật 2026-11-25: R1 đã được người dùng commit tại 1a64b53. Phần hoàn thiện sau review ở cuối tài liệu hiện chưa commit/push. Các trạng thái bàn giao R0/R1 bên dưới được giữ theo thời điểm kiểm chứng.
+
 ## R0: kết quả khảo sát nguồn, chưa triển khai báo cáo
 
 Ngày: 2026-11-25. Repository: backend mới `Doan-new/backend`; baseline `1552753`, nhánh khảo sát `fix/vietnamese-unicode`. Working tree sạch khi bắt đầu. Đợt R0 chỉ tạo tài liệu này, không thay source, API, contract, SQL, cấu hình hoặc dữ liệu. Chưa tạo/chuyển nhánh phát triển WF-05. Không commit/push.
@@ -275,3 +277,52 @@ Gemini kiểm tra lại:
 
 Tên commit đề xuất: **Thêm quyền xem và kiểm tra kỳ báo cáo nhà hàng**.
 Mô tả: **Chỉ cho Manager đúng nhà hàng đọc ngữ cảnh báo cáo; chuẩn hóa múi giờ và khoảng thời gian, kiểm tra cách nhóm, bổ sung test Gateway và kiểm chứng Docker. Không thay đổi schema.**
+
+
+## Hoàn thiện sau review R1 (2026-11-25)
+
+Baseline review là commit **1a64b53** trên `feature/restaurant-performance-reports`, working tree sạch khi bắt đầu. Giữ nguyên commit và lịch sử. Phần này chỉ xử lý các nhận xét nhỏ của R1, chưa chuyển R2.
+
+| Nhận xét | Kết luận tự kiểm chứng | Thay đổi |
+| --- | --- | --- |
+| F-01 — UTC z thường | Đã tái hiện bằng 2 test mới: code baseline trả BillingException 400 cho hậu tố z (có/không phần lẻ giây), trong khi Z được chấp nhận. Đây là cải thiện tương thích, không phải lỗi tính sai UTC. | `RestaurantReportService.Parse` chuẩn hóa riêng hậu tố z thành Z trước khi kiểm tra offset và TryParseExact. Không sửa timestamp thiếu offset, không sửa khoảng trắng/giá trị sai, không đổi biên/múi giờ. |
+| F-02 — dấu + trong query | Đã chạy HTTP: + viết thẳng bị query decoder đổi thành khoảng trắng và bị từ chối 400; %2B hợp lệ trả 200. Đây là yêu cầu encode URL, không phải lý do nới validation. Tài liệu R1 trước đã có lưu ý, nhưng Swagger chưa hiện hướng dẫn. | Thêm EndpointDescription vào đúng action GetPeriod để JSON Swagger có mô tả cho cả from/to. Dùng metadata ASP.NET có sẵn, không thêm package/filter toàn cục hoặc thay định dạng request. |
+| F-03 — quyền nhà hàng | Không có lỗi cần sửa trong nhận xét này. | Giữ guard Manager/phân công, chạy hồi quy quyền và request khác nhà hàng. Không tuyên bố việc một số test đạt chứng minh mọi tấn công đều bị chặn. |
+| F-04 — khoảng nửa mở | Không có lỗi cần sửa trong nhận xét này. | Giữ startInclusive/endExclusive. Đây vẫn là metadata và validation kỳ; chưa phải bằng chứng truy vấn tổng tiền hoặc grouping đúng biên vì R2 chưa triển khai. |
+
+Đối chiếu [RFC 3339 §5.6](https://www.rfc-editor.org/info/rfc3339/#section-5.6): t/z thường được cho phép trong cú pháp chung, đồng thời một profile có thể giới hạn chữ hoa. Bản sửa chỉ mở tương thích **hậu tố UTC z** như review yêu cầu; không tuyên bố đây là bộ kiểm tra đầy đủ mọi biến thể RFC 3339. Response vẫn chuẩn hóa như trước.
+
+### Bằng chứng test trước/sau
+
+- Trước sửa: `dotnet test Tests/Billing.Tests/Billing.Tests.csproj -c Release --filter FullyQualifiedName~LowercaseUtcDesignatorMatchesUppercaseUtc` → **2 failed, 0 passed**. Cùng test mong đợi z/Z cho cùng kết quả, baseline ném 400 tại Parse.
+- Sau sửa: `--filter FullyQualifiedName~RestaurantReportServiceTests` → **23 passed**, 0 failed/skipped (21 cũ + 2 regression z). Test mới `LowercaseUtcDesignatorMatchesUppercaseUtc` so sánh toàn DTO và giữ nguyên request đầu vào.
+- `dotnet test Tests/Restaurant.Tests/Restaurant.Tests.csproj -c Release --filter FullyQualifiedName~ReportPeriod` → **17 passed**, 0 failed/skipped (12 cũ + 4 ca HTTP encoding + 1 ca Swagger).
+- `ReportPeriodTimestampEncodingRemainsStrict`: Z/z và %2B07:00 trả 200 với UTC đúng; +07:00 chưa encode trả 400, result null. Chạy qua HTTP Gateway → Billing → Restaurant trên test host, SQLite và identity giả như R1.
+- `ReportPeriodSwaggerDocumentsOffsetEncodingForBothBounds`: bật Swagger:Enabled riêng trong test host, đọc JSON Swagger thật và kiểm tra operation description có from, to, %2B và UTC Z. Không chỉ kiểm tra attribute tồn tại trong source; không bật Swagger toàn môi trường bằng thay đổi code này.
+- Build `dotnet build Backend.sln -c Release`: đạt, 0 warning/0 error ở lần build cuối. Khi test build lại các dependency từ đầu có cảnh báo nullable cũ; không sửa các cảnh báo ngoài phạm vi.
+- Test hồi quy toàn solution: 1372 passed, 0 failed, 104 skipped. Các SQL test opt-in không được tính là đạt khi chưa cấp connection riêng; Docker chạy không tự cấp các biến test đó.
+
+Docker kiểm chứng lại từ source mới bằng Compose project riêng (db-init, Identity, Restaurant, Billing, Gateway, SQL Server 2022, tài khoản demo và volume tách biệt):
+
+| Request/kiểm tra | Kết quả thực tế |
+| --- | --- |
+| from/to dùng Z | 200, UTC đúng |
+| Cả from và to dùng z thường | 200, cùng instant với Z |
+| Offset +07:00 đã encode thành %2B07:00 | 200, UTC đúng |
+| Dấu + viết thẳng trong query | 400, không tự sửa thành timestamp hợp lệ |
+| GET /swagger/v1/swagger.json | 200, có hướng dẫn encode thực tế trong description của endpoint |
+| 22 ca báo cáo Docker cũ + 7 login demo | Đạt; giữ các ca sai quyền/khác nhà hàng/revoked/header lệch/biên sai; Billing row counts trước/sau không đổi |
+
+Những kiểm tra mới ở bảng Docker cộng thêm một login demo riêng; không dùng số lần login làm số ca nghiệp vụ. Không gọi PayOS/Gemini thật, không thử FE. Chưa chạy CI remote. Môi trường của nhóm không được cập nhật image/schema/data trong lượt này. Đã dọn container/network/volume của project thử và xóa file credential demo tạm sau kiểm chứng.
+
+### File và bàn giao review
+
+Chỉ sửa sáu file:
+- `Services/billing_service/Billing.BLL/Implements/RestaurantReportService.cs`: nhận hậu tố z thường mà vẫn kiểm tra chặt timestamp.
+- `Services/api_gateway/ApiGateway/Controllers/Billing/RestaurantReportController.cs`: hướng dẫn encode URL trong Swagger của đúng endpoint.
+- `Tests/Billing.Tests/RestaurantReportServiceTests.cs`: hai ca tái hiện/regression z/Z.
+- `Tests/Restaurant.Tests/RestaurantReportFlowTests.cs`: bốn ca HTTP encoding và một ca kiểm tra JSON Swagger.
+- `docs/restaurant-performance-reports.md`: kết luận từng nhận xét, bằng chứng trước/sau, giới hạn kiểm chứng.
+- `docs/database-change-log.md`: ghi rõ không đổi cấu trúc database.
+
+**Không có thay đổi schema**, contract gRPC/route/quyền hoặc cấu hình chung; không sửa repo SQL riêng. Không commit/push hoặc sửa commit 1a64b53. Tên commit đề xuất: **Hoàn thiện định dạng thời gian và hướng dẫn báo cáo**. Mô tả: **Hỗ trợ hậu tố UTC z thường, bổ sung hướng dẫn encode offset trên Swagger và test hồi quy; giữ nguyên quyền truy cập và cấu trúc database.**
