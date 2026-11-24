@@ -725,3 +725,8 @@ Bằng chứng nghiệm thu cục bộ:
 - Gateway Docker build từ source mới, database thử tách biệt: POST/GET categories; POST/GET items (tên/mô tả); PUT/GET users/me; POST/GET ingredients đều giữ nguyên chuỗi tiếng Việt. Không gọi Cloudinary thật trong các ca này.
 - Lần test tổng đầu chạy song song build Docker có 3 lỗi timing/regex tại AI. Chạy AI riêng đạt 163/163; chạy lại toàn solution tuần tự đạt các số liệu ở trên. Không sửa code AI.
 - Chưa chạy GitHub Actions trên remote, chưa nâng cấp database dev của nhóm, chưa kiểm thử giao diện FE; không tuyên bố mọi luồng nghiệp vụ đã được kiểm thử end-to-end.
+
+
+## 2026-11-25 — Quyền xem và kỳ báo cáo nhà hàng
+
+**Không có thay đổi schema.** Chỉ bổ sung contract gRPC, DTO, lớp kiểm tra ngữ cảnh/kỳ và API Gateway; không thêm/sửa/xóa bảng/cột/PK/FK/UNIQUE/CHECK/index, không đổi quan hệ/cardinality hoặc dây ERD. DTO mới không phải entity. Không sửa repo SQL riêng. Fixture Docker tách biệt dùng schema/seed hiện có để kiểm thử; không áp SQL hoặc đổi dữ liệu database dev của nhóm. Chi tiết file, test, giới hạn và review tại `docs/restaurant-performance-reports.md`, mục R1. Thay đổi đang để chưa commit/push trên `feature/restaurant-performance-reports`.

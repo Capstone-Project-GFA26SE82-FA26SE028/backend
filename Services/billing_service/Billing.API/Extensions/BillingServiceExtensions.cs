@@ -108,6 +108,8 @@ public static class BillingServiceExtensions
         services.AddScoped<IBillSourceClient, BillSourceClient>();
         services.Configure<BillSettings>(configuration.GetSection("Billing"));
         services.AddScoped<IBillingAccess, RestaurantBillingAccess>();
+        services.AddScoped<IRestaurantReportContextClient, RestaurantReportContextClient>();
+        services.AddScoped<IRestaurantReportService, RestaurantReportService>();
         services.AddScoped<ICashRegisterService, CashRegisterService>();
         services.AddScoped<ICashShiftService, CashShiftService>();
         services.AddOptions<CashPaymentSettings>().Bind(configuration.GetSection("CashPayment"))

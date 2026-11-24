@@ -7,6 +7,19 @@ namespace Restaurant.API.GrpcServices;
 public sealed class RestaurantAccessGrpcService(ICurrentRestaurantScopeService service, IRestaurantDataScopeService dataScope)
     : RestaurantAccessGrpc.RestaurantAccessGrpcBase
 {
+    public override async Task<RestaurantReportContextReply> GetReportContext(
+        CurrentRestaurantScopeRequest request, ServerCallContext context)
+    {
+        var restaurantId = ParseOptional(request.RestaurantId)
+            ?? throw new RpcException(new Status(StatusCode.InvalidArgument, "Yêu cầu mã nhà hàng hợp lệ."));
+        var result = await service.GetReportContext(restaurantId, context.CancellationToken);
+        return new RestaurantReportContextReply
+        {
+            RestaurantId = result.RestaurantId.ToString(),
+            TimeZone = result.TimeZone
+        };
+    }
+
     public override async Task<RestaurantDataScopeReply> ResolveDataScope(RestaurantDataScopeRequest request, ServerCallContext context)
     {
         var restaurantId = await dataScope.Resolve(ParseOptional(request.RestaurantId),
