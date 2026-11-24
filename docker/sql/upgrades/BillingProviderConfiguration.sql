@@ -21,9 +21,9 @@ BEGIN TRY
     IF COL_LENGTH(N'dbo.PaymentProviderConfig', N'Enabled') IS NULL
         ALTER TABLE dbo.PaymentProviderConfig ADD Enabled bit NOT NULL;
     IF COL_LENGTH(N'dbo.PaymentProviderConfig', N'ReturnUrl') IS NULL
-        ALTER TABLE dbo.PaymentProviderConfig ADD ReturnUrl varchar(2048) NOT NULL;
+        ALTER TABLE dbo.PaymentProviderConfig ADD ReturnUrl nvarchar(2048) NOT NULL;
     IF COL_LENGTH(N'dbo.PaymentProviderConfig', N'CancelUrl') IS NULL
-        ALTER TABLE dbo.PaymentProviderConfig ADD CancelUrl varchar(2048) NOT NULL;
+        ALTER TABLE dbo.PaymentProviderConfig ADD CancelUrl nvarchar(2048) NOT NULL;
     IF COL_LENGTH(N'dbo.PaymentProviderConfig', N'RestaurantId') IS NULL
         ALTER TABLE dbo.PaymentProviderConfig ADD RestaurantId uniqueidentifier NOT NULL;
 
@@ -63,7 +63,8 @@ BEGIN TRY
     IF (SELECT COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.PaymentProviderConfig')
         AND is_nullable = 0 AND is_computed = 0 AND default_object_id = 0
         AND ((name = N'Enabled' AND system_type_id = 104)
-            OR (name IN (N'ReturnUrl', N'CancelUrl') AND system_type_id = 167 AND max_length = 2048))) <> 3
+            OR (name IN (N'ReturnUrl', N'CancelUrl') AND ((system_type_id = 167 AND max_length = 2048)
+                OR (system_type_id = 231 AND max_length = 4096))))) <> 3
         THROW 51000, 'Unexpected Billing provider configuration column definitions.', 1;
 
     IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.PaymentProviderConfig')

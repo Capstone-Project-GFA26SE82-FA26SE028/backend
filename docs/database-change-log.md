@@ -644,3 +644,84 @@ Docker: đã rebuild Restaurant, Identity và Gateway từ working tree, dùng p
 Lượt test solution đầu chạy song song với Docker build có hai lỗi: AI TotalBudgetIncludesDataReadAndModelTime đo 1,8766 giây vượt ngưỡng 1,8 giây; test Identity IncompatibleExistingSchemaIsRejectedWithoutRewritingData timeout ở khởi tạo kết nối LocalDB. Chưa sửa code/test ngoài phạm vi metadata; giữ kết quả lượt này để đối chiếu và chạy lại solution tuần tự sau khi dừng Docker thử.
 
 Kết quả chạy lại tuần tự sau khi dừng Docker thử: dotnet test Backend.sln -c Release --no-build --no-restore -m:1 đạt 1.172, lỗi 0, bỏ qua 100; hai test lỗi ở lượt song song đã đạt mà không sửa code hoặc assertion. Identity 76/76, Restaurant 146 đạt/51 bỏ qua, AI 163/163. Chưa chạy GitHub Actions Ubuntu. Đã rà diff; chưa commit/push.
+
+
+## 2026-11-24 — Bảo toàn tiếng Việt trên toàn backend
+
+Nhánh `fix/vietnamese-unicode`, baseline `9a2bbe0`; thay đổi chưa commit. Các bảng/cột dưới đây đã tồn tại. Chỉ sửa kiểu chuỗi, giữ độ dài ký tự, NULL/NOT NULL, collation và DEFAULT hiện có; không thêm DEFAULT. Không thêm/xóa bảng/cột, PK, FK hoặc quan hệ; cardinality và dây ERD không đổi. Chỉ đổi nhãn kiểu dữ liệu cho 56 cột dưới đây.
+
+SQL tạo mới: `docker/sql/schema/{Database}.sql` cho 7 database. SQL nâng cấp bảo toàn dữ liệu: `docker/sql/upgrades/UnicodeText.sql`, tự gọi trong `docker/sql/init.sh` sau các upgrade nghiệp vụ. `BillingPayOs.sql`, `BillingProviderConfiguration.sql`, `RestaurantCloudinary.sql` được cập nhật kiểu tạo mới/kiểm tra tương thích để chạy lại được sau nâng cấp. Index/UQ/CHECK/DEFAULT phụ thuộc được dựng lại cùng tên/định nghĩa/tùy chọn; không thêm ràng buộc nghiệp vụ. Script từ chối dependency không hỗ trợ thay vì xóa âm thầm.
+
+Đã áp dụng và kiểm tra trên SQL Server Docker **tách biệt** (database mới, fixture schema varchar cũ, chạy lặp, đối chiếu số dòng/index/giá trị cũ). Chưa áp dụng database dev đang chạy của nhóm. Đã scaffold từ database thử bằng EF 8.0.24; chỉ cập nhật mapping ảnh hưởng, giữ các tùy chỉnh tenant. Repo SQL riêng được đồng bộ 54 định nghĩa có sẵn và file upgrade Unicode; hai cột PaymentProviderConfig.ReturnUrl/CancelUrl chưa có ở baseline SQL riêng nên không tự thêm. Bản SQL riêng cần hoàn tất các upgrade nghiệp vụ hiện tại trước khi áp dụng UnicodeText.sql; không coi nó đã đồng bộ toàn bộ Billing. Không ghi đè thay đổi Billing/README đã tồn tại.
+
+| Database | Bảng.cột có sẵn | Thay đổi kiểu | Nullability giữ nguyên |
+| --- | --- | --- | --- |
+| IdentityDb | Role.RoleName | varchar(50) → nvarchar(50) | NOT NULL |
+| IdentityDb | Role.Description | varchar(max) → nvarchar(max) | NULL |
+| IdentityDb | User.UserName | varchar(100) → nvarchar(100) | NOT NULL |
+| IdentityDb | User.Email | varchar(255) → nvarchar(255) | NOT NULL |
+| IdentityDb | User.FullName | varchar(255) → nvarchar(255) | NOT NULL |
+| IdentityDb | User.AvatarUrl | varchar(max) → nvarchar(max) | NULL |
+| IdentityDb | UserSession.UserAgent | varchar(max) → nvarchar(max) | NULL |
+| IdentityDb | UserSession.DeviceType | varchar(50) → nvarchar(50) | NULL |
+| IdentityDb | AuditLog.OldValue | varchar(max) → nvarchar(max) | NULL |
+| IdentityDb | AuditLog.NewValue | varchar(max) → nvarchar(max) | NULL |
+| RestaurantDb | Restaurant.RestaurantName | varchar(255) → nvarchar(255) | NOT NULL |
+| RestaurantDb | Restaurant.Address | varchar(500) → nvarchar(500) | NOT NULL |
+| RestaurantDb | Restaurant.LogoUrl | varchar(max) → nvarchar(max) | NULL |
+| RestaurantDb | Reservation.ContactName | varchar(255) → nvarchar(255) | NOT NULL |
+| RestaurantDb | Area.AreaCode | varchar(50) → nvarchar(50) | NOT NULL |
+| RestaurantDb | Area.AreaName | varchar(100) → nvarchar(100) | NOT NULL |
+| RestaurantDb | Table.TableCode | varchar(50) → nvarchar(50) | NOT NULL |
+| RestaurantDb | SessionTable.MoveReason | varchar(500) → nvarchar(500) | NULL |
+| RestaurantDb | Qr.ImageUrl | varchar(2048) → nvarchar(2048) | NULL |
+| CatalogDb | Category.CategoryName | varchar(255) → nvarchar(255) | NOT NULL |
+| CatalogDb | Item.ItemName | varchar(255) → nvarchar(255) | NOT NULL |
+| CatalogDb | Item.Description | varchar(max) → nvarchar(max) | NULL |
+| CatalogDb | Item.ImageUrl | varchar(max) → nvarchar(max) | NULL |
+| CatalogDb | Option.OptionName | varchar(255) → nvarchar(255) | NOT NULL |
+| CatalogDb | OptionGroup.OptionGroupName | varchar(255) → nvarchar(255) | NOT NULL |
+| CatalogDb | RecipeMedia.Url | varchar(max) → nvarchar(max) | NOT NULL |
+| CatalogDb | RecipeVersion.Instructions | varchar(max) → nvarchar(max) | NULL |
+| InventoryDb | GoodsReceipt.Note | varchar(max) → nvarchar(max) | NULL |
+| InventoryDb | Ingredient.IngredientName | varchar(255) → nvarchar(255) | NOT NULL |
+| InventoryDb | StockMovement.Reason | varchar(max) → nvarchar(max) | NULL |
+| InventoryDb | StocktakeItem.DiscrepancyReason | varchar(max) → nvarchar(max) | NULL |
+| OrderingDb | CartItem.Note | varchar(max) → nvarchar(max) | NULL |
+| OrderingDb | KitchenStation.KitchenStationName | varchar(255) → nvarchar(255) | NOT NULL |
+| OrderingDb | OrderItem.NameSnapshot | varchar(255) → nvarchar(255) | NOT NULL |
+| OrderingDb | OrderItem.Note | varchar(max) → nvarchar(max) | NULL |
+| OrderingDb | OrderItemOption.NameSnapshot | varchar(255) → nvarchar(255) | NOT NULL |
+| CustomerDb | Customer.CustomerName | varchar(255) → nvarchar(255) | NOT NULL |
+| CustomerDb | Feedback.Comment | varchar(max) → nvarchar(max) | NULL |
+| CustomerDb | FeedbackItem.Comment | varchar(max) → nvarchar(max) | NULL |
+| CustomerDb | LoyaltyTier.LoyaltyTierName | varchar(100) → nvarchar(100) | NOT NULL |
+| BillingDb | BillAdjustment.RuleSnapshot | varchar(max) → nvarchar(max) | NULL |
+| BillingDb | BillAdjustment.Reason | varchar(1000) → nvarchar(1000) | NULL |
+| BillingDb | BillLine.ItemSnapshot | varchar(max) → nvarchar(max) | NOT NULL |
+| BillingDb | CashMovement.Reason | varchar(1000) → nvarchar(1000) | NULL |
+| BillingDb | ElectronicInvoice.CompanyName | varchar(255) → nvarchar(255) | NOT NULL |
+| BillingDb | ElectronicInvoice.Address | varchar(500) → nvarchar(500) | NOT NULL |
+| BillingDb | ElectronicInvoice.Email | varchar(320) → nvarchar(320) | NOT NULL |
+| BillingDb | Payment.ProviderCheckoutUrl | varchar(2048) → nvarchar(2048) | NULL |
+| BillingDb | Payment.ProviderQrCode | varchar(max) → nvarchar(max) | NULL |
+| BillingDb | Payment.EvidenceUrl | varchar(2048) → nvarchar(2048) | NULL |
+| BillingDb | PaymentProviderConfig.ReturnUrl | varchar(2048) → nvarchar(2048) | NOT NULL |
+| BillingDb | PaymentProviderConfig.CancelUrl | varchar(2048) → nvarchar(2048) | NOT NULL |
+| BillingDb | PaymentProviderConfig.WebhookUrl | varchar(2048) → nvarchar(2048) | NOT NULL |
+| BillingDb | Promotion.PromotionName | varchar(255) → nvarchar(255) | NOT NULL |
+| BillingDb | Refund.Reason | varchar(1000) → nvarchar(1000) | NOT NULL |
+| BillingDb | ShiftReport.DifferenceReason | varchar(1000) → nvarchar(1000) | NULL |
+
+Giới hạn: chuỗi đã thành `?` trước nâng cấp không thể tự khôi phục; cần nguồn dữ liệu đúng để nhập lại. Mã kỹ thuật/status/hash/secret ciphertext giữ varchar; BaseUnit liên kết mã đơn vị ASCII nên không thay đổi. SQL thủ công nhập Unicode phải dùng tham số Unicode hoặc N'...'. NVARCHAR tăng dung lượng chuỗi; nâng cấp cần maintenance window cho database lớn vì ALTER COLUMN/index có khóa schema.
+
+Kiểm tra dependency của 56 cột trên baseline Docker: không cột nào có DEFAULT, PK/FK hoặc index trực tiếp. Test bổ sung một UNIQUE filtered nonclustered index có INCLUDE/FILLFACTOR và CHECK/DEFAULT trên IngredientName để xác minh nhánh dựng lại dependency (không thêm các object thử vào schema thật).
+
+Bằng chứng nghiệm thu cục bộ:
+- `dotnet build Backend.sln -c Release`: đạt, 0 warning/0 error ở lần build solution. Docker build các service có cảnh báo nullable sẵn có trong Shared.Persistence.
+- `dotnet test Backend.sln -c Release --no-build --no-restore -m:1`: 1.388 đạt, 0 lỗi, 103 skipped do điều kiện môi trường của các bài tích hợp khác; skipped không tính là đạt. Có cấp connection SQL riêng cho 56 bài parameter Unicode.
+- `pwsh -File scripts/Test-UnicodeDockerBootstrap.ps1 -VerifyEf`: đạt kiểm tra SQL mới/cũ, dependency, chạy lặp và 112 test Unicode (0 skipped).
+- `pwsh -File scripts/Test-BillingDockerBootstrap.ps1`: ALL DOCKER BOOTSTRAP CHECKS PASSED.
+- Gateway Docker build từ source mới, database thử tách biệt: POST/GET categories; POST/GET items (tên/mô tả); PUT/GET users/me; POST/GET ingredients đều giữ nguyên chuỗi tiếng Việt. Không gọi Cloudinary thật trong các ca này.
+- Lần test tổng đầu chạy song song build Docker có 3 lỗi timing/regex tại AI. Chạy AI riêng đạt 163/163; chạy lại toàn solution tuần tự đạt các số liệu ở trên. Không sửa code AI.
+- Chưa chạy GitHub Actions trên remote, chưa nâng cấp database dev của nhóm, chưa kiểm thử giao diện FE; không tuyên bố mọi luồng nghiệp vụ đã được kiểm thử end-to-end.

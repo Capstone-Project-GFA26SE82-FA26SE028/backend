@@ -6,7 +6,7 @@ CREATE TABLE dbo.[Category]
 (
     [CategoryId] uniqueidentifier NOT NULL,
     [CategoryCode] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [CategoryName] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [CategoryName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [IsActive] bit NOT NULL,
     [RestaurantId] uniqueidentifier NULL
 );
@@ -17,9 +17,9 @@ CREATE TABLE dbo.[Item]
     [ItemId] uniqueidentifier NOT NULL,
     [CategoryId] uniqueidentifier NOT NULL,
     [ItemCode] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [ItemName] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [Description] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-    [ImageUrl] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [ItemName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [Description] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [ImageUrl] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [Availability] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [KitchenStationRef] uniqueidentifier NULL,
     [PreparationTimeMinutes] int NULL,
@@ -42,7 +42,7 @@ CREATE TABLE dbo.[Option]
 (
     [OptionId] uniqueidentifier NOT NULL,
     [OptionGroupId] uniqueidentifier NOT NULL,
-    [OptionName] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [OptionName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [ExtraPrice] decimal(18,2) NOT NULL,
     [Availability] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [RestaurantId] uniqueidentifier NULL
@@ -52,7 +52,7 @@ GO
 CREATE TABLE dbo.[OptionGroup]
 (
     [OptionGroupId] uniqueidentifier NOT NULL,
-    [OptionGroupName] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [OptionGroupName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [RestaurantId] uniqueidentifier NULL
 );
 GO
@@ -89,7 +89,7 @@ CREATE TABLE dbo.[RecipeMedia]
     [RecipeMediaId] uniqueidentifier NOT NULL,
     [RecipeVersionId] uniqueidentifier NOT NULL,
     [MediaType] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [Url] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [Url] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [DisplayOrder] int NOT NULL,
     [RestaurantId] uniqueidentifier NULL
 );
@@ -103,7 +103,7 @@ CREATE TABLE dbo.[RecipeVersion]
     [Version] int NOT NULL,
     [EffectiveFrom] datetime NOT NULL,
     [EffectiveTo] datetime NULL,
-    [Instructions] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Instructions] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [RestaurantId] uniqueidentifier NULL
 );
 GO

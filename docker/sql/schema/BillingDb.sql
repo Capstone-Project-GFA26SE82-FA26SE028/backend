@@ -31,9 +31,9 @@ CREATE TABLE dbo.[BillAdjustment]
     [PromotionId] uniqueidentifier NULL,
     [Type] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [Amount] decimal(18,2) NOT NULL,
-    [RuleSnapshot] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [RuleSnapshot] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [ActorUserRef] uniqueidentifier NULL,
-    [Reason] varchar(1000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Reason] nvarchar(1000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [RestaurantId] uniqueidentifier NULL
 );
 GO
@@ -64,7 +64,7 @@ CREATE TABLE dbo.[BillLine]
     [TableSessionRef] uniqueidentifier NOT NULL,
     [OriginalTableRef] uniqueidentifier NOT NULL,
     [ComboGroupRef] uniqueidentifier NULL,
-    [ItemSnapshot] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [ItemSnapshot] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [Quantity] decimal(18,6) NOT NULL,
     [UnitPriceSnapshot] decimal(18,2) NOT NULL,
     [DiscountAllocated] decimal(18,2) NOT NULL,
@@ -95,7 +95,7 @@ CREATE TABLE dbo.[CashMovement]
     [PaymentId] uniqueidentifier NULL,
     [Type] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [SignedAmount] decimal(18,2) NOT NULL,
-    [Reason] varchar(1000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Reason] nvarchar(1000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [PostedAt] datetime NOT NULL,
     [IdempotencyKey] varchar(128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [RestaurantId] uniqueidentifier NULL
@@ -139,10 +139,10 @@ CREATE TABLE dbo.[ElectronicInvoice]
 (
     [ElectronicInvoiceId] uniqueidentifier NOT NULL,
     [BillId] uniqueidentifier NOT NULL,
-    [CompanyName] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [CompanyName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [TaxCode] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [Address] varchar(500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [Email] varchar(320) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [Address] nvarchar(500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [Email] nvarchar(320) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [ProviderReference] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [Status] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [IssuedAt] datetime NULL,
@@ -182,8 +182,8 @@ CREATE TABLE dbo.[Payment]
     [CashReceived] decimal(18,2) NULL,
     [ChangeAmount] decimal(18,2) NULL,
     [ProviderPaymentLinkId] varchar(100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-    [ProviderCheckoutUrl] varchar(2048) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-    [ProviderQrCode] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [ProviderCheckoutUrl] nvarchar(2048) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [ProviderQrCode] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [ProviderOrderCode] varchar(100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [ProviderTransactionId] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [IdempotencyKey] varchar(128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -191,7 +191,7 @@ CREATE TABLE dbo.[Payment]
     [PaidAt] datetime NULL,
     [VerificationSource] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [ConfirmedByRef] uniqueidentifier NULL,
-    [EvidenceUrl] varchar(2048) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [EvidenceUrl] nvarchar(2048) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [RestaurantId] uniqueidentifier NULL
 );
 GO
@@ -206,13 +206,13 @@ GO
 CREATE TABLE dbo.[PaymentProviderConfig]
 (
     [Enabled] bit NOT NULL,
-    [ReturnUrl] varchar(2048) NOT NULL,
-    [CancelUrl] varchar(2048) NOT NULL,
+    [ReturnUrl] nvarchar(2048) NOT NULL,
+    [CancelUrl] nvarchar(2048) NOT NULL,
     [PaymentProviderConfigId] uniqueidentifier NOT NULL,
     [Provider] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [ClientId] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [SecretReference] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [WebhookUrl] varchar(2048) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [WebhookUrl] nvarchar(2048) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [IsVerified] bit NOT NULL,
     [RestaurantId] uniqueidentifier NOT NULL
 );
@@ -237,7 +237,7 @@ GO
 CREATE TABLE dbo.[Promotion]
 (
     [PromotionId] uniqueidentifier NOT NULL,
-    [PromotionName] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [PromotionName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [DiscountType] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [Type] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [DiscountValue] decimal(18,2) NOT NULL,
@@ -280,7 +280,7 @@ CREATE TABLE dbo.[Refund]
     [PaymentId] uniqueidentifier NOT NULL,
     [Amount] decimal(18,2) NOT NULL,
     [Status] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [Reason] varchar(1000) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [Reason] nvarchar(1000) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [IdempotencyKey] varchar(128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [CompletedAt] datetime NULL,
     [RestaurantId] uniqueidentifier NULL
@@ -305,7 +305,7 @@ CREATE TABLE dbo.[ShiftReport]
     [ExpectedCash] decimal(18,2) NOT NULL,
     [ActualCash] decimal(18,2) NOT NULL,
     [CashHandleOver] decimal(18,2) NOT NULL,
-    [DifferenceReason] varchar(1000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [DifferenceReason] nvarchar(1000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [ClosedAt] datetime NOT NULL,
     [RestaurantId] uniqueidentifier NULL
 );

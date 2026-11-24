@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-sqlcmd=(/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -r1 -l 30)
+sqlcmd=(/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -r1 -l 30 -f 65001)
 script=$(mktemp)
 trap 'rm -f "$script"' EXIT
 
@@ -47,6 +47,13 @@ done
 
 echo "Applying RestaurantDb upgrade: RestaurantCloudinary.sql"
 "${sqlcmd[@]}" -d RestaurantDb -i /init/upgrades/RestaurantCloudinary.sql
+
+# UNICODE_UPGRADE_BEGIN
+for database in IdentityDb RestaurantDb InventoryDb CatalogDb OrderingDb CustomerDb BillingDb; do
+    echo "Applying Unicode text upgrade: $database"
+    "${sqlcmd[@]}" -d "$database" -i /init/upgrades/UnicodeText.sql
+done
+# UNICODE_UPGRADE_END
 
 # Compile and execute zero-row reads from the same schema files used for fresh installs.
 # This catches missing columns/tables before services accept requests, without reading data.

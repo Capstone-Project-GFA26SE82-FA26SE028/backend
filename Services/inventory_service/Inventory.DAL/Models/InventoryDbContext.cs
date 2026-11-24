@@ -43,7 +43,7 @@ public partial class InventoryDbContext : Shared.Persistence.RestaurantIsolation
             entity.Property(e => e.GoodsReceiptId).ValueGeneratedNever();
             entity.Property(e => e.ConfirmAt).HasColumnType("datetime");
             entity.Property(e => e.CreatedAt).HasColumnType("datetime");
-            entity.Property(e => e.Note).IsUnicode(false);
+
             entity.Property(e => e.ReceiptCode)
                 .IsRequired()
                 .HasMaxLength(50)
@@ -87,8 +87,7 @@ public partial class InventoryDbContext : Shared.Persistence.RestaurantIsolation
                 .IsUnicode(false);
             entity.Property(e => e.IngredientName)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
             entity.Property(e => e.LowStockThreshold).HasColumnType("decimal(18, 6)");
             entity.Property(e => e.StockQuantity).HasColumnType("decimal(18, 6)");
             entity.Property(e => e.StockVersion)
@@ -108,7 +107,6 @@ public partial class InventoryDbContext : Shared.Persistence.RestaurantIsolation
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.QuantityChange).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.Reason).IsUnicode(false);
 
             entity.HasOne(d => d.GoodsReceiptItem).WithMany(p => p.StockMovements)
                 .HasForeignKey(d => d.GoodsReceiptItemId)
@@ -147,7 +145,7 @@ public partial class InventoryDbContext : Shared.Persistence.RestaurantIsolation
 
             entity.Property(e => e.StocktakeItemId).ValueGeneratedNever();
             entity.Property(e => e.ActualQuantity).HasColumnType("decimal(18, 6)");
-            entity.Property(e => e.DiscrepancyReason).IsUnicode(false);
+
             entity.Property(e => e.SnapshotVersion)
                 .IsRequired()
                 .HasMaxLength(8)

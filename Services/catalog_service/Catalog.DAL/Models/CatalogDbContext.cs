@@ -53,8 +53,7 @@ public partial class CatalogDbContext : Shared.Persistence.RestaurantIsolation.R
                 .IsUnicode(false);
             entity.Property(e => e.CategoryName)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
         });
 
         modelBuilder.Entity<Item>(entity =>
@@ -67,16 +66,14 @@ public partial class CatalogDbContext : Shared.Persistence.RestaurantIsolation.R
                 .IsRequired()
                 .HasMaxLength(50)
                 .IsUnicode(false);
-            entity.Property(e => e.Description).IsUnicode(false);
-            entity.Property(e => e.ImageUrl).IsUnicode(false);
+
             entity.Property(e => e.ItemCode)
                 .IsRequired()
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.ItemName)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
             entity.Property(e => e.Version)
                 .IsRequired()
                 .IsRowVersion()
@@ -120,8 +117,7 @@ public partial class CatalogDbContext : Shared.Persistence.RestaurantIsolation.R
             entity.Property(e => e.ExtraPrice).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.OptionName)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
 
             entity.HasOne(d => d.OptionGroup).WithMany(p => p.Options)
                 .HasForeignKey(d => d.OptionGroupId)
@@ -136,8 +132,7 @@ public partial class CatalogDbContext : Shared.Persistence.RestaurantIsolation.R
             entity.Property(e => e.OptionGroupId).ValueGeneratedNever();
             entity.Property(e => e.OptionGroupName)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
         });
 
         modelBuilder.Entity<Price>(entity =>
@@ -186,8 +181,7 @@ public partial class CatalogDbContext : Shared.Persistence.RestaurantIsolation.R
                 .HasMaxLength(50)
                 .IsUnicode(false);
             entity.Property(e => e.Url)
-                .IsRequired()
-                .IsUnicode(false);
+                .IsRequired();
 
             entity.HasOne(d => d.RecipeVersion).WithMany(p => p.RecipeMedia)
                 .HasForeignKey(d => d.RecipeVersionId)
@@ -202,7 +196,6 @@ public partial class CatalogDbContext : Shared.Persistence.RestaurantIsolation.R
             entity.Property(e => e.RecipeVersionId).ValueGeneratedNever();
             entity.Property(e => e.EffectiveFrom).HasColumnType("datetime");
             entity.Property(e => e.EffectiveTo).HasColumnType("datetime");
-            entity.Property(e => e.Instructions).IsUnicode(false);
 
             entity.HasOne(d => d.Item).WithMany(p => p.RecipeVersions)
                 .HasForeignKey(d => d.ItemId)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-sqlcmd=(/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -r1 -l 30)
+sqlcmd=(/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -r1 -l 30 -f 65001)
 script=$(mktemp)
 trap 'rm -f "$script"' EXIT
 
