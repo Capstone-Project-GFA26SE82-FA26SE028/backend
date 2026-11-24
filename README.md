@@ -14,6 +14,14 @@ For GitHub Actions deployment, store credentials in repository/environment Secre
 
 # Restaurant backend and AI assistant
 
+## Catalog item images (Cloudinary)
+
+Keep the existing two-step flow: upload with `POST /api/items/images` (`multipart/form-data`, field `file`), then send the returned `imageUrl` to item create/update. JPEG, PNG and WebP are supported, up to 2 MiB. Backend checks the file signature; Cloudinary validates the actual image. Existing menu-management permissions and item rowversion checks remain in effect.
+
+New image references must use HTTPS on `res.cloudinary.com`, the configured cloud, and the `catalog/items` upload folder. URLs from other clouds, avatar/QR folders, external hosts, or with query strings/fragments are rejected. This validates the source/path; it is not proof of an asset's existence or an upload receipt. Existing image URLs may remain unchanged. Omitting/null `imageUrl` on update preserves the image; an explicit empty string clears it. No migration or deletion of old images is performed.
+
+Catalog already receives the shared Cloudinary credentials through Compose. Rebuild Catalog after pulling this change. No new endpoint, secret, SQL column or ERD relationship is needed. Uploading does not update an item until create/update succeeds; a subsequent version conflict can leave an unreferenced cloud asset. Do not retry indefinitely.
+
 ## Restaurant logos (Cloudinary)
 
 `POST /api/restaurants/{id}/logo` uploads and immediately saves a restaurant logo. Use `multipart/form-data` with field `file`, JPEG/PNG/WebP up to 2 MiB, and a valid platform-admin bearer token. This retains the current restaurant-profile permission; it does not grant restaurant admins or managers new access. The response contains `result.restaurantId` and `result.logoUrl`.

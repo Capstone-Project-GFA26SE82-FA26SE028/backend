@@ -49,12 +49,14 @@ internal sealed class ItemTestApplication : IDisposable
 
     public static DateTimeOffset Now { get; } = new(2030, 1, 15, 8, 0, 0, TimeSpan.Zero);
 
-    public static async Task<ItemTestApplication> Create(string initialAvailability = "Inactive", IKitchenStationLookup? stationLookup = null, IInventoryRecipeLookup? inventoryLookup = null, TestImageStorage? imageStorage = null)
+    public static async Task<ItemTestApplication> Create(string initialAvailability = "Inactive", IKitchenStationLookup? stationLookup = null, IInventoryRecipeLookup? inventoryLookup = null, TestImageStorage? imageStorage = null,
+        string cloudName = "test")
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
+            ["Cloudinary:CloudName"] = cloudName,
             ["GrpcServices:Identity"] = "http://identity.test",
             ["CatalogManagement:IdentityTimeoutSeconds"] = "5",
             ["CatalogManagement:MenuManagerRoleIds:0"] = "test-menu-manager",
@@ -222,7 +224,7 @@ internal sealed class ItemTestApplication : IDisposable
             categoryId,
             itemName = name,
             description = "  A seasonal vegetable soup.  ",
-            imageUrl = "https://example.test/soup.png"
+            imageUrl = "https://res.cloudinary.com/test/image/upload/catalog/items/11111111111111111111111111111111.png"
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
