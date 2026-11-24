@@ -81,6 +81,7 @@ message UserInfo {
 }
 
 service UserGrpc {
+  rpc UploadAvatar(UploadAvatarRequest) returns (UserReply);
   rpc GetStaffProfiles(StaffProfilesRequest) returns (UserListReply);
   rpc UpdateUser (UpdateUserRequest) returns (UserReply);
   rpc CreateUser (CreateUserRequest) returns (UserReply);
@@ -91,6 +92,11 @@ service UserGrpc {
   rpc ListUsers (ListUsersRequest) returns (UserListReply);
   rpc GetUser (GetUserRequest) returns (UserReply);
   rpc SetUserStatus (SetUserStatusRequest) returns (UserReply);
+}
+
+message UploadAvatarRequest {
+  optional string user_id = 1;
+  bytes image = 2;
 }
 message GetMeRequest {}
 message UpdateMeRequest {

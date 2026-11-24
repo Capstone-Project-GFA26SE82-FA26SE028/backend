@@ -53,6 +53,9 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 services.RemoveAll<RestaurantDbContext>();
                 services.RemoveAll<IQrImageStore>();
                 services.AddSingleton<IQrImageStore>(_qrImages);
+                services.RemoveAll<Shared.Common.Images.IImageStorage>();
+                services.AddSingleton<Shared.Common.Images.IImageStorage>(_logoImages);
+                services.AddSingleton(_logoImages);
                 services.AddScoped<RestaurantDbContext>(_ => new TestDb(_connection));
                 services.AddSingleton<TimeProvider>(_reservationClock);
                 services.RemoveAll<IManagementAccess>();
@@ -379,8 +382,13 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
         }
     }
 
-    private sealed class TestAccess(IHttpContextAccessor accessor) : IManagementAccess, ILayoutManagementAccess
+    private sealed class TestAccess(IHttpContextAccessor accessor, LogoImageStorage logoImages) : IManagementAccess, ILayoutManagementAccess
     {
+        public Task<Guid> RevalidateAdmin(CancellationToken ct)
+        {
+            return RequireAdmin(ct);
+        }
+
         // Existing CRUD fixtures stub authorization; LayoutManagementAccessTests cover the real policy.
         public async Task RequireManager(CancellationToken ct)
         {
@@ -396,7 +404,7 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
         public Task<Guid> RequireAdmin(CancellationToken ct)
         {
             var auth = accessor.HttpContext!.Request.Headers.Authorization.ToString();
-            if (auth is "" or "Bearer revoked")
+            if (auth is "" or "Bearer revoked" || logoImages.Revoked)
             {
                 throw new ManagementException(401, "Invalid session.");
             }

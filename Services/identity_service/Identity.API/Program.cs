@@ -39,6 +39,12 @@ builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantGrpc.Resta
     options.Address = new Uri(builder.Configuration["GrpcServices:Restaurant"] ?? "http://localhost:5002");
 });
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton(builder.Configuration.GetSection("Cloudinary")
+    .Get<Shared.Common.Images.CloudinarySettings>() ?? new Shared.Common.Images.CloudinarySettings());
+builder.Services.AddHttpClient<Shared.Common.Images.IImageStorage, Shared.Common.Images.CloudinaryImageStorage>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(8);
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantAccessGrpc.RestaurantAccessGrpcClient>(options =>
 {
     options.Address = new Uri(builder.Configuration["GrpcServices:Restaurant"] ?? "http://localhost:5002");

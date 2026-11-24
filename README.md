@@ -14,6 +14,60 @@ For GitHub Actions deployment, store credentials in repository/environment Secre
 
 # Restaurant backend and AI assistant
 
+## Recipe images and videos (Cloudinary)
+
+`POST /api/recipes/media` accepts a local file as `multipart/form-data`, field `file`, using the existing menu-manager authentication and restaurant scope. Backend detects the type from file bytes; do not supply a trusted MIME type or remote file URL. It returns `result.mediaType` (`image` or `video`) and `result.url`.
+
+Send these values in `media` when creating an item or option recipe, together with `displayOrder`. Video has two supported inputs: upload a local MP4/WebM through this endpoint, or send a pasted HTTP/HTTPS video link directly in the recipe request (`mediaType: "video"`, `url: "https://www.youtube.com/watch?v=..."`). Query strings/fragments are allowed for video links, including YouTube links. Credentials in URLs, executable schemes, local paths and control characters are rejected. Backend stores video links without downloading, uploading, fetching metadata or checking availability; rendering a provider page versus embedding a video is a client concern. The upload file-size limit does not apply to remote links. Upload alone does not create or alter a recipe. Existing recipe-version, ingredient validation and effective-date rules still apply.
+
+```powershell
+curl.exe -X POST "http://localhost:5000/api/recipes/media" -H "Authorization: Bearer YOUR_ACCESS_TOKEN" -F "file=@step.mp4"
+```
+
+Defaults in both Gateway and Catalog `RecipeMedia` configuration: `MaximumImageBytes=2097152` (JPEG/PNG/WebP), `MaximumVideoBytes=20971520` (MP4/WebM), `UploadTimeoutSeconds=45`. Limits may be lowered; the supported upper bounds remain 2 MiB/image and 20 MiB/video. Gateway allows the configured upload timeout plus 10 seconds for forwarding. Only the media-upload RPC receives the larger gRPC message limit. Rebuild Catalog and Gateway after pulling this contract change. Compose reuses the existing Cloudinary environment variables; no new secret is needed.
+
+New images must match the configured Cloudinary cloud, image resource type and `catalog/recipes/images` folder. Uploaded video replies use `catalog/recipes/videos`; pasted video links may point to external hosts. Image validation checks source/path, not an upload receipt or asset ownership. Historical HTTP/HTTPS images may be carried forward unchanged only for the same item/option that already referenced them; existing versions are never rewritten. Empty `media` creates a version without media. Unsupported upload formats, new external image links and unsafe video-link schemes are rejected; failed validation does not close the active recipe.
+
+No automatic retry or old-asset deletion is performed. Upload success followed by a failed recipe save may leave an unreferenced asset. Cloudinary delivery URLs are public: do not upload secrets or documents requiring restricted access. No SQL/ERD schema change is required; `RecipeMedia` and its relation to `RecipeVersion` already exist.
+
+## Catalog item images (Cloudinary)
+
+Keep the existing two-step flow: upload with `POST /api/items/images` (`multipart/form-data`, field `file`), then send the returned `imageUrl` to item create/update. JPEG, PNG and WebP are supported, up to 2 MiB. Backend checks the file signature; Cloudinary validates the actual image. Existing menu-management permissions and item rowversion checks remain in effect.
+
+New image references must use HTTPS on `res.cloudinary.com`, the configured cloud, and the `catalog/items` upload folder. URLs from other clouds, avatar/QR folders, external hosts, or with query strings/fragments are rejected. This validates the source/path; it is not proof of an asset's existence or an upload receipt. Existing image URLs may remain unchanged. Omitting/null `imageUrl` on update preserves the image; an explicit empty string clears it. No migration or deletion of old images is performed.
+
+Catalog already receives the shared Cloudinary credentials through Compose. Rebuild Catalog after pulling this change. No new endpoint, secret, SQL column or ERD relationship is needed. Uploading does not update an item until create/update succeeds; a subsequent version conflict can leave an unreferenced cloud asset. Do not retry indefinitely.
+
+## Restaurant logos (Cloudinary)
+
+`POST /api/restaurants/{id}/logo` uploads and immediately saves a restaurant logo. Use `multipart/form-data` with field `file`, JPEG/PNG/WebP up to 2 MiB, and a valid platform-admin bearer token. This retains the current restaurant-profile permission; it does not grant restaurant admins or managers new access. The response contains `result.restaurantId` and `result.logoUrl`.
+
+Create the restaurant first without a logo, then upload for its returned ID. Restaurant create/update APIs reject new pasted logo URLs. Updates may keep the existing URL unchanged; omitting `logoUrl` preserves it, while an explicit empty string clears the reference. Existing URLs are not migrated or deleted.
+
+```powershell
+curl.exe -X POST "http://localhost:5000/api/restaurants/RESTAURANT_ID/logo" -H "Authorization: Bearer YOUR_ACCESS_TOKEN" -F "file=@logo.png"
+```
+
+Use the actual Gateway port. Restaurant already receives `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` from the ignored Compose `.env`; no additional secret is required. Rebuild Restaurant and Gateway after pulling this contract change. For direct .NET execution, set the corresponding `Cloudinary__*` environment variables.
+
+Authorization is checked before upload and revalidated with Identity before saving. Invalid input returns 400, missing restaurant 404, authentication/permission failures 401/403, and cloud failures 503. Failed upload leaves the previous logo unchanged. An upload followed by a failed database save or revoked access can leave an unreferenced cloud asset; old assets are not automatically deleted. No SQL/ERD schema changes are required.
+
+## Identity avatars (Cloudinary)
+
+Avatar changes accept files, not newly pasted URLs. Existing avatar URLs remain readable and may be sent back unchanged. Omitting `avatarUrl` in a profile/account update preserves the saved image; an explicit empty string removes the reference without deleting the cloud file. Create an account without an avatar, then upload for that account.
+
+- `POST /api/users/me/avatar`: authenticated account uploads its own avatar.
+- `POST /api/users/{id}/avatar`: existing user-management permissions apply; restaurant admins may update only permitted staff in their own restaurant, and platform admins retain their configured scope.
+- Use `multipart/form-data` with field `file`. JPEG, PNG and WebP are supported, up to 2 MiB. A successful response contains `result.userId` and `result.avatarUrl`; Identity has already saved the avatar.
+
+```powershell
+curl.exe -X POST "http://localhost:5000/api/users/me/avatar" -H "Authorization: Bearer YOUR_ACCESS_TOKEN" -F "file=@avatar.png"
+```
+
+Use the actual Gateway port when it differs from 5000. Identity uses the same `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` supplied to Compose through the ignored root `.env`. For direct .NET execution, supply `Cloudinary__CloudName`, `Cloudinary__ApiKey` and `Cloudinary__ApiSecret` as environment variables. Do not put secrets in committed appsettings.
+
+Cloud upload failures leave the previous avatar unchanged. Missing credentials/provider failures return 503; invalid image input returns 400. No automatic retry or deletion of old cloud assets is performed. If upload succeeds but saving the account fails, an unreferenced cloud asset may remain; do not retry indefinitely. This feature changes no SQL/ERD schema.
+
 The AI service calls Gemini API (`gemini-3.1-flash-lite` by default) for menu reasoning and cart-based recommendations. A small allowlist of exact price questions about one resolved dish is answered directly from a fresh Catalog read after checking QR access again. Questions needing interpretation continue through Gemini. It sends only the information needed for the request and keeps the existing QR and Catalog checks.
 
 ## Run with Docker Compose

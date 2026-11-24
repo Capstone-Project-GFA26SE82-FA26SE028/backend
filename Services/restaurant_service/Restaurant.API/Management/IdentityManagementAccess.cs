@@ -9,6 +9,12 @@ public sealed class IdentityManagementAccess(AccessGrpc.AccessGrpcClient client,
 {
     private Guid? _actor;
 
+    public Task<Guid> RevalidateAdmin(CancellationToken ct)
+    {
+        _actor = null;
+        return RequireAdmin(ct);
+    }
+
     public async Task<Guid> RequireAdmin(CancellationToken ct)
     {
         if (_actor.HasValue)

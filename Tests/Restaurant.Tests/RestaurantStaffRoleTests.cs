@@ -64,6 +64,11 @@ public sealed partial class GatewayFlowTests
 
     private sealed class AssignmentAdministratorAccess : IManagementAccess
     {
+        public Task<Guid> RevalidateAdmin(CancellationToken ct)
+        {
+            return RequireAdmin(ct);
+        }
+
         public Task<Guid> RequireAdmin(CancellationToken ct)
         {
             return Task.FromResult(Guid.NewGuid());

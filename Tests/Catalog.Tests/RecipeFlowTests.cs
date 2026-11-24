@@ -46,7 +46,7 @@ public sealed class RecipeFlowTests
                 new
                 {
                     mediaType = "image",
-                    url = "https://example.com/step1.png",
+                    url = "https://res.cloudinary.com/test/image/upload/catalog/recipes/images/11111111111111111111111111111111.png",
                     displayOrder = 1
                 }
             }
@@ -77,7 +77,7 @@ public sealed class RecipeFlowTests
 
         var media = result.GetProperty("media");
         Assert.Equal(1, media.GetArrayLength());
-        Assert.Equal("https://example.com/step1.png", media[0].GetProperty("url").GetString());
+        Assert.Equal("https://res.cloudinary.com/test/image/upload/catalog/recipes/images/11111111111111111111111111111111.png", media[0].GetProperty("url").GetString());
 
         Assert.Equal($"/api/recipes/{recipeVersionId}", response.Headers.Location?.OriginalString);
     }
@@ -290,7 +290,7 @@ public sealed class RecipeFlowTests
                 new
                 {
                     mediaType = "image",
-                    url = "https://example.com/cheese-foam.png",
+                    url = "https://res.cloudinary.com/test/image/upload/catalog/recipes/images/22222222222222222222222222222222.png",
                     displayOrder = 1
                 }
             }
@@ -317,7 +317,7 @@ public sealed class RecipeFlowTests
 
         var media = result.GetProperty("media");
         Assert.Equal(1, media.GetArrayLength());
-        Assert.Equal("https://example.com/cheese-foam.png", media[0].GetProperty("url").GetString());
+        Assert.Equal("https://res.cloudinary.com/test/image/upload/catalog/recipes/images/22222222222222222222222222222222.png", media[0].GetProperty("url").GetString());
 
         Assert.Equal($"/api/recipes/{recipeVersionId}", response.Headers.Location?.OriginalString);
     }

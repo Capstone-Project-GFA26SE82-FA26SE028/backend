@@ -49,12 +49,15 @@ internal sealed class ItemTestApplication : IDisposable
 
     public static DateTimeOffset Now { get; } = new(2030, 1, 15, 8, 0, 0, TimeSpan.Zero);
 
-    public static async Task<ItemTestApplication> Create(string initialAvailability = "Inactive", IKitchenStationLookup? stationLookup = null, IInventoryRecipeLookup? inventoryLookup = null, TestImageStorage? imageStorage = null)
+    public static async Task<ItemTestApplication> Create(string initialAvailability = "Inactive", IKitchenStationLookup? stationLookup = null, IInventoryRecipeLookup? inventoryLookup = null, TestImageStorage? imageStorage = null,
+        string cloudName = "test", IRecipeMediaStorage? recipeMediaStorage = null, int? maximumVideoBytes = null)
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
+            ["Cloudinary:CloudName"] = cloudName,
+            ["RecipeMedia:MaximumVideoBytes"] = (maximumVideoBytes ?? Shared.Common.Images.RecipeMediaSettings.VideoLimitBytes).ToString(),
             ["GrpcServices:Identity"] = "http://identity.test",
             ["CatalogManagement:IdentityTimeoutSeconds"] = "5",
             ["CatalogManagement:MenuManagerRoleIds:0"] = "test-menu-manager",
@@ -75,6 +78,7 @@ internal sealed class ItemTestApplication : IDisposable
                 services.AddGrpc();
                 services.AddCatalogManagement(configuration);
                 services.AddSingleton<Shared.Common.Images.IImageStorage>(imageStorage ?? new TestImageStorage());
+                services.AddSingleton<IRecipeMediaStorage>(recipeMediaStorage ?? new TestRecipeMediaStorage());
                 services.AddSingleton<IInventoryRecipeLookup>(inventoryLookup ?? new TestInventoryLookup());
                 if (stationLookup is not null)
                 {
@@ -109,6 +113,7 @@ internal sealed class ItemTestApplication : IDisposable
                     endpoints.MapGrpcService<OptionGrpcService>();
                     endpoints.MapGrpcService<ItemOptionGroupGrpcService>();
                     endpoints.MapGrpcService<RecipeGrpcService>();
+                    endpoints.MapGrpcService<RecipeMediaGrpcService>();
                 });
             }));
 
@@ -117,6 +122,11 @@ internal sealed class ItemTestApplication : IDisposable
             {
                 services.AddRouting();
                 services.AddControllers().AddApplicationPart(typeof(GatewayItemController).Assembly);
+                services.Configure<Shared.Common.Images.RecipeMediaSettings>(configuration.GetSection("RecipeMedia"));
+                services.AddGrpcClient<gateway::Backend.Contracts.Catalog.RecipeMediaGrpc.RecipeMediaGrpcClient>(options =>
+                {
+                    options.Address = new Uri("http://catalog.test");
+                }).ConfigurePrimaryHttpMessageHandler(catalog.CreateHandler);
                 services.AddGrpcClient<gateway::Backend.Contracts.Catalog.ItemImageGrpc.ItemImageGrpcClient>(options =>
                 {
                     options.Address = new Uri("http://catalog.test");
@@ -222,7 +232,7 @@ internal sealed class ItemTestApplication : IDisposable
             categoryId,
             itemName = name,
             description = "  A seasonal vegetable soup.  ",
-            imageUrl = "https://example.test/soup.png"
+            imageUrl = "https://res.cloudinary.com/test/image/upload/catalog/items/11111111111111111111111111111111.png"
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();

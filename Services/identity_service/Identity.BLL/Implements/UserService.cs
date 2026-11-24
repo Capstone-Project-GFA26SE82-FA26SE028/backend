@@ -9,8 +9,9 @@ using Microsoft.Extensions.Options;
 
 namespace Identity.BLL.Implements;
 
-public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementSettings> settings,
-    IUserRestaurantAccess? restaurants = null, IStaffProvisioner? provisioner = null, IRestaurantNames? restaurantNames = null) : IUserService
+public sealed partial class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementSettings> settings,
+    IUserRestaurantAccess? restaurants = null, IStaffProvisioner? provisioner = null, IRestaurantNames? restaurantNames = null,
+    Shared.Common.Images.IImageStorage? images = null) : IUserService
 {
     private static readonly string[] StaffRoles = ["manager", "waiter", "cashier", "kitchen", "inventory"];
 
@@ -115,6 +116,16 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             return Missing();
         }
 
+        if (request.AvatarUrl is null)
+        {
+            avatar = user.AvatarUrl;
+        }
+
+        if (!CanKeepAvatar(avatar, user.AvatarUrl))
+        {
+            return AvatarUploadRequired();
+        }
+
         unitOfWork.RecordAudit(actorId, "UPDATE_PROFILE", "User", user.UserId.ToString(),
             new
             {
@@ -205,6 +216,11 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
         var role = request.RoleId?.Trim();
         var avatar = string.IsNullOrWhiteSpace(request.AvatarUrl) ? null : request.AvatarUrl.Trim();
         var phone = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+        if (avatar is not null)
+        {
+            return AvatarUploadRequired();
+        }
+
         if (string.IsNullOrEmpty(name) || name.Length > 100 || name.Any(char.IsWhiteSpace)
             || string.IsNullOrEmpty(email) || email.Length > 255 || !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email)
             || string.IsNullOrEmpty(fullName) || fullName.Length > 255 || string.IsNullOrEmpty(role) || role.Length > 50
@@ -310,6 +326,16 @@ public sealed class UserService(IUnitOfWork unitOfWork, IOptions<UserManagementS
             }
 
             var before = Map(user);
+            if (request.AvatarUrl is null)
+            {
+                avatar = user.AvatarUrl;
+            }
+
+            if (!CanKeepAvatar(avatar, user.AvatarUrl))
+            {
+                return AvatarUploadRequired();
+            }
+
             user.UserName = name;
             user.Email = email;
             user.FullName = fullName;

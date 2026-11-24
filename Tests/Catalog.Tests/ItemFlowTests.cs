@@ -49,7 +49,7 @@ public sealed class ItemFlowTests
         Assert.Equal("vegetarian-soup", updated.GetProperty("itemCode").GetString());
         Assert.Equal("Inactive", updated.GetProperty("availability").GetString());
         Assert.Equal(JsonValueKind.Null, updated.GetProperty("description").ValueKind);
-        Assert.Equal(JsonValueKind.Null, updated.GetProperty("imageUrl").ValueKind);
+        Assert.Equal(item.GetProperty("imageUrl").GetString(), updated.GetProperty("imageUrl").GetString());
         Assert.NotEqual(version, updated.GetProperty("version").GetString());
         await using var verification = application.OpenDatabase();
         Assert.Equal(stationId, (await verification.Items.SingleAsync()).KitchenStationRef);

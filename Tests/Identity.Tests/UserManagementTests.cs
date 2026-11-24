@@ -100,6 +100,9 @@ public sealed partial class UserManagementTests : IDisposable
     [Fact]
     public async Task ProfileUpdateChangesOnlyAllowedFields()
     {
+        var existing = await db.Users.SingleAsync(user => user.UserId == memberId);
+        existing.AvatarUrl = "https://example.test/avatar.png";
+        await db.SaveChangesAsync();
         var response = await service.UpdateMe(memberId, new UpdateProfileDTO
         {
             FullName = " Updated name ",

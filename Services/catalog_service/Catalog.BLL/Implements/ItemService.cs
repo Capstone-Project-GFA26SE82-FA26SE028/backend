@@ -12,7 +12,7 @@ using Shared.Common.Pagination;
 
 namespace Catalog.BLL.Implements;
 
-public sealed class ItemService(
+public sealed partial class ItemService(
     IItemRepository items,
     ICategoryRepository categories,
     IItemTransaction transaction,
@@ -24,7 +24,8 @@ public sealed class ItemService(
     IOptions<PricingSettings> pricingSettings,
     TimeProvider timeProvider,
     IKitchenStationLookup kitchenStations,
-    ILogger<ItemService> logger, IRestaurantMenuAccess restaurantAccess) : IItemService
+    ILogger<ItemService> logger, IRestaurantMenuAccess restaurantAccess,
+    Shared.Common.Images.CloudinarySettings imageSettings) : IItemService
 {
     public async Task<ResponseDTO> SetRestaurant(Guid id, Guid restaurantId, string versionText, CancellationToken ct)
     {
@@ -135,6 +136,12 @@ public sealed class ItemService(
             return validation;
         }
 
+        var imageValidation = ValidateNewImageUrl(imageUrl);
+        if (imageValidation is not null)
+        {
+            return imageValidation;
+        }
+
         var code = ItemCodeGenerator.Create(name);
         if (code.Length is < 1 or > 50)
         {
@@ -225,6 +232,19 @@ public sealed class ItemService(
             if (!item.Version.SequenceEqual(version))
             {
                 return (ConcurrentUpdate(), null);
+            }
+
+            if (request?.ImageUrl is null)
+            {
+                imageUrl = item.ImageUrl;
+            }
+            else if (!string.Equals(imageUrl, item.ImageUrl, StringComparison.Ordinal))
+            {
+                var imageValidation = ValidateNewImageUrl(imageUrl);
+                if (imageValidation is not null)
+                {
+                    return (imageValidation, null);
+                }
             }
 
             var category = await categories.GetByIdAsync(request!.CategoryId, cancellationToken);

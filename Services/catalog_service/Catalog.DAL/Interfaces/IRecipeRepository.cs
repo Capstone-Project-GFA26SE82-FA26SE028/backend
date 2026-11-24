@@ -4,6 +4,8 @@ namespace Catalog.DAL.Interfaces;
 
 public interface IRecipeRepository
 {
+    Task<bool> HasMediaAsync(Guid? itemId, Guid? optionId, string mediaType, string url, CancellationToken ct);
+
     DateTime NormalizeTimestamp(DateTime utc);
 
     Task<DateTime?> GetLatestEffectiveFromAsync(Guid? itemId, Guid? optionId, CancellationToken cancellationToken);

@@ -8,14 +8,14 @@ using Microsoft.Extensions.Logging;
 
 namespace Catalog.BLL.Implements;
 
-public sealed class RecipeService(
+public sealed partial class RecipeService(
     IRecipeRepository recipes,
     IItemRepository items,
     IOptionRepository options,
     ICatalogAccess access,
     IRecipeTransaction transaction,
     ILogger<RecipeService> logger,
-    IInventoryRecipeLookup inventory) : IRecipeService
+    IInventoryRecipeLookup inventory, Shared.Common.Images.CloudinarySettings cloudinary) : IRecipeService
 {
     public async Task<ResponseDTO> CreateItemRecipe(
         Guid itemId,
@@ -39,6 +39,12 @@ public sealed class RecipeService(
         if (item is null)
         {
             return new ResponseDTO("Không tìm thấy món ăn.", 404);
+        }
+
+        var mediaError = await ValidateMediaReferences(request, itemId, null, cancellationToken);
+        if (mediaError is not null)
+        {
+            return mediaError;
         }
 
         var inventoryError = await ResolveIngredients(request, cancellationToken);
@@ -158,6 +164,12 @@ public sealed class RecipeService(
         if (option is null)
         {
             return new ResponseDTO("Không tìm thấy tùy chọn.", 404);
+        }
+
+        var mediaError = await ValidateMediaReferences(request, null, optionId, cancellationToken);
+        if (mediaError is not null)
+        {
+            return mediaError;
         }
 
         var inventoryError = await ResolveIngredients(request, cancellationToken);
@@ -369,13 +381,18 @@ public sealed class RecipeService(
             }
         }
 
+        if (request.Media?.Count > 100)
+        {
+            return new ResponseDTO("Công thức chỉ nhận tối đa 100 tệp media mỗi phiên bản.", 400);
+        }
+
         if (request.Media is not null)
         {
             foreach (var media in request.Media)
             {
-                if (string.IsNullOrWhiteSpace(media.MediaType) || media.MediaType.Length > 50)
+                if (media is null || media.MediaType is not ("image" or "video"))
                 {
-                    return new ResponseDTO("Loại tệp đa phương tiện không được rỗng và tối đa 50 ký tự.", 400);
+                    return new ResponseDTO("Loại media công thức chỉ nhận image hoặc video.", 400);
                 }
 
                 if (string.IsNullOrWhiteSpace(media.Url) || media.Url.Length > 2048)

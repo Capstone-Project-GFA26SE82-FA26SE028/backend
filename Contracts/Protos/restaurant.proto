@@ -116,12 +116,22 @@ message RestaurantInfo {
 }
 message RestaurantPage { repeated RestaurantInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
 service RestaurantGrpc {
+  rpc UploadLogo(RestaurantLogoUploadRequest) returns (RestaurantLogoUploadReply);
   rpc GetNames(RestaurantNamesRequest) returns (RestaurantNamesReply);
   rpc Browse(ListRequest) returns (RestaurantPage);
   rpc GetAll(ListRequest) returns (RestaurantPage);
   rpc GetById(IdRequest) returns (RestaurantInfo);
   rpc Create(RestaurantInfo) returns (RestaurantInfo);
   rpc Update(RestaurantInfo) returns (RestaurantInfo);
+}
+
+message RestaurantLogoUploadRequest {
+  string restaurant_id = 1;
+  bytes image = 2;
+}
+
+message RestaurantLogoUploadReply {
+  string logo_url = 1;
 }
 
 message AreaInfo {

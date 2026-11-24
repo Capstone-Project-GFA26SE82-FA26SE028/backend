@@ -14,6 +14,24 @@ namespace Restaurant.Tests;
 public sealed class IdentityAccessTests
 {
     [Fact]
+    public async Task RevalidationDoesNotReuseAnAdministratorCachedBeforeUpload()
+    {
+        var client = new FakeAccessClient();
+        var http = new DefaultHttpContext();
+        http.Request.Headers.Authorization = "Bearer opaque-token";
+        var access = new ManagementAccess(client, new HttpContextAccessor
+        {
+            HttpContext = http
+        });
+        Assert.Equal(client.Actor, await access.RequireAdmin(default));
+        client.Failure = StatusCode.Unauthenticated;
+        Assert.Equal(client.Actor, await access.RequireAdmin(default));
+        var error = await Assert.ThrowsAsync<RpcException>(() => access.RevalidateAdmin(default));
+        Assert.Equal(StatusCode.Unauthenticated, error.StatusCode);
+        Assert.Equal(2, client.Calls);
+    }
+
+    [Fact]
     public async Task MissingTokenNeverCallsIdentity()
     {
         var client = new FakeAccessClient();
