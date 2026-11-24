@@ -22,6 +22,17 @@ public sealed class TableSessionRepository(RestaurantDbContext db)
             .SingleOrDefaultAsync(session => session.TableSessionId == id, ct);
     }
 
+    public async Task<TableSession?> LockForTransferAsync(Guid id, CancellationToken ct)
+    {
+        var session = await LockAsync(id, ct);
+        if (session is not null)
+        {
+            // Refresh the instance that may have been read before waiting on the SQL lock.
+            await _context.Entry(session).ReloadAsync(ct);
+        }
+        return session;
+    }
+
     public Task<TableSession?> LockAsync(Guid id, CancellationToken ct)
     {
         RequireTransaction();

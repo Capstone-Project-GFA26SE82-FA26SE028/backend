@@ -140,7 +140,8 @@ public sealed partial class ReservationSqlServerTests : IAsyncLifetime
                 ["Logging:LogLevel:Default"] = "Warning",
                 ["Reservations:ExpirationEnabled"] = "false",
                 ["Reservations:StaffRoleIds:0"] = "waiter",
-                ["Reservations:StaffRoleIds:1"] = "cashier"
+                ["Reservations:StaffRoleIds:1"] = "cashier",
+                ["TableTransfer:ServiceKey"] = "table-transfer-sql-test-key"
             }));
             builder.ConfigureTestServices(services =>
             {

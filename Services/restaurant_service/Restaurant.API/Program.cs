@@ -102,7 +102,11 @@ builder.Services.AddGrpcClient<Backend.Contracts.Ordering.StaffTransferGuardGrpc
     options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]
         ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Ordering."));
 });
+
+builder.Services.AddScoped<Restaurant.DAL.Interfaces.ITableTransferSessionRepository, Restaurant.DAL.Implements.TableTransferSessionRepository>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableTransferSessionService, Restaurant.BLL.Implements.TableTransferSessionService>();
 var app = builder.Build();
+app.MapGrpcService<Restaurant.API.GrpcServices.TableTransferSessionGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.StaffTransferReceiptGrpcService>();
 
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantGrpcService>();
