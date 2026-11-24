@@ -14,6 +14,22 @@ For GitHub Actions deployment, store credentials in repository/environment Secre
 
 # Restaurant backend and AI assistant
 
+## Identity avatars (Cloudinary)
+
+Avatar changes accept files, not newly pasted URLs. Existing avatar URLs remain readable and may be sent back unchanged. Omitting `avatarUrl` in a profile/account update preserves the saved image; an explicit empty string removes the reference without deleting the cloud file. Create an account without an avatar, then upload for that account.
+
+- `POST /api/users/me/avatar`: authenticated account uploads its own avatar.
+- `POST /api/users/{id}/avatar`: existing user-management permissions apply; restaurant admins may update only permitted staff in their own restaurant, and platform admins retain their configured scope.
+- Use `multipart/form-data` with field `file`. JPEG, PNG and WebP are supported, up to 2 MiB. A successful response contains `result.userId` and `result.avatarUrl`; Identity has already saved the avatar.
+
+```powershell
+curl.exe -X POST "http://localhost:5000/api/users/me/avatar" -H "Authorization: Bearer YOUR_ACCESS_TOKEN" -F "file=@avatar.png"
+```
+
+Use the actual Gateway port when it differs from 5000. Identity uses the same `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` supplied to Compose through the ignored root `.env`. For direct .NET execution, supply `Cloudinary__CloudName`, `Cloudinary__ApiKey` and `Cloudinary__ApiSecret` as environment variables. Do not put secrets in committed appsettings.
+
+Cloud upload failures leave the previous avatar unchanged. Missing credentials/provider failures return 503; invalid image input returns 400. No automatic retry or deletion of old cloud assets is performed. If upload succeeds but saving the account fails, an unreferenced cloud asset may remain; do not retry indefinitely. This feature changes no SQL/ERD schema.
+
 The AI service calls Gemini API (`gemini-3.1-flash-lite` by default) for menu reasoning and cart-based recommendations. A small allowlist of exact price questions about one resolved dish is answered directly from a fresh Catalog read after checking QR access again. Questions needing interpretation continue through Gemini. It sends only the information needed for the request and keeps the existing QR and Catalog checks.
 
 ## Run with Docker Compose

@@ -8,7 +8,7 @@ using Identity.Common.DTOs;
 
 namespace Identity.API.GrpcServices;
 
-public sealed class UserGrpcService(IUserService users, IRoleService roles, IConfiguration? configuration = null) : UserGrpc.UserGrpcBase
+public sealed partial class UserGrpcService(IUserService users, IRoleService roles, IConfiguration? configuration = null) : UserGrpc.UserGrpcBase
 {
     public override async Task<UserListReply> GetStaffProfiles(StaffProfilesRequest request, ServerCallContext context)
     {

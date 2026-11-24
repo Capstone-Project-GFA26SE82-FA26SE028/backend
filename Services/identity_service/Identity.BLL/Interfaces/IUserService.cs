@@ -4,6 +4,7 @@ namespace Identity.BLL.Interfaces;
 
 public interface IUserService
 {
+    Task<ResponseDTO> UploadAvatar(Guid actorId, Guid userId, byte[] image, CancellationToken ct);
     Task<IReadOnlyList<UserDTO>> GetStaffProfiles(Guid restaurantId, Guid[] ids, CancellationToken ct);
     Task ProvisionPending(CancellationToken ct);
     Task<ResponseDTO> Update(Guid actorId, Guid userId, UpdateUserDTO request, CancellationToken ct);

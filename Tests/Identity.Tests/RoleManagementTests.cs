@@ -48,8 +48,7 @@ public sealed partial class UserManagementTests
             UserName = "updated",
             Email = "updated@example.test",
             FullName = "Updated employee",
-            PhoneNumber = "0901234567",
-            AvatarUrl = "https://example.test/avatar.png"
+            PhoneNumber = "0901234567"
         };
     }
 

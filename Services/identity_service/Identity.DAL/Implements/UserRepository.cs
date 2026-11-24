@@ -48,6 +48,18 @@ namespace Identity.DAL.Implements
             return _context.Users.FirstOrDefaultAsync(u => u.UserId == id, ct);
         }
 
+        public async Task<User?> ReloadUserAsync(Guid id, CancellationToken ct)
+        {
+            var user = await FindUserAsync(id, ct);
+            if (user is null)
+            {
+                return null;
+            }
+
+            await _context.Entry(user).ReloadAsync(ct);
+            return _context.Entry(user).State == EntityState.Detached ? null : user;
+        }
+
         public async Task<bool> ChangePasswordAsync(Guid userId, string oldHash, string newHash, CancellationToken ct)
         {
             var now = DateTime.UtcNow;
