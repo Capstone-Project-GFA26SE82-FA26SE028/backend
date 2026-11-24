@@ -11,5 +11,7 @@ public interface IRestaurantRepository : IGenericRepository<global::Restaurant.D
 
     Task<Dictionary<Guid, string>> GetNamesAsync(Guid[] ids, CancellationToken ct);
 
+    Task<Entity?> LockAsync(Guid id, CancellationToken ct);
+
     void ReplaceOpeningHours(Entity entity, IEnumerable<OpeningHour> hours);
 }

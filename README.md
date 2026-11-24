@@ -14,6 +14,20 @@ For GitHub Actions deployment, store credentials in repository/environment Secre
 
 # Restaurant backend and AI assistant
 
+## Restaurant logos (Cloudinary)
+
+`POST /api/restaurants/{id}/logo` uploads and immediately saves a restaurant logo. Use `multipart/form-data` with field `file`, JPEG/PNG/WebP up to 2 MiB, and a valid platform-admin bearer token. This retains the current restaurant-profile permission; it does not grant restaurant admins or managers new access. The response contains `result.restaurantId` and `result.logoUrl`.
+
+Create the restaurant first without a logo, then upload for its returned ID. Restaurant create/update APIs reject new pasted logo URLs. Updates may keep the existing URL unchanged; omitting `logoUrl` preserves it, while an explicit empty string clears the reference. Existing URLs are not migrated or deleted.
+
+```powershell
+curl.exe -X POST "http://localhost:5000/api/restaurants/RESTAURANT_ID/logo" -H "Authorization: Bearer YOUR_ACCESS_TOKEN" -F "file=@logo.png"
+```
+
+Use the actual Gateway port. Restaurant already receives `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` from the ignored Compose `.env`; no additional secret is required. Rebuild Restaurant and Gateway after pulling this contract change. For direct .NET execution, set the corresponding `Cloudinary__*` environment variables.
+
+Authorization is checked before upload and revalidated with Identity before saving. Invalid input returns 400, missing restaurant 404, authentication/permission failures 401/403, and cloud failures 503. Failed upload leaves the previous logo unchanged. An upload followed by a failed database save or revoked access can leave an unreferenced cloud asset; old assets are not automatically deleted. No SQL/ERD schema changes are required.
+
 ## Identity avatars (Cloudinary)
 
 Avatar changes accept files, not newly pasted URLs. Existing avatar URLs remain readable and may be sent back unchanged. Omitting `avatarUrl` in a profile/account update preserves the saved image; an explicit empty string removes the reference without deleting the cloud file. Create an account without an avatar, then upload for that account.

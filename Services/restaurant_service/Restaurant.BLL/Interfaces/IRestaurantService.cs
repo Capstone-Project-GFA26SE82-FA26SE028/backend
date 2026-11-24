@@ -4,6 +4,8 @@ namespace Restaurant.BLL.Interfaces;
 
 public interface IRestaurantService
 {
+    Task<string> UploadLogo(Guid id, byte[] image, CancellationToken ct);
+
     Task<Dictionary<Guid, string>> GetNames(Guid[] ids, CancellationToken ct);
 
     Task<PageResult<RestaurantDto>> Browse(ListQuery query, CancellationToken ct);
