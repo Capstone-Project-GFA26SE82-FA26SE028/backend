@@ -42,3 +42,47 @@ dotnet test Tests/Identity.Tests/Identity.Tests.csproj
 Foundation.Tests kiểm tra DI và mapping của sáu service mà không kết nối SQL Server; test lưu/xóa và commit/rollback dùng SQLite in-memory. Cần kiểm tra thêm trên SQL Server thật cho constraint, rowversion và transaction của nghiệp vụ cụ thể.
 
 Xem [Docker và cấu hình local](docker.md) để đặt connection string và chạy service.
+
+
+## Kiểm tra lưu tiếng Việt
+
+Các trường văn bản được liệt kê trong `docker/sql/upgrades/UnicodeText.sql` dùng NVARCHAR ở SQL và mapping Unicode ở EF. Không bỏ `.IsUnicode(false)` ở trường mã kỹ thuật một cách hàng loạt. Danh sách đầy đủ kiểu dữ liệu/ERD nằm trong `database-change-log.md` (mục 2026-11-24).
+
+Chạy regression trên Docker SQL riêng, không dùng volume của nhóm:
+
+```powershell
+pwsh -File scripts/Test-UnicodeDockerBootstrap.ps1 -VerifyEf
+```
+
+Lệnh kiểm tra tạo database mới, nâng cấp fixture varchar, chạy lại initializer/seed, giữ nguyên dữ liệu/index và 112 assertion EF/SQL. Nếu không có `UNICODE_TEST_CONNECTION`, các bài SQL parameter được ghi skipped; metadata vẫn chạy. CI có job riêng cấp SQL thật cho các bài này.
+
+Với môi trường dev hiện có: sao lưu database, dùng đúng file env đang chạy, chạy `docker compose build db-init identity restaurant catalog inventory ordering customer billing` rồi `docker compose up -d --build`. db-init nâng cấp database cũ trước khi service chạy. Không xóa volume. Khi dùng dotnet ngoài Docker, chạy upgrade trên từng database rồi rebuild service; chỉ rebuild source không thay kiểu cột trong SQL. Giá trị đã thành dấu `?` cần nhập lại từ nguồn đúng sau nâng cấp, không tự sửa bằng cách đổi encoding.
+
+Các file thuộc đợt Unicode (không bao gồm thay đổi có sẵn ở repo SQL riêng):
+
+- `.github/workflows/backend-ci.yml`
+- `Services/billing_service/Billing.DAL/Models/BillingDbContext.cs`
+- `Services/catalog_service/Catalog.DAL/Models/CatalogDbContext.cs`
+- `Services/customer_service/Customer.DAL/Models/CustomerDbContext.cs`
+- `Services/identity_service/Identity.DAL/Models/IdentityDbContext.cs`
+- `Services/inventory_service/Inventory.DAL/Models/InventoryDbContext.cs`
+- `Services/ordering_service/Ordering.DAL/Models/OrderingDbContext.cs`
+- `Services/restaurant_service/Restaurant.DAL/Models/RestaurantDbContext.cs`
+- `Tests/Foundation.Tests/Foundation.Tests.csproj`
+- `Tests/Foundation.Tests/UnicodePersistenceTests.cs`
+- `docker/sql/init.sh`
+- `docker/sql/schema/BillingDb.sql`
+- `docker/sql/schema/CatalogDb.sql`
+- `docker/sql/schema/CustomerDb.sql`
+- `docker/sql/schema/IdentityDb.sql`
+- `docker/sql/schema/InventoryDb.sql`
+- `docker/sql/schema/OrderingDb.sql`
+- `docker/sql/schema/RestaurantDb.sql`
+- `docker/sql/seed.sh`
+- `docker/sql/upgrades/BillingPayOs.sql`
+- `docker/sql/upgrades/BillingProviderConfiguration.sql`
+- `docker/sql/upgrades/RestaurantCloudinary.sql`
+- `docker/sql/upgrades/UnicodeText.sql`
+- `docs/database-change-log.md`
+- `docs/development.md`
+- `scripts/Test-UnicodeDockerBootstrap.ps1`

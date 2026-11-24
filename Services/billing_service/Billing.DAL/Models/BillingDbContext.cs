@@ -109,9 +109,8 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
             entity.Property(e => e.BillAdjustmentId).ValueGeneratedNever();
             entity.Property(e => e.Amount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Reason)
-                .HasMaxLength(1000)
-                .IsUnicode(false);
-            entity.Property(e => e.RuleSnapshot).IsUnicode(false);
+                .HasMaxLength(1000);
+
             entity.Property(e => e.Type)
                 .IsRequired()
                 .HasMaxLength(50)
@@ -139,8 +138,7 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
             entity.Property(e => e.CogsSnapshot).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.DiscountAllocated).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.ItemSnapshot)
-                .IsRequired()
-                .IsUnicode(false);
+                .IsRequired();
             entity.Property(e => e.Quantity).HasColumnType("decimal(18, 6)");
             entity.Property(e => e.ServiceAllocated).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.UnitPriceSnapshot).HasColumnType("decimal(18, 2)");
@@ -184,8 +182,7 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
                 .IsUnicode(false);
             entity.Property(e => e.PostedAt).HasColumnType("datetime");
             entity.Property(e => e.Reason)
-                .HasMaxLength(1000)
-                .IsUnicode(false);
+                .HasMaxLength(1000);
             entity.Property(e => e.SignedAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.Type)
                 .IsRequired()
@@ -255,16 +252,13 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
             entity.Property(e => e.ElectronicInvoiceId).ValueGeneratedNever();
             entity.Property(e => e.Address)
                 .IsRequired()
-                .HasMaxLength(500)
-                .IsUnicode(false);
+                .HasMaxLength(500);
             entity.Property(e => e.CompanyName)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
             entity.Property(e => e.Email)
                 .IsRequired()
-                .HasMaxLength(320)
-                .IsUnicode(false);
+                .HasMaxLength(320);
             entity.Property(e => e.IssuedAt).HasColumnType("datetime");
             entity.Property(e => e.ProviderReference)
                 .HasMaxLength(255)
@@ -293,8 +287,7 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
             entity.Property(e => e.CashReceived).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.ChangeAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.EvidenceUrl)
-                .HasMaxLength(2048)
-                .IsUnicode(false);
+                .HasMaxLength(2048);
             entity.Property(e => e.ExpiredAt).HasColumnType("datetime");
             entity.Property(e => e.IdempotencyKey)
                 .IsRequired()
@@ -309,9 +302,8 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
                 .HasMaxLength(100)
                 .IsUnicode(false);
             entity.Property(e => e.ProviderCheckoutUrl)
-                .HasMaxLength(2048)
-                .IsUnicode(false);
-            entity.Property(e => e.ProviderQrCode).IsUnicode(false);
+                .HasMaxLength(2048);
+
             entity.Property(e => e.ProviderOrderCode)
                 .HasMaxLength(100)
                 .IsUnicode(false);
@@ -357,8 +349,8 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
         {
             entity.ToTable("PaymentProviderConfig");
             entity.HasIndex(value => new { value.RestaurantId, value.Provider }).IsUnique();
-            entity.Property(value => value.ReturnUrl).IsRequired().HasMaxLength(2048).IsUnicode(false);
-            entity.Property(value => value.CancelUrl).IsRequired().HasMaxLength(2048).IsUnicode(false);
+            entity.Property(value => value.ReturnUrl).IsRequired().HasMaxLength(2048);
+            entity.Property(value => value.CancelUrl).IsRequired().HasMaxLength(2048);
 
             entity.Property(e => e.PaymentProviderConfigId).ValueGeneratedNever();
             entity.Property(e => e.ClientId)
@@ -374,8 +366,7 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
                 .IsUnicode(false);
             entity.Property(e => e.WebhookUrl)
                 .IsRequired()
-                .HasMaxLength(2048)
-                .IsUnicode(false);
+                .HasMaxLength(2048);
         });
 
         modelBuilder.Entity<PaymentWebhook>(entity =>
@@ -421,8 +412,7 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
             entity.Property(e => e.MinimumSpend).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.PromotionName)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
             entity.Property(e => e.StartAt).HasColumnType("datetime");
             entity.Property(e => e.Type)
                 .IsRequired()
@@ -477,8 +467,7 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
                 .IsUnicode(false);
             entity.Property(e => e.Reason)
                 .IsRequired()
-                .HasMaxLength(1000)
-                .IsUnicode(false);
+                .HasMaxLength(1000);
             entity.Property(e => e.Status)
                 .IsRequired()
                 .HasMaxLength(50)
@@ -520,8 +509,7 @@ public partial class BillingDbContext : Shared.Persistence.RestaurantIsolation.R
             entity.Property(e => e.CashHandleOver).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.ClosedAt).HasColumnType("datetime");
             entity.Property(e => e.DifferenceReason)
-                .HasMaxLength(1000)
-                .IsUnicode(false);
+                .HasMaxLength(1000);
             entity.Property(e => e.ExpectedCash).HasColumnType("decimal(18, 2)");
 
             entity.HasOne(d => d.CashShift).WithOne(p => p.ShiftReport)

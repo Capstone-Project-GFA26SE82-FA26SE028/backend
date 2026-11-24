@@ -4,11 +4,11 @@ SET QUOTED_IDENTIFIER ON
 GO
 CREATE TABLE [dbo].[Restaurant](
 	[RestaurantId] [uniqueidentifier] NOT NULL,
-	[RestaurantName] [varchar](255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[RestaurantName] [nvarchar](255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[TaxCode] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[Address] [varchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[Address] [nvarchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[Hotline] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-	[LogoUrl] [varchar](max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[LogoUrl] [nvarchar](max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[TimeZone] [varchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
  CONSTRAINT [PK_Restaurant] PRIMARY KEY CLUSTERED 
 (
@@ -25,7 +25,7 @@ CREATE TABLE [dbo].[Reservation](
 	[ReservationId] [uniqueidentifier] NOT NULL,
 	[RestaurantId] [uniqueidentifier] NOT NULL,
 	[RequestedAreaId] [uniqueidentifier] NOT NULL,
-	[ContactName] [varchar](255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[ContactName] [nvarchar](255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[Phone] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[PartySize] [int] NOT NULL,
 	[StartAt] [datetime] NOT NULL,
@@ -73,8 +73,8 @@ GO
 CREATE TABLE [dbo].[Area](
 	[AreaId] [uniqueidentifier] NOT NULL,
 	[RestaurantId] [uniqueidentifier] NOT NULL,
-	[AreaCode] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-	[AreaName] [varchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[AreaCode] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[AreaName] [nvarchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[ServiceType] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[SpaceType] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[IsActive] [bit] NOT NULL,
@@ -127,7 +127,7 @@ GO
 CREATE TABLE [dbo].[Table](
 	[TableId] [uniqueidentifier] NOT NULL,
 	[AreaId] [uniqueidentifier] NOT NULL,
-	[TableCode] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[TableCode] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[Capacity] [int] NOT NULL,
 	[PositionX] [decimal](10, 2) NULL,
 	[PositionY] [decimal](10, 2) NULL,
@@ -187,7 +187,7 @@ CREATE TABLE [dbo].[SessionTable](
 	[AssignedAt] [datetime] NOT NULL,
 	[ReleasedAt] [datetime] NULL,
 	[ChangedByRef] [uniqueidentifier] NULL,
-	[MoveReason] [varchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+	[MoveReason] [nvarchar](500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
  CONSTRAINT [PK_SessionTable] PRIMARY KEY CLUSTERED 
 (
 	[SessionTableId] ASC
@@ -205,7 +205,7 @@ CREATE TABLE [dbo].[Qr](
 	[TokenHash] [varchar](255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[CreatedAt] [datetime] NOT NULL,
 	[RevokedAt] [datetime] NULL,
-	[ImageUrl] [varchar](2048) NULL,
+	[ImageUrl] [nvarchar](2048) NULL,
  CONSTRAINT [PK_Qr] PRIMARY KEY CLUSTERED 
 (
 	[QrId] ASC

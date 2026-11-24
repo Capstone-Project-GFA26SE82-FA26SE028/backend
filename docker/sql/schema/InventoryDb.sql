@@ -10,7 +10,7 @@ CREATE TABLE dbo.[GoodsReceipt]
     [CreatedByRef] uniqueidentifier NOT NULL,
     [CreatedAt] datetime NOT NULL,
     [ConfirmAt] datetime NULL,
-    [Note] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Note] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [RestaurantId] uniqueidentifier NULL
 );
 GO
@@ -33,7 +33,7 @@ CREATE TABLE dbo.[Ingredient]
 (
     [IngredientId] uniqueidentifier NOT NULL,
     [IngredientCode] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [IngredientName] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [IngredientName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [BaseUnit] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [StockQuantity] decimal(18,6) NOT NULL,
     [LowStockThreshold] decimal(18,6) NOT NULL,
@@ -74,7 +74,7 @@ CREATE TABLE dbo.[StockMovement]
     [CookingEventRef] uniqueidentifier NULL,
     [OrderItemRef] uniqueidentifier NULL,
     [PerformedByRef] uniqueidentifier NULL,
-    [Reason] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Reason] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [CreatedAt] datetime NOT NULL,
     [StockIssueId] uniqueidentifier NULL,
     [RestaurantId] uniqueidentifier NULL
@@ -102,7 +102,7 @@ CREATE TABLE dbo.[StocktakeItem]
     [SystemQuantity] decimal(18,6) NOT NULL,
     [ActualQuantity] decimal(18,6) NULL,
     [SnapshotVersion] binary(8) NOT NULL,
-    [DiscrepancyReason] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [DiscrepancyReason] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [RestaurantId] uniqueidentifier NULL
 );
 GO

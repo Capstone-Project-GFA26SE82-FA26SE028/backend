@@ -60,3 +60,18 @@ jobs:
           path: TestResults/**/*.trx
           if-no-files-found: ignore
           retention-days: 14
+
+  unicode-sql:
+    name: Unicode SQL bootstrap and persistence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '9.0.x'
+      - name: Verify fresh and existing SQL databases, repeat upgrades and EF Unicode parameters
+        shell: pwsh
+        run: ./scripts/Test-UnicodeDockerBootstrap.ps1 -VerifyEf
