@@ -30,6 +30,21 @@ public static class CatalogServiceExtensions
                 };
             });
         services.AddScoped<IItemImageService, ItemImageService>();
+        services.AddOptions<Shared.Common.Images.RecipeMediaSettings>()
+            .Bind(configuration.GetSection("RecipeMedia"))
+            .Validate(value => value.IsValid(), "Giới hạn hoặc timeout media công thức không hợp lệ.")
+            .ValidateOnStart();
+        services.AddGrpc().AddServiceOptions<Catalog.API.GrpcServices.RecipeMediaGrpcService>(options =>
+        {
+            options.MaxReceiveMessageSize = Shared.Common.Images.RecipeMediaSettings.TransportLimitBytes;
+        });
+        services.AddScoped<IRecipeMediaService, RecipeMediaService>();
+        services.AddHttpClient<IRecipeMediaStorage, Catalog.API.Clients.CloudinaryRecipeMediaStorage>((provider, client) =>
+        {
+            var media = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<Shared.Common.Images.RecipeMediaSettings>>().Value;
+            client.Timeout = TimeSpan.FromSeconds(media.UploadTimeoutSeconds);
+        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+            .RedactLoggedHeaders(["Authorization"]);
         services.AddGrpcClient<Backend.Contracts.Inventory.IngredientUnitGrpc.IngredientUnitGrpcClient>(options =>
         {
             options.Address = new Uri(configuration["GrpcServices:Inventory"]

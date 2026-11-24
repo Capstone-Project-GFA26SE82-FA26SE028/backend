@@ -7,6 +7,15 @@ namespace Catalog.DAL.Implements;
 
 public sealed class RecipeRepository(CatalogDbContext context) : IRecipeRepository
 {
+    public async Task<bool> HasMediaAsync(Guid? itemId, Guid? optionId, string mediaType, string url, CancellationToken ct)
+    {
+        var matches = await context.RecipeMedia.Where(media => media.RecipeVersion.ItemId == itemId
+            && media.RecipeVersion.OptionId == optionId && media.MediaType == mediaType && media.Url == url)
+            .Select(media => new { media.MediaType, media.Url }).ToListAsync(ct);
+        return matches.Any(media => string.Equals(media.MediaType, mediaType, StringComparison.Ordinal)
+            && string.Equals(media.Url, url, StringComparison.Ordinal));
+    }
+
     public DateTime NormalizeTimestamp(DateTime utc)
     {
         return DateTime.SpecifyKind(new SqlDateTime(utc).Value, DateTimeKind.Utc);

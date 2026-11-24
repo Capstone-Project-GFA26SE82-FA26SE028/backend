@@ -133,6 +133,14 @@ builder.Services.AddGrpcClient<Backend.Contracts.Catalog.RecipeGrpc.RecipeGrpcCl
 {
     options.Address = catalogUri;
 });
+builder.Services.AddOptions<Shared.Common.Images.RecipeMediaSettings>()
+    .Bind(builder.Configuration.GetSection("RecipeMedia"))
+    .Validate(value => value.IsValid(), "Giới hạn hoặc timeout media công thức không hợp lệ.")
+    .ValidateOnStart();
+builder.Services.AddGrpcClient<Backend.Contracts.Catalog.RecipeMediaGrpc.RecipeMediaGrpcClient>(options =>
+{
+    options.Address = catalogUri;
+});
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp",

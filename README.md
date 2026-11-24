@@ -14,6 +14,22 @@ For GitHub Actions deployment, store credentials in repository/environment Secre
 
 # Restaurant backend and AI assistant
 
+## Recipe images and videos (Cloudinary)
+
+`POST /api/recipes/media` accepts a local file as `multipart/form-data`, field `file`, using the existing menu-manager authentication and restaurant scope. Backend detects the type from file bytes; do not supply a trusted MIME type or remote file URL. It returns `result.mediaType` (`image` or `video`) and `result.url`.
+
+Send these values in `media` when creating an item or option recipe, together with `displayOrder`. Video has two supported inputs: upload a local MP4/WebM through this endpoint, or send a pasted HTTP/HTTPS video link directly in the recipe request (`mediaType: "video"`, `url: "https://www.youtube.com/watch?v=..."`). Query strings/fragments are allowed for video links, including YouTube links. Credentials in URLs, executable schemes, local paths and control characters are rejected. Backend stores video links without downloading, uploading, fetching metadata or checking availability; rendering a provider page versus embedding a video is a client concern. The upload file-size limit does not apply to remote links. Upload alone does not create or alter a recipe. Existing recipe-version, ingredient validation and effective-date rules still apply.
+
+```powershell
+curl.exe -X POST "http://localhost:5000/api/recipes/media" -H "Authorization: Bearer YOUR_ACCESS_TOKEN" -F "file=@step.mp4"
+```
+
+Defaults in both Gateway and Catalog `RecipeMedia` configuration: `MaximumImageBytes=2097152` (JPEG/PNG/WebP), `MaximumVideoBytes=20971520` (MP4/WebM), `UploadTimeoutSeconds=45`. Limits may be lowered; the supported upper bounds remain 2 MiB/image and 20 MiB/video. Gateway allows the configured upload timeout plus 10 seconds for forwarding. Only the media-upload RPC receives the larger gRPC message limit. Rebuild Catalog and Gateway after pulling this contract change. Compose reuses the existing Cloudinary environment variables; no new secret is needed.
+
+New images must match the configured Cloudinary cloud, image resource type and `catalog/recipes/images` folder. Uploaded video replies use `catalog/recipes/videos`; pasted video links may point to external hosts. Image validation checks source/path, not an upload receipt or asset ownership. Historical HTTP/HTTPS images may be carried forward unchanged only for the same item/option that already referenced them; existing versions are never rewritten. Empty `media` creates a version without media. Unsupported upload formats, new external image links and unsafe video-link schemes are rejected; failed validation does not close the active recipe.
+
+No automatic retry or old-asset deletion is performed. Upload success followed by a failed recipe save may leave an unreferenced asset. Cloudinary delivery URLs are public: do not upload secrets or documents requiring restricted access. No SQL/ERD schema change is required; `RecipeMedia` and its relation to `RecipeVersion` already exist.
+
 ## Catalog item images (Cloudinary)
 
 Keep the existing two-step flow: upload with `POST /api/items/images` (`multipart/form-data`, field `file`), then send the returned `imageUrl` to item create/update. JPEG, PNG and WebP are supported, up to 2 MiB. Backend checks the file signature; Cloudinary validates the actual image. Existing menu-management permissions and item rowversion checks remain in effect.
