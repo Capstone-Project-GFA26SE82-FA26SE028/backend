@@ -138,7 +138,12 @@ message StockLotPage {
   int32 page = 3;
   int32 page_size = 4;
 }
-message StockIssueLine { string ingredient_id = 1; string quantity = 2; }
+message StockIssueLine {
+  string ingredient_id = 1;
+  string quantity = 2;
+  optional string receipt_item_id = 3;
+  optional bool is_disposal = 4;
+}
 message StockIssueWriteRequest {
   string id = 1;
   string reason = 2;

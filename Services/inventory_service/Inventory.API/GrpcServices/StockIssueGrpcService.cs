@@ -17,7 +17,11 @@ public sealed class StockIssueGrpcService(StockIssueService service) : StockIssu
             Items = request.Items.Select(line => new StockIssueLineDTO
             {
                 IngredientId = InventoryMapping.Id(line.IngredientId),
-                Quantity = InventoryMapping.Decimal(line.Quantity)
+                Quantity = InventoryMapping.Decimal(line.Quantity),
+                GoodsReceiptItemId = line.HasReceiptItemId && !string.IsNullOrWhiteSpace(line.ReceiptItemId)
+                    ? InventoryMapping.Id(line.ReceiptItemId)
+                    : null,
+                IsDisposal = line.HasIsDisposal && line.IsDisposal
             }).ToList()
         }, context.CancellationToken));
     }
