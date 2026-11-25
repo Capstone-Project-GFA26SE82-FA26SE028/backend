@@ -110,6 +110,10 @@ public static class BillingServiceExtensions
         services.AddScoped<IBillingAccess, RestaurantBillingAccess>();
         services.AddScoped<IRestaurantReportContextClient, RestaurantReportContextClient>();
         services.AddScoped<IRestaurantReportService, RestaurantReportService>();
+        services.AddScoped<IRestaurantSalesReportService, RestaurantSalesReportService>();
+        services.AddScoped<IRestaurantDishReportService, RestaurantDishReportService>();
+        services.AddScoped<IRestaurantReportItemsClient, RestaurantReportItemsClient>();
+        services.AddScoped<IRestaurantReportOrderClient, RestaurantReportOrderClient>();
         services.AddScoped<ICashRegisterService, CashRegisterService>();
         services.AddScoped<ICashShiftService, CashShiftService>();
         services.AddOptions<CashPaymentSettings>().Bind(configuration.GetSection("CashPayment"))

@@ -239,6 +239,8 @@ public sealed partial class GatewayFlowTests
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();
+                services.RemoveAll<Billing.BLL.Interfaces.IRestaurantReportOrderClient>();
+                services.AddSingleton<Billing.BLL.Interfaces.IRestaurantReportOrderClient, EmptyReportOrderClient>();
                 services.AddGrpcClient<BillingRestaurant>()
                     .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
             });
@@ -256,6 +258,14 @@ public sealed partial class GatewayFlowTests
                     .ConfigurePrimaryHttpMessageHandler(() => billing.Server.CreateHandler());
             });
         });
+    }
+
+    private sealed class EmptyReportOrderClient : Billing.BLL.Interfaces.IRestaurantReportOrderClient
+    {
+        public Task<IReadOnlyDictionary<Guid, string>> GetChannelsAsync(Guid restaurantId, Guid[] orderIds, CancellationToken ct)
+        {
+            return Task.FromResult<IReadOnlyDictionary<Guid, string>>(new Dictionary<Guid, string>());
+        }
     }
 
     private static string ReportUrl(Guid restaurantId)

@@ -37,7 +37,7 @@ public sealed class CancellationRequestTests
         Assert.Equal(1, response.Items[0].CancelledQuantity);
         Assert.Equal(1, response.Items[0].RemainingQuantity);
         Assert.Equal(order.TotalAmount / 2, response.TotalAmount);
-        var billing = await new BillingOrderService(new OrderRepository(f.Db), new BillingSession())
+        var billing = await new BillingOrderService(new OrderRepository(f.Db), new BillingSession(), new AllowOrderReportAccess())
             .GetForRestaurant(f.Session, f.Restaurant, default);
         Assert.Equal(1, Assert.Single(billing.Items).Quantity);
         var events = await f.Db.Set<Shared.Persistence.Notifications.NotificationOutbox>().ToListAsync();
@@ -57,7 +57,7 @@ public sealed class CancellationRequestTests
         Assert.Equal("Cancelled", (await f.Db.KitchenTasks.SingleAsync()).Status);
         Assert.Equal("Cancelled", (await f.Db.Orders.SingleAsync()).Status);
         Assert.Equal(0, (await f.Orders.GetById(f.Session, order.OrderId, "", default)).TotalAmount);
-        Assert.Empty((await new BillingOrderService(new OrderRepository(f.Db), new BillingSession())
+        Assert.Empty((await new BillingOrderService(new OrderRepository(f.Db), new BillingSession(), new AllowOrderReportAccess())
             .GetForRestaurant(f.Session, f.Restaurant, default)).Items);
     }
 
