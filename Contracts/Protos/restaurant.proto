@@ -3,6 +3,7 @@ syntax = "proto3";
 message GuestJoinRequest {
   string table_session_id = 1;
   string phone_or_code = 2;
+  optional string customer_id = 3;
 }
 
 message GuestAccessRequest {
@@ -15,6 +16,10 @@ message GuestAccessReply {
   string expires_at = 2;
   string token = 3;
   string guest_access_id = 4;
+  optional string customer_id = 5;
+  optional string customer_name = 6;
+  optional int32 available_points = 7;
+  optional string loyalty_tier_name = 8;
 }
 
 service GuestAccessGrpc {
@@ -26,7 +31,11 @@ service BillingSessionGrpc {
   rpc GetById(BillingSessionRequest) returns (BillingSessionReply);
 }
 message BillingSessionRequest { string table_session_id = 1; }
-message BillingSessionReply { string table_session_id = 1; string restaurant_id = 2; }
+message BillingSessionReply {
+  string table_session_id = 1;
+  string restaurant_id = 2;
+  optional string customer_ref = 3;
+}
 
 service RestaurantAccessGrpc {
   rpc GetCurrentScope(CurrentRestaurantScopeRequest) returns (CurrentRestaurantScopeReply);

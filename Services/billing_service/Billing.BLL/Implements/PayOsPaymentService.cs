@@ -21,7 +21,8 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
     IPaymentMethodRepository methods, IPaymentWebhookRepository webhooks, IUnitOfWork unitOfWork,
     IBillingAccess access, IBillService billService, ICheckoutSourceClient ordering, IPayOsClient provider,
     IOptions<CashRegisterAccessSettings> roles, IOptions<PayOsSettings> settings, TimeProvider clock,
-    IPaymentReviewClient reviews, IPaidSessionClosureClient closure) : IPayOsPaymentService
+    IPaymentReviewClient reviews, IPaidSessionClosureClient closure,
+    ICustomerLoyaltyClient? loyaltyClient = null) : IPayOsPaymentService
 {
     public async Task<(PayOsPaymentDTO Payment, bool Created)> Create(Guid billId, string key, CreatePayOsPaymentDTO request, CancellationToken ct)
     {

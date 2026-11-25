@@ -14,10 +14,15 @@ public sealed class BillingSessionGrpcService(IBillingSessionService service) : 
         }
 
         var result = await service.GetById(id, context.CancellationToken);
-        return new BillingSessionReply
+        var reply = new BillingSessionReply
         {
             TableSessionId = result.TableSessionId.ToString(),
             RestaurantId = result.RestaurantId.ToString()
         };
+        if (result.CustomerRef.HasValue)
+        {
+            reply.CustomerRef = result.CustomerRef.Value.ToString();
+        }
+        return reply;
     }
 }

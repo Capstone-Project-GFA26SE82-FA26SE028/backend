@@ -100,6 +100,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             {
                 BillId = Guid.NewGuid(),
                 RestaurantId = snapshot.RestaurantId,
+                CustomerRef = snapshot.CustomerRef,
                 Status = "Unpaid",
                 Currency = settings.Value.Currency,
                 DiscountAmount = 0,
@@ -355,9 +356,11 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
 
     private static void CalculateTotals(Bill bill, decimal serviceRate, decimal vatRate)
     {
-        bill.ServiceAmount = Money(decimal.Round(bill.SubTotal * serviceRate, 2, MidpointRounding.AwayFromZero));
-        bill.VatAmount = Money(decimal.Round((bill.SubTotal + bill.ServiceAmount) * vatRate, 2, MidpointRounding.AwayFromZero));
-        bill.TotalAmount = Money(decimal.Round(bill.SubTotal + bill.ServiceAmount + bill.VatAmount, 0, MidpointRounding.AwayFromZero));
+        var discountedSubTotal = Math.Max(0, bill.SubTotal - bill.DiscountAmount);
+        bill.ServiceAmount = Money(decimal.Round(discountedSubTotal * serviceRate, 2, MidpointRounding.AwayFromZero));
+        bill.VatAmount = Money(decimal.Round((discountedSubTotal + bill.ServiceAmount) * vatRate, 2, MidpointRounding.AwayFromZero));
+        bill.TotalAmount = Money(decimal.Round(discountedSubTotal + bill.ServiceAmount + bill.VatAmount, 0, MidpointRounding.AwayFromZero));
+        Allocate(bill.BillLines, bill.SubTotal, bill.DiscountAmount, (line, value) => line.DiscountAllocated = value);
         Allocate(bill.BillLines, bill.SubTotal, bill.ServiceAmount, (line, value) => line.ServiceAllocated = value);
         Allocate(bill.BillLines, bill.SubTotal, bill.VatAmount, (line, value) => line.VatAllocated = value);
     }
@@ -424,6 +427,31 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         }
 
         return result;
+    }
+
+    public Task<BillDTO> AssignCustomer(Guid billId, Guid customerId, CancellationToken ct)
+    {
+        if (billId == Guid.Empty || customerId == Guid.Empty)
+        {
+            throw new BillingException(400, "Mã hóa đơn và mã khách hàng là bắt buộc.");
+        }
+
+        return unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            var actor = await access.GetCurrentScopeAsync(null, ct);
+            RequireRole(actor, false);
+            var bill = await bills.GetByIdAsync(billId, ct)
+                ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
+            RequireBranch(actor, bill.RestaurantId);
+            if (bill.Status != "Unpaid")
+            {
+                throw new BillingException(409, "Chỉ có thể gán khách hàng thành viên cho hóa đơn chưa thanh toán.");
+            }
+
+            bill.CustomerRef = customerId;
+            await bills.UpdateAsync(bill);
+            return Map(bill);
+        }, ct);
     }
 
     private void RequireRole(BillingAccessScope actor, bool create)
@@ -527,6 +555,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         {
             BillId = bill.BillId,
             RestaurantId = bill.RestaurantId,
+            CustomerRef = bill.CustomerRef,
             BillNumber = bill.BillNumber,
             Status = bill.Status,
             Currency = bill.Currency,
@@ -540,6 +569,18 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
             RoundingAdjustment = bill.TotalAmount - (bill.SubTotal - bill.DiscountAmount + bill.ServiceAmount + bill.VatAmount),
             Version = Convert.ToBase64String(bill.Version ?? []),
             HasCompleteCogs = bill.BillLines.Count > 0 && bill.BillLines.All(line => line.CogsSnapshot.HasValue),
+            Adjustments = bill.BillAdjustments?.Select(a => new BillAdjustmentDTO
+            {
+                BillAdjustmentId = a.BillAdjustmentId,
+                BillId = a.BillId,
+                VoucherId = a.VoucherId,
+                PromotionId = a.PromotionId,
+                Type = a.Type,
+                Amount = a.Amount,
+                RuleSnapshot = a.RuleSnapshot,
+                ActorUserRef = a.ActorUserRef,
+                Reason = a.Reason
+            }).ToList() ?? [],
             Items = bill.BillLines.OrderBy(line => line.OrderItemRef).Select(line => new BillLineDTO
             {
                 BillLineId = line.BillLineId,

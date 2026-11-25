@@ -26,6 +26,39 @@ public sealed class BillServiceTests
         Assert.False(await fixture.Service.CanTransfer(target, source, default));
     }
 
+    [Fact]
+    public async Task CreationCopiesCustomerRefFromSource()
+    {
+        await using var fixture = await BillFixture.Create();
+        var customerId = Guid.NewGuid();
+        fixture.Source.Value.CustomerRef = customerId;
+        var bill = await fixture.Service.Create(fixture.Source.Value.TableSessionId, default);
+        Assert.Equal(customerId, bill.CustomerRef);
+        var stored = await fixture.Service.GetById(bill.BillId, default);
+        Assert.Equal(customerId, stored.CustomerRef);
+    }
+
+    [Fact]
+    public async Task AssignCustomerUpdatesUnpaidBillAndRejectsPaidBill()
+    {
+        await using var fixture = await BillFixture.Create();
+        var bill = await fixture.Service.Create(fixture.Source.Value.TableSessionId, default);
+        Assert.Null(bill.CustomerRef);
+
+        var customerId = Guid.NewGuid();
+        var updated = await fixture.Service.AssignCustomer(bill.BillId, customerId, default);
+        Assert.Equal(customerId, updated.CustomerRef);
+
+        var stored = await fixture.Service.GetById(bill.BillId, default);
+        Assert.Equal(customerId, stored.CustomerRef);
+
+        var dbBill = await fixture.Db.Bills.FindAsync(bill.BillId);
+        dbBill!.Status = "Paid";
+        await fixture.Db.SaveChangesAsync();
+
+        await Status(409, () => fixture.Service.AssignCustomer(bill.BillId, Guid.NewGuid(), default));
+    }
+
 
     [Fact]
     public async Task CookingAndServingProgressDoesNotInvalidateFinancialSnapshot()

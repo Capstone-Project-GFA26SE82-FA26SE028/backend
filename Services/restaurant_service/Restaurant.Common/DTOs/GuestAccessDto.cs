@@ -6,4 +6,5 @@ public sealed class GuestAccessDto
     public Guid TableSessionId { get; set; }
     public DateTime ExpiresAt { get; set; }
     public string Token { get; set; } = "";
+    public Guid? CustomerId { get; set; }
 }

@@ -4,6 +4,7 @@ public sealed class BillDTO
 {
     public Guid BillId { get; set; }
     public Guid RestaurantId { get; set; }
+    public Guid? CustomerRef { get; set; }
     public string BillNumber { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public string Currency { get; set; } = string.Empty;
@@ -19,6 +20,7 @@ public sealed class BillDTO
     public string Version { get; set; } = string.Empty;
     public bool HasCompleteCogs { get; set; }
     public List<string> Warnings { get; set; } = [];
+    public List<BillAdjustmentDTO> Adjustments { get; set; } = [];
     public List<BillLineDTO> Items { get; set; } = [];
 }
 

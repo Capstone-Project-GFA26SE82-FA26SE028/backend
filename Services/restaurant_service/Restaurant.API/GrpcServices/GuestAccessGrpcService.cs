@@ -10,7 +10,8 @@ public sealed class GuestAccessGrpcService(IGuestAccessService service) : GuestA
 {
     public override async Task<GuestAccessReply> Join(GuestJoinRequest request, ServerCallContext context)
     {
-        return Map(await service.Join(ParseId(request.TableSessionId), request.PhoneOrCode, context.CancellationToken));
+        Guid? customerId = request.HasCustomerId && Guid.TryParse(request.CustomerId, out var cId) ? cId : null;
+        return Map(await service.Join(ParseId(request.TableSessionId), request.PhoneOrCode, customerId, context.CancellationToken));
     }
 
     public override async Task<GuestAccessReply> GetMe(GuestAccessRequest request, ServerCallContext context)
@@ -30,12 +31,17 @@ public sealed class GuestAccessGrpcService(IGuestAccessService service) : GuestA
 
     private static GuestAccessReply Map(GuestAccessDto result)
     {
-        return new GuestAccessReply
+        var reply = new GuestAccessReply
         {
             GuestAccessId = result.GuestAccessId.ToString(),
             TableSessionId = result.TableSessionId.ToString(),
             ExpiresAt = result.ExpiresAt.ToString("O"),
             Token = result.Token
         };
+        if (result.CustomerId.HasValue)
+        {
+            reply.CustomerId = result.CustomerId.Value.ToString();
+        }
+        return reply;
     }
 }

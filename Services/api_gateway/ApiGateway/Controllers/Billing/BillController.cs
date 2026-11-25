@@ -4,6 +4,7 @@ using ApiGateway.DTOs.Billing;
 using ApiGateway.Settings;
 using ApiGateway.Swagger;
 using Backend.Contracts.Billing;
+using Grpc.Core;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Shared.Common.DTOs;
@@ -14,8 +15,10 @@ namespace ApiGateway.Controllers.Billing;
 [ApiController]
 [Route("api/bills")]
 [RequireBearerToken]
-public sealed class BillController(BillGrpc.BillGrpcClient client, IOptions<BillingClientSettings> settings)
-    : BillingControllerBase(settings)
+public sealed class BillController(
+    BillGrpc.BillGrpcClient client,
+    Backend.Contracts.Customer.CustomerGrpc.CustomerGrpcClient customerClient,
+    IOptions<BillingClientSettings> settings) : BillingControllerBase(settings)
 {
     [HttpPost]
     [ProducesResponseType(typeof(ResponseDTO<BillDTO>), StatusCodes.Status201Created)]
@@ -73,6 +76,84 @@ public sealed class BillController(BillGrpc.BillGrpcClient client, IOptions<Bill
         }, options)), ct);
     }
 
+    [HttpPost("{id:guid}/voucher")]
+    [ProducesResponseType(typeof(ResponseDTO<BillDTO>), StatusCodes.Status200OK)]
+    public Task<IActionResult> ApplyVoucher(Guid id, [FromBody] ApplyVoucherDTO body, CancellationToken ct)
+    {
+        return Execute(async options => Map(await client.ApplyVoucherAsync(new ApplyVoucherRequest
+        {
+            BillId = id.ToString(),
+            VoucherCode = body.VoucherCode
+        }, options)), ct);
+    }
+
+    [HttpDelete("{id:guid}/voucher/{voucherId:guid}")]
+    [ProducesResponseType(typeof(ResponseDTO<BillDTO>), StatusCodes.Status200OK)]
+    public Task<IActionResult> RemoveVoucher(Guid id, Guid voucherId, CancellationToken ct)
+    {
+        return Execute(async options => Map(await client.RemoveVoucherAsync(new RemoveVoucherRequest
+        {
+            BillId = id.ToString(),
+            VoucherId = voucherId.ToString()
+        }, options)), ct);
+    }
+
+    [HttpGet("{id:guid}/available-promotions")]
+    [ProducesResponseType(typeof(ResponseDTO<List<ApplicablePromotionDTO>>), StatusCodes.Status200OK)]
+    public Task<IActionResult> GetAvailablePromotions(Guid id, CancellationToken ct)
+    {
+        return Execute(async options =>
+        {
+            var reply = await client.GetAvailablePromotionsAsync(new BillIdRequest
+            {
+                BillId = id.ToString()
+            }, options);
+
+            return reply.Items.Select(p => new ApplicablePromotionDTO
+            {
+                PromotionId = Guid.Parse(p.PromotionId),
+                PromotionName = p.PromotionName,
+                DiscountType = p.DiscountType,
+                Type = p.Type,
+                DiscountValue = Decimal(p.DiscountValue),
+                EstimatedDiscount = Decimal(p.EstimatedDiscount),
+                Description = p.Description
+            }).ToList();
+        }, ct);
+    }
+
+    [HttpPost("{id:guid}/customer")]
+    [ProducesResponseType(typeof(ResponseDTO<BillDTO>), StatusCodes.Status200OK)]
+    public Task<IActionResult> AssignCustomer(Guid id, [FromBody] AssignCustomerDTO body, CancellationToken ct)
+    {
+        return Execute(async options =>
+        {
+            var customerId = body.CustomerId;
+            if (!customerId.HasValue && !string.IsNullOrWhiteSpace(body.PhoneNumber))
+            {
+                var customer = await customerClient.GetOrCreateAsync(new Backend.Contracts.Customer.CreateCustomerRequest
+                {
+                    Phone = body.PhoneNumber.Trim(),
+                    Name = ""
+                }, options);
+                customerId = Guid.Parse(customer.CustomerId);
+            }
+
+            if (!customerId.HasValue || customerId.Value == Guid.Empty)
+            {
+                throw new RpcException(new Status(Grpc.Core.StatusCode.InvalidArgument, "Vui lòng cung cấp mã khách hàng hoặc số điện thoại thành viên hợp lệ."));
+            }
+
+            var reply = await client.AssignCustomerAsync(new AssignCustomerRequest
+            {
+                BillId = id.ToString(),
+                CustomerId = customerId.Value.ToString()
+            }, options);
+
+            return Map(reply);
+        }, ct);
+    }
+
     private static decimal Decimal(string value)
     {
         return decimal.Parse(value, CultureInfo.InvariantCulture);
@@ -84,6 +165,7 @@ public sealed class BillController(BillGrpc.BillGrpcClient client, IOptions<Bill
         {
             BillId = Guid.Parse(source.BillId),
             RestaurantId = Guid.Parse(source.RestaurantId),
+            CustomerRef = source.HasCustomerRef && Guid.TryParse(source.CustomerRef, out var cId) ? cId : null,
             BillNumber = source.BillNumber,
             Status = source.Status,
             Currency = source.Currency,
@@ -99,6 +181,18 @@ public sealed class BillController(BillGrpc.BillGrpcClient client, IOptions<Bill
             HasCompleteCogs = source.HasCompleteCogs,
             SourceStatus = source.SourceStatus,
             Warnings = source.Warnings.ToList(),
+            Adjustments = source.Adjustments.Select(adj => new BillAdjustmentDTO
+            {
+                BillAdjustmentId = Guid.Parse(adj.BillAdjustmentId),
+                BillId = Guid.Parse(adj.BillId),
+                VoucherId = adj.HasVoucherId ? Guid.Parse(adj.VoucherId) : null,
+                PromotionId = adj.HasPromotionId ? Guid.Parse(adj.PromotionId) : null,
+                Type = adj.Type,
+                Amount = Decimal(adj.Amount),
+                RuleSnapshot = adj.RuleSnapshot,
+                ActorUserRef = adj.HasActorUserRef ? Guid.Parse(adj.ActorUserRef) : null,
+                Reason = adj.HasReason ? adj.Reason : null
+            }).ToList(),
             Items = source.Items.Select(line => new BillLineDTO
             {
                 BillLineId = Guid.Parse(line.BillLineId),

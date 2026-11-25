@@ -7,7 +7,7 @@ using Grpc.Core;
 
 namespace Billing.API.GrpcServices;
 
-public sealed class BillGrpcService(IBillService service) : BillGrpc.BillGrpcBase
+public sealed class BillGrpcService(IBillService service, IVoucherService voucherService, IPromotionService promotionService) : BillGrpc.BillGrpcBase
 {
     public override async Task<BillInfo> Create(CreateBillRequest request, ServerCallContext context)
     {
@@ -22,6 +22,38 @@ public sealed class BillGrpcService(IBillService service) : BillGrpc.BillGrpcBas
     public override async Task<BillInfo> Refresh(BillIdRequest request, ServerCallContext context)
     {
         return Map(await service.Refresh(Id(request.BillId), context.CancellationToken));
+    }
+
+    public override async Task<BillInfo> ApplyVoucher(ApplyVoucherRequest request, ServerCallContext context)
+    {
+        return Map(await voucherService.ApplyVoucher(Id(request.BillId), request.VoucherCode, context.CancellationToken));
+    }
+
+    public override async Task<BillInfo> RemoveVoucher(RemoveVoucherRequest request, ServerCallContext context)
+    {
+        return Map(await voucherService.RemoveVoucher(Id(request.BillId), Id(request.VoucherId), context.CancellationToken));
+    }
+
+    public override async Task<ApplicablePromotionListReply> GetAvailablePromotions(BillIdRequest request, ServerCallContext context)
+    {
+        var promos = await promotionService.GetAvailableForBill(Id(request.BillId), context.CancellationToken);
+        var reply = new ApplicablePromotionListReply();
+        reply.Items.AddRange(promos.Select(p => new ApplicablePromotionInfo
+        {
+            PromotionId = p.PromotionId.ToString(),
+            PromotionName = p.PromotionName,
+            DiscountType = p.DiscountType,
+            Type = p.Type,
+            DiscountValue = Decimal(p.DiscountValue),
+            EstimatedDiscount = Decimal(p.EstimatedDiscount),
+            Description = p.Description
+        }));
+        return reply;
+    }
+
+    public override async Task<BillInfo> AssignCustomer(AssignCustomerRequest request, ServerCallContext context)
+    {
+        return Map(await service.AssignCustomer(Id(request.BillId), Id(request.CustomerId), context.CancellationToken));
     }
 
     public override async Task<BillPage> GetAll(BillListRequest request, ServerCallContext context)
@@ -84,7 +116,23 @@ public sealed class BillGrpcService(IBillService service) : BillGrpc.BillGrpcBas
             HasCompleteCogs = includeCost && source.HasCompleteCogs,
             SourceStatus = source.SourceStatus
         };
+        if (source.CustomerRef.HasValue)
+        {
+            result.CustomerRef = source.CustomerRef.Value.ToString();
+        }
         result.Warnings.AddRange(source.Warnings);
+        result.Adjustments.AddRange(source.Adjustments.Select(adj => new BillAdjustmentInfo
+        {
+            BillAdjustmentId = adj.BillAdjustmentId.ToString(),
+            BillId = adj.BillId.ToString(),
+            VoucherId = adj.VoucherId?.ToString(),
+            PromotionId = adj.PromotionId?.ToString(),
+            Type = adj.Type,
+            Amount = Decimal(adj.Amount),
+            RuleSnapshot = adj.RuleSnapshot,
+            ActorUserRef = adj.ActorUserRef?.ToString(),
+            Reason = adj.Reason
+        }));
         result.Items.AddRange(source.Items.Select(line =>
         {
             var item = new BillLineInfo

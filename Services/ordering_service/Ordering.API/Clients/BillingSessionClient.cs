@@ -12,6 +12,12 @@ public sealed class BillingSessionClient(BillingSessionGrpc.BillingSessionGrpcCl
 {
     public async Task<Guid> GetRestaurantIdAsync(Guid sessionId, CancellationToken ct)
     {
+        var (branch, _) = await GetSessionInfoAsync(sessionId, ct);
+        return branch;
+    }
+
+    public async Task<(Guid RestaurantId, Guid? CustomerRef)> GetSessionInfoAsync(Guid sessionId, CancellationToken ct)
+    {
         var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
         if (string.IsNullOrWhiteSpace(authorization))
         {
@@ -31,6 +37,7 @@ public sealed class BillingSessionClient(BillingSessionGrpc.BillingSessionGrpcCl
             throw new OrderingException(503, "Dịch vụ nhà hàng trả về phiên thanh toán không hợp lệ.");
         }
 
-        return branch;
+        Guid? customerRef = reply.HasCustomerRef && Guid.TryParse(reply.CustomerRef, out var cRef) ? cRef : null;
+        return (branch, customerRef);
     }
 }

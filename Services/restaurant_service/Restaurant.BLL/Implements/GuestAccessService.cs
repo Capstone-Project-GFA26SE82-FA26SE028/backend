@@ -15,6 +15,11 @@ public sealed class GuestAccessService(ITableSessionRepository sessions, IGuestA
 {
     public Task<GuestAccessDto> Join(Guid sessionId, string phoneOrCode, CancellationToken ct)
     {
+        return Join(sessionId, phoneOrCode, null, ct);
+    }
+
+    public Task<GuestAccessDto> Join(Guid sessionId, string phoneOrCode, Guid? customerId, CancellationToken ct)
+    {
         var input = phoneOrCode.Trim();
         if ((input.Length != 3 && (input.Length != 10 || input[0] != '0'))
             || input.Any(c => c < '0' || c > '9'))
@@ -29,6 +34,11 @@ public sealed class GuestAccessService(ITableSessionRepository sessions, IGuestA
             if (session.ClosedAt != null || session.Status != "Open")
             {
                 throw new ManagementException(409, "Phiên bàn đã đóng hoặc không còn nhận khách.");
+            }
+
+            if (!session.LoyaltyCustomerRef.HasValue && customerId.HasValue && customerId.Value != Guid.Empty)
+            {
+                session.LoyaltyCustomerRef = customerId.Value;
             }
 
             var code = input[^3..];
@@ -70,7 +80,8 @@ public sealed class GuestAccessService(ITableSessionRepository sessions, IGuestA
                 GuestAccessId = guestId,
                 TableSessionId = sessionId,
                 ExpiresAt = expiresAt,
-                Token = token
+                Token = token,
+                CustomerId = session.LoyaltyCustomerRef
             };
         }, ct);
     }

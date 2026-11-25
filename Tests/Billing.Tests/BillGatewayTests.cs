@@ -138,6 +138,7 @@ public sealed class BillGatewayTests
             settings.TimeoutSeconds = 15;
         });
         builder.Services.AddSingleton(new Wire.BillGrpc.BillGrpcClient(invoker));
+        builder.Services.AddSingleton(new Gateway::Backend.Contracts.Customer.CustomerGrpc.CustomerGrpcClient(invoker));
         var app = builder.Build();
         app.MapControllers();
         await app.StartAsync();

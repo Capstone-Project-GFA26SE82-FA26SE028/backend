@@ -118,6 +118,47 @@ public sealed partial class GatewayFlowTests
         Assert.Empty(await db.GuestAccesses.ToListAsync());
     }
 
+    [Fact]
+    public async Task GuestJoinWithCustomerIdSetsLoyaltyCustomerRefOnTableSession()
+    {
+        var session = await CreateGuestSession();
+        using var scope = _restaurant.Services.CreateScope();
+        var guestService = scope.ServiceProvider.GetRequiredService<Restaurant.BLL.Interfaces.IGuestAccessService>();
+        var customerId = Guid.NewGuid();
+
+        await guestService.Join(session.TableSessionId, "0987654321", customerId, default);
+
+        var db = scope.ServiceProvider.GetRequiredService<RestaurantDbContext>();
+        var dbSession = await db.TableSessions.FindAsync(session.TableSessionId);
+        Assert.Equal(customerId, dbSession!.LoyaltyCustomerRef);
+
+        await guestService.Join(session.TableSessionId, "321", Guid.NewGuid(), default);
+        db.ChangeTracker.Clear();
+        var reloaded = await db.TableSessions.FindAsync(session.TableSessionId);
+        Assert.Equal(customerId, reloaded!.LoyaltyCustomerRef);
+    }
+
+    [Fact]
+    public async Task BillingSessionInfoReturnsLinkedLoyaltyCustomerRef()
+    {
+        var session = await CreateGuestSession();
+        using var scope = _restaurant.Services.CreateScope();
+        var httpContextAccessor = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Http.IHttpContextAccessor>();
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.Headers.Authorization = "Bearer admin";
+        httpContextAccessor.HttpContext = httpContext;
+
+        var guestService = scope.ServiceProvider.GetRequiredService<Restaurant.BLL.Interfaces.IGuestAccessService>();
+        var billingSessionService = scope.ServiceProvider.GetRequiredService<Restaurant.BLL.Interfaces.IBillingSessionService>();
+        var customerId = Guid.NewGuid();
+
+        await guestService.Join(session.TableSessionId, "0912345678", customerId, default);
+
+        var sessionInfo = await billingSessionService.GetById(session.TableSessionId, default);
+        Assert.NotNull(sessionInfo);
+        Assert.Equal(customerId, sessionInfo.CustomerRef);
+    }
+
     private async Task<TableSessionScanDto> CreateGuestSession()
     {
         var restaurant = await CreateRestaurant();

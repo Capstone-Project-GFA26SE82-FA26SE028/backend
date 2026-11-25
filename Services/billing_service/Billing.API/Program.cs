@@ -39,6 +39,8 @@ app.MapGrpcService<PaymentProviderConfigGrpcService>();
 app.MapGrpcService<PaymentWebhookGrpcService>();
 app.MapGrpcService<CashMovementGrpcService>();
 app.MapGrpcService<BillCheckoutGrpcService>();
+app.MapGrpcService<PromotionGrpcService>();
+app.MapGrpcService<VoucherGrpcService>();
 app.MapGrpcService<PaymentSubmissionGrpcService>();
 app.MapGrpcService<TaxFeePolicyGrpcService>();
 
