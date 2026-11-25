@@ -1,6 +1,6 @@
 # Báo cáo hiệu quả hoạt động nhà hàng
 
-Trạng thái cập nhật 2026-11-25: R1 và bản hoàn thiện đã được commit đến 8e8d872. R2–R4 đã được gộp trong commit 0286a09; R5 cùng các bản hoàn thiện review được đóng gói trong commit riêng kế tiếp, không tạo commit fix riêng; R4 đã bổ sung bảng món, nguồn snapshot Ordering và kiểm chứng Gateway/Docker. R5 bổ sung giảm giá và tỷ suất đóng góp từng món cho phần đủ nguồn; chưa nghiệm thu đủ lợi nhuận ròng toàn nhà hàng. Giá vốn vận hành còn thiếu writer, xem mục R4 cuối tài liệu. Các trạng thái bàn giao cũ bên dưới được giữ theo thời điểm kiểm chứng.
+Trạng thái cập nhật 2026-11-26: R2–R4 đã được gộp trong commit 0286a09; R5 cùng các bản hoàn thiện review nằm trong commit 83c7c00. R6 có bộ kiểm thử Docker tái lập và job CI đang để chưa commit/push: 19 nhóm kiểm tra thực thi đạt, gồm 11 Covered và 8 Partial; chưa nghiệm thu đủ lợi nhuận ròng toàn nhà hàng do thiếu nguồn. Các trạng thái bàn giao cũ bên dưới được giữ theo thời điểm kiểm chứng.
 
 ## R0: kết quả khảo sát nguồn, chưa triển khai báo cáo
 
@@ -886,3 +886,155 @@ Tên commit đề xuất: **Sửa phạm vi cảnh báo báo cáo món và bổ 
 Mô tả: **Chỉ cảnh báo đóng góp khi bảng món có kết quả; bổ sung hồi quy tỷ suất âm, gộp dòng giảm100% và dòng trả tiền cùng món, kiểm chứng Gateway/Docker. Giữ nguyên giới hạn nguồn và schema.**
 
 Giữ nguyên branch feature/restaurant-performance-reports, HEAD8e8d872; chưa stage/commit/push.
+
+
+## R6 — Nghiệm thu tổng hợp qua Gateway trên Docker và đối chiếu BM04 (2026-11-26)
+
+Baseline: HEAD `83c7c00` trên nhánh `feature/restaurant-performance-reports`. Lượt R6 giữ nguyên toàn bộ code nghiệp vụ, hợp đồng HTTP/gRPC và cấu trúc database của R1–R5; chỉ bổ sung bộ kiểm thử tổng hợp Docker tái lập được, tích hợp CI và bảng đối chiếu nghiệm thu BM04. Không tự thêm R7; chưa stage/commit/push.
+
+### Lệnh chạy lại trên máy thành viên khác và trong CI
+
+Chạy được trực tiếp bằng Windows PowerShell 5.1 (`powershell`) sẵn có trên Windows hoặc PowerShell 7 (`pwsh`) trên Windows/Linux/CI, yêu cầu Docker Engine đang bật Linux containers:
+
+```powershell
+# Trên máy Windows (PowerShell 5.1 hoặc PowerShell 7)
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-RestaurantReports.ps1 -OutputDirectory TestResults/RestaurantReports
+
+# PowerShell 7 trên Windows/Linux; CI gọi cùng script trong shell pwsh
+pwsh -NoProfile -File scripts/Test-RestaurantReports.ps1 -OutputDirectory TestResults/RestaurantReports
+```
+
+Cơ chế cô lập và an toàn dữ liệu:
+
+- Mỗi lượt sinh project Compose riêng `report-r6-<10hex>`, network/volume riêng, mật khẩu SQL/JWT dùng một lần trong thư mục tạm ngoài repository và cổng loopback ngẫu nhiên (`GATEWAY_HTTP_PORT=0`).
+- Trước mọi câu lệnh SQL nạp fixture hoặc tiêm lỗi, `Assert-TestServer` đối chiếu nhãn `com.docker.compose.project` của container SQL Server khớp đúng project `report-r6-<10hex>`, từ chối chạy trên container `backend-*` của nhóm.
+- Build trực tiếp từ working tree 6 image riêng (`db-init`, `identity`, `restaurant`, `billing`, `ordering`, `gateway`) và kiểm tra container image ID thực tế khớp image vừa build trước khi gọi API.
+- Khối `finally` thử dọn các tài nguyên đã tạo bằng `docker compose down --volumes`, xóa các thẻ image `:test` đúng project (không force), xóa file credential tạm, khôi phục biến môi trường tiến trình và ghi biên bản `results.json`. cleanupSucceeded chỉ true khi down và các thao tác xóa tag đã có đều thành công. Biên bản có mã băm SHA-256 của script và từng file fixture.
+
+### Thiết kế dữ liệu hai nhà hàng và số kỳ vọng tính độc lập
+
+Số kỳ vọng được tính tay độc lập và lưu riêng tại `Tests/Fixtures/RestaurantReports/expected.json`, tuyệt đối không đọc ngược từ phản hồi API:
+
+- **Nhà hàng A (`20000000-0000-0000-0000-000000000001`, múi giờ `Asia/Ho_Chi_Minh`)**:
+  - Kỳ chính `[2026-11-25T00:00:00+07:00, 2026-11-26T00:00:00+07:00)` tức `[2026-11-24T17:00:00Z, 2026-11-25T17:00:00Z)`:
+    - `R6-1` (`Cash`, ca 1, `Order 1` `DineIn`): `PaidAt = 2026-11-24T17:00:00Z` (đúng biên đầu `[start`), `SubTotal = 200`, `DiscountAmount = 20` kèm `BillAdjustment = 20`, `ServiceAmount = 5.4`, `VatAmount = 14.83`, `TotalAmount = 200` (`RoundingAdjustment = -0.23`), `CashReceived = 300`, `ChangeAmount = 100`, `CashHandover` `Confirmed`, `CashMovement` `Sale = 200`. Dòng món `Bún bò lịch sử` (`Base = 80` + option `20` = `100`), `BillLine.Quantity = 2` (nguồn `OrderItem` có `Quantity = 3, CancelledQuantity = 1`), `DiscountAllocated = 20`, `CogsSnapshot = 50` (tổng dòng); kèm 1 dòng `Quantity = 0` có JSON không hợp lệ để xác nhận dòng 0 không gây báo thiếu nguồn giả.
+    - `R6-2` (`BankTransfer` `PayOSQuery`, ca 1): `PaidAt = 2026-11-25T02:00:00Z`, `SubTotal = 100`, `VatAmount = 8`, `TotalAmount = 108`; gồm 2 dòng `Bún bò lịch sử` biến thể giá `50` (`Base = 40` + option `10`) thuộc hai đơn khác kênh (`Order 2` `DineIn` có `CogsSnapshot = 20`; `Order 3` `Takeaway` có `CogsSnapshot = NULL`) → nguyên hóa đơn xếp kênh `Mixed = 108`.
+    - `R6-3` (`BankTransfer` `PayOSQuery`, ca 2, `Order 4` `DineIn`): `PaidAt = 2026-11-25T03:00:00Z`, `SubTotal = 100`, `DiscountAmount = 50` kèm `BillAdjustment = 50`, `VatAmount = 4`, `TotalAmount = 54`; hai dòng chung một `OrderId` (đếm 1 đơn): dòng `Dòng giảm toàn bộ` (`gross = 50`, `discount = 50`, `net = 0`, `cost = 20`, `profit = -20`, `margin = null`) và dòng `Món trả tiền` (`gross = 50`, `discount = 0`, `net = 50`, `cost = 30`, `profit = 20`, `margin = 40%`).
+    - `Online 20005` (`Takeaway`, `unassigned`, `Order 5` `Accepted`): `PaidAt = 2026-11-25T04:00:00Z`, `Amount = 50`, trạng thái hiện tại `Refunded` với `RefundedAt = 2026-11-26T03:00:00Z` (thuộc kỳ kế tiếp) và chứng cứ HTTPS đã xác minh; món `Trà` (`Base = 20` + option `5` = `25`, `Quantity = 2, CancelledQuantity = 1` → lượng bán hợp lệ `1`, `gross = 25`).
+    - Bản ghi chưa xác minh/thất bại trong kỳ chính phải bị loại: `Online 20021` (`Pending`, `777`), `Online 20022` (`Failed`, `777`), và `R6-PENDING-CASH` (`Unpaid`, `PendingHandover`, `Amount = 108`, `CashReceived = 200`, thu hộ lúc `02:59Z` chưa được Cashier xác nhận, chưa có `PaidAt`/`Sale`).
+    - Tổng kỳ vọng kỳ chính nhà hàng A: `collections = 412` (`Cash = 200`, `BankTransfer = 212`; kênh `DineIn = 254`, `Mixed = 108`, `Takeaway = 50`; ca `shiftOne = 308`, `shiftTwo = 54`, `unassigned = 50`), `paidOrders = 5`, `dishRevenueKnown = 330`, `discountsKnown = 70`, `vatKnown = 26.83`, `serviceFeesKnown = 5.4`, `roundingAdjustment.knownAmount = -0.23`, `netDishRevenue.amount = null`. Món đứng đầu `Bún bò lịch sử`: `quantity = 4`, `gross = 300`, `discounts = 20`, `net = 280`, `knownCost = 70`, `knownProfit = 160`, `cost.amount = null`, `grossProfit.amount = null`, `contributionMarginPercent = null`.
+  - Kỳ kế tiếp `[2026-11-26T00:00:00+07:00, 2026-11-27T00:00:00+07:00)` tức `[2026-11-25T17:00:00Z, 2026-11-26T17:00:00Z)`:
+    - `R6-6` (`BankTransfer`, ca 1, `Order 6` `DineIn`): `PaidAt = 2026-11-25T17:00:00Z` (đúng biên cuối `end)` của kỳ chính, rơi vào đầu kỳ kế tiếp) → `nextCollections = 108`; khoản hoàn đã xác minh của `Online 20005` rơi vào kỳ này → `nextRefundsKnown = 50`, `nextNetCollectionsKnown = 58`, `netCollections.amount = null`.
+- **Nhà hàng B (`20000000-0000-0000-0000-000000000099`, múi giờ `Asia/Ho_Chi_Minh`)**:
+  - `R6-99` (`BankTransfer`, ca 99, `Order 99` `DineIn`): `PaidAt = 2026-11-25T02:00:00Z`, `TotalAmount = 1080`, món riêng `87...99` lượng `10`, `gross = 1000`. Không rò rỉ sang nhà hàng A; Manager A chỉ đọc được `1080` khi được gán phân công hoạt động tại B.
+
+### Bảng đối chiếu 18 tiêu chí chức năng và 1 luồng E2E theo BM04
+
+Cột **Thực thi** phản ánh kết quả kiểm tra tự động hiện tại; cột **Nghiệm thu BM04** phân biệt phần đã phủ đủ (`Covered`) với phần mới kiểm chứng trên snapshot giả lập hoặc còn thiếu writer nguồn (`Partial`):
+
+| Mã BM04 | Nội dung kiểm tra trong `Test-RestaurantReports.ps1` | Thực thi | Nghiệm thu BM04 | Giới hạn nguồn / lý do đánh dấu `Partial` |
+| --- | --- | --- | --- | --- |
+| `TC-WF05-01` | Chuẩn hóa kỳ `[from, to)` trên `/period` và `/sales`; nhóm `hour`/`day`/`week`/`month` cộng khớp `412`; giữ `Asia/Ho_Chi_Minh` và tuần bắt đầu `Monday` (`2026-11-23`) kể cả khi query gửi `timeZone=UTC`. | Passed | Covered | — |
+| `TC-WF05-02` | Từ chối `400` (`result = null`) khi thiếu offset, `from == to`, `from > to` hoặc `groupBy` sai (`quarter`). | Passed | Covered | — |
+| `TC-WF05-03` | Kỳ rỗng trả `collections.amount = 0`, `paidOrders.count = 0`, `groups = []`, `dishes.items = []`, `quantityComplete = true`; không tự điền `0` cho các chỉ tiêu thiếu nguồn (`refunds.amount`, `netCollections.amount`, `netDishRevenue.amount` giữ `null`). | Passed | Partial | Thiếu nguồn hoàn tại bàn và lợi nhuận ròng toàn nhà hàng nên các tổng đầy đủ tương ứng trả `null`, chưa thể trả `0` hoàn chỉnh cho mọi chỉ tiêu tài chính. |
+| `TC-WF05-04` | Chỉ cộng khoản thu đã xác nhận (`412`, `5` đơn); giữ giao dịch ở đúng `start`, loại giao dịch ở `end`, loại `Pending`/`Failed` (`777`) và thu hộ tiền mặt chờ bàn giao (`108`/`200`); không cộng `CashReceived = 300` hoặc nhân `Sale = 200`; hạ `CashHandover` xuống `Pending` làm `collections.amount = null`, `knownAmount = 212`. | Passed | Partial | Dữ liệu đối soát PayOS là fixture và bước chuyển trạng thái chứng cứ tiền mặt dùng tiêm lỗi SQL, không chạy qua giao dịch PayOS/API xác nhận bàn giao trực tiếp. |
+| `TC-WF05-05` | Tách thời điểm thu (`PaidAt`) và hoàn (`RefundedAt`) qua hai kỳ; khi `OnlinePayments` ở `Paid` hoặc `RefundPending` vẫn giữ thu `412` kỳ gốc và `refunds.knownAmount = 0` kỳ sau; khi `Refunded` ghi nhận `nextCollections = 108`, `nextRefundsKnown = 50`, `nextNetCollectionsKnown = 58`, `netCollections.amount = null`. | Passed | Partial | Hoàn tiền mang về có writer được kiểm chứng; hoàn tại bàn (`GAP-02`) và tách tiền món/VAT/phí được hoàn (`GAP-03`) chưa có nguồn vận hành. |
+| `TC-WF05-06` | Truy vấn lặp trả kết quả bất biến; khi trùng mã giao dịch nhà cung cấp (`R6-TXN-2`) giữa tại bàn và mang về, cả hai bị loại khỏi `knownAmount` (`254`) và báo `collections.amount = null`. | Passed | Covered | — |
+| `TC-WF05-07` | Phân tổ và bộ lọc kênh khớp nhau: `DineIn = 254`, `Mixed = 108` (giữ nguyên hóa đơn đa kênh, không tự chia tiền), `Takeaway = 50`; tổng `412`. | Passed | Covered | — |
+| `TC-WF05-08` | Phân tổ và bộ lọc ca lịch sử đã đóng cùng nhóm không gắn ca: `shiftOne = 308`, `shiftTwo = 54`, `unassigned = 50`; tổng `412`. | Passed | Covered | — |
+| `TC-WF05-09` | Phân tổ và bộ lọc phương thức cộng khớp `collections`: `Cash = 200`, `BankTransfer = 212`; tách riêng khoản hoàn ở kỳ xác minh hoàn. | Passed | Covered | — |
+| `TC-WF05-10` | Xếp hạng món theo lượng bán hợp lệ giảm dần (`itemA = 4` đứng đầu, `Trà = 1`); không trừ `CancelledQuantity` lần hai từ `BillLine.Quantity`; đơn chuyển `Rejected` bị loại khỏi `/dishes` nhưng không xóa tiền thu `412` của `/sales`. | Passed | Covered | — |
+| `TC-WF05-11` | Đổi `OrderItem.UnitPriceSnapshot` sang `99999` không làm đổi `grossSales = 300`, tên tiếng Việt lịch sử `Bún bò lịch sử` hay hai biến thể giá+option `50` và `100` trên hóa đơn đã thu. | Passed | Covered | — |
+| `TC-WF05-12` | Giá vốn tổng dòng không nhân lại theo số lượng (`knownCost = 70` từ `50 + 20`); `knownProfit = 160` chỉ tính trên giao các dòng đủ cả `netSales` và `cost`; dòng thiếu COGS giữ `cost.amount = null`, `grossProfit.amount = null` kèm `DishCostUnavailable`; dòng `Quantity = 0` không tạo thiếu giá vốn giả. | Passed | Partial | `CogsSnapshot` là dữ liệu fixture; hệ thống chưa có writer ghi giá vốn vận hành từ nhập/xuất kho và định mức (`GAP-01`). |
+| `TC-WF05-13` | Giảm giá tính đúng một lần (`discountsKnown = 70`, không cộng trùng `BillAdjustment`; giảm giá món `itemA = 20`, `netSales = 280`); tách `dishRevenueKnown = 330`, `vatKnown = 26.83`, `serviceFeesKnown = 5.4`, `roundingAdjustment.knownAmount = -0.23`; `netDishRevenue.amount = null`. | Passed | Partial | Kiểm chứng công thức trên snapshot giảm giá giả lập; chưa có writer áp dụng khuyến mãi/voucher vận hành và chưa có phân bổ doanh thu hoàn (`GAP-03`). |
+| `TC-WF05-14` | Dòng giảm giá 100% có `netSales = 0`, giữ `cost = 20` đúng một lần, `grossProfit = -20` và `contributionMarginPercent = null` (mẫu số `0` trả N/A). | Passed | Partial | Dòng giảm 100% trong fixture chỉ mô phỏng tác động số học, chưa chứng minh luồng nghiệp vụ tặng món hoặc lợi nhuận gộp toàn nhà hàng. |
+| `TC-WF05-15` | Món đủ nguồn (`Món trả tiền`) trả `grossProfit = 20`, `contributionMarginPercent = 40` kèm cảnh báo `DishContributionBeforeRefunds`; món thiếu giá vốn (`itemA`) trả `contributionMarginPercent = null`. | Passed | Partial | Đã phủ tỷ suất đóng góp từng món trước hoàn tiền; chưa nghiệm thu lợi nhuận gộp và gross margin ròng cấp toàn nhà hàng (`F-WF05-05`). |
+| `TC-WF05-16` | Manager đang hoạt động tại nhà hàng A đọc được báo cáo của A (`412`), đúng `restaurantId`, không lẫn món hay doanh số của nhà hàng B. | Passed | Covered | — |
+| `TC-WF05-17` | Không có token trả `401` trên `/period`, `/sales`, `/dishes`; cả 6 tài khoản sai vai trò (`cashier`, `waiter`, `admin`, `kitchen`, `inventory`, `platform_admin`) đều bị chặn `403` với `result = null`. | Passed | Covered | — |
+| `TC-WF05-18` | Manager A gọi nhà hàng B bị `403`; khi tạm cấp phân công B thì đọc đúng `1080` và `10` phần món B, nhưng gửi route A kèm header `X-Restaurant-Id: B` vẫn bị `403` trên cả `/sales` và `/dishes`; thu hồi `IsActive = 0` tại A bị `403` ngay. | Passed | Covered | — |
+| `E2E-WF05-01` | Luồng tổng hợp qua HTTP Gateway → gRPC Billing/Ordering/Restaurant/Identity + SQL Server 2022 thật trên hai nhà hàng; kiểm tra `Cache-Control: no-store`, tính bất biến sau toàn bộ lượt thử và đối chiếu dấu vân tay 3 DB (`BillingDb`, `OrderingDb`, `RestaurantDb`) không bị thay đổi bởi báo cáo. | Passed | Partial | Hạ tầng container/SQL/gRPC/Gateway là thật, nhưng snapshot đối soát PayOS/ưu đãi/giá vốn dùng fixture tổng hợp và các khoảng trống nguồn `GAP-01..03` vẫn còn mở. |
+
+### Đối chiếu các tập dữ liệu cam kết DS-05a đến DS-05h
+
+| Tập dữ liệu | Phạm vi kiểm tra trong bộ R6 | Trạng thái |
+| --- | --- | --- |
+| `DS-05a` | Ca chính có đủ thu tiền mặt, chuyển khoản, mang về, nhiều ca, kênh `DineIn`/`Mixed`/`Takeaway`, nhiều dòng chung đơn và nhà hàng B tách biệt (`collections = 412` so với `1080`). | Thực thi Passed (`Partial` phần nguồn fixture) |
+| `DS-05b` | Kỳ sai định dạng/thiếu offset, `start == end`, `start > end`, `groupBy` không hợp lệ (`TC-WF05-02`). | Covered |
+| `DS-05c` | Kỳ rỗng không có giao dịch (`TC-WF05-03`): tổng đã biết `0`, danh sách rỗng, trường thiếu nguồn giữ `null`. | Partial (không ép `null` thành `0`) |
+| `DS-05d` | Giao dịch `Pending`, `Failed`, thu hộ tiền mặt `PendingHandover` và chứng cứ bàn giao chưa xác nhận (`TC-WF05-04`). | Partial (tiêm lỗi SQL cho trạng thái bàn giao) |
+| `DS-05e` | Phân quyền Manager hoạt động, ẩn danh `401`, 6 vai trò khác `403`, khác nhà hàng, lệch header `X-Restaurant-Id` và thu hồi phân công (`TC-WF05-16..18`). | Covered |
+| `DS-05f` | Biên nửa mở `[start, end)` (`R6-1` tại `start`, `R6-6` tại `end`) và thu/hoàn khác kỳ qua các trạng thái `Paid` → `RefundPending` → `Refunded` (`TC-WF05-01, 04, 05`). | Partial (thiếu hoàn tại bàn) |
+| `DS-05g` | Giảm giá/dòng giảm 100% không tính trùng `BillAdjustment`, thiếu `CogsSnapshot` trả `null` + cảnh báo, mẫu số `0` trả `null` (`TC-WF05-12..15`). | Partial (`GAP-01`, `GAP-03`) |
+| `DS-05h` | Giá bán + option lịch sử khi giá nguồn thay đổi, hủy một phần không trừ hai lần, đơn `Rejected` loại khỏi bảng món nhưng giữ dòng tiền đã thu (`TC-WF05-10, 11`). | Covered |
+
+### Bằng chứng R6 trước lượt kiểm tra độc lập
+
+Các kết quả Windows PowerShell 5.1, project và mã băm bên dưới do Antigravity ghi nhận, đã đối chiếu khớp biên bản cũ `TestResults/RestaurantReports/results-antigravity.json`. Bản chạy và bằng chứng mới nhất của Codex nằm ở mục kiểm tra độc lập sau bảng này.
+
+- `dotnet build Backend.sln -c Release`: đạt, **0 error** (có cảnh báo nullable CS8618/CS8603 sẵn có ngoài phạm vi khi build mới từ đầu).
+- `dotnet test Backend.sln -c Release --no-build --no-restore -m:1 --logger trx --results-directory TestResults/R6`: **1.485 passed, 0 failed, 104 skipped** trên 9 project kiểm thử (`TestResults/R6/*.trx`). 104 bài skipped là các SQL Server test opt-in cần biến kết nối riêng, không tính là đạt.
+- `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-RestaurantReports.ps1 -OutputDirectory TestResults/RestaurantReports`:
+  - Project cô lập thực tế: `report-r6-ac4abf7a72`, thời điểm đo `2026-11-25T18:38:05.1472335+00:00`.
+  - Kết quả: **19/19 ca `execution = Passed` (`0 Failed`, `0 NotRun`)**, phân loại nghiệm thu **`11 Covered`, `8 Partial`**, tổng cộng **64 HTTP checks đạt** (57 request API báo cáo `/period`, `/sales`, `/dishes` + 7 request đăng nhập tài khoản tổng hợp).
+  - `cleanupSucceeded = true`: đã xác minh bằng `docker ps -a`, `docker volume ls` và `docker images "report-r6-*"` không còn container, volume hay thẻ image thử nghiệm; toàn bộ container `backend-*` và volume của nhóm vẫn chạy nguyên vẹn.
+- Mã băm SHA-256 ghi nhận trong `results.json`:
+  - `scripts/Test-RestaurantReports.ps1`: `845E88F7B6D8F1862A1DEBDFC1E2D212E41016393140056151D0C6E87641512F`
+  - `Tests/Fixtures/RestaurantReports/BillingDb.sql`: `8E1F23C85550908EFCCE5477C2F6284BF6F0405CC523F904EA9556F328E2D581`
+  - `Tests/Fixtures/RestaurantReports/expected.json`: `06AB3525009C17AC8AE711515C51D0F8526AB812DC67D12FEF2DD6AC1B74E434`
+  - `Tests/Fixtures/RestaurantReports/OrderingDb.sql`: `B7AE56ABF3164A4902405DA49F4E6ADB93695E34955E25F38BA4032C7071A52D`
+  - `Tests/Fixtures/RestaurantReports/RestaurantDb.sql`: `E50AEE00E7184181AAD3F1F23F1D7B5A183448E154FD397D5EBE11C0139FF4B6`
+- Tích hợp CI: `.github/workflows/backend-ci.yml` bổ sung job `restaurant-reports` chạy `./scripts/Test-RestaurantReports.ps1 -OutputDirectory TestResults/RestaurantReports` trên `ubuntu-latest` và tải lên artifact `restaurant-report-acceptance` (`TestResults/RestaurantReports/results.json`). **Chưa chạy GitHub Actions trên remote** vì chưa commit/push; chưa kiểm thử FE hoặc gọi PayOS thật.
+
+### SQL/ERD, danh sách file và hướng dẫn review R6
+
+**Không có thay đổi schema.** Không thêm/sửa/xóa bảng, cột, kiểu dữ liệu, NULL/DEFAULT, PK/FK/UNIQUE/CHECK/index, quan hệ/cardinality hay dây ERD; không sửa `docker/sql/schema`, `docker/sql/upgrades`, model/DbContext hoặc repository SQL riêng. Các file `.sql` trong `Tests/Fixtures/RestaurantReports/` chỉ chứa lệnh `INSERT` dữ liệu giả lập chạy trong container thử nghiệm cô lập.
+
+File thay đổi/thêm mới của R6:
+
+- `.github/workflows/backend-ci.yml`
+- `scripts/Test-RestaurantReports.ps1`
+- `Tests/Fixtures/RestaurantReports/BillingDb.sql`
+- `Tests/Fixtures/RestaurantReports/OrderingDb.sql`
+- `Tests/Fixtures/RestaurantReports/RestaurantDb.sql`
+- `Tests/Fixtures/RestaurantReports/expected.json`
+- `docs/restaurant-performance-reports.md`
+- `docs/database-change-log.md`
+
+Hướng dẫn Gemini review độc lập R6:
+
+1. Tự tính lại từng con số trong `Tests/Fixtures/RestaurantReports/expected.json` từ ba file SQL fixture (`412`, `200`, `212`, `254`/`108`/`50`, `308`/`54`/`50`, `330`, `70`, `26.83`, `5.4`, `-0.23`, kỳ kế tiếp `108`/`50`/`58`, nhà hàng B `1080`, món chính `4`/`300`/`280`/`70`/`160`), xác nhận không có giá trị kỳ vọng nào lấy từ API đang kiểm thử.
+2. Kiểm tra cơ chế bảo vệ trong `scripts/Test-RestaurantReports.ps1`: nhãn project `report-r6-<10hex>` trước khi chạy SQL, không in mật khẩu ra stdout, dọn sạch container/volume/image tag `:test` và giữ nguyên môi trường `backend-*` của nhóm.
+3. Chạy lại lệnh PowerShell trên máy khác hoặc CI và đọc `TestResults/RestaurantReports/results.json`; đối chiếu rõ `execution = Passed` không đồng nghĩa nghiệm thu đủ các tiêu chí lợi nhuận/hoàn tiền đang `Partial` (`GAP-01..03`). Không tự sửa `Partial` thành `Covered` khi chưa triển khai writer nguồn thực tế.
+
+Tên commit đề xuất (chưa thực hiện commit): **Bổ sung bộ kiểm thử Docker và đối chiếu nghiệm thu báo cáo R6**.
+Mô tả: **Thêm script kiểm thử tổng hợp qua Gateway trên Docker với dữ liệu hai nhà hàng và số kỳ vọng độc lập, tích hợp job CI xuất biên bản kết quả và cập nhật bảng đối chiếu 18+1 tiêu chí BM04 cùng các giới hạn nguồn còn mở. Không thay đổi code nghiệp vụ hoặc schema.**
+
+
+### Kiểm tra độc lập sau bàn giao Antigravity — 2026-11-26
+
+Kết luận: các thay đổi của Antigravity giữ đúng phạm vi R6, không có thay đổi code nghiệp vụ, DTO/RPC hoặc schema. Việc dùng HttpClient và truyền fixture SQL UTF-8 bằng base64 giải quyết được khác biệt native argument/HTTP giữa Windows PowerShell5.1 và pwsh. Không cần quay về bản chỉ hỗ trợ PowerShell7.
+
+Đã bổ sung rào chắn cho bộ chạy:
+
+- Invoke-Native xác minh executable thực sự tồn tại, chọn một đường dẫn duy nhất nếu PATH có nhiều git.exe; phân biệt mã thoát mới với mã thoát cũ, không coi việc khởi chạy lỗi là exit0.
+- Xác minh container image yêu cầu cả hai lệnh inspect thành công, ID đúng dạng sha256 và trùng image vừa build; không chấp nhận hai chuỗi rỗng bằng nhau.
+- Login có cancellation10giây/lượt; readiness có giới hạn120giây và tối đa30lượt. Timeout không tạo ca kiểm thử Passed.
+- Dọn tag chỉ trong project ngẫu nhiên hiện tại, không force; lỗi xóa tag làm cleanupSucceeded=false và script thoát lỗi.
+- Đối chiếu fingerprint ngay sau hai GET đầu tiên trước tiêm lỗi, rồi đối chiếu lại sau khi phục hồi fixture. Fingerprint bao phủ các cột được SELECT trong Get-FinancialFingerprint (tiền/trạng thái hóa đơn, thanh toán, bàn giao, dòng món, sổ tiền mặt, đơn và phân công), không phải bằng chứng mọi byte/cột của ba database không thay đổi. Các UPDATE/DELETE trong script là setup/tiêm lỗi/phục hồi fixture, không phải luồng nghiệp vụ hay truy cập xuyên database trong production.
+
+Kiểm chứng độc lập trên bản script hiện tại:
+
+| Lượt | Lệnh / bằng chứng | Kết quả |
+| --- | --- | --- |
+| PowerShell7 trên Windows | Gọi trực tiếp & ./scripts/Test-RestaurantReports.ps1 -OutputDirectory TestResults/RestaurantReports/pwsh trong host PowerShell7 của lượt kiểm tra | 19 Passed,0 Failed,0 NotRun;64 HTTP;11 Covered/8 Partial. |
+| Windows PowerShell5.1 | powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test-RestaurantReports.ps1 -OutputDirectory TestResults/RestaurantReports/windows-powershell | 19 Passed,0 Failed,0 NotRun;64 HTTP;11 Covered/8 Partial. |
+| Kiểm mã băm | runnerSha256 của cả hai biên bản so với Get-FileHash script | Khớp cùng bản hiện tại. Biên bản pwsh mới nhất được sao sang TestResults/RestaurantReports/results.json; bản Antigravity cũ giữ riêng. |
+| Kiểm rào chắn | Trích chính các hàm trong script qua PowerShell AST rồi gọi git --version, git rev-parse với ref không tồn tại, executable không tồn tại, Assert-TestServer với container backend-sqlserver-1 và project thử khác | Chấp nhận exit0; từ chối exit khác0/executable thiếu/project khác. Chỉ docker inspect container nhóm, không chạy SQL vào đó. |
+| Kiểm dọn tài nguyên | docker ps -a và docker volume ls lọc nhãn project; docker image ls lọc đúng project của từng biên bản | Không còn container/volume/tag của hai lượt; cleanupSucceeded=true. backend-* của nhóm vẫn chạy. |
+| Build/test .NET R6 | Kiểm lại9 TRX của lượt đã chạy trong đợt R6: TestResults/R6/*.trx | 1485 đạt,0 lỗi,104 bỏ qua; không chạy lại .NET sau thay đổi chỉ ở runner/docs/CI/fixture, không sửa source C#. Không tính skipped là đạt. |
+
+Các lệnh Docker của hai lượt trên chạy Docker Engine thật, SQL Server thật và5 service thật; vẫn dùng các snapshot thanh toán/COGS/ưu đãi tổng hợp. Không chạy FE hoặc thanh toán/provider thật. Chưa chạy runner trên host Linux hay GitHub Actions remote; kiểm chứng pwsh trên Windows không thay thế bằng chứng CI Linux. Job CI đã cấu hình, cần kiểm tra khi người dùng push/mở PR.
+
+Đây là18 nhóm kiểm tra theo TC-WF05-01..18 và1 nhóm luồng tổng hợp, không phải19 phương thức xUnit mới; không đếm64 HTTP thành64 tiêu chí BM04. execution=Passed chứng minh assertion hiện tại đúng, không đồng nghĩa19/19 tiêu chí nghiệp vụ đã nghiệm thu đầy đủ. 8 nhóm Partial vẫn phải giữ rõ GAP-01..03, điều kiện kỳ rỗng, thao tác xác nhận thu tiền thật và lợi nhuận ròng toàn nhà hàng.
+
+**Không có thay đổi schema.** Giữ8 file R6 đã liệt kê; không sửa source nghiệp vụ, model/DbContext, SQL tạo mới/upgrade hoặc repo SQL riêng. git diff --check đạt. Giữ HEAD83c7c00 và branch feature/restaurant-performance-reports; chưa stage/commit/push. Tên/mô tả commit đề xuất R6 ở trên vẫn áp dụng, không tạo commit fix riêng.

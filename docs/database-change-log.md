@@ -774,3 +774,13 @@ Bằng chứng nghiệm thu cục bộ:
 ## 2026-11-25 — Hoàn thiện review R5
 
 **Không có thay đổi schema.** Chỉ sửa phạm vi cảnh báo theo kết quả lọc món, bổ sung test backend/Gateway cho bảng trống và tỷ suất âm/gộp cùng món. Không thêm/sửa/xóa bảng/cột/kiểu/NULL/default/khóa/index/quan hệ/cardinality/ERD, SQL tạo mới/upgrade/model/DbContext hoặc repo SQL riêng. SQL fixture chỉ dùng trong project Docker thử riêng đã dọn, không thay database nhóm. Chưa commit/push; chi tiết tại mục review R5 của tài liệu báo cáo.
+
+
+## 2026-11-26 — R6 bộ kiểm thử nghiệm thu Docker và đối chiếu BM04
+
+**Không có thay đổi schema.** Chỉ bổ sung dữ liệu fixture tổng hợp tại `Tests/Fixtures/RestaurantReports/`, script kiểm thử cô lập `scripts/Test-RestaurantReports.ps1`, cấu hình CI `.github/workflows/backend-ci.yml` và mục đối chiếu nghiệm thu R6 trong `docs/restaurant-performance-reports.md`. Không thêm/sửa/xóa bảng/cột/kiểu/NULL/default/PK/FK/UNIQUE/CHECK/index/quan hệ/cardinality hoặc dây ERD; không sửa model, DbContext, `docker/sql/schema`, `docker/sql/upgrades` hay repository SQL riêng; không tác động container và database `backend-*` của nhóm. Giữ nguyên HEAD `83c7c00`, chưa commit/push.
+
+
+### 2026-11-26 — Đối chiếu độc lập bộ chạy R6
+
+**Không có thay đổi schema.** Chỉ siết rào chắn native exit/image/readiness/cleanup và fingerprint trong runner, cập nhật bằng chứng kiểm thử PowerShell7/5.1 trong tài liệu hiện có. Không sửa bảng/cột/NULL/default/khóa/index/quan hệ/cardinality/ERD hoặc SQL production/model/DbContext/repo SQL riêng; fixture vẫn chỉ trong project thử đã dọn. Giữ HEAD83c7c00, chưa commit/push.
