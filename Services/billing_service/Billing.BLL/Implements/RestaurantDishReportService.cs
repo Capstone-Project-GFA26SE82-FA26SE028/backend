@@ -258,6 +258,10 @@ public sealed class RestaurantDishReportService(IRestaurantReportService periods
         try
         {
             var selected = rows.Where(value => !itemId.HasValue || value.ItemId == itemId).ToArray();
+            if (selected.Length > 0)
+            {
+                Warn(warnings, "DishContributionBeforeRefunds", "Lợi nhuận và tỷ suất từng món được tính trước hoàn tiền; chưa phải lợi nhuận ròng của nhà hàng.");
+            }
             var selectedComplete = itemId.HasValue
                 ? !unknownItemGap && !incompleteItems.Contains(itemId.Value) && selected.All(value => value.Quantity.HasValue)
                 : rankingComplete;

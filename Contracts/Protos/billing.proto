@@ -635,6 +635,8 @@ message DishReportItemInfo {
   ReportAmountInfo cost = 7;
   ReportAmountInfo gross_profit = 8;
   repeated DishReportPriceInfo prices = 9;
+  ReportAmountInfo discounts = 10;
+  optional string contribution_margin_percent = 11;
 }
 message DishReportReply {
   ReportPeriodReply period = 1;

@@ -1,6 +1,6 @@
 # Báo cáo hiệu quả hoạt động nhà hàng
 
-Trạng thái cập nhật 2026-11-25: R1 và bản hoàn thiện đã được commit đến 8e8d872. R2/R3/R4 được gom trong commit này; R4 đã bổ sung bảng món, nguồn snapshot Ordering và kiểm chứng Gateway/Docker. R5 sẽ được bàn giao trong commit riêng, chưa nằm trong phần R2–R4 này. Giá vốn vận hành còn thiếu writer, xem mục R4 cuối tài liệu. Các trạng thái bàn giao cũ bên dưới được giữ theo thời điểm kiểm chứng.
+Trạng thái cập nhật 2026-11-25: R1 và bản hoàn thiện đã được commit đến 8e8d872. R2–R4 đã được gộp trong commit 0286a09; R5 cùng các bản hoàn thiện review được đóng gói trong commit riêng kế tiếp, không tạo commit fix riêng; R4 đã bổ sung bảng món, nguồn snapshot Ordering và kiểm chứng Gateway/Docker. R5 bổ sung giảm giá và tỷ suất đóng góp từng món cho phần đủ nguồn; chưa nghiệm thu đủ lợi nhuận ròng toàn nhà hàng. Giá vốn vận hành còn thiếu writer, xem mục R4 cuối tài liệu. Các trạng thái bàn giao cũ bên dưới được giữ theo thời điểm kiểm chứng.
 
 ## R0: kết quả khảo sát nguồn, chưa triển khai báo cáo
 
@@ -775,3 +775,114 @@ Tên commit đề xuất: **Sửa độ đầy đủ từng món và đồng b�
 Mô tả: **Tách lỗi nguồn theo món khỏi lỗi chưa xác định, giữ số liệu nhất quán khi lọc; bổ sung tiền tệ VND, cảnh báo kênh và kiểm thử hồi quy qua Gateway/Docker. Không thay đổi schema.**
 
 Giữ nguyên branch feature/restaurant-performance-reports, HEAD 8e8d872; chưa commit/push.
+
+
+## R5 — Giảm giá và tỷ suất đóng góp từng món
+
+Ngày kiểm chứng: 2026-11-25. Branch feature/restaurant-performance-reports; HEAD 8e8d872 giữ nguyên. R2/R3/R4 đã có thay đổi chưa commit khi bắt đầu; không coi toàn bộ diff là riêng R5. Chỉ Backend, không sửa FE hoặc các luồng thu/hoàn/ưu đãi/kho.
+
+### Phạm vi và giới hạn so với BM04
+
+Đã đọc lại PDF BM04 mục 6.5, trang 16–21, nhất là F-WF05-05 và DS-05g. Phân biệt hai chỉ tiêu:
+
+- Theo từng món: netSales = lượng hợp lệ × giá snapshot − giảm giá đã phân bổ hợp lệ; grossProfit = netSales − giá vốn tổng dòng đủ nguồn. Đây là đóng góp trước hoàn tiền, giữ ý nghĩa R4, không thay bằng lợi nhuận ròng toàn nhà hàng.
+- Toàn nhà hàng theo cam kết: doanh thu ròng phải trừ phần doanh thu món được hoàn trong kỳ xác minh; gross profit còn phải trừ chi phí nguyên liệu lịch sử đủ nguồn. Chưa có nguồn xác minh hoàn tại bàn, chưa có phân bổ tiền món/VAT/phí của khoản hoàn mang về và chưa có writer COGS hoàn chỉnh. NetDishRevenue.Amount vẫn null; không coi netSales của bảng món là chỉ tiêu này. R5 chưa được nghiệm thu đủ F-WF05-05/TC-WF05-13–15.
+
+Không suy ra chi phí nguyên liệu đã sử dụng hay hoàn kho từ trạng thái hủy món; không mở rộng nghiệp vụ kho. Điểm phân biệt chi phí thực tế của món hủy đã được gửi hỏi người dùng, chưa có quyết định mới trong lượt này. Phần triển khai không phụ thuộc giả định đó.
+
+### API và hành vi bổ sung
+
+Giữ endpoint GET /api/restaurants/{restaurantId}/reports/dishes, quyền Manager đúng nhà hàng và toàn bộ bộ lọc R3/R4.
+
+- Thêm items[].discounts: ReportAmountDTO, gồm knownAmount/amount/isComplete. Chỉ cộng giảm giá suy được từ cùng dòng có lượng và netSales đủ nguồn. Không lấy tổng gross đã biết trừ net của một tập dòng khác. Không cộng BillAdjustment.Amount vào giảm giá lần nữa, không chạy lại Promotion/Voucher hiện tại.
+- Thêm items[].contributionMarginPercent: grossProfit / netSales × 100. Tính trên tổng của món, không lấy trung bình phần trăm các dòng. Giữ decimal, không áp một quy tắc làm tròn nghiệp vụ mới. Trả null khi netSales bằng 0 hoặc thiếu netSales/giá vốn/lượng.
+- Thêm cảnh báo DishContributionBeforeRefunds để phân biệt với lợi nhuận ròng toàn nhà hàng.
+- Dòng giảm 100% vẫn giữ giá vốn tổng dòng đúng một lần; không nhân cost với quantity. Không suy ra loại Complimentary từ giá 0 hoặc giảm 100% khi không có chứng cứ phân loại ưu đãi. Test mô phỏng tác động tài chính của dòng được giảm toàn bộ, chưa chứng minh luồng tặng món đã có.
+- Hủy làm lượng khác snapshot mà chưa có phân bổ giảm giá/giá vốn tương ứng: financial amount và margin null; không tự chia tỷ lệ. Dữ liệu phân bổ không khớp header cũng không dùng tính net đầy đủ. Kết quả đã xác minh của thu tiền không bị xóa.
+- Proto DishReportItemInfo thêm field10 discounts và optional field11 contribution_margin_percent; không đổi số field cũ. Gateway chỉ map dữ liệu, công thức ở BLL.
+
+### Các file sửa riêng trong R5
+
+| File | Mục đích |
+| --- | --- |
+| Contracts/Protos/billing.proto | Bổ sung hai field phản hồi, giữ hợp đồng cũ. |
+| Services/billing_service/Billing.Common/DTOs/RestaurantDishReportDTO.cs | DTO giảm giá và tỷ suất nullable. |
+| Services/billing_service/Billing.BLL/Implements/DishReportAggregation.cs | Tổng giảm giá theo dòng đủ nguồn và tỷ suất đóng góp theo tổng món. |
+| Services/billing_service/Billing.BLL/Implements/RestaurantDishReportService.cs | Cảnh báo phân biệt chỉ tiêu trước hoàn tiền. |
+| Services/billing_service/Billing.API/GrpcServices/RestaurantReportGrpcService.cs | Map đầy đủ field mới và giữ trạng thái nullable. |
+| Services/api_gateway/ApiGateway/DTOs/Billing/RestaurantDishReportDTO.cs | Đồng bộ DTO HTTP. |
+| Services/api_gateway/ApiGateway/Controllers/Billing/RestaurantReportController.cs | Map field mới từ RPC, không tính nghiệp vụ ở controller. |
+| Tests/Billing.Tests/RestaurantDishReportServiceTests.cs | Thêm5 regression nghiệp vụ R5. |
+| Tests/Restaurant.Tests/RestaurantDishReportFlowTests.cs | Thêm1 test xuyên Gateway/Billing/Ordering/Restaurant kiểm field mới và financial thiếu nguồn. |
+| docs/restaurant-performance-reports.md | Hành vi, bằng chứng, giới hạn và hướng dẫn review. |
+| docs/database-change-log.md | Xác nhận không thay schema. |
+
+Không thêm/xóa file riêng trong R5. Một số file ở trạng thái untracked do R2/R3/R4 chưa commit, được tiếp tục sửa; không phải toàn bộ nội dung mới của R5.
+
+### Kiểm thử thực tế
+
+| Phạm vi | Dữ liệu/điều kiện và kết quả |
+| --- | --- |
+| R5DiscountIsCountedOnceAndMarginUsesRevenueAfterDiscountExcludingVat | Snapshot gross200/discount20/cost50 và BillAdjustment20. Discounts20, net180, profit130, margin130/180×100; không trừ điều chỉnh lần2 hoặc cộng VAT vào doanh thu món. |
+| R5FullyDiscountedLineKeepsItsHistoricalCostOnceAndMarginIsNull | Dòng quantity2/gross200/discount200/cost50 cùng một dòng trả tiền100/cost40 trong bill có thanh toán dương. Tổng net100/cost90/profit10; riêng dòng giảm toàn bộ net0/profit−50/marginnull. |
+| R5MissingCostPreservesDiscountRevenueButDoesNotInventProfitOrMargin | Discount20/net180 vẫn rõ; cost/profit/marginnull và cảnh báo thiếu cost. |
+| R5CancellationDoesNotProrateDiscountOrCostAndKnownDiscountUsesOnlyKnownRows | Lượng còn1 thay snapshot2, có dòng khác cùng món đủ nguồn. Không chia discount20/cost50; discount/net/cost/profit đầy đủ null; knownDiscount0/knownNet100/knownProfit60 chỉ từ dòng đủ nguồn. |
+| R5InvalidDiscountAllocationDoesNotEraseVerifiedQuantityOrInventFinancials | Header20 nhưng line21: lượng2 vẫn rõ; discount/net/profit/marginnull. |
+| R5DiscountAndMissingCostCrossTheGatewayWithoutInventingNetProfit | TestServer với repository SQLite thật, client RPC thật tới Ordering/Restaurant, Identity giả. HTTP200, discount20/net180/profit130/margin đúng; sales collections196/VAT16/netDishRevenuenull; bỏ cost thì profit/marginnull. |
+
+Lệnh và kết quả:
+
+- dotnet test Tests/Billing.Tests/Billing.Tests.csproj -c Release --filter FullyQualifiedName~RestaurantDishReportServiceTests: 31 đạt, 0 lỗi, 0 bỏ qua ở lần chạy chọn lọc ban đầu; fixture dòng giảm toàn bộ sau đó được làm rõ thành bill có dòng trả tiền và chạy lại trong toàn solution.
+- dotnet test Tests/Restaurant.Tests/Restaurant.Tests.csproj -c Release --filter "FullyQualifiedName~R5DiscountAndMissingCostCrossTheGateway|FullyQualifiedName~DishReportUsesRealOrderingSnapshots": 2 đạt, 0 lỗi, 0 bỏ qua.
+- dotnet build Backend.sln -c Release: đạt, 0 warning, 0 error trong lần incremental build được ghi nhận. Docker build sạch có cảnh báo nullable CS8603 có sẵn tại Shared.Persistence/Repositories/GenericRepository.cs:139; không sửa ngoài phạm vi.
+- dotnet test Backend.sln -c Release --no-build --no-restore -m:1 --logger trx: 1482 đạt, 0 lỗi, 104 bỏ qua trên9 project. Không tính SQL opt-in bị bỏ qua là đạt.
+- Docker project thử riêng, image build từ working tree, SQL Server và Identity thật: hồi quy R2 12report+2login và2 GET đồng thời; hồi quy R4 24HTTP gồm2login; quyền6HTTP gồm login; riêng R5 12HTTP gồm2login, tất cả đạt. R5 thử Cash discount20/net180/cost50/profit130, thiếu cost, hủy thêm không chia tiền, allocation sai; bill Mixed có dòng giảm toàn bộ gross50/discount50/cost20/profit−20/marginnull và dòng trả tiền50/cost30/profit20, tổng net50/cost50/profit0. Request lặp không sửa số tiền/trạng thái bill. Cashier403, anonymous401; scope khác nhà hàng đã hồi quy trước đó. Image ID Billing/Gateway/Ordering khớp tag vừa build.
+- Dữ liệu thanh toán, giá vốn, giảm giá và BillAdjustment trong các test là fixture tổng hợp. Không gọi PayOS thật, không tạo ưu đãi qua API vận hành, không thử FE hoặc CI remote. Không dùng các fixture này để tuyên bố nguồn giá vốn/món tặng/hoàn tiền đã hoàn chỉnh.
+
+### Các thay đổi cần cập nhật trên SQL/ERD
+
+**Không có thay đổi schema.** Không thêm/sửa/xóa bảng, cột, NULL/default, PK/FK/UNIQUE/CHECK/index, quan hệ/cardinality/dây ERD. Không sửa SQL tạo mới/upgrade/model/DbContext hoặc repo SQL riêng; không áp thay đổi database nhóm. SQL ghi fixture chỉ chạy trong project Docker tách biệt và được dọn sau kiểm thử.
+
+### Hướng dẫn Gemini kiểm tra lại R5
+
+1. Chỉ review11 file ở bảng trên cho phần R5; giữ nguyên thay đổi R2/R3/R4 chưa commit. Không xem tổng git diff là một đợt mới.
+2. Mở DishReportAggregation.Item: knownDiscount phải dùng cùng dòng có net/quantity, margin chỉ đủ nguồn/net khác0; không nhân cost, không tính trung bình phần trăm hoặc mặc định costnull=0 cho tổng đầy đủ.
+3. Truy DTO → proto fields10/11 → RestaurantReportGrpcService.GetDishes → RestaurantReportController.GetDishes. Xác minh null optional không bị đổi thành0.
+4. Chạy hai lệnh test chọn lọc trên và toàn solution. Phân biệt mock/SQLite/Identity giả với Docker SQL thật, dữ liệu seed/fixture và giao dịch provider thật.
+5. Kiểm5 test R5 và test Gateway mới: allocation khớp/sai, dòng giảm100%, cost thiếu, lượng hủy thay đổi; đối chiếu sales đã xác minh và NetDishRevenue vẫn thiếu nguồn. Không coi contributionMarginPercent là financial gross margin theo F-WF05-05.
+6. Báo riêng các khoảng trống: writer giá vốn và ưu đãi/món tặng, phân bổ doanh thu hoàn, chi phí món hủy thực tế. Không tự thay đổi schema hoặc nghiệp vụ để làm đầy số liệu. R6 chưa triển khai/đối chiếu đủ18+1 ca cam kết.
+
+Tên commit đề xuất: **Bổ sung giảm giá và tỷ suất đóng góp trong báo cáo món**.
+Mô tả: **Tổng hợp giảm giá theo snapshot đúng một lần, trả tỷ suất đóng góp khi đủ nguồn và giữ null khi thiếu giá vốn hoặc doanh thu bằng0; đồng bộ Gateway/gRPC và bổ sung kiểm thử nghiệp vụ, Docker. Chưa hoàn chỉnh lợi nhuận ròng toàn nhà hàng do thiếu nguồn. Không thay đổi schema.**
+
+Đã dọn container/network/volume và file credential của project Docker thử riêng; các container backend-* của nhóm vẫn chạy, không bị thay thế hoặc xóa volume. git diff --check đạt. Chưa stage/commit/push; giữ HEAD8e8d872 và toàn bộ thay đổi có sẵn.
+
+
+### Hoàn thiện sau review R5 — 2026-11-25
+
+| Nhận xét | Xác minh và xử lý |
+| --- | --- |
+| R5-F01 | Đã tái hiện bằng test R5EmptyItemSelectionDoesNotEmitContributionWarningForOtherItems: trước sửa thất bại Assert.DoesNotContain vì lọc ItemId không có lượt bán vẫn trả DishContributionBeforeRefunds. RestaurantDishReportService.GetDishes chuyển điều kiện sau khi lọc, dùng selected.Length > 0; không xóa các cảnh báo thiếu nguồn khác. Test còn xác nhận món có kết quả vẫn giữ cảnh báo. |
+| R5-F02 | Không phải lỗi công thức backend. Giữ decimal và số âm, không làm tròn hoặc chặn về0. Thêm R5PositiveRevenueBelowCostKeepsNegativeContributionMargin: gross200/discount160/net40/cost50/profit−10/margin−25%. Thêm R5SameItemFullyDiscountedAndPaidLinesUseCombinedProfitAndRevenueForMargin: cùng ItemId trong cùng bill, gross100/discount100/net0/cost30 và gross100/net100/cost30; kết quả gross200/discount100/net100/cost60/profit40/margin40%. Không sửa FE. FE cần format phần trăm theo hiển thị và chấp nhận số âm/null; đây là lưu ý tích hợp, chưa kiểm thử FE. |
+| R5-F03 | Giữ giới hạn nguồn đã báo. Tìm lại writer trong Services: BillService.Create gán CogsSnapshot=null, refresh giữ hoặc đặt null; không tìm thấy writer áp dụng BillAdjustment hay xác minh Refund tại bàn. Không suy ra nguồn vận hành đầy đủ từ fixture. Chưa bổ sung cost/grossProfit/grossMarginPercent toàn nhà hàng hoặc thay NetDishRevenue.Amount=null. R5 chưa nghiệm thu đủ F-WF05-05. |
+
+File sửa riêng trong lượt review: RestaurantDishReportService.cs; RestaurantDishReportServiceTests.cs; RestaurantDishReportFlowTests.cs (assert HTTP bảng trống không kèm cảnh báo đóng góp); tài liệu báo cáo này và database-change-log.md. Không sửa DTO/proto/công thức/SQL trong lượt này; toàn bộ thay đổi R2–R5 trước đó được giữ nguyên.
+
+Kiểm thử thực tế:
+
+- Toàn solution: dotnet test Backend.sln -c Release --no-build --no-restore -m:1 --logger trx: **1485 đạt, 0 lỗi, 104 bỏ qua**,9project. Bỏ qua không tính là đạt.
+
+- dotnet build Backend.sln -c Release: đạt, 0warning/0error trong lần incremental build này.
+- dotnet test Tests/Billing.Tests/Billing.Tests.csproj -c Release --no-build --no-restore --filter FullyQualifiedName~RestaurantDishReportServiceTests: 34passed,0failed,0skipped.
+- dotnet test Tests/Restaurant.Tests/Restaurant.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName~R5DiscountAndMissingCostCrossTheGateway|FullyQualifiedName~DishReportUsesRealOrderingSnapshots": 2passed,0failed,0skipped. Pipeline TestServer dùng repository SQLite và RPC thật giữa các host, Identity giả; không phải gọi database service khác từ production.
+- Docker mới từ working tree, SQL Server/Identity/Gateway thật, fixture tổng hợp: hồi quy R2 (12report+2login và2GET đồng thời), R4 (24HTTP gồm2login), quyền (6HTTP gồm login), R5 (12HTTP gồm2login) đều đạt; kiểm review mới4HTTP gồm login đạt: itemId không bán trả items[] không có DishContributionBeforeRefunds, món đang bán vẫn có cảnh báo, tỷ suất âm−25 và cùng món tổng hợp40.
+- Không gọi PayOS thật, chưa chạy FE/CI remote; nguồn ưu đãi/COGS/hoàn tiền thiếu vẫn giữ nguyên. Đã dọn container/network/volume và credential của project thử riêng sau khi xác minh đúng project label; backend-* của nhóm vẫn chạy. Không sửa database nhóm.
+
+**Không có thay đổi schema.** Không đổi bảng/cột/kiểu/NULL/default/khóa/index/quan hệ/cardinality/ERD hoặc file SQL/upgrade/model.
+
+Gemini kiểm lại: chạy3 test mới nêu trên và pipeline; đối chiếu chỉ cảnh báo đóng góp theo selected, các cảnh báo thiếu nguồn khác không bị bỏ; xác nhận −25% và40% nguyên giá trị qua backend, không suy từ đó thành lợi nhuận ròng nhà hàng. Không sửa FE hoặc mở rộng writer kho/ưu đãi/hoàn tiền trong review này.
+
+Tên commit đề xuất: **Sửa phạm vi cảnh báo báo cáo món và bổ sung kiểm thử tỷ suất**.
+Mô tả: **Chỉ cảnh báo đóng góp khi bảng món có kết quả; bổ sung hồi quy tỷ suất âm, gộp dòng giảm100% và dòng trả tiền cùng món, kiểm chứng Gateway/Docker. Giữ nguyên giới hạn nguồn và schema.**
+
+Giữ nguyên branch feature/restaurant-performance-reports, HEAD8e8d872; chưa stage/commit/push.

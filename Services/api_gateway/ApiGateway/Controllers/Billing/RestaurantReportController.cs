@@ -64,7 +64,8 @@ public sealed class RestaurantReportController(RestaurantReportGrpc.RestaurantRe
                             Name = option.Name,
                             Quantity = option.Quantity,
                             ExtraPrice = decimal.Parse(option.ExtraPrice, CultureInfo.InvariantCulture)
-                        }).ToArray())).ToArray())).ToArray(),
+                        }).ToArray())).ToArray(), Map(item.Discounts), item.HasContributionMarginPercent
+                        ? decimal.Parse(item.ContributionMarginPercent, CultureInfo.InvariantCulture) : null)).ToArray(),
                 reply.Warnings.Select(value => new ReportWarningDTO(value.Code, value.Message)).ToArray());
         }, ct);
     }

@@ -56,11 +56,17 @@ public sealed class RestaurantReportGrpcService(IRestaurantReportService service
                 GrossSales = Map(item.GrossSales),
                 NetSales = Map(item.NetSales),
                 Cost = Map(item.Cost),
-                GrossProfit = Map(item.GrossProfit)
+                GrossProfit = Map(item.GrossProfit),
+                Discounts = Map(item.Discounts)
             };
             if (item.Quantity.Quantity.HasValue)
             {
                 mapped.Quantity = item.Quantity.Quantity.Value.ToString(CultureInfo.InvariantCulture);
+            }
+
+            if (item.ContributionMarginPercent.HasValue)
+            {
+                mapped.ContributionMarginPercent = item.ContributionMarginPercent.Value.ToString(CultureInfo.InvariantCulture);
             }
 
             mapped.Names.AddRange(item.Names);

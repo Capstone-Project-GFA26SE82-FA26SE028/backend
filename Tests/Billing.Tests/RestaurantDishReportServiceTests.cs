@@ -404,6 +404,155 @@ public sealed class RestaurantDishReportServiceTests
         Assert.Contains(selected.Warnings, value => value.Code == "ExclusiveChannelFilter");
     }
 
+    [Fact]
+    public async Task R5DiscountIsCountedOnceAndMarginUsesRevenueAfterDiscountExcludingVat()
+    {
+        var fixture = new Fixture();
+        fixture.SetDiscount(20);
+        fixture.Payment.Bill.BillAdjustments.Add(new BillAdjustment
+        {
+            BillAdjustmentId = Guid.NewGuid(),
+            BillId = fixture.Payment.BillId,
+            Amount = 20,
+            Type = "Discount",
+            RuleSnapshot = "{}"
+        });
+        var item = Assert.Single((await fixture.Get()).Items);
+        Assert.Equal(200m, item.GrossSales.Amount);
+        Assert.Equal(20m, item.Discounts.Amount);
+        Assert.Equal(180m, item.NetSales.Amount);
+        Assert.Equal(50m, item.Cost.Amount);
+        Assert.Equal(130m, item.GrossProfit.Amount);
+        Assert.Equal(130m / 180m * 100m, item.ContributionMarginPercent);
+    }
+
+    [Fact]
+    public async Task R5FullyDiscountedLineKeepsItsHistoricalCostOnceAndMarginIsNull()
+    {
+        var fixture = new Fixture();
+        fixture.SetDiscount(200);
+        var additional = fixture.AddBill(Guid.NewGuid(), 100, 40);
+        fixture.Repository.Payments.Remove(additional);
+        var paidLine = additional.Bill.BillLines.Single();
+        paidLine.BillId = fixture.Payment.BillId;
+        paidLine.Bill = fixture.Payment.Bill;
+        fixture.Payment.Bill.BillLines.Add(paidLine);
+        fixture.Payment.Bill.SubTotal += 100;
+        fixture.Payment.Bill.TotalAmount += 100;
+        fixture.Payment.Amount += 100;
+        var report = await fixture.Get();
+        Assert.Equal(100m, report.Items.Sum(value => value.NetSales.Amount));
+        Assert.Equal(90m, report.Items.Sum(value => value.Cost.Amount));
+        Assert.Equal(10m, report.Items.Sum(value => value.GrossProfit.Amount));
+        var item = report.Items.Single(value => value.ItemId == fixture.ItemId);
+        Assert.Equal(2m, item.Quantity.Quantity);
+        Assert.Equal(200m, item.Discounts.Amount);
+        Assert.Equal(0m, item.NetSales.Amount);
+        Assert.Equal(50m, item.Cost.Amount);
+        Assert.Equal(-50m, item.GrossProfit.Amount);
+        Assert.Null(item.ContributionMarginPercent);
+    }
+
+    [Fact]
+    public async Task R5MissingCostPreservesDiscountRevenueButDoesNotInventProfitOrMargin()
+    {
+        var fixture = new Fixture();
+        fixture.SetDiscount(20);
+        fixture.Line.CogsSnapshot = null;
+        var result = await fixture.Get();
+        var item = Assert.Single(result.Items);
+        Assert.Equal(20m, item.Discounts.Amount);
+        Assert.Equal(180m, item.NetSales.Amount);
+        Assert.Null(item.Cost.Amount);
+        Assert.Null(item.GrossProfit.Amount);
+        Assert.Null(item.ContributionMarginPercent);
+        Assert.Contains(result.Warnings, value => value.Code == "DishCostUnavailable");
+    }
+
+    [Fact]
+    public async Task R5CancellationDoesNotProrateDiscountOrCostAndKnownDiscountUsesOnlyKnownRows()
+    {
+        var fixture = new Fixture();
+        fixture.SetDiscount(20);
+        fixture.SetOrder(cancelled: 2);
+        fixture.AddBill(fixture.ItemId, 100, 40);
+        var item = Assert.Single((await fixture.Get()).Items);
+        Assert.Equal(2m, item.Quantity.Quantity);
+        Assert.Equal(100m, item.NetSales.KnownAmount);
+        Assert.Null(item.NetSales.Amount);
+        Assert.Equal(0m, item.Discounts.KnownAmount);
+        Assert.Null(item.Discounts.Amount);
+        Assert.Null(item.Cost.Amount);
+        Assert.Equal(60m, item.GrossProfit.KnownAmount);
+        Assert.Null(item.GrossProfit.Amount);
+        Assert.Null(item.ContributionMarginPercent);
+    }
+
+    [Fact]
+    public async Task R5InvalidDiscountAllocationDoesNotEraseVerifiedQuantityOrInventFinancials()
+    {
+        var fixture = new Fixture();
+        fixture.SetDiscount(20);
+        fixture.Line.DiscountAllocated = 21;
+        var item = Assert.Single((await fixture.Get()).Items);
+        Assert.Equal(2m, item.Quantity.Quantity);
+        Assert.Null(item.Discounts.Amount);
+        Assert.Null(item.NetSales.Amount);
+        Assert.Null(item.GrossProfit.Amount);
+        Assert.Null(item.ContributionMarginPercent);
+    }
+
+    [Fact]
+    public async Task R5EmptyItemSelectionDoesNotEmitContributionWarningForOtherItems()
+    {
+        var fixture = new Fixture();
+        var result = await fixture.Get(Guid.NewGuid());
+        Assert.Empty(result.Items);
+        Assert.DoesNotContain(result.Warnings, value => value.Code == "DishContributionBeforeRefunds");
+        Assert.Contains((await fixture.Get(fixture.ItemId)).Warnings,
+            value => value.Code == "DishContributionBeforeRefunds");
+    }
+
+    [Fact]
+    public async Task R5PositiveRevenueBelowCostKeepsNegativeContributionMargin()
+    {
+        var fixture = new Fixture();
+        fixture.SetDiscount(160);
+        var item = Assert.Single((await fixture.Get(fixture.ItemId)).Items);
+        Assert.Equal(200m, item.GrossSales.Amount);
+        Assert.Equal(160m, item.Discounts.Amount);
+        Assert.Equal(40m, item.NetSales.Amount);
+        Assert.Equal(50m, item.Cost.Amount);
+        Assert.Equal(-10m, item.GrossProfit.Amount);
+        Assert.Equal(-25m, item.ContributionMarginPercent);
+    }
+
+    [Fact]
+    public async Task R5SameItemFullyDiscountedAndPaidLinesUseCombinedProfitAndRevenueForMargin()
+    {
+        var fixture = new Fixture();
+        fixture.Line.Quantity = 1;
+        fixture.Line.CogsSnapshot = 30;
+        fixture.Payment.Bill.SubTotal = 100;
+        fixture.SetDiscount(100);
+        var additional = fixture.AddBill(fixture.ItemId, 100, 30);
+        fixture.Repository.Payments.Remove(additional);
+        var paidLine = additional.Bill.BillLines.Single();
+        paidLine.BillId = fixture.Payment.BillId;
+        paidLine.Bill = fixture.Payment.Bill;
+        fixture.Payment.Bill.BillLines.Add(paidLine);
+        fixture.Payment.Bill.SubTotal += 100;
+        fixture.Payment.Bill.TotalAmount += 100;
+        fixture.Payment.Amount += 100;
+        var item = Assert.Single((await fixture.Get(fixture.ItemId)).Items);
+        Assert.Equal(200m, item.GrossSales.Amount);
+        Assert.Equal(100m, item.Discounts.Amount);
+        Assert.Equal(100m, item.NetSales.Amount);
+        Assert.Equal(60m, item.Cost.Amount);
+        Assert.Equal(40m, item.GrossProfit.Amount);
+        Assert.Equal(40m, item.ContributionMarginPercent);
+    }
+
     private sealed class Fixture : IRestaurantReportContextClient, IRestaurantReportItemsClient
     {
         public Guid RestaurantId { get; } = Guid.NewGuid();
@@ -460,6 +609,14 @@ public sealed class RestaurantDishReportServiceTests
                 : []);
             Repository.Payments.Add(payment);
             return payment;
+        }
+
+        public void SetDiscount(decimal discount)
+        {
+            Payment.Bill.DiscountAmount = discount;
+            Line.DiscountAllocated = discount;
+            Payment.Bill.TotalAmount = Payment.Bill.SubTotal - discount + Payment.Bill.VatAmount;
+            Payment.Amount = Payment.Bill.TotalAmount;
         }
 
         public void SetOrder(int cancelled = 1, string status = "Confirmed", string channel = "DineIn")

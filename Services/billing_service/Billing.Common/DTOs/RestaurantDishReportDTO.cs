@@ -9,7 +9,8 @@ public sealed record DishPriceSnapshotDTO(decimal UnitPrice, IReadOnlyList<BillO
 
 public sealed record DishReportItemDTO(Guid ItemId, IReadOnlyList<string> Names,
     ReportQuantityDTO Quantity, ReportAmountDTO GrossSales, ReportAmountDTO NetSales,
-    ReportAmountDTO Cost, ReportAmountDTO GrossProfit, IReadOnlyList<DishPriceSnapshotDTO> Prices);
+    ReportAmountDTO Cost, ReportAmountDTO GrossProfit, IReadOnlyList<DishPriceSnapshotDTO> Prices,
+    ReportAmountDTO Discounts, decimal? ContributionMarginPercent);
 
 public sealed record RestaurantDishReportDTO(ReportPeriodDTO Period, string Currency, SalesReportFilterDTO Filters,
     Guid? ItemId, bool QuantityComplete, IReadOnlyList<DishReportItemDTO> Items, IReadOnlyList<ReportWarningDTO> Warnings);

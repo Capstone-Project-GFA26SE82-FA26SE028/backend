@@ -764,3 +764,13 @@ Bằng chứng nghiệm thu cục bộ:
 ## 2026-11-25 — Hoàn thiện review R4
 
 **Không có thay đổi schema.** Chỉ tách completeness theo ItemId, bổ sung currency vào DTO/proto và cảnh báo lọc kênh; không thêm/sửa/xóa bảng/cột/NULL/default/khóa/index/quan hệ/cardinality/ERD. Không sửa SQL tạo mới/upgrade/model hoặc database nhóm. Dữ liệu tổng hợp Docker riêng chỉ phục vụ kiểm thử, không phải migration. Chi tiết kết quả tại docs/restaurant-performance-reports.md. Chưa commit/push.
+
+
+## 2026-11-25 — R5 giảm giá và tỷ suất đóng góp từng món
+
+**Không có thay đổi schema.** Chỉ thêm field DTO/proto cho discounts và contributionMarginPercent, tổng hợp chỉ đọc và kiểm thử. Không thêm/sửa/xóa bảng/cột/NULL/default/PK/FK/UNIQUE/CHECK/index/quan hệ/cardinality/dây ERD; không sửa model, DbContext, SQL tạo mới/upgrade/Docker hoặc repo SQL riêng. BillAdjustment, DiscountAllocated, CogsSnapshot đều là bảng/cột đã có; đọc hay tạo fixture không có nghĩa tạo bảng/cột mới. Dữ liệu fixture chỉ được ghi vào SQLite và SQL Server của project Docker thử riêng, không thay database nhóm. Chưa commit/push. Chi tiết và giới hạn nguồn xem R5 trong docs/restaurant-performance-reports.md.
+
+
+## 2026-11-25 — Hoàn thiện review R5
+
+**Không có thay đổi schema.** Chỉ sửa phạm vi cảnh báo theo kết quả lọc món, bổ sung test backend/Gateway cho bảng trống và tỷ suất âm/gộp cùng món. Không thêm/sửa/xóa bảng/cột/kiểu/NULL/default/khóa/index/quan hệ/cardinality/ERD, SQL tạo mới/upgrade/model/DbContext hoặc repo SQL riêng. SQL fixture chỉ dùng trong project Docker thử riêng đã dọn, không thay database nhóm. Chưa commit/push; chi tiết tại mục review R5 của tài liệu báo cáo.

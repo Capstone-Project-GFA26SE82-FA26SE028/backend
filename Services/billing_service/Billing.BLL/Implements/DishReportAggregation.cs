@@ -21,8 +21,12 @@ internal static class DishReportAggregation
         var gross = rows.Sum(value => (value.Quantity ?? 0) * value.UnitPrice);
         var net = rows.Sum(value => value.NetSales ?? 0);
         var cost = rows.Sum(value => value.Cost ?? 0);
+        var discounts = rows.Where(value => value.Quantity.HasValue && value.NetSales.HasValue)
+            .Sum(value => value.Quantity!.Value * value.UnitPrice - value.NetSales!.Value);
         var profit = rows.Where(value => value.NetSales.HasValue && value.Cost.HasValue)
             .Sum(value => value.NetSales!.Value - value.Cost!.Value);
+        var profitComplete = quantityComplete && rows.All(value => value.NetSales.HasValue && value.Cost.HasValue);
+        decimal? margin = profitComplete && net != 0 ? profit / net * 100m : null;
         return new DishReportItemDTO(rows[0].ItemId,
             rows.Select(value => value.Name).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
             new ReportQuantityDTO(quantity, quantityComplete ? quantity : null),
@@ -31,6 +35,7 @@ internal static class DishReportAggregation
             new ReportAmountDTO(cost, quantityComplete && rows.All(value => value.Cost.HasValue) ? cost : null),
             new ReportAmountDTO(profit, quantityComplete && rows.All(value => value.NetSales.HasValue && value.Cost.HasValue) ? profit : null),
             rows.Select(value => new DishPriceSnapshotDTO(value.UnitPrice, value.Options.OrderBy(option => option.OptionId).ToArray()))
-                .DistinctBy(value => JsonSerializer.Serialize(value)).OrderBy(value => value.UnitPrice).ToArray());
+                .DistinctBy(value => JsonSerializer.Serialize(value)).OrderBy(value => value.UnitPrice).ToArray(),
+            new ReportAmountDTO(discounts, quantityComplete && rows.All(value => value.NetSales.HasValue) ? discounts : null), margin);
     }
 }

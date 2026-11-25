@@ -107,6 +107,8 @@ public sealed partial class GatewayFlowTests
         using var unmatched = await client.GetAsync(path + "&itemId=" + Guid.NewGuid());
         using var unmatchedJson = JsonDocument.Parse(await unmatched.Content.ReadAsStringAsync());
         Assert.Empty(unmatchedJson.RootElement.GetProperty("result").GetProperty("items").EnumerateArray());
+        Assert.DoesNotContain(unmatchedJson.RootElement.GetProperty("result").GetProperty("warnings").EnumerateArray(),
+            value => value.GetProperty("code").GetString() == "DishContributionBeforeRefunds");
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync(path + "&itemId=bad")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new("Bearer", "cashier");
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync(path)).StatusCode);
@@ -190,6 +192,91 @@ public sealed partial class GatewayFlowTests
         await using var verify = new ReportSalesDb(billingConnection, tenant);
         Assert.Equal("Paid", (await verify.Payments.SingleAsync()).Status);
         Assert.Equal(2m, (await verify.BillLines.SingleAsync(value => value.Quantity > 0)).Quantity);
+    }
+
+    [Fact]
+    public async Task R5DiscountAndMissingCostCrossTheGatewayWithoutInventingNetProfit()
+    {
+        var restaurant = await CreateRestaurant();
+        await AssignReportManager(restaurant.RestaurantId);
+        await using var billingConnection = new SqliteConnection("Data Source=:memory:");
+        await using var orderingConnection = new SqliteConnection("Data Source=:memory:");
+        await billingConnection.OpenAsync();
+        await orderingConnection.OpenAsync();
+        var tenant = new RestaurantDataScope();
+        tenant.Select(restaurant.RestaurantId);
+        var orderId = Guid.NewGuid();
+        var lineId = Guid.NewGuid();
+        var itemId = Guid.NewGuid();
+        var optionId = Guid.NewGuid();
+        await using (var db = new ReportSalesDb(billingConnection, tenant))
+        {
+            await db.Database.EnsureCreatedAsync();
+            SeedDishReportPayment(db, restaurant.RestaurantId, orderId, lineId, itemId, optionId);
+            var payment = db.ChangeTracker.Entries<Payment>().Single().Entity;
+            payment.Bill.DiscountAmount = 20;
+            payment.Bill.TotalAmount = 196;
+            payment.Amount = 196;
+            payment.Bill.BillLines.Single(value => value.Quantity > 0).DiscountAllocated = 20;
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = new ReportOrderDb(orderingConnection, tenant))
+        {
+            await db.Database.EnsureCreatedAsync();
+            var order = ReportOrder(orderId, restaurant.RestaurantId, "DineIn");
+            order.OrderItems.Add(new OrderItem
+            {
+                OrderItemId = lineId,
+                ItemRef = itemId,
+                NameSnapshot = "Bún bò",
+                UnitPriceSnapshot = 100,
+                Quantity = 2,
+                CancelledQuantity = 0,
+                Status = "Pending"
+            });
+            db.Orders.Add(order);
+            await db.SaveChangesAsync();
+        }
+
+        await using var ordering = ReportOrderingHost(orderingConnection);
+        await using var billing = ReportBillingWithOrdering(billingConnection, ordering);
+        await using var gateway = ReportGatewayHost(billing);
+        using var client = gateway.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", "manager");
+        var path = ReportUrl(restaurant.RestaurantId).Replace("/reports/period", "/reports/dishes");
+        using var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var result = json.RootElement.GetProperty("result");
+        var item = Assert.Single(result.GetProperty("items").EnumerateArray());
+        Assert.Equal(20m, item.GetProperty("discounts").GetProperty("amount").GetDecimal());
+        Assert.Equal(180m, item.GetProperty("netSales").GetProperty("amount").GetDecimal());
+        Assert.Equal(130m, item.GetProperty("grossProfit").GetProperty("amount").GetDecimal());
+        Assert.Equal(130m / 180m * 100m, item.GetProperty("contributionMarginPercent").GetDecimal());
+        Assert.Contains(result.GetProperty("warnings").EnumerateArray(),
+            value => value.GetProperty("code").GetString() == "DishContributionBeforeRefunds");
+        using var sales = await client.GetAsync(path.Replace("/dishes", "/sales"));
+        Assert.Equal(HttpStatusCode.OK, sales.StatusCode);
+        using var salesJson = JsonDocument.Parse(await sales.Content.ReadAsStringAsync());
+        var totals = salesJson.RootElement.GetProperty("result").GetProperty("totals");
+        Assert.Equal(196m, totals.GetProperty("collections").GetProperty("amount").GetDecimal());
+        Assert.Equal(20m, totals.GetProperty("discounts").GetProperty("amount").GetDecimal());
+        Assert.Equal(180m, totals.GetProperty("dishRevenue").GetProperty("amount").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, totals.GetProperty("netDishRevenue").GetProperty("amount").ValueKind);
+        await using (var db = new ReportSalesDb(billingConnection, tenant))
+        {
+            await db.BillLines.Where(value => value.OrderItemRef == lineId)
+                .ExecuteUpdateAsync(update => update.SetProperty(value => value.CogsSnapshot, (decimal?)null));
+        }
+
+        using var missing = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, missing.StatusCode);
+        using var missingJson = JsonDocument.Parse(await missing.Content.ReadAsStringAsync());
+        var incomplete = Assert.Single(missingJson.RootElement.GetProperty("result").GetProperty("items").EnumerateArray());
+        Assert.Equal(180m, incomplete.GetProperty("netSales").GetProperty("amount").GetDecimal());
+        Assert.Equal(JsonValueKind.Null, incomplete.GetProperty("grossProfit").GetProperty("amount").ValueKind);
+        Assert.Equal(JsonValueKind.Null, incomplete.GetProperty("contributionMarginPercent").ValueKind);
     }
 
     private static void SeedDishReportPayment(BillingDb db, Guid restaurant, Guid order, Guid lineId, Guid item, Guid option)
