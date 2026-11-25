@@ -4,7 +4,7 @@ sqlcmd=(/opt/mssql-tools18/bin/sqlcmd -S sqlserver -U sa -C -b -r1 -l 30 -f 6500
 script=$(mktemp)
 trap 'rm -f "$script"' EXIT
 
-for database in IdentityDb RestaurantDb InventoryDb CatalogDb OrderingDb BillingDb; do
+for database in IdentityDb RestaurantDb InventoryDb CatalogDb CustomerDb OrderingDb BillingDb; do
     version=$("${sqlcmd[@]}" -d "$database" -h -1 -W -Q "SET NOCOUNT ON; SELECT COALESCE((SELECT CONVERT(nvarchar(20), value) FROM sys.extended_properties WHERE class = 0 AND name = N'DockerBootstrapVersion'), N'0');" | tr -d '[:space:]')
     if [[ "$version" != "2" ]]; then
         echo "$database schema is not ready. Run db-init first." >&2

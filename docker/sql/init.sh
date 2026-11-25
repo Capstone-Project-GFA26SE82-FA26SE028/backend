@@ -82,3 +82,6 @@ for database in BillingDb OrderingDb CatalogDb RestaurantDb InventoryDb Identity
     "${sqlcmd[@]}" -d "$database" -i "$script" -h -1
 done
 echo "Billing and AI dependency schemas are ready."
+
+echo "Seeding initial development and operational data..."
+/bin/bash /init/seed.sh
