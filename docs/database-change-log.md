@@ -725,3 +725,52 @@ Bằng chứng nghiệm thu cục bộ:
 - Gateway Docker build từ source mới, database thử tách biệt: POST/GET categories; POST/GET items (tên/mô tả); PUT/GET users/me; POST/GET ingredients đều giữ nguyên chuỗi tiếng Việt. Không gọi Cloudinary thật trong các ca này.
 - Lần test tổng đầu chạy song song build Docker có 3 lỗi timing/regex tại AI. Chạy AI riêng đạt 163/163; chạy lại toàn solution tuần tự đạt các số liệu ở trên. Không sửa code AI.
 - Chưa chạy GitHub Actions trên remote, chưa nâng cấp database dev của nhóm, chưa kiểm thử giao diện FE; không tuyên bố mọi luồng nghiệp vụ đã được kiểm thử end-to-end.
+
+
+## 2026-11-25 — Quyền xem và kỳ báo cáo nhà hàng
+
+**Không có thay đổi schema.** Chỉ bổ sung contract gRPC, DTO, lớp kiểm tra ngữ cảnh/kỳ và API Gateway; không thêm/sửa/xóa bảng/cột/PK/FK/UNIQUE/CHECK/index, không đổi quan hệ/cardinality hoặc dây ERD. DTO mới không phải entity. Không sửa repo SQL riêng. Fixture Docker tách biệt dùng schema/seed hiện có để kiểm thử; không áp SQL hoặc đổi dữ liệu database dev của nhóm. Chi tiết file, test, giới hạn và review tại `docs/restaurant-performance-reports.md`, mục R1. Thay đổi đang để chưa commit/push trên `feature/restaurant-performance-reports`.
+
+
+## 2026-11-25 — Hoàn thiện định dạng thời gian sau review
+
+**Không có thay đổi schema.** Chỉ chuẩn hóa hậu tố UTC z thường trong validation kỳ báo cáo, bổ sung hướng dẫn encode URL trong Swagger và test. Không đổi bảng/cột/khóa/ràng buộc/index/quan hệ, không sửa SQL Docker hoặc repo SQL riêng, không áp thay đổi database nhóm. Kiểm chứng Docker dùng project và dữ liệu demo riêng. Bản sửa dựa trên commit 1a64b53, giữ nguyên lịch sử và chưa commit/push. Chi tiết trong `docs/restaurant-performance-reports.md`, mục hoàn thiện sau review R1.
+
+
+## 2026-11-25 — Báo cáo doanh thu và tiền thu theo kỳ
+
+**Không có thay đổi schema.** Không thêm/sửa/xóa bảng/cột/default/PK/FK/UNIQUE/CHECK/index hoặc quan hệ/cardinality/dây ERD. Chỉ thêm repository đọc, DTO, tổng hợp, RPC/API và test. Không sửa SQL Docker hoặc repo Database-SQLServer riêng; không áp thay đổi trên database dev của nhóm. Fixture SQL tổng hợp chỉ dùng trong project Docker thử tách biệt, không được tính là nguồn hoàn/thu PayOS thật. Chi tiết và giới hạn dữ liệu tại `docs/restaurant-performance-reports.md`, mục R2. Giữ HEAD 8e8d872, thay đổi chưa commit/push.
+
+
+## 2026-11-25 — Báo cáo theo phương thức và ca thu ngân (R3 đang làm)
+
+**Không có thay đổi schema.** Bổ sung filter/partition trên dữ liệu đã có, không đổi bảng/cột/NULL/default/khóa/ràng buộc/index/quan hệ/cardinality hoặc ERD; không sửa SQL Docker/upgrade/repo SQL riêng. Chưa bổ sung nguồn kênh từ Ordering hoặc cột Channel; phần này đang chờ người dùng chốt bill nhiều kênh, xem mục R3 trong `docs/restaurant-performance-reports.md`. Không thay dữ liệu database nhóm, không commit/push.
+
+
+## 2026-11-25 — Hoàn thiện nguồn kênh báo cáo R3
+
+**Không có thay đổi schema.** Chỉ bổ sung RPC/DTO/client và truy vấn chỉ đọc Order.Channel có kiểm tra RestaurantRef, không thêm Channel vào Bill hoặc thay bảng/cột/khóa/index/ràng buộc/default/NULL/cardinality/dây ERD. Không sửa SQL Docker/upgrade hoặc repo SQL riêng, không áp thay đổi database nhóm. Fixture nguồn kênh/thanh toán trong project Docker riêng được ghi rõ ở tài liệu báo cáo; không phải migration hay dữ liệu vận hành. Giữ nguyên luồng lập/thu/hoàn và quyền API quản trị cũ, chưa commit/push.
+
+
+## 2026-11-25 — Sửa trạng thái đầy đủ của phân tổ kênh báo cáo
+
+**Không có thay đổi schema.** Chỉ sửa completeness của chiều kênh và bổ sung regression/test pipeline thật trong TestServer. Không đổi bảng/cột/default/NULL/khóa/index/ràng buộc/cardinality/ERD, SQL Docker/upgrade hay repo SQL riêng. Fixture SQLite/SQL thử không phải model/schema production. Không đổi DB của nhóm hoặc luồng thu/hoàn; giữ nguyên HEAD8e8d872, chưa commit/push. Xem mục review kênh R3 trong tài liệu báo cáo.
+
+
+## 2026-11-25 — R4 bảng món bán và snapshot giá vốn
+
+**Không có thay đổi schema.** BillLine.CogsSnapshot đã có sẵn, giữ decimal(18,2) NULL, không DEFAULT; người dùng chốt đây là giá vốn tổng dòng. Chỉ bổ sung reader/DTO/RPC/bảng món, không thêm/sửa/xóa bảng/cột/khóa/ràng buộc/index/quan hệ/cardinality hoặc ERD, không sửa model production/SQL Docker/upgrade/repo SQL riêng. Không tự điền COGS, không chia cost khi lượng thay đổi; nguồn writer kho vẫn thiếu. restaurant_id cấp gốc mới là field proto, không phải cột SQL. Fixture SQLite/SQL tách biệt phục vụ test không phải migration hoặc dữ liệu vận hành. Không đổi database nhóm, chưa commit/push; chi tiết và bằng chứng R4 tại docs/restaurant-performance-reports.md.
+
+## 2026-11-25 — Hoàn thiện review R4
+
+**Không có thay đổi schema.** Chỉ tách completeness theo ItemId, bổ sung currency vào DTO/proto và cảnh báo lọc kênh; không thêm/sửa/xóa bảng/cột/NULL/default/khóa/index/quan hệ/cardinality/ERD. Không sửa SQL tạo mới/upgrade/model hoặc database nhóm. Dữ liệu tổng hợp Docker riêng chỉ phục vụ kiểm thử, không phải migration. Chi tiết kết quả tại docs/restaurant-performance-reports.md. Chưa commit/push.
+
+
+## 2026-11-25 — R5 giảm giá và tỷ suất đóng góp từng món
+
+**Không có thay đổi schema.** Chỉ thêm field DTO/proto cho discounts và contributionMarginPercent, tổng hợp chỉ đọc và kiểm thử. Không thêm/sửa/xóa bảng/cột/NULL/default/PK/FK/UNIQUE/CHECK/index/quan hệ/cardinality/dây ERD; không sửa model, DbContext, SQL tạo mới/upgrade/Docker hoặc repo SQL riêng. BillAdjustment, DiscountAllocated, CogsSnapshot đều là bảng/cột đã có; đọc hay tạo fixture không có nghĩa tạo bảng/cột mới. Dữ liệu fixture chỉ được ghi vào SQLite và SQL Server của project Docker thử riêng, không thay database nhóm. Chưa commit/push. Chi tiết và giới hạn nguồn xem R5 trong docs/restaurant-performance-reports.md.
+
+
+## 2026-11-25 — Hoàn thiện review R5
+
+**Không có thay đổi schema.** Chỉ sửa phạm vi cảnh báo theo kết quả lọc món, bổ sung test backend/Gateway cho bảng trống và tỷ suất âm/gộp cùng món. Không thêm/sửa/xóa bảng/cột/kiểu/NULL/default/khóa/index/quan hệ/cardinality/ERD, SQL tạo mới/upgrade/model/DbContext hoặc repo SQL riêng. SQL fixture chỉ dùng trong project Docker thử riêng đã dọn, không thay database nhóm. Chưa commit/push; chi tiết tại mục review R5 của tài liệu báo cáo.

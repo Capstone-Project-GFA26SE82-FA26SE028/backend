@@ -48,6 +48,7 @@ message BillingSessionDisplayInfo {
 message BillingSessionDisplayReply { repeated BillingSessionDisplayInfo items = 1; }
 
 service RestaurantAccessGrpc {
+  rpc GetReportContext(CurrentRestaurantScopeRequest) returns (RestaurantReportContextReply);
   rpc GetCurrentScope(CurrentRestaurantScopeRequest) returns (CurrentRestaurantScopeReply);
   rpc ResolveDataScope(RestaurantDataScopeRequest) returns (RestaurantDataScopeReply);
 }
@@ -476,3 +477,8 @@ message StaffAssignmentTransferRequest {
   string target_restaurant_id = 4;
 }
 message StaffAssignmentTransferReply { string status = 1; string message = 2; }
+
+message RestaurantReportContextReply {
+  string restaurant_id = 1;
+  string time_zone = 2;
+}

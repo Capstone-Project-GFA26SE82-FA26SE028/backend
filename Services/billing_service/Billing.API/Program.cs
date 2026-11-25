@@ -40,6 +40,7 @@ app.MapGrpcService<CashMovementGrpcService>();
 app.MapGrpcService<BillCheckoutGrpcService>();
 app.MapGrpcService<PaymentSubmissionGrpcService>();
 app.MapGrpcService<TaxFeePolicyGrpcService>();
+app.MapGrpcService<RestaurantReportGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

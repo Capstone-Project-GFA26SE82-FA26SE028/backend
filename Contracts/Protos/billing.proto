@@ -550,3 +550,100 @@ message WaiterPayOsPage {
   int32 page = 3;
   int32 page_size = 4;
 }
+
+service RestaurantReportGrpc {
+  rpc GetDishes(DishReportRequest) returns (DishReportReply);
+  rpc GetSales(ReportPeriodRequest) returns (RestaurantSalesReportReply);
+  rpc GetPeriod(ReportPeriodRequest) returns (ReportPeriodReply);
+}
+message ReportPeriodRequest {
+  string restaurant_id = 1;
+  string from = 2;
+  string to = 3;
+  string group_by = 4;
+  string channel = 5;
+  string method_code = 6;
+  string shift = 7;
+}
+message ReportPeriodReply {
+  string restaurant_id = 1;
+  string time_zone = 2;
+  string from_utc = 3;
+  string to_utc = 4;
+  string from_local = 5;
+  string to_local = 6;
+  string group_by = 7;
+  string week_starts_on = 8;
+}
+
+message ReportAmountInfo { string known_amount = 1; optional string amount = 2; }
+message ReportCountInfo { int32 known_count = 1; optional int32 count = 2; }
+message ReportWarningInfo { string code = 1; string message = 2; }
+message SalesReportTotalsInfo {
+  ReportAmountInfo collections = 1;
+  ReportAmountInfo refunds = 2;
+  ReportAmountInfo net_collections = 3;
+  ReportAmountInfo dish_revenue = 4;
+  ReportAmountInfo net_dish_revenue = 5;
+  ReportAmountInfo discounts = 6;
+  ReportAmountInfo vat = 7;
+  ReportAmountInfo service_fees = 8;
+  ReportCountInfo paid_orders = 9;
+  ReportAmountInfo rounding_adjustment = 10;
+}
+message SalesReportGroupInfo { string key = 1; SalesReportTotalsInfo totals = 2; }
+message RestaurantSalesReportReply {
+  ReportPeriodReply period = 1;
+  string currency = 2;
+  SalesReportTotalsInfo totals = 3;
+  repeated SalesReportGroupInfo groups = 4;
+  repeated ReportWarningInfo warnings = 5;
+  repeated SalesReportGroupInfo channels = 6;
+  repeated SalesReportGroupInfo methods = 7;
+  repeated SalesReportGroupInfo shifts = 8;
+  SalesReportFiltersInfo filters = 9;
+}
+
+message SalesReportFiltersInfo {
+  string channel = 1;
+  string method_code = 2;
+  string shift = 3;
+}
+
+message DishReportRequest {
+  ReportPeriodRequest query = 1;
+  optional string item_id = 2;
+  string restaurant_id = 3;
+}
+message DishReportOptionInfo {
+  string option_id = 1;
+  string name = 2;
+  int32 quantity = 3;
+  string extra_price = 4;
+}
+message DishReportPriceInfo {
+  string unit_price = 1;
+  repeated DishReportOptionInfo options = 2;
+}
+message DishReportItemInfo {
+  string item_id = 1;
+  repeated string names = 2;
+  string known_quantity = 3;
+  optional string quantity = 4;
+  ReportAmountInfo gross_sales = 5;
+  ReportAmountInfo net_sales = 6;
+  ReportAmountInfo cost = 7;
+  ReportAmountInfo gross_profit = 8;
+  repeated DishReportPriceInfo prices = 9;
+  ReportAmountInfo discounts = 10;
+  optional string contribution_margin_percent = 11;
+}
+message DishReportReply {
+  ReportPeriodReply period = 1;
+  SalesReportFiltersInfo filters = 2;
+  optional string item_id = 3;
+  bool quantity_complete = 4;
+  repeated DishReportItemInfo items = 5;
+  repeated ReportWarningInfo warnings = 6;
+  string currency = 7;
+}

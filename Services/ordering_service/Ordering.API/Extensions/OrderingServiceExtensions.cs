@@ -76,6 +76,7 @@ public static class OrderingServiceExtensions
         });
         services.AddScoped<IBillingSessionClient, BillingSessionClient>();
         services.AddScoped<IBillingOrderService, BillingOrderService>();
+        services.AddScoped<IOrderReportAccess, OrderReportAccess>();
         services.AddGrpcClient<RestaurantAccessGrpc.RestaurantAccessGrpcClient>(options =>
         {
             options.Address = Address(configuration, "Restaurant");
