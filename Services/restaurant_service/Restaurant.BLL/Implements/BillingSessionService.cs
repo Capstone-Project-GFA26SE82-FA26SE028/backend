@@ -78,7 +78,8 @@ public sealed class BillingSessionService(ICurrentRestaurantScopeService access,
         return new BillingSessionDto
         {
             TableSessionId = id,
-            RestaurantId = branches[0]
+            RestaurantId = branches[0],
+            CustomerRef = session.LoyaltyCustomerRef
         };
     }
 }

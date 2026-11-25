@@ -45,7 +45,8 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 config.AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Qr:MenuBaseUrl"] = "https://menu.example.test/menu",
-                    ["Reservations:ExpirationEnabled"] = "false"
+                    ["Reservations:ExpirationEnabled"] = "false",
+                    ["TableTransfer:ServiceKey"] = "table-transfer-test-key"
                 });
             });
             builder.ConfigureTestServices(services =>

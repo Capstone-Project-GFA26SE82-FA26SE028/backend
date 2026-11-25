@@ -15,7 +15,8 @@ public sealed class AuditLogController(AuditLogGrpc.AuditLogGrpcClient client) :
     public Task<IActionResult> GetAll(CancellationToken ct, [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20, [FromQuery] Guid? userId = null,
         [FromQuery] string? search = null, [FromQuery] string? action = null,
-        [FromQuery] DateTimeOffset? from = null, [FromQuery] DateTimeOffset? to = null)
+        [FromQuery] DateTimeOffset? from = null, [FromQuery] DateTimeOffset? to = null,
+        [FromQuery] Guid? restaurantId = null)
     {
         return Execute(async () =>
         {
@@ -28,6 +29,11 @@ public sealed class AuditLogController(AuditLogGrpc.AuditLogGrpcClient client) :
             if (userId.HasValue)
             {
                 request.UserId = userId.Value.ToString();
+            }
+
+            if (restaurantId.HasValue)
+            {
+                request.RestaurantId = restaurantId.Value.ToString();
             }
 
             if (search is not null)

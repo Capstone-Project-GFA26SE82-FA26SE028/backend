@@ -17,7 +17,9 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
     IBillCheckoutRepository checkouts, ICashShiftRepository shifts, ICashRegisterRepository registers,
     ICashMovementRepository movements, IUnitOfWork unitOfWork,
     IBillingAccess access, IBillService billService, ICheckoutSourceClient ordering,
-    IOptions<CashRegisterAccessSettings> roles, IOptions<CashPaymentSettings> settings, TimeProvider clock) : IPaymentService
+    IOptions<CashRegisterAccessSettings> roles, IOptions<CashPaymentSettings> settings, TimeProvider clock,
+    IVoucherRedemptionRepository? voucherRedemptions = null,
+    ICustomerLoyaltyClient? loyaltyClient = null) : IPaymentService
 {
     internal const decimal MaximumMoney = 9999999999999999.99m;
 
@@ -220,6 +222,21 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
                 bill.Status = PaymentStatuses.Paid;
                 bill.PaidAt = paidAt;
                 checkout.Status = PaymentStatuses.Paid;
+                if (voucherRedemptions is not null)
+                {
+                    var redemptions = await voucherRedemptions.GetByBillIdAsync(bill.BillId, ct);
+                    foreach (var r in redemptions.Where(x => x.Status == "Reserved"))
+                    {
+                        r.Status = "Committed";
+                        r.CommittedAt = paidAt;
+                        await voucherRedemptions.UpdateAsync(r, ct);
+                    }
+                }
+                if (loyaltyClient is not null && bill.CustomerRef.HasValue && bill.CustomerRef.Value != Guid.Empty)
+                {
+                    await loyaltyClient.EarnPointsAsync(bill.CustomerRef.Value, bill.BillId, bill.TotalAmount, ct);
+                    await loyaltyClient.CommitPointsAsync(bill.BillId, ct);
+                }
                 return (Map(payment, checkout.CheckoutId), true);
             }, ct);
         }

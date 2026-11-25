@@ -160,6 +160,11 @@ public sealed class BillingOrderReadTests
                 .Select(value => new Ordering.Common.DTOs.OrderReportChannelDTO(value.OrderId, value.Channel)).ToList());
         }
 
+        public Task<List<Order>> GetForTransferAsync(Guid sessionId, CancellationToken ct)
+        {
+            return Task.FromResult(Values);
+        }
+
         public Task<List<Order>> GetForBillingAsync(Guid sessionId, CancellationToken ct)
         {
             return Task.FromResult(Values);

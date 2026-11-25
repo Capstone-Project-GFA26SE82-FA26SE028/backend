@@ -37,8 +37,10 @@ public sealed class BillingOrderService(IOrderRepository orders, IBillingSession
             throw new OrderingException(400, "Mã phiên bàn không hợp lệ hoặc bị trống.");
         }
 
-        var restaurantId = await sessions.GetRestaurantIdAsync(sessionId, ct);
-        return await GetForRestaurant(sessionId, restaurantId, ct);
+        var (restaurantId, customerRef) = await sessions.GetSessionInfoAsync(sessionId, ct);
+        var snapshot = await GetForRestaurant(sessionId, restaurantId, ct);
+        snapshot.CustomerRef = customerRef;
+        return snapshot;
     }
 
     public async Task<BillingOrderSnapshotDTO> GetForRestaurant(Guid sessionId, Guid restaurantId, CancellationToken ct)

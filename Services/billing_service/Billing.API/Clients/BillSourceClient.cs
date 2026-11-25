@@ -47,6 +47,7 @@ public sealed class BillSourceClient(BillingOrderGrpc.BillingOrderGrpcClient cli
             {
                 TableSessionId = Guid.Parse(reply.TableSessionId),
                 RestaurantId = Guid.Parse(reply.RestaurantId),
+                CustomerRef = reply.HasCustomerRef && Guid.TryParse(reply.CustomerRef, out var cId) ? cId : null,
                 PendingOrderCount = reply.PendingOrderCount,
                 Items = reply.Items.Select(line => new BillSourceLineDTO
                 {

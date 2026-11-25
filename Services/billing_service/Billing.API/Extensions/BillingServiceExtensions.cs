@@ -88,6 +88,15 @@ public static class BillingServiceExtensions
         services.AddScoped<IPaidSessionClosureClient, PaidSessionClosureClient>();
         services.AddScoped<IPaymentSettlementService, PaymentSettlementService>();
         services.AddScoped<IPaymentSubmissionService, PaymentSubmissionService>();
+        services.AddGrpcClient<Backend.Contracts.Customer.CustomerGrpc.CustomerGrpcClient>(options =>
+        {
+            var customerAddress = configuration["GrpcServices:Customer"] ?? "https://localhost:5005";
+            if (Uri.TryCreate(customerAddress, UriKind.Absolute, out var customerUri))
+            {
+                options.Address = customerUri;
+            }
+        });
+        services.AddScoped<ICustomerLoyaltyClient, CustomerLoyaltyClient>();
         services.AddGrpcClient<Backend.Contracts.Ordering.BillingOrderGrpc.BillingOrderGrpcClient>(options =>
         {
             var orderingAddress = configuration["GrpcServices:Ordering"];
@@ -126,6 +135,8 @@ public static class BillingServiceExtensions
         services.AddScoped<ICashHandoverService, CashHandoverService>();
         services.AddScoped<ICashMovementService, CashMovementService>();
         services.AddScoped<IBillService, BillService>();
+        services.AddScoped<IPromotionService, PromotionService>();
+        services.AddScoped<IVoucherService, VoucherService>();
         services.AddScoped<ITaxFeePolicyService, TaxFeePolicyService>();
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         return services;

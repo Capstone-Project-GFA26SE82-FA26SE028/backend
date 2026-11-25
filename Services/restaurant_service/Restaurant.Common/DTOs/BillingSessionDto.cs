@@ -4,4 +4,5 @@ public sealed class BillingSessionDto
 {
     public Guid TableSessionId { get; set; }
     public Guid RestaurantId { get; set; }
+    public Guid? CustomerRef { get; set; }
 }

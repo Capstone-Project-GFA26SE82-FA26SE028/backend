@@ -22,7 +22,20 @@ builder.Services.AddScoped<RestaurantIsolation.INotificationEventEnricher, Order
 
 builder.Services.AddScoped<Ordering.DAL.Interfaces.IKitchenAssignmentRepository, Ordering.DAL.Implements.KitchenAssignmentRepository>();
 builder.Services.AddScoped<Ordering.BLL.Interfaces.IStaffTransferGuardService, Ordering.BLL.Implements.StaffTransferGuardService>();
+
+builder.Services.AddScoped<Ordering.DAL.Interfaces.ITableTransferRepository, Ordering.DAL.Implements.TableTransferRepository>();
+builder.Services.AddScoped<Ordering.BLL.Interfaces.ITableTransferService, Ordering.BLL.Implements.TableTransferService>();
+builder.Services.AddScoped<Ordering.BLL.Interfaces.ITableTransferSessionClient, Ordering.API.Clients.TableTransferSessionClient>();
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.TableTransferSessionGrpc.TableTransferSessionGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Restaurant"]!);
+});
+builder.Services.AddGrpcClient<Backend.Contracts.Billing.TableTransferBillingGrpc.TableTransferBillingGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Billing"]!);
+});
 var app = builder.Build();
+app.MapGrpcService<Ordering.API.GrpcServices.TableTransferGrpcService>();
 app.MapGrpcService<Ordering.API.GrpcServices.StaffTransferGuardGrpcService>();
 
 app.MapGrpcService<Ordering.API.GrpcServices.KitchenStationGrpcService>();

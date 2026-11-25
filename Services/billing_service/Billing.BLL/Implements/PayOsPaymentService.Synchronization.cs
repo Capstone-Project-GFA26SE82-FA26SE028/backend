@@ -248,6 +248,11 @@ public sealed partial class PayOsPaymentService
         payment.Bill.PaidAt = payment.PaidAt;
         var writable = await checkouts.GetByIdAsync(checkout.CheckoutId, ct) ?? throw new BillingException(409, "Không còn tìm thấy lần chốt hóa đơn.");
         writable.Status = PaymentStatuses.Paid;
+        if (loyaltyClient is not null && payment.Bill.CustomerRef.HasValue && payment.Bill.CustomerRef.Value != Guid.Empty)
+        {
+            await loyaltyClient.EarnPointsAsync(payment.Bill.CustomerRef.Value, payment.Bill.BillId, payment.Bill.TotalAmount, ct);
+            await loyaltyClient.CommitPointsAsync(payment.Bill.BillId, ct);
+        }
     }
 
     private static bool CanSettleCheckout(BillCheckout checkout, Payment payment)

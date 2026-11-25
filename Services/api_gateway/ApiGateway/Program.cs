@@ -261,6 +261,11 @@ builder.Services.AddGrpcClient<Backend.Contracts.Notifications.NotificationSetti
     options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]!);
 });
 
+
+builder.Services.AddGrpcClient<Backend.Contracts.Ordering.TableTransferGrpc.TableTransferGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Ordering"]!);
+});
 var app = builder.Build();
 
 

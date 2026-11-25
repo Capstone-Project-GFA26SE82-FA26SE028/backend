@@ -7,6 +7,11 @@ namespace Ordering.DAL.Implements;
 
 public sealed class OrderRepository(OrderingDbContext db) : IOrderRepository
 {
+    public Task<List<Order>> GetForTransferAsync(Guid sessionId, CancellationToken ct)
+    {
+        return Details(db.Orders.Where(order => order.TableSessionRef == sessionId))
+            .OrderBy(order => order.OrderId).ToListAsync(ct);
+    }
     public async Task<List<OrderReportSnapshotDTO>> GetReportItemsAsync(Guid restaurantId, Guid[] orderIds, CancellationToken ct)
     {
         // One SQL statement keeps order/item/cancellation snapshots consistent without a network-held transaction.

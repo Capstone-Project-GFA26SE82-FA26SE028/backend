@@ -171,6 +171,120 @@ public sealed class StockIssueTests
         }));
     }
 
+    [Fact]
+    public async Task ExpiredLotCanBeDisposedWhenLotIdAndDisposalSpecified()
+    {
+        using var f = new Fixture();
+        var ingredient = await f.Ingredient();
+        var expiredLotId = await f.Lot(ingredient, 50, new DateOnly(2026, 10, 20), -5);
+        var request = new StockIssueWriteDTO
+        {
+            StockIssueId = Guid.NewGuid(),
+            Reason = "Hủy lô gạo hết hạn",
+            Items =
+            [
+                new StockIssueLineDTO
+                {
+                    IngredientId = ingredient.IngredientId,
+                    GoodsReceiptItemId = expiredLotId,
+                    Quantity = 30,
+                    IsDisposal = true
+                }
+            ]
+        };
+
+        var issue = await f.Issues.Create(request, default);
+
+        Assert.Equal("Disposal", Assert.Single(issue.Movements).MovementType);
+        Assert.Equal(expiredLotId, Assert.Single(issue.Movements).GoodsReceiptItemId);
+        Assert.Equal(-30, Assert.Single(issue.Movements).QuantityChange);
+        Assert.Equal(20, (await f.Db.Ingredients.FindAsync(ingredient.IngredientId))!.StockQuantity);
+
+        var page = await f.Lots.GetAll(ingredient.IngredientId, 1, 20, default);
+        Assert.Equal(20, Assert.Single(page.Items).RemainingQuantity);
+    }
+
+    [Fact]
+    public async Task DisposingMoreThanLotRemainingQuantityThrows409()
+    {
+        using var f = new Fixture();
+        var ingredient = await f.Ingredient();
+        var expiredLotId = await f.Lot(ingredient, 50, new DateOnly(2026, 10, 20), -5);
+        var request = new StockIssueWriteDTO
+        {
+            StockIssueId = Guid.NewGuid(),
+            Reason = "Hủy lô gạo hết hạn",
+            Items =
+            [
+                new StockIssueLineDTO
+                {
+                    IngredientId = ingredient.IngredientId,
+                    GoodsReceiptItemId = expiredLotId,
+                    Quantity = 55,
+                    IsDisposal = true
+                }
+            ]
+        };
+
+        await Error(409, () => f.Issues.Create(request, default));
+    }
+
+    [Fact]
+    public async Task TargetingExpiredLotWithoutDisposalFlagThrows409()
+    {
+        using var f = new Fixture();
+        var ingredient = await f.Ingredient();
+        var expiredLotId = await f.Lot(ingredient, 50, new DateOnly(2026, 10, 20), -5);
+        var request = new StockIssueWriteDTO
+        {
+            StockIssueId = Guid.NewGuid(),
+            Reason = "Xuất sử dụng thông thường",
+            Items =
+            [
+                new StockIssueLineDTO
+                {
+                    IngredientId = ingredient.IngredientId,
+                    GoodsReceiptItemId = expiredLotId,
+                    Quantity = 10,
+                    IsDisposal = false
+                }
+            ]
+        };
+
+        await Error(409, () => f.Issues.Create(request, default));
+    }
+
+    [Fact]
+    public async Task DisposingExpiredLotForInactiveIngredientIsAllowed()
+    {
+        using var f = new Fixture();
+        var ingredient = await f.Ingredient();
+        var expiredLotId = await f.Lot(ingredient, 50, new DateOnly(2026, 10, 20), -5);
+        ingredient.IsActive = false;
+        await f.Db.SaveChangesAsync();
+
+        var request = new StockIssueWriteDTO
+        {
+            StockIssueId = Guid.NewGuid(),
+            Reason = "Hủy lô nguyên liệu đã ngừng kinh doanh",
+            Items =
+            [
+                new StockIssueLineDTO
+                {
+                    IngredientId = ingredient.IngredientId,
+                    GoodsReceiptItemId = expiredLotId,
+                    Quantity = 50,
+                    IsDisposal = true
+                }
+            ]
+        };
+
+        var issue = await f.Issues.Create(request, default);
+
+        Assert.Equal("Disposal", Assert.Single(issue.Movements).MovementType);
+        Assert.Equal(0, (await f.Db.Ingredients.FindAsync(ingredient.IngredientId))!.StockQuantity);
+    }
+
     private static StockIssueWriteDTO Request(Ingredient ingredient, decimal quantity)
     {
         return new StockIssueWriteDTO

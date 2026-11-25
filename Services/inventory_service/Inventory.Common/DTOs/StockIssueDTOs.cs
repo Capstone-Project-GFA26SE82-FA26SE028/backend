@@ -4,6 +4,8 @@ public sealed class StockIssueLineDTO
 {
     public Guid IngredientId { get; set; }
     public decimal Quantity { get; set; }
+    public Guid? GoodsReceiptItemId { get; set; }
+    public bool IsDisposal { get; set; }
 }
 
 public sealed class StockIssueWriteDTO

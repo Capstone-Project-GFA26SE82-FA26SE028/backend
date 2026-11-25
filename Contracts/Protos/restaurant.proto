@@ -3,6 +3,7 @@ syntax = "proto3";
 message GuestJoinRequest {
   string table_session_id = 1;
   string phone_or_code = 2;
+  optional string customer_id = 3;
 }
 
 message GuestAccessRequest {
@@ -15,6 +16,10 @@ message GuestAccessReply {
   string expires_at = 2;
   string token = 3;
   string guest_access_id = 4;
+  optional string customer_id = 5;
+  optional string customer_name = 6;
+  optional int32 available_points = 7;
+  optional string loyalty_tier_name = 8;
 }
 
 service GuestAccessGrpc {
@@ -27,7 +32,11 @@ service BillingSessionGrpc {
   rpc GetDisplays(BillingSessionDisplayRequest) returns (BillingSessionDisplayReply);
 }
 message BillingSessionRequest { string table_session_id = 1; }
-message BillingSessionReply { string table_session_id = 1; string restaurant_id = 2; }
+message BillingSessionReply {
+  string table_session_id = 1;
+  string restaurant_id = 2;
+  optional string customer_ref = 3;
+}
 message BillingSessionDisplayRequest {
   string restaurant_id = 1;
   repeated string table_session_ids = 2;
@@ -477,6 +486,15 @@ message StaffAssignmentTransferRequest {
   string target_restaurant_id = 4;
 }
 message StaffAssignmentTransferReply { string status = 1; string message = 2; }
+
+service TableTransferSessionGrpc {
+  rpc Prepare(TableTransferSessionRequest) returns (TableTransferSessionReply);
+  rpc Finish(TableTransferFinishRequest) returns (TableTransferSessionReply);
+  rpc Get(TableTransferFinishRequest) returns (TableTransferSessionReply);
+}
+message TableTransferSessionRequest { string payload = 1; }
+message TableTransferFinishRequest { string operation_id = 1; bool abort = 2; }
+message TableTransferSessionReply { string payload = 1; }
 
 message RestaurantReportContextReply {
   string restaurant_id = 1;

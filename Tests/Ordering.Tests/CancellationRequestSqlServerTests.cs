@@ -24,7 +24,7 @@ public sealed class CancellationSqlFactAttribute : FactAttribute
     }
 }
 
-public sealed class CancellationRequestSqlServerTests : IAsyncLifetime
+public sealed partial class CancellationRequestSqlServerTests : IAsyncLifetime
 {
     private readonly Guid restaurant = Guid.NewGuid();
     private readonly Guid session = Guid.NewGuid();

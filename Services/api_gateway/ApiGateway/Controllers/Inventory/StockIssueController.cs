@@ -24,10 +24,22 @@ public sealed class StockIssueController(StockIssueGrpc.StockIssueGrpcClient cli
             Id = body.StockIssueId.ToString(),
             Reason = body.Reason
         };
-        request.Items.AddRange(body.Items.Select(line => new StockIssueLine
+        request.Items.AddRange(body.Items.Select(line =>
         {
-            IngredientId = line.IngredientId.ToString(),
-            Quantity = line.Quantity.ToString(CultureInfo.InvariantCulture)
+            var item = new StockIssueLine
+            {
+                IngredientId = line.IngredientId.ToString(),
+                Quantity = line.Quantity.ToString(CultureInfo.InvariantCulture)
+            };
+            if (line.GoodsReceiptItemId.HasValue && line.GoodsReceiptItemId.Value != Guid.Empty)
+            {
+                item.ReceiptItemId = line.GoodsReceiptItemId.Value.ToString();
+            }
+            if (line.IsDisposal)
+            {
+                item.IsDisposal = true;
+            }
+            return item;
         }));
         return Execute(async () => Map(await client.CreateAsync(request, Options(ct))), ct);
     }

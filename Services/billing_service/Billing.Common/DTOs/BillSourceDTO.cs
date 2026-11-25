@@ -4,6 +4,7 @@ public sealed class BillSourceDTO
 {
     public Guid TableSessionId { get; set; }
     public Guid RestaurantId { get; set; }
+    public Guid? CustomerRef { get; set; }
     public int PendingOrderCount { get; set; }
     public List<BillSourceLineDTO> Items { get; set; } = [];
 }

@@ -323,3 +323,21 @@ CREATE TABLE dbo.StaffTransferReceipt (
     CreatedAt datetime2 NOT NULL
 );
 GO
+
+CREATE TABLE [dbo].[TableTransferSession] (
+    [OperationId] uniqueidentifier NOT NULL PRIMARY KEY,
+    [SourceSessionId] uniqueidentifier NOT NULL,
+    [TargetSessionId] uniqueidentifier NOT NULL,
+    [TargetTableId] uniqueidentifier NOT NULL,
+    [ActorId] uniqueidentifier NOT NULL,
+    [RestaurantId] uniqueidentifier NOT NULL,
+    [RequestHash] nvarchar(64) NOT NULL,
+    [Mode] nvarchar(10) NOT NULL,
+    [Reason] nvarchar(1000) NOT NULL,
+    [Status] nvarchar(20) NOT NULL,
+    [CreatedAt] datetime2 NOT NULL, [TargetCreated] bit NOT NULL
+);
+GO
+CREATE INDEX IX_TableTransferSession_Source ON [dbo].[TableTransferSession] ([SourceSessionId], [Status]);
+CREATE INDEX IX_TableTransferSession_Target ON [dbo].[TableTransferSession] ([TargetSessionId], [Status]);
+GO

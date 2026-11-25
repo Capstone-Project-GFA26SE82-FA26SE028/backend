@@ -300,3 +300,21 @@ GO
 
 CREATE UNIQUE NONCLUSTERED INDEX [UX_CancellationRequest_PendingItem] ON dbo.[CancellationRequest] ([OrderItemId]) WHERE [Status] = 'Pending';
 GO
+
+CREATE TABLE [dbo].[TableTransfer] (
+    [OperationId] uniqueidentifier NOT NULL PRIMARY KEY,
+    [SourceSessionId] uniqueidentifier NOT NULL,
+    [TargetSessionId] uniqueidentifier NOT NULL,
+    [TargetTableId] uniqueidentifier NOT NULL,
+    [ActorId] uniqueidentifier NOT NULL,
+    [RestaurantId] uniqueidentifier NOT NULL,
+    [RequestHash] nvarchar(64) NOT NULL,
+    [Mode] nvarchar(10) NOT NULL,
+    [Reason] nvarchar(1000) NOT NULL,
+    [Status] nvarchar(20) NOT NULL,
+    [CreatedAt] datetime2 NOT NULL
+);
+GO
+CREATE INDEX IX_TableTransfer_Source ON [dbo].[TableTransfer] ([SourceSessionId], [Status]);
+CREATE INDEX IX_TableTransfer_Target ON [dbo].[TableTransfer] ([TargetSessionId], [Status]);
+GO

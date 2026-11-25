@@ -5,10 +5,12 @@ namespace Billing.BLL.Interfaces;
 
 public interface IBillService
 {
+    Task<bool> CanTransfer(Guid source, Guid target, CancellationToken ct);
     Task<BillDTO> Create(Guid tableSessionId, CancellationToken ct);
     Task<BillDTO> CreateForCheckout(Guid tableSessionId, Guid checkoutId, CancellationToken ct);
     Task<BillDTO> Refresh(Guid id, CancellationToken ct);
     Task<BillDTO> RefreshForCheckout(Guid id, Guid checkoutId, CancellationToken ct);
     Task<PagedResult<BillDTO>> GetAll(BillQueryDTO query, CancellationToken ct);
     Task<BillDTO> GetById(Guid id, CancellationToken ct);
+    Task<BillDTO> AssignCustomer(Guid billId, Guid customerId, CancellationToken ct);
 }

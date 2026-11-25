@@ -6,4 +6,5 @@ public sealed class AuditLogFilter
     public string? Action { get; set; }
     public DateTime? FromUtc { get; set; }
     public DateTime? ToUtc { get; set; }
+    public Guid? RestaurantId { get; set; }
 }

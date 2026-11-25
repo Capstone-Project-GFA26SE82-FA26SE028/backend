@@ -110,6 +110,10 @@ public sealed class BillingOrderGrpcService(IBillingOrderService service, IOrder
             RestaurantId = source.RestaurantId.ToString(),
             PendingOrderCount = source.PendingOrderCount
         };
+        if (source.CustomerRef.HasValue)
+        {
+            reply.CustomerRef = source.CustomerRef.Value.ToString();
+        }
         reply.Items.AddRange(source.Items.Select(line =>
         {
             var value = new BillingOrderLine

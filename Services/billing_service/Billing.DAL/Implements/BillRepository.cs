@@ -50,7 +50,10 @@ public sealed class BillRepository(BillingDbContext db) : GenericRepository<Bill
 
     public Task<Bill?> GetDetailsAsync(Guid id, CancellationToken ct)
     {
-        return _context.Bills.AsNoTracking().Include(bill => bill.BillLines)
+        return _context.Bills.AsNoTracking()
+            .Include(bill => bill.BillLines)
+            .Include(bill => bill.BillAdjustments)
+            .Include(bill => bill.VoucherRedemptions)
             .SingleOrDefaultAsync(bill => bill.BillId == id, ct);
     }
 
@@ -93,8 +96,14 @@ public sealed class BillRepository(BillingDbContext db) : GenericRepository<Bill
         }
 
         var count = await source.CountAsync(ct);
-        var items = await source.Include(bill => bill.BillLines).OrderBy(bill => bill.BillNumber).ThenBy(bill => bill.BillId)
-            .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync(ct);
+        var items = await source
+            .Include(bill => bill.BillLines)
+            .Include(bill => bill.BillAdjustments)
+            .OrderBy(bill => bill.BillNumber)
+            .ThenBy(bill => bill.BillId)
+            .Skip((query.Page - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .ToListAsync(ct);
         return new PagedResult<Bill>(items, count, query.Page, query.PageSize);
     }
 }

@@ -22,16 +22,19 @@ public sealed class StockIssueService(StockIssueRepository repository, StockLotR
         if (reason.Length is < 1 or > 1000 || reason.Any(char.IsControl)
             || request.Items is null || request.Items.Count is < 1 or > 100
             || request.Items.Any(x => x is null || x.IngredientId == Guid.Empty || x.Quantity <= 0 || !InventoryValidation.Quantity(x.Quantity))
-            || request.Items.Select(x => x.IngredientId).Distinct().Count() != request.Items.Count)
+            || request.Items.Any(x => x.GoodsReceiptItemId.HasValue && x.GoodsReceiptItemId.Value == Guid.Empty)
+            || request.Items.Select(x => (x.IngredientId, x.GoodsReceiptItemId)).Distinct().Count() != request.Items.Count)
         {
-            throw new InventoryException(400, "Cung cấp lý do xuất kho và 1-100 nguyên liệu không trùng lặp với số lượng đơn vị cơ sở dương (tối đa 6 chữ số thập phân).");
+            throw new InventoryException(400, "Cung cấp lý do xuất kho và 1-100 nguyên liệu/lô không trùng lặp với số lượng đơn vị cơ sở dương (tối đa 6 chữ số thập phân).");
         }
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
         {
             Reason = reason,
-            Items = request.Items.OrderBy(x => x.IngredientId).Select(x => new
+            Items = request.Items.OrderBy(x => x.IngredientId).ThenBy(x => x.GoodsReceiptItemId).Select(x => new
             {
                 x.IngredientId,
+                GoodsReceiptItemId = x.GoodsReceiptItemId?.ToString(),
+                IsDisposal = x.IsDisposal,
                 Quantity = x.Quantity.ToString("0.######", CultureInfo.InvariantCulture)
             }).ToList()
         }))));
@@ -55,46 +58,83 @@ public sealed class StockIssueService(StockIssueRepository repository, StockLotR
                 RequestHash = hash
             };
             var today = StockLotService.BusinessDate(clock);
-            foreach (var line in request.Items.OrderBy(x => x.IngredientId))
+            foreach (var line in request.Items.OrderBy(x => x.IngredientId).ThenBy(x => x.GoodsReceiptItemId))
             {
                 var ingredient = await ingredients.GetByIdAsync(line.IngredientId, ct)
                     ?? throw new InventoryException(404, "Không tìm thấy nguyên liệu.");
-                if (!ingredient.IsActive || ingredient.StockQuantity < line.Quantity)
+                if ((!line.IsDisposal && !ingredient.IsActive) || ingredient.StockQuantity < line.Quantity)
                 {
-                    throw new InventoryException(409, "Nguyên liệu đang ngừng hoạt động hoặc không đủ tồn kho.");
+                    throw new InventoryException(409, !ingredient.IsActive ? "Nguyên liệu đang ngừng hoạt động." : "Không đủ tồn kho.");
                 }
                 var available = await lots.GetAllAsync(line.IngredientId, ct);
                 if (available.Any(x => x.RemainingQuantity < 0))
                 {
                     throw new InventoryException(409, "Số dư lô hàng không nhất quán. Vui lòng đối soát kiểm kê trước khi xuất kho.");
                 }
-                var remaining = line.Quantity;
-                foreach (var lot in available.Where(x => x.ExpiryDate >= today && x.RemainingQuantity > 0))
+
+                if (line.GoodsReceiptItemId.HasValue && line.GoodsReceiptItemId.Value != Guid.Empty)
                 {
-                    var quantity = Math.Min(remaining, lot.RemainingQuantity);
+                    var targetLot = available.FirstOrDefault(x => x.GoodsReceiptItemId == line.GoodsReceiptItemId.Value)
+                        ?? throw new InventoryException(404, "Không tìm thấy lô hàng tương ứng của nguyên liệu.");
+
+                    if (targetLot.RemainingQuantity < line.Quantity)
+                    {
+                        throw new InventoryException(409, $"Số lượng xuất ({line.Quantity:0.######}) vượt quá số dư khả dụng trong lô hàng ({targetLot.RemainingQuantity:0.######}).");
+                    }
+
+                    if (!line.IsDisposal && targetLot.ExpiryDate.HasValue && targetLot.ExpiryDate < today)
+                    {
+                        throw new InventoryException(409, "Không thể xuất dùng lô hàng đã hết hạn sử dụng. Vui lòng chọn hình thức xuất hủy để xử lý.");
+                    }
+
+                    var movementType = line.IsDisposal ? "Disposal" : "Issue";
                     issue.Movements.Add(new StockMovement
                     {
                         StockMovementId = Guid.NewGuid(),
                         StockIssueId = issue.StockIssueId,
                         IngredientId = line.IngredientId,
-                        GoodsReceiptItemId = lot.GoodsReceiptItemId,
-                        MovementType = "Issue",
-                        QuantityChange = -quantity,
+                        GoodsReceiptItemId = targetLot.GoodsReceiptItemId,
+                        MovementType = movementType,
+                        QuantityChange = -line.Quantity,
                         PerformedByRef = actor,
                         Reason = reason,
                         CreatedAt = issue.CreatedAt
                     });
-                    remaining -= quantity;
-                    if (remaining == 0)
-                    {
-                        break;
-                    }
+
+                    targetLot.RemainingQuantity -= line.Quantity;
+                    ingredient.StockQuantity -= line.Quantity;
                 }
-                if (remaining > 0)
+                else
                 {
-                    throw new InventoryException(409, "Không đủ tồn kho trong các lô hàng còn hạn. Chưa thực hiện xuất kho.");
+                    var remaining = line.Quantity;
+                    foreach (var lot in available.Where(x => x.ExpiryDate >= today && x.RemainingQuantity > 0))
+                    {
+                        var quantity = Math.Min(remaining, lot.RemainingQuantity);
+                        issue.Movements.Add(new StockMovement
+                        {
+                            StockMovementId = Guid.NewGuid(),
+                            StockIssueId = issue.StockIssueId,
+                            IngredientId = line.IngredientId,
+                            GoodsReceiptItemId = lot.GoodsReceiptItemId,
+                            MovementType = "Issue",
+                            QuantityChange = -quantity,
+                            PerformedByRef = actor,
+                            Reason = reason,
+                            CreatedAt = issue.CreatedAt
+                        });
+                        lot.RemainingQuantity -= quantity;
+                        remaining -= quantity;
+                        if (remaining == 0)
+                        {
+                            break;
+                        }
+                    }
+                    if (remaining > 0)
+                    {
+                        throw new InventoryException(409, "Không đủ tồn kho trong các lô hàng còn hạn. Chưa thực hiện xuất kho.");
+                    }
+                    ingredient.StockQuantity -= line.Quantity;
                 }
-                ingredient.StockQuantity -= line.Quantity;
             }
             await repository.CreateAsync(issue, ct);
             return issue;
