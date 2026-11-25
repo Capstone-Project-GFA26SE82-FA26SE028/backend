@@ -18,7 +18,8 @@ public sealed class AuditLogGrpcService(IAuditLogService service) : AuditLogGrpc
             Search = request.HasSearch ? request.Search : null,
             Action = request.HasAction ? request.Action : null,
             FromUtc = request.FromUtc?.ToDateTime(),
-            ToUtc = request.ToUtc?.ToDateTime()
+            ToUtc = request.ToUtc?.ToDateTime(),
+            RestaurantId = request.HasRestaurantId ? ParseId(request.RestaurantId) : null
         });
         var reply = new AuditLogListReply
         {

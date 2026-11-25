@@ -34,6 +34,10 @@ public static class PersistenceExtensions
         services.AddScoped<IPaymentMethodRepository, PaymentMethodRepository>();
         services.AddScoped<ICashMovementRepository, CashMovementRepository>();
         services.AddScoped<IBillCheckoutRepository, BillCheckoutRepository>();
+        services.AddScoped<IPromotionRepository, PromotionRepository>();
+        services.AddScoped<IVoucherRepository, VoucherRepository>();
+        services.AddScoped<IVoucherRedemptionRepository, VoucherRedemptionRepository>();
+        services.AddScoped<IBillAdjustmentRepository, BillAdjustmentRepository>();
         services.AddScoped<IGenericRepository<BillCheckout>, GenericRepository<BillCheckout, BillingDbContext>>();
         services.AddScoped<ITaxFeePolicyRepository, TaxFeePolicyRepository>();
         services.AddScoped<IGenericRepository<global::Billing.DAL.Models.Bill>, GenericRepository<global::Billing.DAL.Models.Bill, BillingDbContext>>();

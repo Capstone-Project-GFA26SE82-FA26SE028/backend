@@ -36,6 +36,11 @@ public sealed class AuditLogRepository(IdentityDbContext context) : IAuditLogRep
             query = query.Where(item => item.CreatedAt <= to);
         }
 
+        if (filter?.RestaurantId.HasValue == true)
+        {
+            query = query.Where(item => item.User != null && item.User.RestaurantId == filter.RestaurantId.Value);
+        }
+
         var total = await query.CountAsync(ct);
         var items = await query.Include(item => item.User)
             .OrderByDescending(item => item.CreatedAt)

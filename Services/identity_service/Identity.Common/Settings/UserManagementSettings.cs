@@ -4,4 +4,5 @@ public sealed class UserManagementSettings
 {
     // Explicit database RoleIds. Empty configuration denies all admin operations.
     public string[] AdminRoleIds { get; set; } = [];
+    public string[] ManagerRoleIds { get; set; } = ["manager"];
 }
