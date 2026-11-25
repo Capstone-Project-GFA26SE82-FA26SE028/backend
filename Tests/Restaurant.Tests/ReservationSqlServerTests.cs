@@ -81,6 +81,11 @@ public sealed partial class ReservationSqlServerTests : IAsyncLifetime
                 ["Jwt:Audience"] = "https://gateway.sql.test",
                 ["UserManagement:AdminRoleIds:0"] = "admin"
             }));
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddGrpcClient<identityapi::Backend.Contracts.Restaurant.RestaurantGrpc.RestaurantGrpcClient>()
+                    .ConfigurePrimaryHttpMessageHandler(() => _restaurant.Server.CreateHandler());
+            });
         });
         using (var scope = _identity.Services.CreateScope())
         {

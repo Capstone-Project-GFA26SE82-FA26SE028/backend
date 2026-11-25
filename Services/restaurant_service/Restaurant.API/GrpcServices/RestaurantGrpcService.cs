@@ -9,6 +9,15 @@ namespace Restaurant.API.GrpcServices;
 
 public sealed class RestaurantGrpcService(IRestaurantService service) : RestaurantGrpc.RestaurantGrpcBase
 {
+    public override async Task<RestaurantLogoUploadReply> UploadLogo(RestaurantLogoUploadRequest request, ServerCallContext context)
+    {
+        return new RestaurantLogoUploadReply
+        {
+            LogoUrl = await service.UploadLogo(ManagementMapping.Id(request.RestaurantId), request.Image.ToByteArray(),
+                context.CancellationToken)
+        };
+    }
+
     public override async Task<RestaurantNamesReply> GetNames(RestaurantNamesRequest request, ServerCallContext context)
     {
         var names = await service.GetNames(request.RestaurantIds.Select(ManagementMapping.Id).ToArray(), context.CancellationToken);

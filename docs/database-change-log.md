@@ -523,3 +523,254 @@ Chỉ Cashier đứng ca tại quầy nhận tạo QR mới khi checkout ở `Pr
 ### B6 — Tự đóng phiên sau khi thanh toán
 
 **Không có thay đổi schema.** Dùng các trường đã có `TableSession.Status/ClosedAt`, `SessionTable.ReleasedAt`, `GuestAccess.RevokedAt` và `ServiceRequest.Status/CompletedAt` để đóng phiên sau khi xác minh giao dịch. Giữ nguyên khóa, index và quan hệ ERD. Không có script SQL nâng cấp cho B6.
+
+### 2026-11-21 — Kiểm kê Billing/AI và nâng cấp Docker có dữ liệu
+
+#### Phạm vi và bằng chứng
+
+Kiểm kê working tree của `feature/AI-restaurant-rework`, HEAD `df9aaa3`; mốc SQL Docker đầu tiên có trong lịch sử là `072863b`. Dùng `git show <commit> -- docker/sql/schema/<database>.sql` để xem bằng chứng thay đổi. Đối chiếu thêm model EF đang chạy, script upgrade và SQL tạo mới. Không coi mọi thay đổi do các thành viên nhập vào dev là sản phẩm của riêng đợt Billing/AI rework. Không đối chiếu model mới rồi tự kết luận bảng mới.
+
+BillingDb ở mốc `072863b` đã có **22 bảng**: Bill, CashRegister, PaymentProviderConfig, PaymentMethod, Voucher, TaxFeePolicy, Promotion, DiscountLimit, VoucherRedemption, ElectronicInvoice, CashShift, ReceiptPrint, PromotionTarget, BillLine, BillAdjustment, ShiftReport, Payment, Refund, CashMovement, CashHandover, PaymentWebhook, RefundLine. Do đó thu hộ, sổ quỹ, ca, báo cáo, in bill và webhook không mặc nhiên là các bảng được tạo thêm khi triển khai nghiệp vụ.
+
+SQL Billing hiện có 25 bảng: ngoài 22 bảng trên là BillCheckout, OnlinePayments và NotificationOutbox. OnlinePayments và NotificationOutbox được đưa vào qua các thay đổi dùng chung của repository, tách riêng dưới đây. Việc một bảng từng có trong một bản SQL cũ nhưng không còn trong bản tạo mới không chứng minh database thật đã DROP bảng.
+
+#### Những thay đổi schema trực tiếp của các đợt Billing
+
+Các cột trong bảng dưới không có DEFAULT, trừ khi ghi rõ. Các file schema là bản tạo mới; file trong `docker/sql/upgrades/` là nâng cấp bảo toàn dữ liệu, không thay thế bằng cách chạy lại CREATE/DROP database.
+
+| Database/bảng | Thay đổi so với SQL gốc | Khóa, quan hệ và ERD | File và commit bằng chứng |
+| --- | --- | --- | --- |
+| BillingDb.CashRegister | Thêm `RestaurantId uniqueidentifier NOT NULL` | Tham chiếu logic Restaurant 1–0..1 CashRegister theo quy tắc một quầy hiện tại; không FK xuyên DB. `UX_CashRegister_Restaurant` là UNIQUE(RestaurantId), được thêm ở B2; PK đã có | `BillingDb.sql`, `BillingCashRegisterRestaurant.sql`: `e1a41ac`; unique index: `8bc315a`, `BillingCheckoutSubmission.sql` |
+| BillingDb.Bill | Thêm `RestaurantId uniqueidentifier NOT NULL` | Restaurant 1–n Bill là logic, PK_Bill giữ nguyên | `BillingDb.sql`, `BillingBillRestaurant.sql`: `6814ad9` |
+| BillingDb.BillLine | `CogsSnapshot decimal(18,2) NOT NULL` → `decimal(18,2) NULL` | Không thêm bảng, không đổi PK/FK/dây ERD. NULL là chưa có giá vốn | Cùng script và commit `6814ad9` |
+| BillingDb.BillCheckout | Bảng mới ban đầu: `CheckoutId uniqueidentifier NOT NULL`, `BillId uniqueidentifier NULL`, `TableSessionRef uniqueidentifier NOT NULL`, `SourceHash char(64) NULL`, `Status varchar(20) NOT NULL`, `CreatedAt datetime2(7) NOT NULL`, `ReleasedAt datetime2(7) NULL` | PK(CheckoutId); FK_BillCheckout_Bill → Bill(BillId): Bill 1–n checkout, checkout có 0..1 bill; UNIQUE `UX_BillCheckout_ActiveSession` trên TableSessionRef WHERE ReleasedAt IS NULL. TableSession 1–n checkout là logic | `BillingDb.sql`: `8dfe450`; đường upgrade hiện tại: `BillingCheckoutTables.sql` |
+| OrderingDb.CheckoutLock | Bảng mới ban đầu: `CheckoutId uniqueidentifier NOT NULL`, `BillIdRef uniqueidentifier NULL`, `TableSessionRef uniqueidentifier NOT NULL`, `SourceHash char(64) NULL`, `Status varchar(20) NOT NULL`, `CreatedAt datetime2(7) NOT NULL`, `ReleasedAt datetime2(7) NULL` | PK(CheckoutId); UNIQUE `UX_CheckoutLock_ActiveSession` trên TableSessionRef WHERE ReleasedAt IS NULL. Bill 1–n CheckoutLock, TableSession 1–n CheckoutLock và đối chiếu CheckoutId giữa hai service là logic; không FK xuyên DB | `OrderingDb.sql`: `8dfe450`; đường upgrade hiện tại: `OrderingCheckoutLock.sql` |
+| BillingDb.Payment | Thêm `ProviderPaymentLinkId varchar(100) NULL`, `ProviderCheckoutUrl varchar(2048) NULL`, `ProviderQrCode varchar(max) NULL` | Không thêm PK/FK/index hoặc đổi dây ERD. Các cột ProviderOrderCode/ProviderTransactionId đã có từ SQL gốc | `BillingDb.sql`, `BillingPayOs.sql`: `ccd65f3` |
+| BillingDb.BillCheckout (B2) | Thêm `CashRegisterId uniqueidentifier NULL`, `SubmittedAt datetime2(7) NULL` | FK_BillCheckout_CashRegister → CashRegister(CashRegisterId): quầy 1–n checkout, checkout cũ có thể chưa có quầy | `BillingDb.sql`, `BillingCheckoutSubmission.sql`: `8bc315a` |
+| BillingDb.BillCheckout (B3) | Thêm `PreparedByRef uniqueidentifier NULL`, `PreparedAt datetime2(7) NULL`, `PresentedAt datetime2(7) NULL` | PreparedByRef là tham chiếu logic Identity.User 1–n checkout; không thêm FK/index | `BillingDb.sql`, `BillingCheckoutPreparation.sql`: `e67abb4` |
+| BillingDb.CashHandover (B4) | Cột `RestaurantId uniqueidentifier NULL` vốn đã có trong schema đa nhà hàng, không phải bảng mới/cột mới của B4 | Upgrade B4 bảo đảm cột và `IX_CashHandover_RestaurantIsolation` NONCLUSTERED(RestaurantId) tồn tại; chỉ backfill khi Bill và CashRegister xác nhận cùng nhà hàng. Restaurant 1–n CashHandover là logic | `BillingCashHandoverRestaurantIsolation.sql`: `85be05b`; xem thêm snapshot `2264c8a` |
+| BillingDb.PaymentMethod | Seed `Cash, IsEnabled=1` và `BankTransfer, IsEnabled=1` chỉ khi thiếu; giữ phương thức đã tắt | **DML, không đổi schema/ERD** | `BillingCashMethod.sql`: `10d8a29`; `BillingPayOs.sql`: `ccd65f3` |
+
+Các phần đóng ca/đối soát, thu chi, thu tiền mặt, phục hồi timeout, cập nhật trạng thái thanh toán và tự đóng phiên không tự tạo thêm cột ngoài các dòng đã nêu. Không có cột `CashMovement.PostedByRef` trong schema hiện tại; người thao tác thu chi được suy từ ca theo nghiệp vụ đã chốt. Các trường của ShiftReport, CashShift, CashMovement, CashHandover và ReceiptPrint còn lại đã có trong baseline.
+
+#### Thay đổi dùng chung đã có trong dev, cần cho Billing/AI hoạt động
+
+| Database/bảng | Cột/kiểu/NULL/DEFAULT | Khóa và quan hệ | Bằng chứng |
+| --- | --- | --- | --- |
+| BillingDb: BillAdjustment, BillLine, CashHandover, CashMovement, CashShift, DiscountLimit, ElectronicInvoice, Payment, PaymentWebhook, Promotion, PromotionTarget, ReceiptPrint, Refund, RefundLine, ShiftReport, TaxFeePolicy, Voucher, VoucherRedemption | Mỗi bảng thêm `RestaurantId uniqueidentifier NULL`, không DEFAULT; BillCheckout và Ordering.CheckoutLock cũng có cột cùng định nghĩa. Đây là phân vùng dữ liệu đa nhà hàng | Các `IX_<table>_RestaurantIsolation` theo RestaurantId; Restaurant 1–n mỗi bảng là logic. Không FK xuyên DB | Snapshot schema `2264c8a`, cơ chế scope/model trong `a40106c`; không gán tất cả vào đợt rework |
+| BillingDb.PaymentProviderConfig | Thêm `Enabled bit NOT NULL`, `ReturnUrl varchar(2048) NOT NULL`, `CancelUrl varchar(2048) NOT NULL`; `RestaurantId uniqueidentifier NULL` → NOT NULL; `SecretReference varchar(500) NOT NULL` → `varchar(max) NOT NULL`; không DEFAULT | UNIQUE `IX_PaymentProviderConfig_RestaurantId_Provider` trên (RestaurantId,Provider); Restaurant 1–n cấu hình provider là logic. PK_PaymentProviderConfig giữ nguyên | `ff89e44`; schema `BillingDb.sql`; đường upgrade mới `BillingProviderConfiguration.sql` |
+| BillingDb.OnlinePayments | Bảng mới của luồng mang đi: `OrderId uniqueidentifier NOT NULL` (PK), `RestaurantId uniqueidentifier NOT NULL`, `CustomerUserId uniqueidentifier NOT NULL`, `ProviderOrderCode bigint NOT NULL`, `Amount decimal(18,2) NOT NULL`, `Status nvarchar(30) NOT NULL`, `LinkId nvarchar(100) NULL`, `CheckoutUrl nvarchar(2048) NULL`, `ExpiresAt datetime2(7) NOT NULL`, `PaidAt datetime2(7) NULL`, `TransactionReference nvarchar(255) NULL`, `RefundReason nvarchar(1000) NULL`, `RefundReference nvarchar(255) NULL`, `RefundEvidence nvarchar(2048) NULL`, `RefundVerifiedBy uniqueidentifier NULL`, `RefundedAt datetime2(7) NULL`; không DEFAULT | UNIQUE ProviderOrderCode; UNIQUE TransactionReference/RefundReference khi không NULL; IX_OnlinePayments_RestaurantIsolation. Order–OnlinePayment là logic 1–0..1 qua OrderId; không FK xuyên DB | `4ae0ce1`, snapshot `2264c8a`; không tạo lại hay sửa nghiệp vụ OnlinePayment trong đợt này |
+| BillingDb.NotificationOutbox và OrderingDb.NotificationOutbox | Mỗi DB có bảng riêng: `NotificationOutboxId uniqueidentifier NOT NULL`, `RestaurantId uniqueidentifier NOT NULL`, `EventKey nvarchar(200) NOT NULL`, `Payload nvarchar(max) NOT NULL`, `CreatedAt datetime2(7) NOT NULL`, `NextAttemptAt datetime2(7) NOT NULL`, `ProcessedAt datetime2(7) NULL`, `Attempts int NOT NULL`, `LastError nvarchar(100) NULL`; không DEFAULT | PK(NotificationOutboxId); UNIQUE IX_NotificationOutbox_EventKey(EventKey); IX_NotificationOutbox_ProcessedAt_NextAttemptAt(ProcessedAt,NextAttemptAt); Restaurant 1–n outbox là logic | Schema `51d11a7`, notification code `b714411`; đường upgrade mới `NotificationOutbox.sql` chạy riêng mỗi DB |
+| OrderingDb.Order | Thêm `RefundBankName nvarchar(100) NULL`, `RefundAccountNumber nvarchar(34) NULL`, `RefundAccountHolder nvarchar(150) NULL`; không DEFAULT | Không thêm PK/FK/index/dây ERD. Truy vấn toàn entity Order từ Billing có thể cần các cột này dù không xử lý hoàn tiền | `cc78682`; đường upgrade mới `OrderingRefundAccount.sql` |
+| RestaurantDb.Qr | `ImageUrl varchar(2048) NULL`, không DEFAULT, đã có trong model nhưng thiếu SQL tạo mới | Không đổi PK/FK/index/dây ERD | Script/model Cloudinary `def8bfe`, initializer cũ `ea2c454`; đợt này đồng bộ CREATE schema và chạy lại `RestaurantCloudinary.sql` |
+
+`PayoutRequest` từng có trong snapshot `2264c8a` rồi bị bỏ khỏi SQL tạo mới ở `ff89e44`. Đợt này **không DROP** bảng hay xóa dữ liệu payout trên database cũ. Các cột mang đi/giỏ khách hàng trên Ordering do `4ae0ce1` và schema đa nhà hàng đưa vào là dependency hiện hữu, không phải DDL của AI rework; không sửa nghiệp vụ đó.
+
+#### AI và SQL
+
+**AI Service không có AI database, DbContext, migration hay bảng SQL riêng.** Chat và gợi ý giỏ gọi hợp đồng Restaurant/Catalog/Ordering; không đọc trực tiếp database service khác. Ngữ cảnh hội thoại dùng token được bảo vệ và khóa Data Protection ở volume `ai-chat-keys`, không phải bảng SQL. Gemini API key là cấu hình môi trường, không phải cột database. Không có DDL Ollama/Qwen/local model.
+
+`scripts/ai/acceptance-menu.sql` (`df9aaa3`) chỉ là **DML cho dữ liệu thử**, có INSERT/UPDATE/DELETE đối với các ID tổng hợp đã định; không CREATE/ALTER bảng, không được `db-init` tự chạy và không được coi là migration hay seed sản xuất. Những bảng RecipeVersion, Item, Price, Cart… AI sử dụng đã thuộc các service hiện hữu, không phải bảng mới của AI.
+
+#### Sửa trong đợt này và điều kiện nâng cấp
+
+- Không thay đổi model hoặc nghiệp vụ thanh toán/AI, không bổ sung trường nghiệp vụ mới. SQL tạo mới duy nhất được đồng bộ là `RestaurantDb.Qr.ImageUrl` cho đúng model và upgrade đã có.
+- Dockerfile đóng gói thư mục upgrades; `init.sh` gọi các script Billing được liệt kê tường minh theo thứ tự, rồi nâng cấp CheckoutLock/refund account/outbox ở Ordering và Qr.ImageUrl ở Restaurant. Không tự chạy mọi script trong thư mục, không tự chạy dữ liệu AI nghiệm thu, không sửa Identity/Inventory/Catalog.
+- Các script mới chỉ đưa database cũ đến cấu trúc đã có trong schema hiện tại: BillingCheckoutTables, BillingProviderConfiguration, OrderingCheckoutLock, OrderingRefundAccount, NotificationOutbox. Không thêm bảng/column mới ngoài hợp đồng schema hiện hữu.
+- Sau upgrade, initializer đọc **0 dòng** từ từng bảng/cột được khai báo trong schema Billing, Ordering, Catalog, Restaurant, Inventory và Identity. Thiếu bảng/cột bất kỳ ở dependency sẽ làm `db-init` thất bại rõ ràng thay vì báo thành công rồi lỗi tại API. Đây là kiểm tra bảng/cột, không phải bằng chứng dữ liệu hoặc mọi quy tắc nghiệp vụ đều hợp lệ.
+- Hỗ trợ database mới hoặc baseline Docker `DockerBootstrapVersion=2`. Database version khác hoặc database có bảng nhưng không có marker bị từ chối để kiểm kê riêng, không tự đánh dấu là đã nâng cấp. Không thể tự chuyển mọi schema tùy biến/lịch sử không xác định thành schema mới mà không có ánh xạ dữ liệu.
+- Quầy/bill cũ thiếu restaurant mapping, nhiều quầy một nhà hàng, cấu hình PayOS cũ thiếu Enabled/URL/nhà hàng, cấu hình trùng provider hoặc index tùy biến cần xử lý rõ trước; không điền giá trị giả, không xóa dữ liệu, không tự bật phương thức bị tắt. Lỗi bước sau không đồng nghĩa hoàn tác các script bước trước đã thành công; từng script có transaction và chạy lại được.
+- Chỉ áp dụng vào SQL Server Docker và LocalDB **thử nghiệm cô lập** trong lượt này. Không chạy upgrade trên BillingDb/OrderingDb/RestaurantDb đang dùng; repo SQL riêng có thay đổi sẵn được giữ nguyên, không ghi đè hoặc commit.
+
+Kiểm thử: `pwsh -File scripts/Test-BillingDockerBootstrap.ps1` build image từ working tree, kiểm tra khởi tạo mới, tái hiện schema cũ thiếu cột, nâng cấp lặp và giữ checkout cũ, đối chiếu toàn bộ metadata cột Billing/Ordering với schema mới, tạo checkout tables khi thiếu, giữ phương thức đã tắt, chặn thiếu cấu hình PayOS/nhiều quầy và chặn thiếu cột dependency AI. Tài nguyên test riêng được dọn. Các kết quả build/test và phần Gateway được báo ở bàn giao; không dùng kết quả LocalDB để khẳng định Docker của thành viên khác đã được nâng cấp.
+
+**Dependency Identity cần chốt riêng:** `e3f36b3` đã đưa `User.RestaurantId uniqueidentifier NULL` và `User.ProvisioningPending bit NOT NULL DEFAULT(0)` vào model; bản schema cũ `2264c8a` chưa có hai cột này. `AuthService.Login` đọc User qua repository nên thiếu cột có thể làm lỗi đăng nhập, không chỉ Billing. Các bảng Notification/NotificationRecipient/NotificationSetting/Announcement cũng đã được thêm vào Identity qua chức năng thông báo. Trong lượt này chỉ kiểm tra và chặn initializer nếu Identity thiếu bảng/cột; chưa thêm DDL hoặc sửa code Identity. Đã gửi câu hỏi phạm vi để người dùng chốt có cho phép bổ sung upgrade Identity theo schema hiện có hay không. Không tự gán RestaurantId cho user cũ.
+
+Đã chạy thêm Compose thật từ `compose.yaml` bằng project test riêng: `up -d --build sqlserver db-init` → db-init Exited(0); sau khi cố tình bỏ 5 cột checkout trong BillingDb test, chạy lại db-init → bổ sung đủ cột, Exited(0). Database/volume/project test đã dọn; không chạy lệnh xóa volume của project backend đang dùng.
+
+### 2026-11-23 — Dữ liệu màn Bàn & hóa đơn thu ngân
+
+**Không có thay đổi schema.** Không thêm/sửa/xóa bảng, cột, kiểu dữ liệu, NULL/NOT NULL, DEFAULT, PK, FK, UNIQUE, CHECK hoặc index; không cần scaffold hoặc SQL upgrade; không đổi dây ERD. Không sửa repository SQL riêng hoặc database đang dùng.
+
+Billing đọc mã/tổng bill hiện có, Payment.CashShiftId/Status/PaidAt để xác định tab đã thanh toán trong ca, và đọc metadata bàn/khu vực qua RPC mới `BillingSessionGrpc.GetDisplays` ở Restaurant. DTO/gRPC bổ sung `tables[]`, các trường bàn/khu vực đơn khi xác định duy nhất, billCode (từ BillNumber), tổng, số khách và thời điểm. Bộ lọc/tổng tính trước phân trang. Đây là thay đổi code/hợp đồng đọc, không phải cột SQL mới. Luồng tiền mặt, PayOS, thu hộ, đóng phiên và quyền quản trị giữ nguyên theo BM04 F-WF02-06.
+
+Đã kiểm chứng: Billing 381/381 test (bao gồm 2 test SQL mới về ca Paid và chống nhân đôi); 6/6 test luồng PaymentSubmission qua Gateway TestServer/SQL Server LocalDB, có bổ sung bộ lọc và thẻ; kiểm tra lại riêng hai luồng tiền mặt/PayOS sau khi thêm assertion Paid. PayOS trong các test dùng HTTP fixture, không gọi cổng thanh toán thật. Fixture Billing seed sơ đồ trực tiếp vào database thử vì quyền API quản lý sơ đồ trên dev đã thay đổi; không đổi quyền production để phục vụ test.
+
+Compose thật dùng project/container/volume riêng và dữ liệu seed thử: đăng nhập Cashier, mở ca qua API, đọc incoming/tìm mã bill/tab Paid/chi tiết bill đều HTTP 200. Dataset có 2 thẻ chờ, 1 bill chưa lập, tổng bill đã lập 45.000 VND; tìm BOARD-UNPAID trả bàn T02/45.000 VND; tab Paid trả bàn T03 đã đóng phiên/90.000 VND theo ca. Đây là kiểm chứng API đọc bằng dữ liệu SQL thử, không phải kiểm chứng toàn luồng thu tiền thật trong Docker. Tài nguyên thử đã dọn, không reset database backend đang dùng.
+
+### 2026-11-23 — Upgrade Identity StaffTransfer và quyền QR theo nhà hàng
+
+Phạm vi: sửa lỗi đổi vai trò/trạng thái tài khoản khi database Docker cũ thiếu `dbo.StaffTransfer`; cho `admin` nhà hàng quản lý QR trong phân công đang hoạt động, giữ nguyên quyền `platform_admin`. Không thay đổi nghiệp vụ chuyển nhân viên hoặc quyền quản trị dùng chung.
+
+**SQL/ERD:** `StaffTransfer` đã tồn tại trong file tạo mới `docker/sql/schema/IdentityDb.sql` (từ chức năng chuyển nhân viên), không phải bảng nghiệp vụ mới do đợt QR tạo ra. Đợt này thêm `docker/sql/upgrades/IdentityStaffTransfer.sql` và gọi tại `docker/sql/init.sh` để bổ sung đối tượng còn thiếu trên database đang dùng. Không sửa baseline, model/DbContext hoặc dữ liệu User; không cần scaffold vì mô hình đã có đúng bảng này.
+
+| Database/bảng | Cột | Kiểu SQL đầy đủ | NULL | DEFAULT |
+| --- | --- | --- | --- | --- |
+| IdentityDb.dbo.StaffTransfer | StaffTransferId | uniqueidentifier | Không | Không |
+| IdentityDb.dbo.StaffTransfer | UserId | uniqueidentifier | Không | Không |
+| IdentityDb.dbo.StaffTransfer | SourceRestaurantId | uniqueidentifier | Không | Không |
+| IdentityDb.dbo.StaffTransfer | TargetRestaurantId | uniqueidentifier | Không | Không |
+| IdentityDb.dbo.StaffTransfer | RequestedBy | uniqueidentifier | Không | Không |
+| IdentityDb.dbo.StaffTransfer | WasActive | bit | Không | Không |
+| IdentityDb.dbo.StaffTransfer | CompletedAt | datetime2(7) | Có | Không |
+| IdentityDb.dbo.StaffTransfer | Status | nvarchar(20) | Không | Không |
+| IdentityDb.dbo.StaffTransfer | Message | nvarchar(500) | Có | Không |
+| IdentityDb.dbo.StaffTransfer | CreatedAt | datetime2(7) | Không | Không |
+
+Khóa/index: PK `PK_StaffTransfer(StaffTransferId)`; index không UNIQUE `IX_StaffTransfer_UserId_Status(UserId, Status)`. Không thêm FK, UNIQUE, CHECK hay DEFAULT; không xóa/sửa cột. Script kiểm tra cấu trúc hiện có, giữ nguyên dữ liệu và dừng/rollback nếu không tương thích; dùng transaction và application lock, chạy lặp an toàn.
+
+Dây ERD: User 1–n StaffTransfer qua UserId (nhân viên được chuyển); User 1–n StaffTransfer qua RequestedBy (người yêu cầu). Đây là tham chiếu logic, schema hiện tại không khai báo FK. Restaurant 1–n StaffTransfer qua từng vai trò SourceRestaurantId/TargetRestaurantId là tham chiếu logic sang RestaurantDb; không tạo FK xuyên database. Nếu ERD đã có bảng theo schema gốc thì không cần thêm bảng/dây lần nữa; nếu chưa có, bổ sung theo mô tả này. Phần QR không có thay đổi schema.
+
+Trạng thái áp dụng: đã chạy script hai lần trên `IdentityDb` trong container Docker hiện có `backend-sqlserver-1`; trước upgrade thiếu bảng, sau upgrade có đủ PK/index, User giữ 7 bản ghi trước/sau và StaffTransfer có 0 bản ghi (không seed chuyển nhân viên). Không xóa volume, không chạy lại schema/seed cho database này. Không thay đổi repo Database-SQLServer riêng vì đợt này chỉ thêm đường upgrade Docker cho định nghĩa đã có. Chưa commit/push.
+
+Kiểm chứng riêng: test SQL Server LocalDB tái hiện lỗi 208 khi bảng thiếu rồi đổi vai trò thành công sau upgrade; chạy lặp giữ User/lịch sử chuyển nhân viên, khôi phục index thiếu, từ chối schema không tương thích. Gateway TestServer dùng SQLite và Identity/Cloudinary giả lập kiểm tra tạo/tạo lại/tải ảnh đúng nhà hàng, lọc trước phân trang, chặn khác nhà hàng, phân công đã thu hồi và các vai trò không được cấp quyền; giữ regression Platform Admin và resolve QR công khai. Một test mới chạy với QrService cũ đã thất bại, chạy lại bản sửa đạt.
+
+Docker Compose project thử `identity-qr-check` build từ working tree: SQL Server, db-init, Identity, Restaurant, Gateway thật. Dùng seed thử riêng và tài khoản đăng nhập thật; thiếu bảng gây PATCH role HTTP 502, chạy lại initializer giữ 7 User và PATCH role HTTP 200. Admin nhà hàng GET /api/qr HTTP 200; truy cập QR của nhà hàng khác qua list/image/create/regenerate đều HTTP 403; Manager GET list HTTP 403. Upload/download ảnh Cloudinary thành công chỉ được kiểm tra bằng test image store trong TestServer, chưa dùng credential Cloudinary thật. Không thay đổi vai trò tài khoản trên database Docker chính để kiểm thử.
+
+Kết quả tổng hợp cuối lượt: build `Backend.sln -c Release --no-restore` đạt; test toàn solution `-c Release --no-build --no-restore` với `IDENTITY_SQL_TEST_CONNECTION` trỏ SQL Server LocalDB đạt 1.167, lỗi 0; 100 test SQL khác bị bỏ qua do chưa bật điều kiện riêng (không tính đạt). Identity 76/76 gồm 3 test SQL upgrade mới; Restaurant 141 đạt, 51 bỏ qua, gồm 8 test QR mới. Các test Gateway QR dùng nhận diện tài khoản/Cloudinary giả lập; kiểm chứng Docker bổ sung dùng Identity và Restaurant thật như mô tả trên. Chưa kiểm chứng upload/tải ảnh thành công với Cloudinary thật hoặc chạy lại GitHub Actions trên Ubuntu.
+
+Kiểm tra Docker sau rebuild Restaurant cuối cùng: lượt gọi ngay sau recreate chưa đạt assertion; kiểm tra lại khi service đã nhận request trả GET /api/qr?pageSize=1 HTTP 200, totalCount=1, chỉ bàn T01 của nhà hàng được phân công. Thu hồi phân công trong database thử làm cùng tài khoản/token nhận HTTP 403; đã khôi phục phân công thử sau test. Project thử đã dừng; không xóa container SQL chính hoặc bất kỳ volume database nào.
+
+### 2026-11-23 — Metadata nhà hàng và khu vực khi quét QR
+
+**Không có thay đổi schema.** Không thêm/sửa/xóa bảng, cột, kiểu dữ liệu, NULL/NOT NULL, DEFAULT, PK/FK, UNIQUE, CHECK hoặc index; không đổi quan hệ/dây ERD, không cần SQL upgrade hoặc scaffold.
+
+`POST /api/table-sessions/scan` bổ sung `restaurantName`, `areaName`, `logoUrl` từ quan hệ bàn đã xác thực → Area → Restaurant, đọc trong transaction mở/tái sử dụng phiên. `LogoUrl` NULL/rỗng/khoảng trắng được trả thành JSON null. Giữ nguyên trường cũ và quét ẩn danh; không dùng tên/ID do client gửi để chọn nhà hàng, không cấp GuestAccess/cookie chỉ vì quét QR. `TableSessionScanReply` bổ sung field 9/10/11, không đổi field cũ. Endpoint Waiter mở bàn dùng chung response cũng có metadata, giữ nguyên kiểm tra quyền.
+
+Kiểm chứng metadata: 5 test mới qua Gateway TestServer với SQLite và image store/nhận diện tài khoản giả lập kiểm tra QR đúng nhà hàng (kể cả client gửi ID/tên khác), tên nhà hàng/khu vực, logo NULL/rỗng/khoảng trắng/có URL, tạo và tái sử dụng phiên, metadata cập nhật từ DB, không tạo GuestAccess/cookie khi chỉ scan. Build toàn solution Release đạt. Test riêng scan/QR: 30 đạt, 4 SQL test bỏ qua.
+
+Docker: đã rebuild Restaurant, Identity và Gateway từ working tree, dùng project/database thử `identity-qr-check`; request scan không có Authorization trả HTTP 200, tên/area đúng DB và logoUrl JSON null; cập nhật URL logo trong DB thử rồi scan lại trả URL mới, cùng phiên, isNewSession=false; token sai trả 404. Không thay đổi dữ liệu hoặc schema trên volume/database Docker chính trong đợt metadata. Lượt khởi động Docker đầu có lỗi db-init kết nối IdentityDb trong lúc SQL khởi động; chạy lại sau khi DB sẵn sàng thì initializer Exited(0) và API chạy được. SQL gốc dùng varchar/collation SQL_Latin1_General_CP1_CI_AS cho RestaurantName/AreaName; fixture Docker dùng tên ASCII sau khi assertion tên tiếng Việt không khớp, không tự đổi kiểu cột trong đợt này. Dữ liệu tiếng Việt được kiểm tra trên SQLite không thay thế việc kiểm tra lưu Unicode ở SQL Server.
+
+Lượt test solution đầu chạy song song với Docker build có hai lỗi: AI TotalBudgetIncludesDataReadAndModelTime đo 1,8766 giây vượt ngưỡng 1,8 giây; test Identity IncompatibleExistingSchemaIsRejectedWithoutRewritingData timeout ở khởi tạo kết nối LocalDB. Chưa sửa code/test ngoài phạm vi metadata; giữ kết quả lượt này để đối chiếu và chạy lại solution tuần tự sau khi dừng Docker thử.
+
+Kết quả chạy lại tuần tự sau khi dừng Docker thử: dotnet test Backend.sln -c Release --no-build --no-restore -m:1 đạt 1.172, lỗi 0, bỏ qua 100; hai test lỗi ở lượt song song đã đạt mà không sửa code hoặc assertion. Identity 76/76, Restaurant 146 đạt/51 bỏ qua, AI 163/163. Chưa chạy GitHub Actions Ubuntu. Đã rà diff; chưa commit/push.
+
+
+## 2026-11-24 — Bảo toàn tiếng Việt trên toàn backend
+
+Nhánh `fix/vietnamese-unicode`, baseline `9a2bbe0`; thay đổi chưa commit. Các bảng/cột dưới đây đã tồn tại. Chỉ sửa kiểu chuỗi, giữ độ dài ký tự, NULL/NOT NULL, collation và DEFAULT hiện có; không thêm DEFAULT. Không thêm/xóa bảng/cột, PK, FK hoặc quan hệ; cardinality và dây ERD không đổi. Chỉ đổi nhãn kiểu dữ liệu cho 56 cột dưới đây.
+
+SQL tạo mới: `docker/sql/schema/{Database}.sql` cho 7 database. SQL nâng cấp bảo toàn dữ liệu: `docker/sql/upgrades/UnicodeText.sql`, tự gọi trong `docker/sql/init.sh` sau các upgrade nghiệp vụ. `BillingPayOs.sql`, `BillingProviderConfiguration.sql`, `RestaurantCloudinary.sql` được cập nhật kiểu tạo mới/kiểm tra tương thích để chạy lại được sau nâng cấp. Index/UQ/CHECK/DEFAULT phụ thuộc được dựng lại cùng tên/định nghĩa/tùy chọn; không thêm ràng buộc nghiệp vụ. Script từ chối dependency không hỗ trợ thay vì xóa âm thầm.
+
+Đã áp dụng và kiểm tra trên SQL Server Docker **tách biệt** (database mới, fixture schema varchar cũ, chạy lặp, đối chiếu số dòng/index/giá trị cũ). Chưa áp dụng database dev đang chạy của nhóm. Đã scaffold từ database thử bằng EF 8.0.24; chỉ cập nhật mapping ảnh hưởng, giữ các tùy chỉnh tenant. Repo SQL riêng được đồng bộ 54 định nghĩa có sẵn và file upgrade Unicode; hai cột PaymentProviderConfig.ReturnUrl/CancelUrl chưa có ở baseline SQL riêng nên không tự thêm. Bản SQL riêng cần hoàn tất các upgrade nghiệp vụ hiện tại trước khi áp dụng UnicodeText.sql; không coi nó đã đồng bộ toàn bộ Billing. Không ghi đè thay đổi Billing/README đã tồn tại.
+
+| Database | Bảng.cột có sẵn | Thay đổi kiểu | Nullability giữ nguyên |
+| --- | --- | --- | --- |
+| IdentityDb | Role.RoleName | varchar(50) → nvarchar(50) | NOT NULL |
+| IdentityDb | Role.Description | varchar(max) → nvarchar(max) | NULL |
+| IdentityDb | User.UserName | varchar(100) → nvarchar(100) | NOT NULL |
+| IdentityDb | User.Email | varchar(255) → nvarchar(255) | NOT NULL |
+| IdentityDb | User.FullName | varchar(255) → nvarchar(255) | NOT NULL |
+| IdentityDb | User.AvatarUrl | varchar(max) → nvarchar(max) | NULL |
+| IdentityDb | UserSession.UserAgent | varchar(max) → nvarchar(max) | NULL |
+| IdentityDb | UserSession.DeviceType | varchar(50) → nvarchar(50) | NULL |
+| IdentityDb | AuditLog.OldValue | varchar(max) → nvarchar(max) | NULL |
+| IdentityDb | AuditLog.NewValue | varchar(max) → nvarchar(max) | NULL |
+| RestaurantDb | Restaurant.RestaurantName | varchar(255) → nvarchar(255) | NOT NULL |
+| RestaurantDb | Restaurant.Address | varchar(500) → nvarchar(500) | NOT NULL |
+| RestaurantDb | Restaurant.LogoUrl | varchar(max) → nvarchar(max) | NULL |
+| RestaurantDb | Reservation.ContactName | varchar(255) → nvarchar(255) | NOT NULL |
+| RestaurantDb | Area.AreaCode | varchar(50) → nvarchar(50) | NOT NULL |
+| RestaurantDb | Area.AreaName | varchar(100) → nvarchar(100) | NOT NULL |
+| RestaurantDb | Table.TableCode | varchar(50) → nvarchar(50) | NOT NULL |
+| RestaurantDb | SessionTable.MoveReason | varchar(500) → nvarchar(500) | NULL |
+| RestaurantDb | Qr.ImageUrl | varchar(2048) → nvarchar(2048) | NULL |
+| CatalogDb | Category.CategoryName | varchar(255) → nvarchar(255) | NOT NULL |
+| CatalogDb | Item.ItemName | varchar(255) → nvarchar(255) | NOT NULL |
+| CatalogDb | Item.Description | varchar(max) → nvarchar(max) | NULL |
+| CatalogDb | Item.ImageUrl | varchar(max) → nvarchar(max) | NULL |
+| CatalogDb | Option.OptionName | varchar(255) → nvarchar(255) | NOT NULL |
+| CatalogDb | OptionGroup.OptionGroupName | varchar(255) → nvarchar(255) | NOT NULL |
+| CatalogDb | RecipeMedia.Url | varchar(max) → nvarchar(max) | NOT NULL |
+| CatalogDb | RecipeVersion.Instructions | varchar(max) → nvarchar(max) | NULL |
+| InventoryDb | GoodsReceipt.Note | varchar(max) → nvarchar(max) | NULL |
+| InventoryDb | Ingredient.IngredientName | varchar(255) → nvarchar(255) | NOT NULL |
+| InventoryDb | StockMovement.Reason | varchar(max) → nvarchar(max) | NULL |
+| InventoryDb | StocktakeItem.DiscrepancyReason | varchar(max) → nvarchar(max) | NULL |
+| OrderingDb | CartItem.Note | varchar(max) → nvarchar(max) | NULL |
+| OrderingDb | KitchenStation.KitchenStationName | varchar(255) → nvarchar(255) | NOT NULL |
+| OrderingDb | OrderItem.NameSnapshot | varchar(255) → nvarchar(255) | NOT NULL |
+| OrderingDb | OrderItem.Note | varchar(max) → nvarchar(max) | NULL |
+| OrderingDb | OrderItemOption.NameSnapshot | varchar(255) → nvarchar(255) | NOT NULL |
+| CustomerDb | Customer.CustomerName | varchar(255) → nvarchar(255) | NOT NULL |
+| CustomerDb | Feedback.Comment | varchar(max) → nvarchar(max) | NULL |
+| CustomerDb | FeedbackItem.Comment | varchar(max) → nvarchar(max) | NULL |
+| CustomerDb | LoyaltyTier.LoyaltyTierName | varchar(100) → nvarchar(100) | NOT NULL |
+| BillingDb | BillAdjustment.RuleSnapshot | varchar(max) → nvarchar(max) | NULL |
+| BillingDb | BillAdjustment.Reason | varchar(1000) → nvarchar(1000) | NULL |
+| BillingDb | BillLine.ItemSnapshot | varchar(max) → nvarchar(max) | NOT NULL |
+| BillingDb | CashMovement.Reason | varchar(1000) → nvarchar(1000) | NULL |
+| BillingDb | ElectronicInvoice.CompanyName | varchar(255) → nvarchar(255) | NOT NULL |
+| BillingDb | ElectronicInvoice.Address | varchar(500) → nvarchar(500) | NOT NULL |
+| BillingDb | ElectronicInvoice.Email | varchar(320) → nvarchar(320) | NOT NULL |
+| BillingDb | Payment.ProviderCheckoutUrl | varchar(2048) → nvarchar(2048) | NULL |
+| BillingDb | Payment.ProviderQrCode | varchar(max) → nvarchar(max) | NULL |
+| BillingDb | Payment.EvidenceUrl | varchar(2048) → nvarchar(2048) | NULL |
+| BillingDb | PaymentProviderConfig.ReturnUrl | varchar(2048) → nvarchar(2048) | NOT NULL |
+| BillingDb | PaymentProviderConfig.CancelUrl | varchar(2048) → nvarchar(2048) | NOT NULL |
+| BillingDb | PaymentProviderConfig.WebhookUrl | varchar(2048) → nvarchar(2048) | NOT NULL |
+| BillingDb | Promotion.PromotionName | varchar(255) → nvarchar(255) | NOT NULL |
+| BillingDb | Refund.Reason | varchar(1000) → nvarchar(1000) | NOT NULL |
+| BillingDb | ShiftReport.DifferenceReason | varchar(1000) → nvarchar(1000) | NULL |
+
+Giới hạn: chuỗi đã thành `?` trước nâng cấp không thể tự khôi phục; cần nguồn dữ liệu đúng để nhập lại. Mã kỹ thuật/status/hash/secret ciphertext giữ varchar; BaseUnit liên kết mã đơn vị ASCII nên không thay đổi. SQL thủ công nhập Unicode phải dùng tham số Unicode hoặc N'...'. NVARCHAR tăng dung lượng chuỗi; nâng cấp cần maintenance window cho database lớn vì ALTER COLUMN/index có khóa schema.
+
+Kiểm tra dependency của 56 cột trên baseline Docker: không cột nào có DEFAULT, PK/FK hoặc index trực tiếp. Test bổ sung một UNIQUE filtered nonclustered index có INCLUDE/FILLFACTOR và CHECK/DEFAULT trên IngredientName để xác minh nhánh dựng lại dependency (không thêm các object thử vào schema thật).
+
+Bằng chứng nghiệm thu cục bộ:
+- `dotnet build Backend.sln -c Release`: đạt, 0 warning/0 error ở lần build solution. Docker build các service có cảnh báo nullable sẵn có trong Shared.Persistence.
+- `dotnet test Backend.sln -c Release --no-build --no-restore -m:1`: 1.388 đạt, 0 lỗi, 103 skipped do điều kiện môi trường của các bài tích hợp khác; skipped không tính là đạt. Có cấp connection SQL riêng cho 56 bài parameter Unicode.
+- `pwsh -File scripts/Test-UnicodeDockerBootstrap.ps1 -VerifyEf`: đạt kiểm tra SQL mới/cũ, dependency, chạy lặp và 112 test Unicode (0 skipped).
+- `pwsh -File scripts/Test-BillingDockerBootstrap.ps1`: ALL DOCKER BOOTSTRAP CHECKS PASSED.
+- Gateway Docker build từ source mới, database thử tách biệt: POST/GET categories; POST/GET items (tên/mô tả); PUT/GET users/me; POST/GET ingredients đều giữ nguyên chuỗi tiếng Việt. Không gọi Cloudinary thật trong các ca này.
+- Lần test tổng đầu chạy song song build Docker có 3 lỗi timing/regex tại AI. Chạy AI riêng đạt 163/163; chạy lại toàn solution tuần tự đạt các số liệu ở trên. Không sửa code AI.
+- Chưa chạy GitHub Actions trên remote, chưa nâng cấp database dev của nhóm, chưa kiểm thử giao diện FE; không tuyên bố mọi luồng nghiệp vụ đã được kiểm thử end-to-end.
+
+
+## 2026-11-25 — Quyền xem và kỳ báo cáo nhà hàng
+
+**Không có thay đổi schema.** Chỉ bổ sung contract gRPC, DTO, lớp kiểm tra ngữ cảnh/kỳ và API Gateway; không thêm/sửa/xóa bảng/cột/PK/FK/UNIQUE/CHECK/index, không đổi quan hệ/cardinality hoặc dây ERD. DTO mới không phải entity. Không sửa repo SQL riêng. Fixture Docker tách biệt dùng schema/seed hiện có để kiểm thử; không áp SQL hoặc đổi dữ liệu database dev của nhóm. Chi tiết file, test, giới hạn và review tại `docs/restaurant-performance-reports.md`, mục R1. Thay đổi đang để chưa commit/push trên `feature/restaurant-performance-reports`.
+
+
+## 2026-11-25 — Hoàn thiện định dạng thời gian sau review
+
+**Không có thay đổi schema.** Chỉ chuẩn hóa hậu tố UTC z thường trong validation kỳ báo cáo, bổ sung hướng dẫn encode URL trong Swagger và test. Không đổi bảng/cột/khóa/ràng buộc/index/quan hệ, không sửa SQL Docker hoặc repo SQL riêng, không áp thay đổi database nhóm. Kiểm chứng Docker dùng project và dữ liệu demo riêng. Bản sửa dựa trên commit 1a64b53, giữ nguyên lịch sử và chưa commit/push. Chi tiết trong `docs/restaurant-performance-reports.md`, mục hoàn thiện sau review R1.
+
+
+## 2026-11-25 — Báo cáo doanh thu và tiền thu theo kỳ
+
+**Không có thay đổi schema.** Không thêm/sửa/xóa bảng/cột/default/PK/FK/UNIQUE/CHECK/index hoặc quan hệ/cardinality/dây ERD. Chỉ thêm repository đọc, DTO, tổng hợp, RPC/API và test. Không sửa SQL Docker hoặc repo Database-SQLServer riêng; không áp thay đổi trên database dev của nhóm. Fixture SQL tổng hợp chỉ dùng trong project Docker thử tách biệt, không được tính là nguồn hoàn/thu PayOS thật. Chi tiết và giới hạn dữ liệu tại `docs/restaurant-performance-reports.md`, mục R2. Giữ HEAD 8e8d872, thay đổi chưa commit/push.
+
+
+## 2026-11-25 — Báo cáo theo phương thức và ca thu ngân (R3 đang làm)
+
+**Không có thay đổi schema.** Bổ sung filter/partition trên dữ liệu đã có, không đổi bảng/cột/NULL/default/khóa/ràng buộc/index/quan hệ/cardinality hoặc ERD; không sửa SQL Docker/upgrade/repo SQL riêng. Chưa bổ sung nguồn kênh từ Ordering hoặc cột Channel; phần này đang chờ người dùng chốt bill nhiều kênh, xem mục R3 trong `docs/restaurant-performance-reports.md`. Không thay dữ liệu database nhóm, không commit/push.
+
+
+## 2026-11-25 — Hoàn thiện nguồn kênh báo cáo R3
+
+**Không có thay đổi schema.** Chỉ bổ sung RPC/DTO/client và truy vấn chỉ đọc Order.Channel có kiểm tra RestaurantRef, không thêm Channel vào Bill hoặc thay bảng/cột/khóa/index/ràng buộc/default/NULL/cardinality/dây ERD. Không sửa SQL Docker/upgrade hoặc repo SQL riêng, không áp thay đổi database nhóm. Fixture nguồn kênh/thanh toán trong project Docker riêng được ghi rõ ở tài liệu báo cáo; không phải migration hay dữ liệu vận hành. Giữ nguyên luồng lập/thu/hoàn và quyền API quản trị cũ, chưa commit/push.
+
+
+## 2026-11-25 — Sửa trạng thái đầy đủ của phân tổ kênh báo cáo
+
+**Không có thay đổi schema.** Chỉ sửa completeness của chiều kênh và bổ sung regression/test pipeline thật trong TestServer. Không đổi bảng/cột/default/NULL/khóa/index/ràng buộc/cardinality/ERD, SQL Docker/upgrade hay repo SQL riêng. Fixture SQLite/SQL thử không phải model/schema production. Không đổi DB của nhóm hoặc luồng thu/hoàn; giữ nguyên HEAD8e8d872, chưa commit/push. Xem mục review kênh R3 trong tài liệu báo cáo.
+
+
+## 2026-11-25 — R4 bảng món bán và snapshot giá vốn
+
+**Không có thay đổi schema.** BillLine.CogsSnapshot đã có sẵn, giữ decimal(18,2) NULL, không DEFAULT; người dùng chốt đây là giá vốn tổng dòng. Chỉ bổ sung reader/DTO/RPC/bảng món, không thêm/sửa/xóa bảng/cột/khóa/ràng buộc/index/quan hệ/cardinality hoặc ERD, không sửa model production/SQL Docker/upgrade/repo SQL riêng. Không tự điền COGS, không chia cost khi lượng thay đổi; nguồn writer kho vẫn thiếu. restaurant_id cấp gốc mới là field proto, không phải cột SQL. Fixture SQLite/SQL tách biệt phục vụ test không phải migration hoặc dữ liệu vận hành. Không đổi database nhóm, chưa commit/push; chi tiết và bằng chứng R4 tại docs/restaurant-performance-reports.md.
+
+## 2026-11-25 — Hoàn thiện review R4
+
+**Không có thay đổi schema.** Chỉ tách completeness theo ItemId, bổ sung currency vào DTO/proto và cảnh báo lọc kênh; không thêm/sửa/xóa bảng/cột/NULL/default/khóa/index/quan hệ/cardinality/ERD. Không sửa SQL tạo mới/upgrade/model hoặc database nhóm. Dữ liệu tổng hợp Docker riêng chỉ phục vụ kiểm thử, không phải migration. Chi tiết kết quả tại docs/restaurant-performance-reports.md. Chưa commit/push.
+
+
+## 2026-11-25 — R5 giảm giá và tỷ suất đóng góp từng món
+
+**Không có thay đổi schema.** Chỉ thêm field DTO/proto cho discounts và contributionMarginPercent, tổng hợp chỉ đọc và kiểm thử. Không thêm/sửa/xóa bảng/cột/NULL/default/PK/FK/UNIQUE/CHECK/index/quan hệ/cardinality/dây ERD; không sửa model, DbContext, SQL tạo mới/upgrade/Docker hoặc repo SQL riêng. BillAdjustment, DiscountAllocated, CogsSnapshot đều là bảng/cột đã có; đọc hay tạo fixture không có nghĩa tạo bảng/cột mới. Dữ liệu fixture chỉ được ghi vào SQLite và SQL Server của project Docker thử riêng, không thay database nhóm. Chưa commit/push. Chi tiết và giới hạn nguồn xem R5 trong docs/restaurant-performance-reports.md.
+
+
+## 2026-11-25 — Hoàn thiện review R5
+
+**Không có thay đổi schema.** Chỉ sửa phạm vi cảnh báo theo kết quả lọc món, bổ sung test backend/Gateway cho bảng trống và tỷ suất âm/gộp cùng món. Không thêm/sửa/xóa bảng/cột/kiểu/NULL/default/khóa/index/quan hệ/cardinality/ERD, SQL tạo mới/upgrade/model/DbContext hoặc repo SQL riêng. SQL fixture chỉ dùng trong project Docker thử riêng đã dọn, không thay database nhóm. Chưa commit/push; chi tiết tại mục review R5 của tài liệu báo cáo.

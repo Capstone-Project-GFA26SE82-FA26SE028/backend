@@ -6,7 +6,7 @@ CREATE TABLE dbo.[Customer]
 (
     [CustomerId] uniqueidentifier NOT NULL,
     [NormalizedPhone] varchar(20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [CustomerName] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [CustomerName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [LoyaltyTierId] uniqueidentifier NOT NULL,
     [Version] timestamp NOT NULL,
     [RestaurantId] uniqueidentifier NULL
@@ -20,7 +20,7 @@ CREATE TABLE dbo.[Feedback]
     [OrderRef] uniqueidentifier NOT NULL,
     [CustomerId] uniqueidentifier NULL,
     [Star] int NOT NULL,
-    [Comment] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Comment] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [SubmittedAt] datetime NOT NULL,
     [RestaurantId] uniqueidentifier NULL
 );
@@ -43,7 +43,7 @@ CREATE TABLE dbo.[FeedbackItem]
     [FeedbackId] uniqueidentifier NOT NULL,
     [OrderItemRef] uniqueidentifier NOT NULL,
     [Star] int NOT NULL,
-    [Comment] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Comment] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [RestaurantId] uniqueidentifier NULL
 );
 GO
@@ -79,7 +79,7 @@ CREATE TABLE dbo.[LoyaltyTier]
 (
     [LoyaltyTierId] uniqueidentifier NOT NULL,
     [LoyaltyTierCode] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [LoyaltyTierName] varchar(100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [LoyaltyTierName] nvarchar(100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [RequiredSpend] decimal(18,2) NOT NULL,
     [DiscountPercent] decimal(5,2) NOT NULL,
     [RestaurantId] uniqueidentifier NULL

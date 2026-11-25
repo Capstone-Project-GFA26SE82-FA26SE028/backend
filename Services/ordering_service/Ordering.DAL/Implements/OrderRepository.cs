@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Ordering.DAL.Interfaces;
 using Ordering.DAL.Models;
+using Ordering.Common.DTOs;
 
 namespace Ordering.DAL.Implements;
 
@@ -10,6 +11,26 @@ public sealed class OrderRepository(OrderingDbContext db) : IOrderRepository
     {
         return Details(db.Orders.Where(order => order.TableSessionRef == sessionId))
             .OrderBy(order => order.OrderId).ToListAsync(ct);
+    }
+    public async Task<List<OrderReportSnapshotDTO>> GetReportItemsAsync(Guid restaurantId, Guid[] orderIds, CancellationToken ct)
+    {
+        // One SQL statement keeps order/item/cancellation snapshots consistent without a network-held transaction.
+        var values = await db.Orders.AsNoTracking()
+            .Where(value => value.RestaurantRef == restaurantId && orderIds.Contains(value.OrderId))
+            .Include(value => value.OrderItems).ThenInclude(value => value.OrderItemOptions)
+            .AsSingleQuery().ToListAsync(ct);
+        return values.Select(order => new OrderReportSnapshotDTO(order.OrderId, order.Channel, order.Status,
+            order.OrderItems.Select(item => new OrderReportItemDTO(item.OrderItemId, item.ItemRef,
+                item.NameSnapshot, item.UnitPriceSnapshot, item.Quantity, item.CancelledQuantity, item.Status,
+                item.OrderItemOptions.Select(option => new OrderReportOptionDTO(option.OptionRef,
+                    option.NameSnapshot, option.Quantity, option.ExtraPriceSnapshot)).ToArray())).ToArray())).ToList();
+    }
+
+    public Task<List<OrderReportChannelDTO>> GetReportChannelsAsync(Guid restaurantId, Guid[] orderIds, CancellationToken ct)
+    {
+        return db.Orders.AsNoTracking()
+            .Where(value => value.RestaurantRef == restaurantId && orderIds.Contains(value.OrderId))
+            .Select(value => new OrderReportChannelDTO(value.OrderId, value.Channel)).ToListAsync(ct);
     }
 
     public Task<List<Order>> GetForBillingAsync(Guid sessionId, CancellationToken ct)

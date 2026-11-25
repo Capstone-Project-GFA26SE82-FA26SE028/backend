@@ -58,12 +58,10 @@ public partial class RestaurantDbContext : DbContext
             entity.Property(e => e.AreaId).ValueGeneratedNever();
             entity.Property(e => e.AreaCode)
                 .IsRequired()
-                .HasMaxLength(50)
-                .IsUnicode(false);
+                .HasMaxLength(50);
             entity.Property(e => e.AreaName)
                 .IsRequired()
-                .HasMaxLength(100)
-                .IsUnicode(false);
+                .HasMaxLength(100);
             entity.Property(e => e.ServiceType)
                 .IsRequired()
                 .HasMaxLength(50)
@@ -117,7 +115,7 @@ public partial class RestaurantDbContext : DbContext
             entity.ToTable("Qr");
 
             entity.Property(e => e.QrId).ValueGeneratedNever();
-            entity.Property(e => e.ImageUrl).HasMaxLength(2048).IsUnicode(false);
+            entity.Property(e => e.ImageUrl).HasMaxLength(2048);
             entity.Property(e => e.CreatedAt).HasColumnType("datetime");
             entity.Property(e => e.RevokedAt).HasColumnType("datetime");
             entity.Property(e => e.TokenHash)
@@ -152,8 +150,7 @@ public partial class RestaurantDbContext : DbContext
             entity.Property(e => e.ReservationId).ValueGeneratedNever();
             entity.Property(e => e.ContactName)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
             entity.Property(e => e.EndAt).HasColumnType("datetime");
             entity.Property(e => e.HoldUntil).HasColumnType("datetime");
             entity.Property(e => e.ConfirmedAt).HasColumnType("datetime");
@@ -193,16 +190,14 @@ public partial class RestaurantDbContext : DbContext
             entity.Property(e => e.RestaurantId).ValueGeneratedNever();
             entity.Property(e => e.Address)
                 .IsRequired()
-                .HasMaxLength(500)
-                .IsUnicode(false);
+                .HasMaxLength(500);
             entity.Property(e => e.Hotline)
                 .HasMaxLength(20)
                 .IsUnicode(false);
-            entity.Property(e => e.LogoUrl).IsUnicode(false);
+
             entity.Property(e => e.RestaurantName)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
             entity.Property(e => e.TaxCode)
                 .HasMaxLength(50)
                 .IsUnicode(false);
@@ -242,8 +237,7 @@ public partial class RestaurantDbContext : DbContext
             entity.Property(e => e.SessionTableId).ValueGeneratedNever();
             entity.Property(e => e.AssignedAt).HasColumnType("datetime");
             entity.Property(e => e.MoveReason)
-                .HasMaxLength(500)
-                .IsUnicode(false);
+                .HasMaxLength(500);
             entity.Property(e => e.ReleasedAt).HasColumnType("datetime");
 
             entity.HasOne(d => d.Table).WithMany(p => p.SessionTables)
@@ -270,8 +264,7 @@ public partial class RestaurantDbContext : DbContext
             entity.Property(e => e.PositionY).HasColumnType("decimal(10, 2)");
             entity.Property(e => e.TableCode)
                 .IsRequired()
-                .HasMaxLength(50)
-                .IsUnicode(false);
+                .HasMaxLength(50);
             entity.Property(e => e.Version)
                 .IsRequired()
                 .IsRowVersion()

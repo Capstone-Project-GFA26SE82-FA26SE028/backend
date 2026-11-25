@@ -26,6 +26,8 @@ message CheckoutLockInfo {
 service BillingOrderGrpc {
   rpc GetBySession(BillingOrderRequest) returns (BillingOrderSnapshot);
   rpc GetForPaymentReview(BillingOrderRequest) returns (BillingOrderSnapshot);
+  rpc GetReportChannels(OrderReportChannelsRequest) returns (OrderReportChannelsReply);
+  rpc GetReportItems(OrderReportChannelsRequest) returns (ReportOrdersReply);
 }
 message BillingOrderRequest { string table_session_id = 1; }
 message BillingOrderSnapshot {
@@ -306,3 +308,37 @@ service TableTransferGrpc {
 message TableTransferRequest { string payload = 1; }
 message TableTransferIdRequest { string operation_id = 1; }
 message TableTransferReply { string payload = 1; }
+
+message OrderReportChannelsRequest {
+  string restaurant_id = 1;
+  repeated string order_ids = 2;
+}
+message OrderReportChannelInfo {
+  string order_id = 1;
+  string channel = 2;
+}
+message OrderReportChannelsReply {
+  string restaurant_id = 1;
+  repeated OrderReportChannelInfo items = 2;
+}
+
+message ReportOrdersReply {
+  string restaurant_id = 1;
+  repeated ReportOrderSnapshotInfo items = 2;
+}
+message ReportOrderSnapshotInfo {
+  string order_id = 1;
+  string channel = 2;
+  string status = 3;
+  repeated ReportOrderItemInfo items = 4;
+}
+message ReportOrderItemInfo {
+  string order_item_id = 1;
+  string item_id = 2;
+  string name = 3;
+  string unit_price = 4;
+  int32 quantity = 5;
+  int32 cancelled_quantity = 6;
+  string status = 7;
+  repeated QuotedOptionInfo options = 8;
+}

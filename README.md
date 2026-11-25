@@ -14,6 +14,60 @@ For GitHub Actions deployment, store credentials in repository/environment Secre
 
 # Restaurant backend and AI assistant
 
+## Recipe images and videos (Cloudinary)
+
+`POST /api/recipes/media` accepts a local file as `multipart/form-data`, field `file`, using the existing menu-manager authentication and restaurant scope. Backend detects the type from file bytes; do not supply a trusted MIME type or remote file URL. It returns `result.mediaType` (`image` or `video`) and `result.url`.
+
+Send these values in `media` when creating an item or option recipe, together with `displayOrder`. Video has two supported inputs: upload a local MP4/WebM through this endpoint, or send a pasted HTTP/HTTPS video link directly in the recipe request (`mediaType: "video"`, `url: "https://www.youtube.com/watch?v=..."`). Query strings/fragments are allowed for video links, including YouTube links. Credentials in URLs, executable schemes, local paths and control characters are rejected. Backend stores video links without downloading, uploading, fetching metadata or checking availability; rendering a provider page versus embedding a video is a client concern. The upload file-size limit does not apply to remote links. Upload alone does not create or alter a recipe. Existing recipe-version, ingredient validation and effective-date rules still apply.
+
+```powershell
+curl.exe -X POST "http://localhost:5000/api/recipes/media" -H "Authorization: Bearer YOUR_ACCESS_TOKEN" -F "file=@step.mp4"
+```
+
+Defaults in both Gateway and Catalog `RecipeMedia` configuration: `MaximumImageBytes=2097152` (JPEG/PNG/WebP), `MaximumVideoBytes=20971520` (MP4/WebM), `UploadTimeoutSeconds=45`. Limits may be lowered; the supported upper bounds remain 2 MiB/image and 20 MiB/video. Gateway allows the configured upload timeout plus 10 seconds for forwarding. Only the media-upload RPC receives the larger gRPC message limit. Rebuild Catalog and Gateway after pulling this contract change. Compose reuses the existing Cloudinary environment variables; no new secret is needed.
+
+New images must match the configured Cloudinary cloud, image resource type and `catalog/recipes/images` folder. Uploaded video replies use `catalog/recipes/videos`; pasted video links may point to external hosts. Image validation checks source/path, not an upload receipt or asset ownership. Historical HTTP/HTTPS images may be carried forward unchanged only for the same item/option that already referenced them; existing versions are never rewritten. Empty `media` creates a version without media. Unsupported upload formats, new external image links and unsafe video-link schemes are rejected; failed validation does not close the active recipe.
+
+No automatic retry or old-asset deletion is performed. Upload success followed by a failed recipe save may leave an unreferenced asset. Cloudinary delivery URLs are public: do not upload secrets or documents requiring restricted access. No SQL/ERD schema change is required; `RecipeMedia` and its relation to `RecipeVersion` already exist.
+
+## Catalog item images (Cloudinary)
+
+Keep the existing two-step flow: upload with `POST /api/items/images` (`multipart/form-data`, field `file`), then send the returned `imageUrl` to item create/update. JPEG, PNG and WebP are supported, up to 2 MiB. Backend checks the file signature; Cloudinary validates the actual image. Existing menu-management permissions and item rowversion checks remain in effect.
+
+New image references must use HTTPS on `res.cloudinary.com`, the configured cloud, and the `catalog/items` upload folder. URLs from other clouds, avatar/QR folders, external hosts, or with query strings/fragments are rejected. This validates the source/path; it is not proof of an asset's existence or an upload receipt. Existing image URLs may remain unchanged. Omitting/null `imageUrl` on update preserves the image; an explicit empty string clears it. No migration or deletion of old images is performed.
+
+Catalog already receives the shared Cloudinary credentials through Compose. Rebuild Catalog after pulling this change. No new endpoint, secret, SQL column or ERD relationship is needed. Uploading does not update an item until create/update succeeds; a subsequent version conflict can leave an unreferenced cloud asset. Do not retry indefinitely.
+
+## Restaurant logos (Cloudinary)
+
+`POST /api/restaurants/{id}/logo` uploads and immediately saves a restaurant logo. Use `multipart/form-data` with field `file`, JPEG/PNG/WebP up to 2 MiB, and a valid platform-admin bearer token. This retains the current restaurant-profile permission; it does not grant restaurant admins or managers new access. The response contains `result.restaurantId` and `result.logoUrl`.
+
+Create the restaurant first without a logo, then upload for its returned ID. Restaurant create/update APIs reject new pasted logo URLs. Updates may keep the existing URL unchanged; omitting `logoUrl` preserves it, while an explicit empty string clears the reference. Existing URLs are not migrated or deleted.
+
+```powershell
+curl.exe -X POST "http://localhost:5000/api/restaurants/RESTAURANT_ID/logo" -H "Authorization: Bearer YOUR_ACCESS_TOKEN" -F "file=@logo.png"
+```
+
+Use the actual Gateway port. Restaurant already receives `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` from the ignored Compose `.env`; no additional secret is required. Rebuild Restaurant and Gateway after pulling this contract change. For direct .NET execution, set the corresponding `Cloudinary__*` environment variables.
+
+Authorization is checked before upload and revalidated with Identity before saving. Invalid input returns 400, missing restaurant 404, authentication/permission failures 401/403, and cloud failures 503. Failed upload leaves the previous logo unchanged. An upload followed by a failed database save or revoked access can leave an unreferenced cloud asset; old assets are not automatically deleted. No SQL/ERD schema changes are required.
+
+## Identity avatars (Cloudinary)
+
+Avatar changes accept files, not newly pasted URLs. Existing avatar URLs remain readable and may be sent back unchanged. Omitting `avatarUrl` in a profile/account update preserves the saved image; an explicit empty string removes the reference without deleting the cloud file. Create an account without an avatar, then upload for that account.
+
+- `POST /api/users/me/avatar`: authenticated account uploads its own avatar.
+- `POST /api/users/{id}/avatar`: existing user-management permissions apply; restaurant admins may update only permitted staff in their own restaurant, and platform admins retain their configured scope.
+- Use `multipart/form-data` with field `file`. JPEG, PNG and WebP are supported, up to 2 MiB. A successful response contains `result.userId` and `result.avatarUrl`; Identity has already saved the avatar.
+
+```powershell
+curl.exe -X POST "http://localhost:5000/api/users/me/avatar" -H "Authorization: Bearer YOUR_ACCESS_TOKEN" -F "file=@avatar.png"
+```
+
+Use the actual Gateway port when it differs from 5000. Identity uses the same `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` supplied to Compose through the ignored root `.env`. For direct .NET execution, supply `Cloudinary__CloudName`, `Cloudinary__ApiKey` and `Cloudinary__ApiSecret` as environment variables. Do not put secrets in committed appsettings.
+
+Cloud upload failures leave the previous avatar unchanged. Missing credentials/provider failures return 503; invalid image input returns 400. No automatic retry or deletion of old cloud assets is performed. If upload succeeds but saving the account fails, an unreferenced cloud asset may remain; do not retry indefinitely. This feature changes no SQL/ERD schema.
+
 The AI service calls Gemini API (`gemini-3.1-flash-lite` by default) for menu reasoning and cart-based recommendations. A small allowlist of exact price questions about one resolved dish is answered directly from a fresh Catalog read after checking QR access again. Questions needing interpretation continue through Gemini. It sends only the information needed for the request and keeps the existing QR and Catalog checks.
 
 ## Run with Docker Compose
@@ -184,7 +238,28 @@ New databases use the checkout tables from the current BillingDb and OrderingDb 
 3. Phục vụ phụ trách gọi `POST /api/table-sessions/{sessionId}/payment-requests/{id}/submit`, không gửi mã quầy. Đơn còn chờ xác nhận hoặc nhà hàng chưa có quầy mặc định sẽ trả `409`. Khi quầy đã tồn tại, yêu cầu gửi trong lúc đổi ca vẫn vào danh sách chờ. Thử lại cùng ID yêu cầu sẽ dùng lượt đã lưu.
 4. Thu ngân đang đứng ca xem `GET /api/restaurants/{restaurantId}/payment-requests/incoming`. Sau khi mở ca mới, danh sách hiện cả yêu cầu tồn từ ca trước, yêu cầu gửi giữa hai ca và bill chưa thanh toán có một phiên bàn xác định. Bill cũ có thể trả `billId` cùng `checkoutId: null` và `submittedAt: null`. Khoản đã thanh toán và lịch sử giao dịch vẫn thuộc ca gốc.
 
-Với BillingDb đã khởi tạo, áp dụng `docker/sql/upgrades/BillingCheckoutSubmission.sql` trước khi chạy bản mới. Compose khởi tạo database mới từ schema và giữ nguyên database đã có.
+Khi chạy `docker compose up -d --build`, `db-init` khởi tạo database mới từ schema hoặc giữ nguyên database có `DockerBootstrapVersion=2`, rồi tự chạy các upgrade Billing và dependency đã liệt kê trong `docker/sql/init.sh`. Các upgrade bao gồm quầy/bill theo nhà hàng, PayOS, phương thức tiền mặt, checkout/chuyển quầy/chốt bill, thu hộ, cấu hình provider, outbox, lock Ordering, cột tài khoản hoàn tiền và ảnh QR. Cuối bước này, initializer đối chiếu sự tồn tại của bảng/cột với schema Billing/Ordering/Catalog/Restaurant/Inventory/Identity và in `Billing and AI dependency schemas are ready.` khi đạt. Identity đang chỉ được kiểm tra, chưa tự nâng cấp database cũ; nếu thiếu cột User hoặc bảng thông báo, cần nâng cấp dependency đó trước.
+
+Script chạy lại được và không tự gán nhà hàng, quầy, nhân viên hoặc URL PayOS. Nếu dữ liệu cũ thiếu ánh xạ bắt buộc, có nhiều quầy một nhà hàng hoặc thiếu cấu hình provider cần quyết định, bước nâng cấp dừng và báo rõ để xử lý dữ liệu; không xóa hoặc đoán giá trị. Database không có marker hoặc có version khác 2 cần kiểm kê/nâng cấp riêng trước. Xem phần kiểm kê ngày 2026-11-21 trong [nhật ký SQL/ERD](docs/database-change-log.md). Không dùng `docker compose down -v` để khắc phục lỗi thiếu cột vì lệnh đó xóa volume database.
+
+Kiểm thử nâng cấp Docker bằng `pwsh -File scripts/Test-BillingDockerBootstrap.ps1` (cần Docker Engine chạy Linux containers). Script build image `db-init` từ source hiện tại và tạo SQL Server/network riêng, tái hiện schema cũ thiếu cột/bảng, kiểm tra nâng cấp lặp giữ dữ liệu, đối chiếu metadata Billing/Ordering và các ca phải dừng an toàn. Tài nguyên thử được dọn khi kết thúc; không dùng database của Compose đang chạy. Với môi trường đã tồn tại, có thể chạy `docker compose build db-init` rồi `docker compose run --rm db-init` để xem rõ kết quả nâng cấp trước khi khởi động lại các service.
+
+### Dữ liệu màn Bàn & hóa đơn của thu ngân
+
+- `GET /api/restaurants/{restaurantId}/payment-requests/incoming`: yêu cầu đã chuyển đến quầy và bill chưa thanh toán cần tiếp quản.
+- `GET /api/restaurants/{restaurantId}/payment-requests/paid`: bill đã Paid và có Payment Paid thuộc ca thu ngân đang đứng. Khoản Waiter vừa thu hộ hoặc PayOS chưa xác minh không thuộc tab này.
+- Hai API nhận `search` (mã bàn hoặc mã bill, tối đa 50 ký tự), `areaId`, `page` (mặc định 1), `pageSize` (mặc định 20, tối đa 100). `cashShiftId` là tùy chọn và phải khớp ca đang đứng; không cho client chọn ca người khác hoặc ca cũ qua hai API màn quầy. API đọc bill/report cũ giữ phạm vi quyền hiện có.
+- Mỗi thẻ có `tableSessionId`, `checkoutId`, `billId`, `billCode`, `totalAmount`, `status`, `partySize`, `openedAt`, `submittedAt`, `paidAt`, `tables[]`. `billCode` lấy từ `Bill.BillNumber`; chưa có bill thì mã và tổng bill là `null`, không dùng 0 thay thế. `openedAt` là giờ mở phiên, `submittedAt` là giờ chuyển quầy, `paidAt` là giờ bill được xác nhận Paid.
+- Một bàn: trả thêm `tableId`, `tableCode`, `areaId`, `areaName`. Nhiều bàn: giữ đủ `tables[]`, hai trường bàn đơn là `null`; khu vực đơn chỉ có khi tất cả bàn cùng khu vực. Phiên mở lấy các liên kết bàn chưa release; phiên đã đóng lấy nhóm liên kết được release cuối cùng. Tên/mã bàn lấy từ Restaurant hiện tại, không phải snapshot tên bàn bất biến trên hóa đơn.
+- Tìm kiếm/lọc, `totalCount` và tổng tiền tính trên toàn bộ tập kết quả trước phân trang. Với bộ lọc khu vực, tìm mã bàn chỉ xét bàn nằm trong khu vực đó; tìm mã bill vẫn phải đáp ứng khu vực. `knownTotalAmount` là tổng bill đã lập, `unbilledCount` là số thẻ chưa lập bill. `totalAmount` chỉ có khi không còn thẻ chưa lập bill; nếu còn, trả `null` để tránh coi phần chưa xác định là 0 đồng. Mỗi tab dùng `totalCount` từ chính API tương ứng và cùng bộ lọc.
+- Chọn thẻ chưa có bill: Cashier gọi `POST /api/table-sessions/{sessionId}/payment-requests/{checkoutId}/prepare`. Đã có bill: đọc `GET /api/bills/{billId}` để lấy món, giá snapshot, VAT, phí và tổng. Chỉ xem thẻ không tự lập bill hoặc ghi nhận thanh toán.
+- Cả hai API yêu cầu Cashier được phân công đúng nhà hàng và đang đứng ca. Billing lấy metadata phiên theo lô tối đa 200 ID từ RPC đọc `BillingSessionGrpc.GetDisplays` của Restaurant; không truy cập database chéo service. Không lấy được đầy đủ metadata thì báo lỗi, không âm thầm bỏ thẻ làm sai số lượng/tổng.
+
+Thay đổi này không đổi luồng BM04 F-WF02-06: khách yêu cầu → Waiter kiểm tra/chuyển quầy → Cashier chốt → Waiter đưa bill → thu hộ được Cashier xác nhận hoặc PayOS được backend xác minh → ghi Paid một lần và tự đóng phiên. Không thêm nghiệp vụ ưu đãi/tích điểm từ UI mẫu.
+
+Triển khai đồng bộ Gateway, Billing, Restaurant cùng commit bằng `docker compose up -d --build`; không chỉ cập nhật một container vì Billing dùng RPC đọc mới. Không có thay đổi schema hoặc SQL upgrade cho phần màn quầy này. Kiểm tra hồi quy bằng `dotnet test Tests/Billing.Tests` (SQL thật cần `BILLING_SQL_TEST_CONNECTION`) và `dotnet test Tests/Restaurant.Tests --filter FullyQualifiedName~PaymentSubmission` (cần `RESTAURANT_SQL_TEST_SERVER` cho SQL Server Windows/LocalDB cô lập). Những test đó dùng dữ liệu thử, không phải thao tác trên database đang dùng.
+
+Khi review độc lập, Gemini cần kiểm tra: (1) lọc trước phân trang và tổng trên toàn bộ kết quả, kể cả thẻ chưa lập bill; (2) đúng nhà hàng/ca và không nhân đôi bill nhiều dòng; (3) nhiều bàn hoặc phiên đã đóng vẫn có metadata đúng; (4) Waiter mới thu hộ chưa vào Paid, Cashier xác nhận/PayOS đã xác minh mới vào Paid; (5) API prepare/đọc bill vẫn cung cấp giá snapshot, VAT, phí và tổng; (6) không có SQL/schema hoặc quyền production thay đổi ngoài hợp đồng đọc đã nêu.
 
 ### Chốt hóa đơn và xác nhận đã đưa khách
 
@@ -192,7 +267,7 @@ Với BillingDb đã khởi tạo, áp dụng `docker/sql/upgrades/BillingChecko
 2. Waiter phụ trách mở `GET /api/table-sessions/{sessionId}/payment-requests/{id}/bill` để lấy bill đưa khách kiểm tra.
 3. Khi đã đưa bill thật, Waiter gọi `POST /api/table-sessions/{sessionId}/payment-requests/{id}/present`. Hệ thống ghi `PresentedAt` một lần và chuyển checkout sang `Presented`.
 
-Hai trạng thái trên vẫn là bill `Unpaid`. Các API thu tiền của checkout cũ chưa xử lý được bill qua luồng này. BillingDb đang dùng cần áp dụng `BillingCheckoutSubmission.sql` rồi `BillingCheckoutPreparation.sql`. Bật đúng cấu hình chính sách VAT/phí trước khi lập bill mới.
+Hai trạng thái trên vẫn là bill `Unpaid`. Các API thu tiền của checkout cũ chưa xử lý được bill qua luồng này. Docker tự áp dụng hai script nâng cấp khi chạy `db-init` từ image mới; môi trường chạy ngoài Docker vẫn cần áp dụng `BillingCheckoutSubmission.sql` rồi `BillingCheckoutPreparation.sql`. Bật đúng cấu hình chính sách VAT/phí trước khi lập bill mới.
 
 
 

@@ -62,6 +62,9 @@ public sealed partial class TableSessionService(IQrService qrService, ITableRepo
                 TableCode = table.TableCode,
                 AreaId = table.AreaId,
                 RestaurantId = table.Area.RestaurantId,
+                RestaurantName = table.Area.Restaurant.RestaurantName,
+                AreaName = table.Area.AreaName,
+                LogoUrl = string.IsNullOrWhiteSpace(table.Area.Restaurant.LogoUrl) ? null : table.Area.Restaurant.LogoUrl,
                 Status = session.Status,
                 OpenedAt = DateTime.SpecifyKind(session.OpenedAt, DateTimeKind.Utc),
                 IsNewSession = created
@@ -155,6 +158,9 @@ public sealed partial class TableSessionService(IQrService qrService, ITableRepo
                 TableCode = resolved.TableCode,
                 AreaId = resolved.AreaId,
                 RestaurantId = resolved.RestaurantId,
+                RestaurantName = table.Area.Restaurant.RestaurantName,
+                AreaName = table.Area.AreaName,
+                LogoUrl = string.IsNullOrWhiteSpace(table.Area.Restaurant.LogoUrl) ? null : table.Area.Restaurant.LogoUrl,
                 Status = session.Status,
                 OpenedAt = DateTime.SpecifyKind(session.OpenedAt, DateTimeKind.Utc),
                 IsNewSession = created

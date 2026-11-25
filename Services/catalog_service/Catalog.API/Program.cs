@@ -31,6 +31,7 @@ app.MapGrpcService<OptionGroupGrpcService>();
 app.MapGrpcService<OptionGrpcService>();
 app.MapGrpcService<ItemOptionGroupGrpcService>();
 app.MapGrpcService<RecipeGrpcService>();
+app.MapGrpcService<RecipeMediaGrpcService>();
 
 app.MapGet("/health/live", () =>
 {

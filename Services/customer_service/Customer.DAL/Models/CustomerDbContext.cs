@@ -47,8 +47,7 @@ public partial class CustomerDbContext : Shared.Persistence.RestaurantIsolation.
             entity.Property(e => e.CustomerId).ValueGeneratedNever();
             entity.Property(e => e.CustomerName)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
             entity.Property(e => e.NormalizedPhone)
                 .IsRequired()
                 .HasMaxLength(20)
@@ -71,7 +70,7 @@ public partial class CustomerDbContext : Shared.Persistence.RestaurantIsolation.
             entity.HasIndex(e => e.AccessId, "UQ_Feedback_AccessId").IsUnique();
 
             entity.Property(e => e.FeedbackId).ValueGeneratedNever();
-            entity.Property(e => e.Comment).IsUnicode(false);
+
             entity.Property(e => e.SubmittedAt).HasColumnType("datetime");
 
             entity.HasOne(d => d.Access).WithOne(p => p.Feedback)
@@ -102,7 +101,6 @@ public partial class CustomerDbContext : Shared.Persistence.RestaurantIsolation.
             entity.ToTable("FeedbackItem");
 
             entity.Property(e => e.FeedbackItemId).ValueGeneratedNever();
-            entity.Property(e => e.Comment).IsUnicode(false);
 
             entity.HasOne(d => d.Feedback).WithMany(p => p.FeedbackItems)
                 .HasForeignKey(d => d.FeedbackId)
@@ -161,8 +159,7 @@ public partial class CustomerDbContext : Shared.Persistence.RestaurantIsolation.
                 .IsUnicode(false);
             entity.Property(e => e.LoyaltyTierName)
                 .IsRequired()
-                .HasMaxLength(100)
-                .IsUnicode(false);
+                .HasMaxLength(100);
             entity.Property(e => e.RequiredSpend).HasColumnType("decimal(18, 2)");
         });
 

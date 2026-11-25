@@ -43,8 +43,6 @@ public partial class IdentityDbContext : DbContext
             entity.Property(e => e.IpAddress)
                 .HasMaxLength(45)
                 .IsUnicode(false);
-            entity.Property(e => e.NewValue).IsUnicode(false);
-            entity.Property(e => e.OldValue).IsUnicode(false);
 
             entity.HasOne(d => d.User).WithMany(p => p.AuditLogs)
                 .HasForeignKey(d => d.UserId)
@@ -58,11 +56,10 @@ public partial class IdentityDbContext : DbContext
             entity.Property(e => e.RoleId)
                 .HasMaxLength(50)
                 .IsUnicode(false);
-            entity.Property(e => e.Description).IsUnicode(false);
+
             entity.Property(e => e.RoleName)
                 .IsRequired()
-                .HasMaxLength(50)
-                .IsUnicode(false);
+                .HasMaxLength(50);
         });
 
         modelBuilder.Entity<User>(entity =>
@@ -71,16 +68,14 @@ public partial class IdentityDbContext : DbContext
 
             entity.HasIndex(e => e.RestaurantId);
             entity.Property(e => e.UserId).ValueGeneratedNever();
-            entity.Property(e => e.AvatarUrl).IsUnicode(false);
+
             entity.Property(e => e.CreatedAt).HasColumnType("datetime");
             entity.Property(e => e.Email)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
             entity.Property(e => e.FullName)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
             entity.Property(e => e.PasswordHash)
                 .IsRequired()
                 .IsUnicode(false);
@@ -94,8 +89,7 @@ public partial class IdentityDbContext : DbContext
             entity.Property(e => e.UpdatedAt).HasColumnType("datetime");
             entity.Property(e => e.UserName)
                 .IsRequired()
-                .HasMaxLength(100)
-                .IsUnicode(false);
+                .HasMaxLength(100);
 
             entity.HasOne(d => d.Role).WithMany(p => p.Users)
                 .HasForeignKey(d => d.RoleId)
@@ -111,8 +105,7 @@ public partial class IdentityDbContext : DbContext
 
             entity.Property(e => e.UserSessionId).ValueGeneratedNever();
             entity.Property(e => e.DeviceType)
-                .HasMaxLength(50)
-                .IsUnicode(false);
+                .HasMaxLength(50);
             entity.Property(e => e.ExpiresAt).HasColumnType("datetime");
             entity.Property(e => e.IpAddress)
                 .HasMaxLength(45)
@@ -123,7 +116,6 @@ public partial class IdentityDbContext : DbContext
                 .HasMaxLength(64)
                 .IsUnicode(false);
             entity.Property(e => e.RevokedAt).HasColumnType("datetime");
-            entity.Property(e => e.UserAgent).IsUnicode(false);
 
             entity.HasOne(d => d.User).WithMany(p => p.UserSessions)
                 .HasForeignKey(d => d.UserId)

@@ -88,7 +88,6 @@ public partial class OrderingDbContext : Shared.Persistence.RestaurantIsolation.
             entity.ToTable("CartItem");
 
             entity.Property(e => e.CartItemId).ValueGeneratedNever();
-            entity.Property(e => e.Note).IsUnicode(false);
 
             entity.HasOne(d => d.Cart).WithMany(p => p.CartItems)
                 .HasForeignKey(d => d.CartId)
@@ -153,8 +152,7 @@ public partial class OrderingDbContext : Shared.Persistence.RestaurantIsolation.
                 .IsUnicode(false);
             entity.Property(e => e.KitchenStationName)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
         });
 
         modelBuilder.Entity<KitchenTask>(entity =>
@@ -240,9 +238,8 @@ public partial class OrderingDbContext : Shared.Persistence.RestaurantIsolation.
             entity.Property(e => e.OrderItemId).ValueGeneratedNever();
             entity.Property(e => e.NameSnapshot)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
-            entity.Property(e => e.Note).IsUnicode(false);
+                .HasMaxLength(255);
+
             entity.Property(e => e.Status)
                 .IsRequired()
                 .HasMaxLength(50)
@@ -267,8 +264,7 @@ public partial class OrderingDbContext : Shared.Persistence.RestaurantIsolation.
             entity.Property(e => e.ExtraPriceSnapshot).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.NameSnapshot)
                 .IsRequired()
-                .HasMaxLength(255)
-                .IsUnicode(false);
+                .HasMaxLength(255);
 
             entity.HasOne(d => d.OrderItem).WithMany(p => p.OrderItemOptions)
                 .HasForeignKey(d => d.OrderItemId)

@@ -76,6 +76,11 @@ public static class BillingServiceExtensions
             options.Address = uri;
         });
         services.AddScoped<IPaymentReviewClient, PaymentReviewClient>();
+        services.AddGrpcClient<BillingSessionGrpc.BillingSessionGrpcClient>(options =>
+        {
+            options.Address = uri;
+        });
+        services.AddScoped<IBillingSessionDisplayClient, BillingSessionDisplayClient>();
         services.AddGrpcClient<PaidSessionClosureGrpc.PaidSessionClosureGrpcClient>(options =>
         {
             options.Address = uri;
@@ -112,6 +117,12 @@ public static class BillingServiceExtensions
         services.AddScoped<IBillSourceClient, BillSourceClient>();
         services.Configure<BillSettings>(configuration.GetSection("Billing"));
         services.AddScoped<IBillingAccess, RestaurantBillingAccess>();
+        services.AddScoped<IRestaurantReportContextClient, RestaurantReportContextClient>();
+        services.AddScoped<IRestaurantReportService, RestaurantReportService>();
+        services.AddScoped<IRestaurantSalesReportService, RestaurantSalesReportService>();
+        services.AddScoped<IRestaurantDishReportService, RestaurantDishReportService>();
+        services.AddScoped<IRestaurantReportItemsClient, RestaurantReportItemsClient>();
+        services.AddScoped<IRestaurantReportOrderClient, RestaurantReportOrderClient>();
         services.AddScoped<ICashRegisterService, CashRegisterService>();
         services.AddScoped<ICashShiftService, CashShiftService>();
         services.AddOptions<CashPaymentSettings>().Bind(configuration.GetSection("CashPayment"))

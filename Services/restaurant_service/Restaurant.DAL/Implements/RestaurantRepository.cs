@@ -45,6 +45,26 @@ public sealed class RestaurantRepository(RestaurantDbContext db) : GenericReposi
         return GetAll().SingleOrDefaultAsync(x => x.RestaurantId == id, ct);
     }
 
+    public async Task<Entity?> LockAsync(Guid id, CancellationToken ct)
+    {
+        if (_context.Database.CurrentTransaction is null)
+        {
+            throw new InvalidOperationException("Cần giao dịch để cập nhật logo nhà hàng.");
+        }
+
+        var source = _context.Database.IsSqlServer()
+            ? _context.Restaurants.FromSqlInterpolated($"SELECT * FROM dbo.Restaurant WITH (UPDLOCK, HOLDLOCK) WHERE RestaurantId = {id}")
+            : _context.Restaurants.Where(item => item.RestaurantId == id);
+        var item = await source.SingleOrDefaultAsync(ct);
+        if (item is null)
+        {
+            return null;
+        }
+
+        await _context.Entry(item).ReloadAsync(ct);
+        return _context.Entry(item).State == EntityState.Detached ? null : item;
+    }
+
     public void ReplaceOpeningHours(Entity entity, IEnumerable<OpeningHour> hours)
     {
         _context.OpeningHours.RemoveRange(entity.OpeningHours);

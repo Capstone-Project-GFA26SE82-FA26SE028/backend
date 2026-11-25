@@ -7,7 +7,8 @@ using Entity = Restaurant.DAL.Models.Restaurant;
 
 namespace Restaurant.BLL.Implements;
 
-public sealed class RestaurantService(IRestaurantRepository repository, IManagementTransaction transaction, IManagementAccess access) : IRestaurantService
+public sealed partial class RestaurantService(IRestaurantRepository repository, IManagementTransaction transaction,
+    IManagementAccess access, Shared.Common.Images.IImageStorage? images = null) : IRestaurantService
 {
     public Task<Dictionary<Guid, string>> GetNames(Guid[] ids, CancellationToken ct)
     {
@@ -71,10 +72,9 @@ public sealed class RestaurantService(IRestaurantRepository repository, IManagem
         var hotline = ManagementValidation.Required(body.Hotline, 20, "Hotline");
         var taxCode = ManagementValidation.Optional(body.TaxCode, 50, "Mã số thuế");
         var logo = ManagementValidation.Optional(body.LogoUrl, 2048, "Đường dẫn Logo");
-        if (logo is not null && (!Uri.TryCreate(logo, UriKind.Absolute, out var uri)
-            || (uri.Scheme != "https" && uri.Scheme != "http")))
+        if (!id.HasValue && logo is not null)
         {
-            throw new ManagementException(400, "Logo phải là đường dẫn URL HTTP/HTTPS hợp lệ.");
+            throw LogoUploadRequired();
         }
 
         var zone = ManagementValidation.Required(body.TimeZone, 100, "Múi giờ");
@@ -114,6 +114,11 @@ public sealed class RestaurantService(IRestaurantRepository repository, IManagem
                 {
                     RestaurantId = Guid.NewGuid()
                 };
+            if (id.HasValue && logo is not null && !string.Equals(logo, item.LogoUrl, StringComparison.Ordinal))
+            {
+                throw LogoUploadRequired();
+            }
+
             if (!id.HasValue)
             {
                 repository.Add(item);
@@ -123,7 +128,10 @@ public sealed class RestaurantService(IRestaurantRepository repository, IManagem
             item.Address = address;
             item.Hotline = hotline;
             item.TaxCode = taxCode!;
-            item.LogoUrl = logo!;
+            if (!id.HasValue || body.LogoUrl is not null)
+            {
+                item.LogoUrl = logo!;
+            }
             item.TimeZone = zone;
             foreach (var hour in hours)
             {

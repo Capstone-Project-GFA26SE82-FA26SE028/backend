@@ -36,7 +36,7 @@ CREATE TABLE dbo.[CartItem]
     [CartId] uniqueidentifier NOT NULL,
     [ItemRef] uniqueidentifier NOT NULL,
     [Quantity] int NOT NULL,
-    [Note] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Note] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [RestaurantId] uniqueidentifier NULL
 );
 GO
@@ -88,7 +88,7 @@ CREATE TABLE dbo.[KitchenStation]
 (
     [KitchenStationId] uniqueidentifier NOT NULL,
     [KitchenStationCode] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [KitchenStationName] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [KitchenStationName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [IsActive] bit NOT NULL,
     [RestaurantId] uniqueidentifier NULL
 );
@@ -156,11 +156,11 @@ CREATE TABLE dbo.[OrderItem]
     [RecipeVersionRef] uniqueidentifier NULL,
     [OriginalTableRef] uniqueidentifier NULL,
     [ComboGroupId] uniqueidentifier NULL,
-    [NameSnapshot] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [NameSnapshot] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [UnitPriceSnapshot] decimal(18,2) NOT NULL,
     [Quantity] int NOT NULL,
     [CancelledQuantity] int NOT NULL,
-    [Note] varchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Note] nvarchar(max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     [Status] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [Version] timestamp NOT NULL,
     [RestaurantId] uniqueidentifier NULL
@@ -172,7 +172,7 @@ CREATE TABLE dbo.[OrderItemOption]
     [Id] uniqueidentifier NOT NULL,
     [OrderItemId] uniqueidentifier NOT NULL,
     [OptionRef] uniqueidentifier NOT NULL,
-    [NameSnapshot] varchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [NameSnapshot] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [ExtraPriceSnapshot] decimal(18,2) NOT NULL,
     [Quantity] int NOT NULL,
     [RestaurantId] uniqueidentifier NULL

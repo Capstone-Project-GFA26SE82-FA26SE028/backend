@@ -24,6 +24,74 @@ public sealed class BillingOrderGrpcService(IBillingOrderService service, IOrder
         return Map(await service.GetForRestaurant(id, restaurantId, context.CancellationToken));
     }
 
+    public override async Task<OrderReportChannelsReply> GetReportChannels(OrderReportChannelsRequest request, ServerCallContext context)
+    {
+        if (!Guid.TryParse(request.RestaurantId, out var restaurantId)
+            || request.OrderIds.Any(value => !Guid.TryParse(value, out _)))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã nhà hàng hoặc đơn không hợp lệ."));
+        }
+
+        var values = await service.GetReportChannels(restaurantId, request.OrderIds.Select(Guid.Parse).ToArray(), context.CancellationToken);
+        var reply = new OrderReportChannelsReply
+        {
+            RestaurantId = restaurantId.ToString()
+        };
+        reply.Items.AddRange(values.Select(value => new OrderReportChannelInfo
+        {
+            OrderId = value.OrderId.ToString(),
+            Channel = value.Channel
+        }));
+        return reply;
+    }
+
+    public override async Task<ReportOrdersReply> GetReportItems(OrderReportChannelsRequest request, ServerCallContext context)
+    {
+        if (!Guid.TryParse(request.RestaurantId, out var restaurantId)
+            || request.OrderIds.Any(value => !Guid.TryParse(value, out _)))
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã nhà hàng hoặc đơn không hợp lệ."));
+        }
+
+        var values = await service.GetReportItems(restaurantId, request.OrderIds.Select(Guid.Parse).ToArray(), context.CancellationToken);
+        var reply = new ReportOrdersReply
+        {
+            RestaurantId = restaurantId.ToString()
+        };
+        reply.Items.AddRange(values.Select(order =>
+        {
+            var snapshot = new ReportOrderSnapshotInfo
+            {
+                OrderId = order.OrderId.ToString(),
+                Channel = order.Channel,
+                Status = order.Status
+            };
+            snapshot.Items.AddRange(order.Items.Select(item =>
+            {
+                var line = new ReportOrderItemInfo
+                {
+                    OrderItemId = item.OrderItemId.ToString(),
+                    ItemId = item.ItemId.ToString(),
+                    Name = item.Name,
+                    UnitPrice = item.UnitPrice.ToString(CultureInfo.InvariantCulture),
+                    Quantity = item.Quantity,
+                    CancelledQuantity = item.CancelledQuantity,
+                    Status = item.Status
+                };
+                line.Options.AddRange(item.Options.Select(option => new QuotedOptionInfo
+                {
+                    OptionId = option.OptionId.ToString(),
+                    Name = option.Name,
+                    Quantity = option.Quantity,
+                    ExtraPrice = option.ExtraPrice.ToString(CultureInfo.InvariantCulture)
+                }));
+                return line;
+            }));
+            return snapshot;
+        }));
+        return reply;
+    }
+
     private static Guid ParseSessionId(string value)
     {
         if (!Guid.TryParse(value, out var id) || id == Guid.Empty)

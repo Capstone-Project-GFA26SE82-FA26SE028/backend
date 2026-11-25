@@ -29,6 +29,7 @@ service GuestAccessGrpc {
 
 service BillingSessionGrpc {
   rpc GetById(BillingSessionRequest) returns (BillingSessionReply);
+  rpc GetDisplays(BillingSessionDisplayRequest) returns (BillingSessionDisplayReply);
 }
 message BillingSessionRequest { string table_session_id = 1; }
 message BillingSessionReply {
@@ -36,8 +37,27 @@ message BillingSessionReply {
   string restaurant_id = 2;
   optional string customer_ref = 3;
 }
+message BillingSessionDisplayRequest {
+  string restaurant_id = 1;
+  repeated string table_session_ids = 2;
+}
+message BillingTableDisplayInfo {
+  string table_id = 1;
+  string table_code = 2;
+  string area_id = 3;
+  string area_name = 4;
+}
+message BillingSessionDisplayInfo {
+  string table_session_id = 1;
+  string restaurant_id = 2;
+  int32 party_size = 3;
+  string opened_at = 4;
+  repeated BillingTableDisplayInfo tables = 5;
+}
+message BillingSessionDisplayReply { repeated BillingSessionDisplayInfo items = 1; }
 
 service RestaurantAccessGrpc {
+  rpc GetReportContext(CurrentRestaurantScopeRequest) returns (RestaurantReportContextReply);
   rpc GetCurrentScope(CurrentRestaurantScopeRequest) returns (CurrentRestaurantScopeReply);
   rpc ResolveDataScope(RestaurantDataScopeRequest) returns (RestaurantDataScopeReply);
 }
@@ -106,12 +126,22 @@ message RestaurantInfo {
 }
 message RestaurantPage { repeated RestaurantInfo items = 1; int32 total_count = 2; int32 page = 3; int32 page_size = 4; }
 service RestaurantGrpc {
+  rpc UploadLogo(RestaurantLogoUploadRequest) returns (RestaurantLogoUploadReply);
   rpc GetNames(RestaurantNamesRequest) returns (RestaurantNamesReply);
   rpc Browse(ListRequest) returns (RestaurantPage);
   rpc GetAll(ListRequest) returns (RestaurantPage);
   rpc GetById(IdRequest) returns (RestaurantInfo);
   rpc Create(RestaurantInfo) returns (RestaurantInfo);
   rpc Update(RestaurantInfo) returns (RestaurantInfo);
+}
+
+message RestaurantLogoUploadRequest {
+  string restaurant_id = 1;
+  bytes image = 2;
+}
+
+message RestaurantLogoUploadReply {
+  string logo_url = 1;
 }
 
 message AreaInfo {
@@ -199,6 +229,9 @@ message TableSessionScanReply {
   string status = 6;
   string opened_at = 7;
   bool is_new_session = 8;
+  string restaurant_name = 9;
+  string area_name = 10;
+  optional string logo_url = 11;
 }
 service TableSessionGrpc {
   rpc OpenForWaiter(IdRequest) returns (TableSessionScanReply);
@@ -462,3 +495,8 @@ service TableTransferSessionGrpc {
 message TableTransferSessionRequest { string payload = 1; }
 message TableTransferFinishRequest { string operation_id = 1; bool abort = 2; }
 message TableTransferSessionReply { string payload = 1; }
+
+message RestaurantReportContextReply {
+  string restaurant_id = 1;
+  string time_zone = 2;
+}

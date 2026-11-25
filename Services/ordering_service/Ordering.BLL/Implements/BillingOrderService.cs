@@ -5,8 +5,31 @@ using Ordering.DAL.Interfaces;
 
 namespace Ordering.BLL.Implements;
 
-public sealed class BillingOrderService(IOrderRepository orders, IBillingSessionClient sessions) : IBillingOrderService
+public sealed class BillingOrderService(IOrderRepository orders, IBillingSessionClient sessions, IOrderReportAccess reportAccess) : IBillingOrderService
 {
+    public async Task<IReadOnlyList<OrderReportChannelDTO>> GetReportChannels(Guid restaurantId, Guid[] orderIds, CancellationToken ct)
+    {
+        await RequireReportAccess(restaurantId, orderIds, ct);
+        return await orders.GetReportChannelsAsync(restaurantId, orderIds, ct);
+    }
+
+    public async Task<IReadOnlyList<OrderReportSnapshotDTO>> GetReportItems(Guid restaurantId, Guid[] orderIds, CancellationToken ct)
+    {
+        await RequireReportAccess(restaurantId, orderIds, ct);
+        return await orders.GetReportItemsAsync(restaurantId, orderIds, ct);
+    }
+
+    private async Task RequireReportAccess(Guid restaurantId, Guid[] orderIds, CancellationToken ct)
+    {
+        if (restaurantId == Guid.Empty || orderIds.Length is < 1 or > 100
+            || orderIds.Any(value => value == Guid.Empty) || orderIds.Distinct().Count() != orderIds.Length)
+        {
+            throw new OrderingException(400, "Yêu cầu nhà hàng hợp lệ và từ 1 đến 100 mã đơn khác nhau.");
+        }
+
+        await reportAccess.RequireManager(restaurantId, ct);
+    }
+
     public async Task<BillingOrderSnapshotDTO> GetBySession(Guid sessionId, CancellationToken ct)
     {
         if (sessionId == Guid.Empty)

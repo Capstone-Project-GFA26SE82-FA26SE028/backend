@@ -60,6 +60,11 @@ public sealed class RecipeController(
 
             if (body.Media is not null)
             {
+                if (body.Media.Any(media => media is null))
+                {
+                    return BadRequest(new ResponseDTO("Danh sách media công thức không hợp lệ.", 400));
+                }
+
                 foreach (var media in body.Media)
                 {
                     request.Media.Add(new CreateRecipeMediaRequest
@@ -190,6 +195,11 @@ public sealed class RecipeController(
 
             if (body.Media is not null)
             {
+                if (body.Media.Any(media => media is null))
+                {
+                    return BadRequest(new ResponseDTO("Danh sách media công thức không hợp lệ.", 400));
+                }
+
                 foreach (var media in body.Media)
                 {
                     request.Media.Add(new CreateRecipeMediaRequest

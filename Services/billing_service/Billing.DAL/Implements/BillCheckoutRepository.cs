@@ -3,7 +3,6 @@ using Billing.Common.DTOs;
 using Billing.DAL.Interfaces;
 using Billing.DAL.Models;
 using Microsoft.EntityFrameworkCore;
-using Shared.Common.Pagination;
 
 namespace Billing.DAL.Implements;
 
@@ -38,8 +37,8 @@ public sealed class BillCheckoutRepository(BillingDbContext db) : IBillCheckoutR
                 .AnyAsync(value => value.Bill.BillLines.Any(line => line.TableSessionRef == sessionId), ct);
     }
 
-    public async Task<PagedResult<PaymentSubmissionDTO>> GetIncomingAsync(Guid restaurantId, Guid cashRegisterId,
-        int page, int pageSize, CancellationToken ct)
+    public async Task<IReadOnlyList<PaymentSubmissionDTO>> GetIncomingCandidatesAsync(Guid restaurantId,
+        Guid cashRegisterId, CancellationToken ct)
     {
         var unpaid = db.Bills.AsNoTracking().Where(bill => bill.RestaurantId == restaurantId
             && bill.Status == "Unpaid" && bill.PaidAt == null
@@ -54,7 +53,9 @@ public sealed class BillCheckoutRepository(BillingDbContext db) : IBillCheckoutR
                 TableSessionId = checkout.TableSessionRef,
                 BillId = (Guid?)null,
                 checkout.SubmittedAt,
-                checkout.Status
+                checkout.Status,
+                BillCode = (string?)null,
+                TotalAmount = (decimal?)null
             });
 
         // Older bills have no queue metadata. The bill's restaurant and single table session
@@ -62,7 +63,7 @@ public sealed class BillCheckoutRepository(BillingDbContext db) : IBillCheckoutR
         var unpaidSessions = (from line in db.BillLines
             join bill in unpaid on line.BillId equals bill.BillId
             where !bill.BillLines.Any(other => other.TableSessionRef != line.TableSessionRef)
-            select new { bill.BillId, TableSessionId = line.TableSessionRef }).Distinct();
+            select new { bill.BillId, TableSessionId = line.TableSessionRef, bill.BillNumber, bill.TotalAmount }).Distinct();
         var bills = from bill in unpaidSessions
             from checkout in active.Where(value => value.TableSessionRef == bill.TableSessionId
                 && (value.BillId == bill.BillId || (value.BillId == null && value.CashRegisterId == cashRegisterId))
@@ -73,18 +74,57 @@ public sealed class BillCheckoutRepository(BillingDbContext db) : IBillCheckoutR
                 bill.TableSessionId,
                 BillId = (Guid?)bill.BillId,
                 SubmittedAt = checkout == null ? (DateTime?)null : checkout.SubmittedAt,
-                Status = checkout == null ? "Unpaid" : checkout.Status
+                Status = checkout == null ? "Unpaid" : checkout.Status,
+                BillCode = (string?)bill.BillNumber,
+                TotalAmount = (decimal?)bill.TotalAmount
             };
 
         var queue = bills.Concat(routed.Where(row => !bills.Any(bill => bill.CheckoutId == row.CheckoutId)));
-        var total = await queue.CountAsync(ct);
         var rows = await queue.OrderBy(row => row.SubmittedAt).ThenBy(row => row.TableSessionId)
-            .ThenBy(row => row.CheckoutId).ThenBy(row => row.BillId)
-            .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
-        var items = rows.Select(row => new PaymentSubmissionDTO(row.CheckoutId, row.TableSessionId, cashRegisterId,
+            .ThenBy(row => row.CheckoutId).ThenBy(row => row.BillId).ToListAsync(ct);
+        return rows.Select(row => new PaymentSubmissionDTO(row.CheckoutId, row.TableSessionId, cashRegisterId,
             row.SubmittedAt.HasValue ? new DateTimeOffset(DateTime.SpecifyKind(row.SubmittedAt.Value, DateTimeKind.Utc)) : null,
-            row.Status, row.BillId)).ToArray();
-        return new PagedResult<PaymentSubmissionDTO>(items, total, page, pageSize);
+            row.Status, row.BillId)
+        {
+            BillCode = row.BillCode,
+            TotalAmount = row.TotalAmount
+        }).ToArray();
+    }
+
+    public async Task<IReadOnlyList<PaymentSubmissionDTO>> GetPaidCandidatesAsync(Guid restaurantId,
+        Guid cashRegisterId, Guid cashShiftId, CancellationToken ct)
+    {
+        var bills = from bill in db.Bills.AsNoTracking()
+            where bill.RestaurantId == restaurantId && bill.Status == "Paid" && bill.PaidAt != null
+                && bill.Payments.Any(payment => payment.Status == "Paid" && payment.PaidAt != null
+                    && payment.CashShiftId == cashShiftId)
+            from line in bill.BillLines
+            where !bill.BillLines.Any(other => other.TableSessionRef != line.TableSessionRef)
+            select new { bill.BillId, bill.BillNumber, bill.TotalAmount, bill.PaidAt, TableSessionId = line.TableSessionRef };
+        var query = from bill in bills.Distinct()
+            from checkout in db.BillCheckouts.Where(value => value.BillId == bill.BillId
+                && value.TableSessionRef == bill.TableSessionId && value.Status == "Paid")
+                .OrderByDescending(value => value.CreatedAt).ThenBy(value => value.CheckoutId).Take(1).DefaultIfEmpty()
+            orderby bill.PaidAt descending, bill.BillId
+            select new
+            {
+                bill.BillId,
+                bill.BillNumber,
+                bill.TotalAmount,
+                bill.PaidAt,
+                bill.TableSessionId,
+                CheckoutId = checkout == null ? (Guid?)null : checkout.CheckoutId,
+                SubmittedAt = checkout == null ? (DateTime?)null : checkout.SubmittedAt
+            };
+        var rows = await query.ToListAsync(ct);
+        return rows.Select(row => new PaymentSubmissionDTO(row.CheckoutId, row.TableSessionId, cashRegisterId,
+            row.SubmittedAt.HasValue ? new DateTimeOffset(DateTime.SpecifyKind(row.SubmittedAt.Value, DateTimeKind.Utc)) : null,
+            "Paid", row.BillId)
+        {
+            BillCode = row.BillNumber,
+            TotalAmount = row.TotalAmount,
+            PaidAt = new DateTimeOffset(DateTime.SpecifyKind(row.PaidAt!.Value, DateTimeKind.Utc))
+        }).ToArray();
     }
 
     public void Add(BillCheckout value)

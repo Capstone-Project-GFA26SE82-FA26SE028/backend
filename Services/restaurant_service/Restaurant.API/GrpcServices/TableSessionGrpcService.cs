@@ -11,17 +11,7 @@ public sealed class TableSessionGrpcService(ITableSessionService service) : Tabl
     public override async Task<TableSessionScanReply> OpenForWaiter(IdRequest request, ServerCallContext context)
     {
         var result = await service.OpenForWaiter(ManagementMapping.Id(request.Id), context.CancellationToken);
-        return new TableSessionScanReply
-        {
-            TableSessionId = result.TableSessionId.ToString(),
-            TableId = result.TableId.ToString(),
-            TableCode = result.TableCode,
-            AreaId = result.AreaId.ToString(),
-            RestaurantId = result.RestaurantId.ToString(),
-            Status = result.Status,
-            OpenedAt = result.OpenedAt.ToString("O"),
-            IsNewSession = result.IsNewSession
-        };
+        return MapScan(result);
     }
 
     public override async Task<OrderSessionReply> GetForOrdering(OrderSessionRequest request, ServerCallContext context)
@@ -76,16 +66,29 @@ public sealed class TableSessionGrpcService(ITableSessionService service) : Tabl
     public override async Task<TableSessionScanReply> Scan(QrTokenRequest request, ServerCallContext context)
     {
         var result = await service.Scan(request.Token, context.CancellationToken);
-        return new TableSessionScanReply
+        return MapScan(result);
+    }
+
+    private static TableSessionScanReply MapScan(TableSessionScanDto result)
+    {
+        var reply = new TableSessionScanReply
         {
             TableSessionId = result.TableSessionId.ToString(),
             TableId = result.TableId.ToString(),
             TableCode = result.TableCode,
             AreaId = result.AreaId.ToString(),
             RestaurantId = result.RestaurantId.ToString(),
+            RestaurantName = result.RestaurantName,
+            AreaName = result.AreaName,
             Status = result.Status,
             OpenedAt = result.OpenedAt.ToString("O"),
             IsNewSession = result.IsNewSession
         };
+        if (result.LogoUrl is not null)
+        {
+            reply.LogoUrl = result.LogoUrl;
+        }
+
+        return reply;
     }
 }

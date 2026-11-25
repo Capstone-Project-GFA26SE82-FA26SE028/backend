@@ -45,6 +45,8 @@ Docker của Billing cần `CashRegisterAccess:WaiterRoleIds` trong cấu hình 
 
 Đăng nhập lại để lấy token của bộ Docker. Dùng Admin tạo QR cho bàn qua API; dùng Waiter mở phiên bàn hoặc khách quét QR và tham gia phiên, sau đó thử order. QR không được seed sẵn vì token và ảnh được tạo bởi backend.
 
+`POST /api/table-sessions/scan` nhận `{"token":"<QR token>"}` và không yêu cầu đăng nhập. Ngoài các trường phiên/bàn hiện có, `result` trả thêm `restaurantName`, `areaName` và `logoUrl` lấy từ nhà hàng/khu vực của bàn đã được QR xác thực. Khi nhà hàng chưa có logo, `logoUrl` là JSON `null`, không phải chuỗi rỗng. Không cần gọi API danh sách nhà hàng để lấy thông tin này. Quét QR chưa cấp quyền đặt món; khách vẫn phải tham gia phiên theo luồng hiện có. Cần rebuild cả Restaurant và Gateway để nạp contract bổ sung; không cần SQL upgrade cho thay đổi này.
+
 ID cố định của T01: `20000000-0000-0000-0000-000000000011`; T02/T03 kết thúc bằng `012`/`013`. Món cơm kết thúc bằng `051`, trà `052`, option `072`, trạm HOT `021`, BAR `022` (cùng tiền tố GUID). UnitRef demo kết thúc bằng `100`, đại diện gram với hệ số 1; hiện dự án chưa có bảng/API quản lý đơn vị.
 
 ## Cấu hình
@@ -64,6 +66,17 @@ Gateway chỉ publish trên loopback. Các service gRPC chỉ dùng HTTP/2 trong
 Schema tại `docker/sql/schema` được xuất từ 7 database hiện có, giữ bảng, khóa và index; không chứa dữ liệu thật. Seed tại `docker/sql/seed` là dữ liệu demo riêng. Mỗi database khởi tạo trong transaction và được đánh dấu bằng extended property `DockerBootstrapVersion`.
 
 Khởi động lại sẽ bỏ qua database đã khởi tạo, không reset tài khoản, menu hoặc đơn hàng đã test. Database có bảng nhưng chưa có dấu khởi tạo sẽ bị từ chối ghi đè. Thay đổi schema/seed trong repo không tự áp dụng vào volume đã khởi tạo; cần script nâng cấp riêng hoặc tạo môi trường Docker mới.
+
+Các script nâng cấp được liệt kê trong `docker/sql/init.sh` vẫn chạy trên database đã khởi tạo. Trong đó, `IdentityStaffTransfer.sql` bổ sung bảng `dbo.StaffTransfer` và index tra cứu khi thiếu, không thay đổi tài khoản hoặc lịch sử chuyển nhà hàng đã có. Script chạy lặp an toàn; cấu trúc hiện có không tương thích sẽ bị báo lỗi thay vì tự sửa dữ liệu. Bảng này cần cho cả kiểm tra đổi vai trò/trạng thái tài khoản, không chỉ thao tác chuyển nhà hàng.
+
+Sau khi lấy bản sửa schema Identity và quyền QR, với `.env` đã cấu hình:
+
+```powershell
+docker compose up -d --build db-init identity restaurant gateway
+docker compose logs db-init
+```
+
+Kiểm tra `db-init` kết thúc với mã 0 trước khi thử đổi vai trò. Không xóa volume để xử lý lỗi thiếu bảng. Admin nhà hàng được quản lý QR trong phân công đang hoạt động; `GET /api/qr` tự chọn khi chỉ có một nhà hàng, hoặc cần `restaurantId` khi có nhiều phân công. Quyền quản trị nền tảng và API resolve QR công khai giữ nguyên.
 
 ```powershell
 docker compose down

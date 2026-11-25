@@ -146,6 +146,7 @@ public sealed partial class ReservationSqlServerTests
         var paidBill = await db.Bills.AsNoTracking().SingleAsync(value => value.BillId == paid.BillId);
         Assert.Equal("Paid", paidBill.Status);
         Assert.Equal(paid.PaidAt, paidBill.PaidAt);
+        await AssertPaidCashierBoard(cashier, shift.RestaurantId, shift.CashShiftId, paidBill.BillId, paidBill.TotalAmount);
         Assert.Equal("Paid", (await db.BillCheckouts.AsNoTracking().SingleAsync(value => value.CheckoutId == presented.CheckoutId)).Status);
         Assert.Equal("Applied", (await db.PaymentWebhooks.AsNoTracking().SingleAsync()).ProcessingStatus);
         Assert.Empty(await db.CashMovements.AsNoTracking().ToListAsync());

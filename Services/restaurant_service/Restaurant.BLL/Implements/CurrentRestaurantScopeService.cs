@@ -8,6 +8,19 @@ namespace Restaurant.BLL.Implements;
 public sealed class CurrentRestaurantScopeService(IStaffIdentity identity,
     IRestaurantStaffRepository staff, IRestaurantRepository restaurants) : ICurrentRestaurantScopeService
 {
+    public async Task<RestaurantReportContextDto> GetReportContext(Guid restaurantId, CancellationToken ct)
+    {
+        var actor = await GetCurrentScope(restaurantId, ct);
+        if (actor.IsAdministrator || actor.RoleId != "manager" || !actor.RestaurantIds.Contains(restaurantId))
+        {
+            throw new ManagementException(403, "Chỉ quản lý được phân công tại nhà hàng này mới được xem báo cáo.");
+        }
+
+        var restaurant = await restaurants.GetByIdAsync(restaurantId, ct)
+            ?? throw new ManagementException(404, "Không tìm thấy nhà hàng.");
+        return new RestaurantReportContextDto(restaurantId, restaurant.TimeZone);
+    }
+
     public async Task<CurrentRestaurantScopeDto> GetCurrentScope(Guid? restaurantId, CancellationToken ct)
     {
         var actor = await identity.GetCurrentAsync(ct);

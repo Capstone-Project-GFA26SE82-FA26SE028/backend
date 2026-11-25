@@ -435,6 +435,12 @@ service RecipeGrpc {
   rpc GetRecipeById (RecipeIdRequest) returns (RecipeReply);
 }
 
+service RecipeMediaGrpc {
+  rpc Upload(RecipeMediaUploadRequest) returns (RecipeMediaUploadReply);
+}
+message RecipeMediaUploadRequest { bytes file = 1; }
+message RecipeMediaUploadReply { string media_type = 1; string url = 2; }
+
 message CreateRecipeIngredientRequest {
   string ingredient_ref = 1;
   string unit_ref = 2;
