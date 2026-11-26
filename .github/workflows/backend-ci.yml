@@ -75,3 +75,24 @@ jobs:
       - name: Verify fresh and existing SQL databases, repeat upgrades and EF Unicode parameters
         shell: pwsh
         run: ./scripts/Test-UnicodeDockerBootstrap.ps1 -VerifyEf
+
+
+  restaurant-reports:
+    name: Restaurant report Docker regression (acceptance gaps reported)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Verify reports through Gateway with two isolated restaurant datasets
+        shell: pwsh
+        run: ./scripts/Test-RestaurantReports.ps1 -OutputDirectory TestResults/RestaurantReports
+      - name: Upload execution results and acceptance limitations
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: restaurant-report-acceptance
+          path: TestResults/RestaurantReports/results.json
+          if-no-files-found: error
+          retention-days: 14
