@@ -4,7 +4,7 @@ public sealed class ReservationDto
 {
     public Guid ReservationId { get; set; }
     public Guid RestaurantId { get; set; }
-    public Guid RequestedAreaId { get; set; }
+    public Guid? RequestedAreaId { get; set; }
     public string ContactName { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
     public int PartySize { get; set; }

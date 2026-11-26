@@ -33,7 +33,7 @@ internal static class ReservationRules
     public static void Configuration(ReservationSettings settings)
     {
         if (settings.DefaultDurationMinutes <= 0 || settings.MinimumAdvanceMinutes <= 0
-            || settings.MaximumAdvanceDays <= 0 || settings.HoldBeforeMinutes <= 0 || settings.HoldAfterMinutes <= 0
+            || settings.HoldBeforeMinutes <= 0 || settings.HoldAfterMinutes <= 0
             || settings.DurationMinutesByRestaurant is null
             || settings.DurationMinutesByRestaurant.Any(pair => pair.Key == Guid.Empty || pair.Value <= 0)
             || settings.ExpirationIntervalSeconds is < 1 or > 3600 || settings.ExpirationBatchSize is < 1 or > 1000)
@@ -43,7 +43,7 @@ internal static class ReservationRules
     }
 
     public static ReservationWindowDto Window(
-        Guid restaurantId, string? timestamp, DateTime now, ReservationSettings settings, IReservationRepository repository)
+        Guid restaurantId, string timeZone, string? timestamp, DateTime now, ReservationSettings settings, IReservationRepository repository)
     {
         Configuration(settings);
         if (!TryUtc(timestamp, out var start))
@@ -54,7 +54,13 @@ internal static class ReservationRules
         start = repository.NormalizeTimestamp(start);
         try
         {
-            if (start < now.AddMinutes(settings.MinimumAdvanceMinutes) || start > now.AddDays(settings.MaximumAdvanceDays))
+            var zone = GetTimeZone(timeZone);
+            if (TimeZoneInfo.ConvertTimeFromUtc(start, zone).Date != TimeZoneInfo.ConvertTimeFromUtc(now, zone).Date)
+            {
+                throw new ManagementException(400, "Chỉ có thể đặt bàn trong ngày hiện tại theo múi giờ của nhà hàng.");
+            }
+
+            if (start < now.AddMinutes(settings.MinimumAdvanceMinutes))
             {
                 throw new ManagementException(400, "StartAt nằm ngoài khoảng thời gian cho phép đặt trước.");
             }
@@ -77,6 +83,18 @@ internal static class ReservationRules
         catch (Exception exception) when (exception is ArgumentOutOfRangeException)
         {
             throw new ManagementException(400, "Khoảng thời gian đặt bàn tính toán vượt quá phạm vi mốc thời gian được hỗ trợ.");
+        }
+    }
+
+    public static TimeZoneInfo GetTimeZone(string timeZone)
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(timeZone);
+        }
+        catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException or ArgumentException)
+        {
+            throw new ManagementException(503, "Múi giờ kinh doanh của nhà hàng chưa được cấu hình chính xác.");
         }
     }
 

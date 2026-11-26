@@ -113,7 +113,7 @@ public sealed partial class GatewayFlowTests
         });
         var created = await Read<ReservationDto>(response, HttpStatusCode.Created);
         Assert.Equal(restaurant.RestaurantId, created.RestaurantId);
-        Assert.Equal(area.AreaId, created.RequestedAreaId);
+        Assert.Null(created.RequestedAreaId);
         Assert.Equal(ReservationStatuses.Pending, created.Status);
         Assert.Null(created.ApprovedByRef);
         Assert.Null(created.AssignedRestaurantId);
@@ -125,7 +125,7 @@ public sealed partial class GatewayFlowTests
         var db = scope.ServiceProvider.GetRequiredService<RestaurantDbContext>();
         var stored = await db.Reservations.SingleAsync();
         Assert.Equal(created.ReservationId, stored.ReservationId);
-        Assert.Equal(area.AreaId, stored.RequestedAreaId);
+        Assert.Null(stored.RequestedAreaId);
         Assert.Equal(restaurant.RestaurantId, stored.RestaurantId);
         Assert.Empty(await db.TableSessions.ToListAsync());
         Assert.Empty(await db.SessionTables.ToListAsync());
@@ -133,7 +133,7 @@ public sealed partial class GatewayFlowTests
         var read = await Read<ReservationDto>(await _http.GetAsync($"/api/reservations/{created.ReservationId}"));
         Assert.Equal(created.RestaurantId, read.RestaurantId);
         var page = await Read<PageResult<ReservationDto>>(await _http.GetAsync(
-            $"/api/reservations?restaurantId={restaurant.RestaurantId}&requestedAreaId={area.AreaId}&unassignedOnly=true"));
+            $"/api/reservations?restaurantId={restaurant.RestaurantId}&unassignedOnly=true"));
         Assert.Equal(created.ReservationId, Assert.Single(page.Items).ReservationId);
     }
 
@@ -155,11 +155,11 @@ public sealed partial class GatewayFlowTests
     }
 
     [Theory]
-    [InlineData("other-restaurant", HttpStatusCode.Conflict)]
-    [InlineData("inactive", HttpStatusCode.Conflict)]
-    [InlineData("missing-area", HttpStatusCode.NotFound)]
+    [InlineData("other-restaurant", HttpStatusCode.Created)]
+    [InlineData("inactive", HttpStatusCode.Created)]
+    [InlineData("missing-area", HttpStatusCode.Created)]
     [InlineData("missing-restaurant", HttpStatusCode.NotFound)]
-    public async Task CreateRejectsInvalidRequestedLocationWithoutSaving(string scenario, HttpStatusCode expected)
+    public async Task CreateIgnoresLegacyAreaAndStillRejectsMissingRestaurant(string scenario, HttpStatusCode expected)
     {
         var restaurant = await CreateRestaurant();
         var areaRestaurantId = scenario == "other-restaurant"
@@ -185,7 +185,14 @@ public sealed partial class GatewayFlowTests
             startAt = _reservationClock.Now.AddHours(1).ToString("O")
         });
         Assert.Equal(expected, response.StatusCode);
-        Assert.Empty(await db.Reservations.ToListAsync());
+        if (expected == HttpStatusCode.Created)
+        {
+            Assert.Null((await db.Reservations.SingleAsync()).RequestedAreaId);
+        }
+        else
+        {
+            Assert.Empty(await db.Reservations.ToListAsync());
+        }
     }
 
     [Fact]
@@ -300,7 +307,7 @@ public sealed partial class GatewayFlowTests
     [Theory]
     [InlineData(29, false)]
     [InlineData(30, true)]
-    [InlineData(43200, true)]
+    [InlineData(43200, false)]
     [InlineData(43201, false)]
     public async Task AdvanceBookingBoundariesAreExplicit(int minutes, bool accepted)
     {

@@ -131,3 +131,44 @@ dotnet test Tests/Identity.Tests/Identity.Tests.csproj
 ```
 
 Restaurant.Tests kiểm tra HTTP Gateway → gRPC Restaurant → BLL → SQLite bằng TestServer. Quyền Identity được giả lập trong test luồng; test riêng của IdentityManagementAccess kiểm tra chuyển token và không cấp quyền khi Identity từ chối/mất kết nối. SQLite mô phỏng version trong test, không thay thế kiểm thử rowversion và khóa của SQL Server.
+
+
+## Đặt bàn: khách gửi yêu cầu, nhân viên sắp xếp bàn
+
+Khách không cần đăng nhập hoặc chọn khu vực/bàn. POST /api/reservations nhận:
+
+```json
+{
+  "restaurantId": "20000000-0000-0000-0000-000000000001",
+  "contactName": "Khách đặt bàn",
+  "phone": "0900000000",
+  "partySize": 4,
+  "startAt": "2026-11-26T14:00:00+07:00"
+}
+```
+
+Thời gian trên chỉ minh họa định dạng, không dùng nguyên ngày/giờ để kiểm thử: phải chọn giờ thuộc ngày hiện tại theo múi giờ nhà hàng, cách thời điểm gửi ít nhất 30 phút và còn đủ thời lượng trước giờ đóng cửa. Không nhận ngày mai hoặc dùng khoảng 24 giờ lăn. Backend kiểm tra nhà hàng, giờ mở cửa, thông tin liên hệ, số khách và thời gian; không yêu cầu nhà hàng đã có khu vực/bàn để tiếp nhận Pending. Nhà hàng chưa có giờ mở cửa hợp lệ vẫn bị từ chối, không tự đặt giờ giả.
+
+Phản hồi 201: status=Pending, requestedAreaId=null, assignedAreaId=null, assignedTableIds=[]. requestedAreaId của request cũ còn được chấp nhận về mặt DTO/wire để tương thích nhưng bị bỏ qua khi tạo; khách không được gán khu vực qua trường này. Bản ghi cũ giữ nguyên giá trị sẵn có sau nâng cấp.
+
+Waiter/cashier đăng nhập và có phân công hoạt động tại nhà hàng:
+1. GET /api/reservations?status=Pending&page=1&pageSize=100 để nhận yêu cầu của mình.
+2. Chọn bàn trong layout của nhà hàng; GET /api/reservations/availability vẫn dành cho nhân viên và cần areaId để xem trước, không giữ bàn.
+3. POST /api/reservations/{id}/confirm với {"tableIds":["UUID-bàn"]}. Backend lấy khu vực từ bàn đã chọn và kiểm tra khu vực/bàn còn hoạt động, cùng nhà hàng, cùng khu vực nếu chọn nhiều bàn, đủ sức chứa và không trùng lịch. Việc xếp bàn và chuyển Confirmed nằm trong transaction/khóa hiện có.
+4. Phản hồi Confirmed có requestedAreaId/assignedAreaId được suy ra từ bàn. Update lịch/bàn sau đó cũng đồng bộ khu vực từ các bàn mới. Quyền sửa, hạn đổi lịch và các điều kiện cũ vẫn giữ nguyên.
+5. Check-in, từ chối, hủy, Expired/NoShow giữ luồng hiện có; check-in không tự tạo phiên bàn.
+
+Frontend cần bỏ bộ chọn khu vực bắt buộc và điều kiện chặn gửi khi danh sách khu vực rỗng. Không cần gọi thêm API khu vực công khai cho khách; không mở /api/areas quản trị. FE vẫn hiển thị lỗi nghiệp vụ nếu nhà hàng thiếu giờ mở cửa hoặc dữ liệu đầu vào không hợp lệ. Lượt này chỉ sửa backend.
+
+Triển khai Docker: build db-init, restaurant và gateway từ cùng source; chạy db-init để nâng cấp database cũ trước, rồi recreate restaurant/gateway với bộ env/Compose đang dùng. Không xóa volume. RequestedAreaId có thể null trong response nên không dùng Gateway/image cũ để đọc Pending mới.
+
+Gemini review: kiểm tra POST ẩn danh không có requestedAreaId (kể cả nhà hàng chưa có khu vực nhưng giờ mở cửa hợp lệ); field cũ không gán khu vực; waiter/cashier đúng nhà hàng mới đọc/duyệt được; bàn khác nhà hàng/khác khu vực trong cùng nhóm hoặc thiếu sức chứa phải bị chặn; hai lần duyệt đồng thời chỉ một lần thành công; khu vực null phải round-trip qua Protobuf/JSON; chạy lại SQL upgrade giữ dữ liệu/FK/index cũ. Các ca TestServer trong ReservationAreaSelectionFlowTests dùng Identity giả lập và SQLite; không coi đó là SQL Server thực.
+
+
+### Giới hạn đặt bàn trong ngày
+
+Tạo yêu cầu mới, đổi lịch và xem trước bàn trống chỉ nhận StartAt thuộc ngày hiện tại của Restaurant.TimeZone lưu tại backend. Ngày theo múi giờ của thiết bị hoặc offset client gửi không quyết định điều kiện này; backend chuyển StartAt và thời điểm hiện tại về cùng múi giờ nhà hàng rồi so sánh ngày. Timestamp vẫn lưu UTC như trước.
+
+Đã bỏ MaximumAdvanceDays khỏi ReservationSettings và cấu hình local/Docker; cấu hình cũ đặt 30 ngày không mở lại quyền đặt tương lai. Giữ MinimumAdvanceMinutes=30, DefaultDurationMinutes=120, khoảng giữ bàn và worker hết hạn. Cuối ngày không còn đủ 30 phút chờ + thời lượng trong giờ mở cửa thì từ chối, không tự chuyển sang ngày mai.
+
+Không xóa/hủy hoặc thay thời gian các yêu cầu tương lai đã tồn tại từ trước. Các thao tác không đổi lịch như đọc danh sách, duyệt yêu cầu cũ, check-in/hủy vẫn tuân theo trạng thái/quyền/hạn xử lý hiện có. Khi đổi lịch, mốc mới bắt buộc trong ngày và lỗi phải rollback giữ nguyên lịch cũ. Frontend nên giới hạn lịch chọn ngày hiện tại theo múi giờ nhà hàng; backend vẫn kiểm tra độc lập.

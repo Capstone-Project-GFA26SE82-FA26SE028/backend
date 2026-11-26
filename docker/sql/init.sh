@@ -48,6 +48,9 @@ done
 echo "Applying RestaurantDb upgrade: RestaurantCloudinary.sql"
 "${sqlcmd[@]}" -d RestaurantDb -i /init/upgrades/RestaurantCloudinary.sql
 
+echo "Applying RestaurantDb upgrade: RestaurantReservationOptionalArea.sql"
+"${sqlcmd[@]}" -d RestaurantDb -i /init/upgrades/RestaurantReservationOptionalArea.sql
+
 # UNICODE_UPGRADE_BEGIN
 for database in IdentityDb RestaurantDb InventoryDb CatalogDb OrderingDb CustomerDb BillingDb; do
     echo "Applying Unicode text upgrade: $database"

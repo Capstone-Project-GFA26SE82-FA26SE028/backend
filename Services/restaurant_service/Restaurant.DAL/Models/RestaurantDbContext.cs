@@ -144,7 +144,6 @@ public partial class RestaurantDbContext : DbContext
 
             entity.HasOne(d => d.RequestedArea).WithMany()
                 .HasForeignKey(d => d.RequestedAreaId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Reservation_RequestedArea");
 
             entity.Property(e => e.ReservationId).ValueGeneratedNever();

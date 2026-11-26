@@ -269,7 +269,8 @@ service ReservationGrpc {
 
 message CreateReservationRequest {
   string restaurant_id = 1;
-  string requested_area_id = 2;
+  // Legacy input kept for wire compatibility; ignored on create. Staff select the area on confirmation.
+  optional string requested_area_id = 2;
   string contact_name = 3;
   string phone = 4;
   int32 party_size = 5;
@@ -309,7 +310,8 @@ message ReservationInfo {
   optional string table_session_id = 13;
   repeated string assigned_table_ids = 14;
   string restaurant_id = 15;
-  string requested_area_id = 16;
+  // Absent for new Pending requests; populated from the tables selected by staff.
+  optional string requested_area_id = 16;
   optional string confirmed_at = 17;
   optional string cancelled_at = 18;
   optional string cancelled_by_ref = 19;
