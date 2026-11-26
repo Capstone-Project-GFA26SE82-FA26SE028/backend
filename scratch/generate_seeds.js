@@ -29,7 +29,12 @@ function buildInserts(table, columns, rows) {
       const vals = columns.map(c => escapeSql(row[c]));
       return `(${vals.join(', ')})`;
     }).join(',\n');
-    chunks.push(`INSERT dbo.[${table}] (${colList}) VALUES\n${valuesList};`);
+    if (table === 'PaymentMethod') {
+      const selected = columns.map(c => `seed.[${c}]`).join(', ');
+      chunks.push(`INSERT dbo.[${table}] (${colList})\nSELECT ${selected}\nFROM (VALUES\n${valuesList}) AS seed (${colList})\nWHERE NOT EXISTS (\n    SELECT 1 FROM dbo.[PaymentMethod] WITH (UPDLOCK, HOLDLOCK)\n    WHERE [MethodCode] = seed.[MethodCode]\n);`);
+    } else {
+      chunks.push(`INSERT dbo.[${table}] (${colList}) VALUES\n${valuesList};`);
+    }
   }
   return chunks.join('\n\n') + '\n\n';
 }
@@ -257,9 +262,9 @@ const db_inventory = {
   GoodsReceipt: [],
   GoodsReceiptItem: [],
   StockIssue: [],
-  StockMovement: [],
   Stocktake: [],
-  StocktakeItem: []
+  StocktakeItem: [],
+  StockMovement: []
 };
 
 const db_ordering = {
@@ -301,14 +306,14 @@ const db_billing = {
   Voucher: [],
   CashRegister: [],
   CashShift: [],
-  CashMovement: [],
-  CashHandover: [],
   ShiftReport: [],
   Bill: [],
   BillLine: [],
   BillCheckout: [],
   BillAdjustment: [],
   Payment: [],
+  CashMovement: [],
+  CashHandover: [],
   OnlinePayments: [],
   PaymentWebhook: [],
   ReceiptPrint: [],
@@ -386,7 +391,7 @@ db_restaurant.Area.push(
 );
 
 // RestaurantDb Tables & QR
-TABLES.forEach(t => {
+TABLES.forEach((t, index) => {
   db_restaurant.Table.push({
     TableId: t.id,
     AreaId: t.area,
@@ -398,7 +403,7 @@ TABLES.forEach(t => {
     CleaningStatus: 'Clean'
   });
   db_restaurant.Qr.push({
-    QrId: uuid('20000000-0000-0000-0001-', parseInt(t.code.replace(/\D/g, '') || '99')),
+    QrId: uuid('20000000-0000-0000-0001-', index + 1),
     TableId: t.id,
     TokenHash: crypto.createHash('sha256').update(`TABLE_${t.code}_SECRET`).digest('hex'),
     CreatedAt: '2026-01-01 00:00:00',

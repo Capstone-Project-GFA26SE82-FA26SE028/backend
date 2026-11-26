@@ -86,7 +86,7 @@ try {
     Start-Sql
     Initialize $tag
     Seed $tag
-    Query 'InventoryDb' "IF NOT EXISTS(SELECT 1 FROM dbo.Ingredient WHERE IngredientName=N'Gạo') THROW 51000,'Fresh UTF-8/NVARCHAR seed lost Vietnamese.',1; PRINT 'PASS fresh Vietnamese seed';" | Write-Output
+    Query 'InventoryDb' "IF NOT EXISTS(SELECT 1 FROM dbo.Ingredient WHERE IngredientCode='RICE' AND IngredientName LIKE N'Gạo%') THROW 51000,'Fresh UTF-8/NVARCHAR seed lost Vietnamese.',1; PRINT 'PASS fresh Vietnamese seed';" | Write-Output
     Initialize $tag
     Write-Output 'PASS fresh bootstrap and repeat'
 
@@ -113,7 +113,7 @@ try {
     Start-Sql
     Initialize $legacyTag
     Seed $legacyTag
-    Query 'InventoryDb' "IF EXISTS(SELECT 1 FROM dbo.Ingredient WHERE IngredientName=N'Gạo') THROW 51000,'Legacy fixture did not reproduce ANSI loss.',1; PRINT 'PASS reproduced VARCHAR loss';" | Write-Output
+    Query 'InventoryDb' "IF EXISTS(SELECT 1 FROM dbo.Ingredient WHERE IngredientCode='RICE' AND IngredientName LIKE N'Gạo%') THROW 51000,'Legacy fixture did not reproduce ANSI loss.',1; PRINT 'PASS reproduced VARCHAR loss';" | Write-Output
     # Exercise dependent objects as well as the repository baseline (which has no text indexes on these columns).
     Query 'InventoryDb' "CREATE UNIQUE INDEX IX_UnicodeTest_Name ON dbo.Ingredient(IngredientName DESC) INCLUDE(BaseUnit) WHERE IsActive=1 WITH(FILLFACTOR=90); ALTER TABLE dbo.Ingredient ADD CONSTRAINT DF_UnicodeTest_Name DEFAULT ('Legacy') FOR IngredientName; ALTER TABLE dbo.Ingredient ADD CONSTRAINT CK_UnicodeTest_Name CHECK (LEN(IngredientName)>0);" | Out-Null
     $constraintsSql = "SET NOCOUNT ON; SELECT CONCAT(OBJECT_NAME(parent_object_id),N'|',name,N'|',definition) FROM sys.default_constraints UNION ALL SELECT CONCAT(OBJECT_NAME(parent_object_id),N'|',name,N'|',definition,N'|',is_not_trusted,N'|',is_disabled) FROM sys.check_constraints ORDER BY 1;"
