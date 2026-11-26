@@ -24,7 +24,7 @@ GO
 CREATE TABLE [dbo].[Reservation](
 	[ReservationId] [uniqueidentifier] NOT NULL,
 	[RestaurantId] [uniqueidentifier] NOT NULL,
-	[RequestedAreaId] [uniqueidentifier] NOT NULL,
+	[RequestedAreaId] [uniqueidentifier] NULL,
 	[ContactName] [nvarchar](255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[Phone] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[PartySize] [int] NOT NULL,

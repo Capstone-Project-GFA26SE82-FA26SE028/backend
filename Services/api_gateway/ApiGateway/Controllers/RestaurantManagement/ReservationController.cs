@@ -79,7 +79,6 @@ public sealed class ReservationController(ReservationGrpc.ReservationGrpcClient 
         return Execute(async () => Map(await client.CreateAsync(new CreateReservationRequest
         {
             RestaurantId = body.RestaurantId.ToString(),
-            RequestedAreaId = body.RequestedAreaId.ToString(),
             ContactName = body.ContactName ?? string.Empty,
             Phone = body.Phone ?? string.Empty,
             PartySize = body.PartySize,
@@ -202,7 +201,7 @@ public sealed class ReservationController(ReservationGrpc.ReservationGrpcClient 
         {
             ReservationId = Guid.Parse(reservation.ReservationId),
             RestaurantId = Guid.Parse(reservation.RestaurantId),
-            RequestedAreaId = Guid.Parse(reservation.RequestedAreaId),
+            RequestedAreaId = reservation.HasRequestedAreaId ? Guid.Parse(reservation.RequestedAreaId) : null,
             ContactName = reservation.ContactName,
             Phone = reservation.Phone,
             PartySize = reservation.PartySize,

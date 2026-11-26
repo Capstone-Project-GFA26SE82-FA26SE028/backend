@@ -11,7 +11,7 @@ public partial class Reservation
 
     public Guid RestaurantId { get; set; }
 
-    public Guid RequestedAreaId { get; set; }
+    public Guid? RequestedAreaId { get; set; }
 
     public string ContactName { get; set; }
 

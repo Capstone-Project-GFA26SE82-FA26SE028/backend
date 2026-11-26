@@ -53,27 +53,21 @@ public sealed class ReservationService(
 
     public async Task<ReservationDto> Create(CreateReservationDto request, CancellationToken ct)
     {
-        if (request is null || request.RestaurantId == Guid.Empty || request.RequestedAreaId == Guid.Empty
+        if (request is null || request.RestaurantId == Guid.Empty
             || string.IsNullOrWhiteSpace(request.ContactName) || request.ContactName.Trim().Length > 255
             || request.ContactName.Any(char.IsControl) || string.IsNullOrWhiteSpace(request.Phone)
             || request.Phone.Trim().Length > 20 || !ValidPhone(request.Phone) || request.PartySize <= 0)
         {
-            throw new ManagementException(400, "Vui lòng cung cấp nhà hàng, khu vực, tên người liên hệ tối đa 255 ký tự, số điện thoại tối đa 20 ký tự và số lượng khách hợp lệ.");
+            throw new ManagementException(400, "Vui lòng cung cấp nhà hàng, tên người liên hệ tối đa 255 ký tự, số điện thoại tối đa 20 ký tự và số lượng khách hợp lệ.");
         }
 
-        var now = reservations.NormalizeTimestamp(clock.GetUtcNow().UtcDateTime);
-        var window = ReservationRules.Window(request.RestaurantId, request.StartAt, now, settings.Value, reservations);
         return await transaction.ExecuteAsync(async () =>
         {
             var restaurant = await restaurants.GetByIdAsync(request.RestaurantId, ct)
                 ?? throw new ManagementException(404, "Không tìm thấy nhà hàng.");
-            var area = await areas.GetByIdAsync(request.RequestedAreaId, ct)
-                ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
-            if (area.RestaurantId != request.RestaurantId || !area.IsActive)
-            {
-                throw new ManagementException(409, "Khu vực yêu cầu đang ngừng hoạt động hoặc không thuộc nhà hàng đã chọn.");
-            }
-
+            var now = reservations.NormalizeTimestamp(clock.GetUtcNow().UtcDateTime);
+            var window = ReservationRules.Window(request.RestaurantId, restaurant.TimeZone, request.StartAt,
+                now, settings.Value, reservations);
             if (!WithinOpeningHours(restaurant, window))
             {
                 throw new ManagementException(409, "Khoảng thời gian yêu cầu nằm ngoài giờ mở cửa của nhà hàng.");
@@ -83,7 +77,7 @@ public sealed class ReservationService(
             {
                 ReservationId = Guid.NewGuid(),
                 RestaurantId = request.RestaurantId,
-                RequestedAreaId = request.RequestedAreaId,
+                RequestedAreaId = null,
                 ContactName = request.ContactName.Trim(),
                 Phone = request.Phone.Trim(),
                 PartySize = request.PartySize,
@@ -140,6 +134,7 @@ public sealed class ReservationService(
                 return (ReservationDto?)null;
             }
 
+            reservation.RequestedAreaId = selected[0].AreaId;
             foreach (var table in selected)
             {
                 reservation.Tables.Add(table);
@@ -250,15 +245,18 @@ public sealed class ReservationService(
             await access.RequireMutationAsync(reservation.RestaurantId, ct);
             RequireConfirmed(reservation);
             RequireChangeDeadline(reservation);
-            var window = ReservationRules.Window(reservation.RestaurantId, request!.StartAt,
+            var restaurant = await restaurants.GetByIdAsync(reservation.RestaurantId, ct)
+                ?? throw new ManagementException(404, "Không tìm thấy nhà hàng.");
+            var window = ReservationRules.Window(reservation.RestaurantId, restaurant.TimeZone, request!.StartAt,
                 clock.GetUtcNow().UtcDateTime, settings.Value, reservations);
             var selected = await PrepareScheduleAsync(reservation, request.TableIds, window, ct);
             RequireChangeDeadline(reservation);
-            window = ReservationRules.Window(reservation.RestaurantId, request.StartAt,
+            window = ReservationRules.Window(reservation.RestaurantId, restaurant.TimeZone, request.StartAt,
                 clock.GetUtcNow().UtcDateTime, settings.Value, reservations);
             reservation.StartAt = window.StartAt;
             reservation.EndAt = window.EndAt;
             reservation.HoldUntil = window.HoldUntil;
+            reservation.RequestedAreaId = selected[0].AreaId;
             reservation.Tables.Clear();
             foreach (var table in selected)
             {
@@ -341,9 +339,10 @@ public sealed class ReservationService(
         }
 
         var now = reservations.NormalizeTimestamp(clock.GetUtcNow().UtcDateTime);
-        var window = ReservationRules.Window(query.RestaurantId, query.StartAt, now, settings.Value, reservations);
         var restaurant = await restaurants.GetByIdAsync(query.RestaurantId, ct)
             ?? throw new ManagementException(404, "Không tìm thấy nhà hàng.");
+        var window = ReservationRules.Window(query.RestaurantId, restaurant.TimeZone, query.StartAt,
+            now, settings.Value, reservations);
         var area = await areas.GetByIdAsync(query.AreaId, ct)
             ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
         if (area.RestaurantId != query.RestaurantId)
@@ -444,11 +443,9 @@ public sealed class ReservationService(
     {
         var restaurant = await restaurants.GetByIdAsync(reservation.RestaurantId, ct)
             ?? throw new ManagementException(404, "Không tìm thấy nhà hàng.");
-        var area = await areas.GetByIdAsync(reservation.RequestedAreaId, ct)
-            ?? throw new ManagementException(404, "Không tìm thấy khu vực.");
-        if (!area.IsActive || area.RestaurantId != reservation.RestaurantId || !WithinOpeningHours(restaurant, window))
+        if (!WithinOpeningHours(restaurant, window))
         {
-            throw new ManagementException(409, "Khu vực yêu cầu hoặc giờ mở cửa không còn hỗ trợ đặt bàn này.");
+            throw new ManagementException(409, "Khoảng thời gian yêu cầu nằm ngoài giờ mở cửa của nhà hàng.");
         }
 
         var locked = new Dictionary<Guid, Table>();
@@ -460,7 +457,9 @@ public sealed class ReservationService(
         }
 
         var selected = tableIds.Select(tableId => locked[tableId]).ToList();
-        if (selected.Any(table => !table.IsActive || table.Capacity <= 0 || table.AreaId != area.AreaId
+        var areaId = selected[0].AreaId;
+
+        if (selected.Any(table => !table.IsActive || !table.Area.IsActive || table.Capacity <= 0 || table.AreaId != areaId
             || table.Area.RestaurantId != restaurant.RestaurantId))
         {
             throw new ManagementException(409, "Các bàn đã chọn phải đang hoạt động và thuộc khu vực, nhà hàng đã chọn.");
@@ -613,16 +612,7 @@ public sealed class ReservationService(
 
     private static bool WithinOpeningHours(global::Restaurant.DAL.Models.Restaurant restaurant, ReservationWindowDto window)
     {
-        TimeZoneInfo zone;
-        try
-        {
-            zone = TimeZoneInfo.FindSystemTimeZoneById(restaurant.TimeZone);
-        }
-        catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException or ArgumentException)
-        {
-            throw new ManagementException(503, "Múi giờ kinh doanh của nhà hàng chưa được cấu hình chính xác.");
-        }
-
+        var zone = ReservationRules.GetTimeZone(restaurant.TimeZone);
         var start = TimeZoneInfo.ConvertTimeFromUtc(window.StartAt, zone);
         var end = TimeZoneInfo.ConvertTimeFromUtc(window.EndAt, zone);
         return start.Date == end.Date && restaurant.OpeningHours.Any(hour => hour.DayOfWeek == (int)start.DayOfWeek

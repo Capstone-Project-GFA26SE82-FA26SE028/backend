@@ -878,3 +878,59 @@ Không có thay đổi schema hoặc SQL/ERD: không thêm/sửa bảng, cột, 
 - Đọc lại cấu hình trong container đã build xác nhận toàn bộ tham số. Worker thật xử lý fixture quá hạn duyệt thành Expired, quá hạn đến thành NoShow, giữ Pending tương lai. Đây là SQL/Docker thật, không phải worker giả lập.
 - dotnet test Tests/Restaurant.Tests/Restaurant.Tests.csproj -c Release --no-restore: 207 passed/0 failed/52 skipped. dotnet build Backend.sln -c Release --no-restore -m:1: đạt, 0 warning/0 error ở lượt cuối; git diff --check đạt.
 - Tài nguyên thử đã dọn. Không thay thế container backend-restaurant-1 đang dùng/image thử nghiệm của nhóm; khi áp dụng phải build/recreate service restaurant bằng source mới với bộ env/Compose đang sử dụng. Không xóa volume, không thay mật khẩu/quyền dữ liệu người dùng và chưa commit/push. Chưa chạy mobile hoặc GitHub Actions sau sửa.
+
+
+## 2026-11-26 — Khách đặt bàn không cần chọn khu vực
+
+Nhánh backend: fix/reservation-waiter-table-selection, tạo từ origin/dev (6f343df). Không commit/push. Chỉ Restaurant và hợp đồng/Gateway/test cần thiết; không sửa frontend, Identity, Ordering, Billing hoặc nghiệp vụ thanh toán.
+
+| Database/bảng | Thay đổi thực tế | NULL/DEFAULT | Khóa/index/ERD | File và trạng thái |
+| --- | --- | --- | --- | --- |
+| RestaurantDb.dbo.Reservation (bảng có sẵn) | RequestedAreaId: uniqueidentifier NOT NULL -> uniqueidentifier NULL | Không thêm DEFAULT; không sửa giá trị cũ | Giữ FK_Reservation_RequestedArea tới Area.AreaId, IX_Reservation_RequestedAreaId và PK/khóa khác. Mỗi Reservation có 0..1 Area; mỗi Area có 0..n Reservation. Không thêm dây/FK xuyên DB. | docker/sql/schema/RestaurantDb.sql; docker/sql/upgrades/RestaurantReservationOptionalArea.sql; docker/sql/init.sh. Đã kiểm tra LocalDB/Docker riêng, chưa áp dụng DB nhóm. |
+
+Repo SQL riêng D:/LEARN/Doan-new/Database-SQLServer: cập nhật đúng cột RequestedAreaId ở RestaurantDb.sql và thêm upgrades/RestaurantReservationOptionalArea.sql đồng nội dung. Repo này đã có nhiều thay đổi chưa commit từ trước; giữ nguyên chúng, không gom/untrack/commit hoặc đổi nhánh main của repo SQL.
+
+Database First: sửa creation/upgrade trước; dựng schema cũ trên LocalDB cô lập, áp dụng upgrade hai lần; xác minh dữ liệu RequestedAreaId cũ còn nguyên, FK trusted và index còn nguyên, chèn được Pending mới với null. Scaffold bằng EF Core 8.0.24 vào thư mục tạm, chỉ nhập Guid? của Reservation và relationship optional vào DbContext, giữ các tùy chỉnh mô hình hiện có. Fresh Docker và initializer chạy lặp cũng đạt. Không thêm bảng/cột khác hoặc sửa seed demo.
+
+DTO Create/response RequestedAreaId nhận null; Protobuf đổi hai trường cùng số hiệu 2 (create) và 16 (response) sang optional, không đổi route/field number. Đầu vào cũ được giữ để tương thích nhưng không dùng khi tạo; Pending mới luôn chưa có khu vực/bàn. Tại confirm/update, sau khi khóa và kiểm tra bàn hợp lệ, lấy RequestedAreaId từ AreaId của bàn nhân viên chọn trong cùng transaction. Giữ các bàn trong cùng khu vực, cùng nhà hàng, kiểm tra sức chứa/lịch và quyền cũ. Không cho guest tự xếp bàn hoặc sửa status/endAt.
+
+Kiểm chứng đã chạy:
+- Bộ Restaurant.Tests: 209 passed/0 failed/52 skipped; gồm hai test mới Gateway -> gRPC -> Restaurant BLL -> SQLite, Identity giả lập, kiểm tra không có khu vực vẫn tạo được và waiter chọn bàn/check-in, bàn khác nhà hàng hoặc nhóm bàn khác khu vực bị chặn, không lưu dở dang và chống duyệt lặp.
+- Đã thử riêng 6 test SQL cũ bằng LocalDB: bị chặn ở bước fixture tạo layout, vì fixture cấu hình admin là quản trị toàn hệ thống trong khi LayoutManagementAccess hiện chỉ cho admin/manager nhà hàng. Chưa tới thao tác reservation; không coi các ca này đã đạt hoặc coi đó là lỗi mới của chức năng. Không nới quyền production để làm test xanh.
+- Docker Linux containers riêng, image từ working tree + SQL Server thật + seed dev: POST ẩn danh không requestedAreaId trả 201 Pending/null ở cả A và B (B không có khu vực; giờ mở cửa của B được bổ sung chỉ trong fixture). Waiter thấy đúng Pending của A, không thấy B; cashier đọc được Pending; duyệt B hoặc Admin nhà hàng duyệt đều 403. Hai request duyệt A cùng lúc trả 200 và 409; DB chỉ có một lần xếp bàn, khu vực suy ra đúng từ bàn. Initializer chạy lần hai đạt.
+- Có hai lần công cụ tạm bị chặn: Docker Engine dừng (đã khởi động Docker Desktop lại, không reset volume) và lỗi cú pháp TimeZoneInfo trong harness (đã sửa harness, không sửa production để né lỗi). Lượt Docker cuối đạt và đã dọn container/volume/image riêng.
+- Chưa áp dụng upgrade/recreate bộ container backend-* đang dùng; chưa kiểm thử frontend/mobile hoặc GitHub Actions sau sửa. Hướng dẫn request, deploy và review ở docs/restaurant-management.md.
+
+
+Kết quả cuối toàn solution: `dotnet build Backend.sln -c Release --no-restore -m:1` đạt 0 warning/0 error; `dotnet test Backend.sln -c Release --no-build --no-restore --logger trx --results-directory TestResults/ReservationAreaSelection` đạt 1.524 test/0 lỗi, 107 skipped trên 9 project (không tính skipped là đạt). TRX là artifact bị ignore. Không ghi đè các kết quả thử riêng 6 ca SQL cũ bị lỗi fixture đã nêu ở trên.
+
+Danh sách file backend của đợt này:
+- Contracts/Protos/restaurant.proto: optional presence và giữ số hiệu field.
+- Services/api_gateway/ApiGateway/Controllers/RestaurantManagement/ReservationController.cs: không gửi khu vực khi tạo; đọc response null an toàn.
+- Services/api_gateway/ApiGateway/DTOs/Restaurant/CreateReservationDto.cs; ReservationDto.cs: nullable DTO, giữ input cũ chỉ để tương thích.
+- Services/restaurant_service/Restaurant.API/GrpcServices/ReservationGrpcService.cs: bỏ yêu cầu area trên create và ánh xạ optional response.
+- Services/restaurant_service/Restaurant.BLL/Implements/ReservationService.cs: tiếp nhận Pending chưa có khu vực, xếp khu vực từ bàn waiter chọn khi confirm/update.
+- Services/restaurant_service/Restaurant.Common/DTOs/CreateReservationDto.cs; ReservationDto.cs: đồng bộ nullable.
+- Services/restaurant_service/Restaurant.DAL/Models/Reservation.cs; RestaurantDbContext.cs: phần model/quan hệ optional từ scaffold.
+- Tests/Restaurant.Tests/ReservationFlowTests.cs: cập nhật kỳ vọng không để input khu vực cũ gán Pending.
+- Tests/Restaurant.Tests/ReservationAreaSelectionFlowTests.cs: hai ca Gateway mới cho luồng không khu vực và waiter xếp bàn/check-in.
+- docker/sql/schema/RestaurantDb.sql; docker/sql/upgrades/RestaurantReservationOptionalArea.sql; docker/sql/init.sh: creation/upgrade bảo toàn dữ liệu và Docker tự nâng cấp.
+- docs/database-change-log.md; docs/restaurant-management.md: SQL/ERD, request frontend, triển khai và hướng dẫn review Gemini.
+
+Tên commit đề xuất: **Cho phép khách đặt bàn không cần chọn khu vực**. Mô tả: **Lưu Pending chưa xếp bàn, để waiter chọn bàn/khu vực khi duyệt; đồng bộ DTO/Protobuf, SQL nâng cấp và kiểm thử Gateway/Docker.** Chưa thực hiện commit.
+
+
+## 2026-11-26 — Chỉ nhận đặt bàn trong ngày hiện tại
+
+Đây là quyết định mới thay giới hạn đặt trước 30 ngày đã ghi ở các mục lịch sử. Riêng lần điều chỉnh này không có thay đổi schema/SQL/ERD; giữ các thay đổi nullable RequestedAreaId của đợt trước, không thay dữ liệu cũ hoặc repo SQL riêng thêm lần nữa.
+
+- ReservationRules.Window: nhận TimeZone từ nhà hàng do backend truy vấn, so sánh ngày địa phương của StartAt đã chuẩn hóa UTC với ngày hiện tại của chính nhà hàng; không dùng ngày máy chủ/client và không dùng cửa sổ 24 giờ. Giữ tối thiểu 30 phút và kiểm tra giờ mở cửa/thời lượng. GetTimeZone được dùng chung cho kiểm tra ngày và giờ mở cửa; cấu hình timezone sai vẫn lỗi 503 có kiểm soát.
+- ReservationService.Create/Update/GetAvailability lấy timezone từ nhà hàng và dùng quy tắc chung. Đổi lịch được kiểm lại sau khi khóa bàn như trước; lỗi không sửa lịch đã lưu. Không tự hủy/xóa/đổi lịch các bản ghi tương lai cũ; đọc/duyệt các yêu cầu cũ không bị thêm quy tắc mới ngoài phạm vi tạo/đổi lịch/preview.
+- Bỏ MaximumAdvanceDays ở ReservationSettings và cả appsettings.json/appsettings.Docker.json, không sửa .dockerignore hoặc đưa secret vào cấu hình Docker.
+- ReservationSameDayFlowTests: 6 ca HTTP Gateway/gRPC/TestServer, Identity giả lập/SQLite/clock cố định; kiểm tra ngày Việt Nam, Los Angeles, Honolulu, ngày UTC khác nhưng ngày nhà hàng giống, ngày UTC giống nhưng ngày nhà hàng khác và offset client khác. Trước sửa 3 lỗi/3 đạt; sau sửa toàn bộ đạt. Cập nhật test biên đặt trước 30 ngày thành từ chối, giữ ca 29 phút từ chối/30 phút chấp nhận; thêm kiểm tra PUT ngày mai thất bại và lịch cũ còn nguyên trong ReservationAreaSelectionFlowTests. ReservationDockerConfigurationTests cập nhật theo cấu hình không còn MaximumAdvanceDays.
+- Bộ Restaurant.Tests: 215 passed/0 failed/52 skipped (skipped không phải đã kiểm chứng). Build solution đạt 0 warning/0 error ở lượt cuối. Lệnh và kết quả toàn solution bổ sung bên dưới sau khi hoàn tất.
+- Docker riêng build từ working tree + SQL Server thật: tạo hôm nay 201 Pending/null, ngày hôm qua/ngày mai/sau 30 ngày đều 400; GET availability ngày mai 400; PUT đổi lịch ngày mai 400, GET lại giữ đúng StartAt đã lưu; waiter/cashier và đồng thời 200+409 vẫn đạt. Fixture dùng múi giờ UTC và giờ mở cửa hợp lệ để có khung giờ thử theo đồng hồ thật, thêm bàn thử không có lịch seed; không sửa dữ liệu nhóm. Kiểm chứng timezone/qua nửa đêm dùng clock cố định trong TestServer nêu trên. Tài nguyên thử đã dọn.
+- Chưa recreate bộ container chính hoặc kiểm thử frontend/mobile/GitHub Actions. Không commit/push; giữ nguyên nhánh fix/reservation-waiter-table-selection và các thay đổi chưa commit của yêu cầu không chọn khu vực.
+
+
+Kết quả cuối: dotnet test Backend.sln -c Release --no-build --no-restore --logger trx --results-directory TestResults/ReservationSameDay đạt 1.530 passed/0 failed/107 skipped trên 9 project; không tính skipped là đạt. git diff --check đạt. Các file bổ sung của phần giới hạn ngày: ReservationRules.cs, ReservationSettings.cs, hai appsettings của Restaurant, ReservationSameDayFlowTests.cs, cập nhật ReservationDockerConfigurationTests/ReservationFlowTests/ReservationAreaSelectionFlowTests và hai tài liệu hiện có. Không sửa thêm service khác hoặc SQL.

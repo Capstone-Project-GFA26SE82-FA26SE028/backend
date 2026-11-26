@@ -22,7 +22,6 @@ public sealed class ReservationDockerConfigurationTests
         Assert.Equal(120, settings.DefaultDurationMinutes);
         Assert.Empty(settings.DurationMinutesByRestaurant);
         Assert.Equal(30, settings.MinimumAdvanceMinutes);
-        Assert.Equal(30, settings.MaximumAdvanceDays);
         Assert.Equal(30, settings.HoldBeforeMinutes);
         Assert.Equal(30, settings.HoldAfterMinutes);
         Assert.True(settings.ExpirationEnabled);

@@ -45,7 +45,6 @@ public sealed class ReservationGrpcService(IReservationService service) : Reserv
         return Map(await service.Create(new CreateReservationDto
         {
             RestaurantId = ParseId(request.RestaurantId),
-            RequestedAreaId = ParseId(request.RequestedAreaId),
             ContactName = request.ContactName,
             Phone = request.Phone,
             PartySize = request.PartySize,
@@ -141,7 +140,6 @@ public sealed class ReservationGrpcService(IReservationService service) : Reserv
         {
             ReservationId = reservation.ReservationId.ToString(),
             RestaurantId = reservation.RestaurantId.ToString(),
-            RequestedAreaId = reservation.RequestedAreaId.ToString(),
             ContactName = reservation.ContactName,
             Phone = reservation.Phone,
             PartySize = reservation.PartySize,
@@ -150,6 +148,11 @@ public sealed class ReservationGrpcService(IReservationService service) : Reserv
             Status = reservation.Status,
             HasConsistentAssignment = reservation.HasConsistentAssignment
         };
+        if (reservation.RequestedAreaId.HasValue)
+        {
+            result.RequestedAreaId = reservation.RequestedAreaId.Value.ToString();
+        }
+
         if (reservation.HoldUntil.HasValue)
         {
             result.HoldUntil = reservation.HoldUntil.Value.ToString("O", CultureInfo.InvariantCulture);
