@@ -124,15 +124,28 @@ public sealed class PromotionGrpcService(IPromotionService service) : PromotionG
             info.EndAt = dto.EndAt.Value.ToString("o");
         }
 
-        info.Targets.AddRange(dto.Targets.Select(t => new PromotionTargetInfo
+        foreach (var target in dto.Targets)
         {
-            PromotionTargetId = t.PromotionTargetId.ToString(),
-            PromotionId = t.PromotionId.ToString(),
-            ItemRef = t.ItemRef?.ToString(),
-            CategoryRef = t.CategoryRef?.ToString(),
-            Role = t.Role,
-            RequiredQuantity = Decimal(t.RequiredQuantity)
-        }));
+            var item = new PromotionTargetInfo
+            {
+                PromotionTargetId = target.PromotionTargetId.ToString(),
+                PromotionId = target.PromotionId.ToString(),
+                Role = target.Role,
+                RequiredQuantity = Decimal(target.RequiredQuantity)
+            };
+
+            if (target.ItemRef.HasValue)
+            {
+                item.ItemRef = target.ItemRef.Value.ToString();
+            }
+
+            if (target.CategoryRef.HasValue)
+            {
+                item.CategoryRef = target.CategoryRef.Value.ToString();
+            }
+
+            info.Targets.Add(item);
+        }
 
         return info;
     }
