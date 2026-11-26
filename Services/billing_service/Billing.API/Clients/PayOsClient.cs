@@ -223,8 +223,9 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
     private bool ValidUrl(string value)
     {
         return Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.UserInfo.Length == 0
-            && (uri.Scheme == Uri.UriSchemeHttps || (options.Value.AllowInsecureTestTransport
-                && environment.IsEnvironment("PayOsTest") && uri.Scheme == Uri.UriSchemeHttp));
+            && (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)
+                || (options.Value.AllowInsecureTestTransport
+                    && environment.IsEnvironment("PayOsTest") && uri.Scheme == Uri.UriSchemeHttp));
     }
 
     private static long Number(JsonElement value, string name)
