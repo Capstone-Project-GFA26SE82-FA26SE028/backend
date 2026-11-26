@@ -15,6 +15,7 @@ $project = 'report-r6-' + [Guid]::NewGuid().ToString('N').Substring(0, 10)
 $privateDirectory = Join-Path ([IO.Path]::GetTempPath()) $project
 $envFile = Join-Path $privateDirectory 'docker.env'
 $override = Join-Path $privateDirectory 'compose.test.yaml'
+$seedDirectory = Join-Path $privateDirectory 'seed'
 $server = "$project-sqlserver-1"
 $checks = [Collections.Generic.List[object]]::new()
 $cases = [ordered]@{}
@@ -83,7 +84,12 @@ function Invoke-Sql([string]$Database, [string]$Sql) {
     Assert-True ($Database -in @('BillingDb', 'OrderingDb', 'RestaurantDb')) 'Unexpected fixture database.'
     $encodedSql = [Convert]::ToBase64String($utf8NoBom.GetBytes($Sql))
     $run = Invoke-Native 'docker' @('exec', $server, 'bash', '-c', 'printf %s $2 | base64 -d | SQLCMDPASSWORD=$MSSQL_SA_PASSWORD /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -I -f 65001 -h -1 -W -d $1', 'bash', $Database, $encodedSql)
-    Assert-True ($run.ExitCode -eq 0) "Test SQL failed in $Database."
+    if ($run.ExitCode -ne 0) {
+        $diagnosticPath = Join-Path $privateDirectory "sql-$Database-failure.log"
+        [IO.File]::WriteAllText($diagnosticPath, ($run.Output -join "`n"), $utf8NoBom)
+        $sqlErrors = ($run.Output | Select-String '^Msg \d+, Level \d+, State \d+' | ForEach-Object { $_.Matches.Value }) -join '; '
+        throw "Test SQL failed in $Database (exit $($run.ExitCode); $sqlErrors). Details retained in the private SQL log."
+    }
     return ($run.Output | Where-Object { "$_" -and "$_".Trim() }) -join "`n"
 }
 
@@ -174,6 +180,18 @@ try {
     $info = Invoke-Native 'docker' @('info', '--format', '{{.ServerVersion}}')
     Assert-True ($info.ExitCode -eq 0) 'Cannot connect to Docker Engine; start Docker Desktop with Linux containers.'
     New-Item -ItemType Directory -Path $privateDirectory | Out-Null
+    New-Item -ItemType Directory -Path $seedDirectory | Out-Null
+    foreach ($database in @('IdentityDb', 'RestaurantDb', 'InventoryDb', 'CatalogDb', 'CustomerDb', 'OrderingDb', 'BillingDb')) {
+        $fixturePath = Join-Path $fixtures "$database.sql"
+        $seedText = if (Test-Path -LiteralPath $fixturePath) {
+            [IO.File]::ReadAllText($fixturePath, [Text.Encoding]::UTF8)
+        } else {
+            '-- Intentionally empty for the isolated report test.'
+        }
+        [IO.File]::WriteAllText((Join-Path $seedDirectory "$database.sql"), $seedText, $utf8NoBom)
+    }
+    $seedMountSource = $seedDirectory.Replace('\', '/') | ConvertTo-Json -Compress
+
     $settings = @{
         SQL_SA_PASSWORD = 'Aa1!' + [Guid]::NewGuid().ToString('N')
         JWT_SECRET_KEY = [Guid]::NewGuid().ToString('N') + [Guid]::NewGuid().ToString('N')
@@ -195,6 +213,11 @@ services:
       MSSQL_MEMORY_LIMIT_MB: '1024'
   db-init:
     image: ${project}-db-init:test
+    volumes:
+      - type: bind
+        source: $seedMountSource
+        target: /init/seed
+        read_only: true
   identity:
     image: ${project}-identity:test
   restaurant:
@@ -212,9 +235,6 @@ services:
     Invoke-Compose @('up', '-d', '--no-deps', '--wait', 'sqlserver') 'sql-start.log'
     Invoke-Compose @('run', '--rm', '--no-deps', 'db-init') 'init.log'
     Invoke-Compose @('run', '--rm', '--no-deps', '--entrypoint', '/bin/bash', 'db-init', '/init/seed.sh') 'seed.log'
-    foreach ($database in @('RestaurantDb', 'OrderingDb', 'BillingDb')) {
-        $null = Invoke-Sql $database ([IO.File]::ReadAllText((Join-Path $fixtures "$database.sql"), [Text.Encoding]::UTF8))
-    }
     Invoke-Compose @('up', '-d', '--no-deps', 'identity', 'restaurant', 'billing', 'ordering', 'gateway') 'apps.log'
     $portInfo = Invoke-Native 'docker' @('port', "$project-gateway-1", '5000/tcp')
     $port = ($portInfo.Output | Select-Object -First 1) -split ':' | Select-Object -Last 1

@@ -776,11 +776,79 @@ Bằng chứng nghiệm thu cục bộ:
 **Không có thay đổi schema.** Chỉ sửa phạm vi cảnh báo theo kết quả lọc món, bổ sung test backend/Gateway cho bảng trống và tỷ suất âm/gộp cùng món. Không thêm/sửa/xóa bảng/cột/kiểu/NULL/default/khóa/index/quan hệ/cardinality/ERD, SQL tạo mới/upgrade/model/DbContext hoặc repo SQL riêng. SQL fixture chỉ dùng trong project Docker thử riêng đã dọn, không thay database nhóm. Chưa commit/push; chi tiết tại mục review R5 của tài liệu báo cáo.
 
 
-## 2026-11-26 — R6 bộ kiểm thử nghiệm thu Docker và đối chiếu BM04
+## 2026-11-26 — Sửa lỗi nạp bộ dữ liệu mẫu một tháng trên Docker
 
-**Không có thay đổi schema.** Chỉ bổ sung dữ liệu fixture tổng hợp tại `Tests/Fixtures/RestaurantReports/`, script kiểm thử cô lập `scripts/Test-RestaurantReports.ps1`, cấu hình CI `.github/workflows/backend-ci.yml` và mục đối chiếu nghiệm thu R6 trong `docs/restaurant-performance-reports.md`. Không thêm/sửa/xóa bảng/cột/kiểu/NULL/default/PK/FK/UNIQUE/CHECK/index/quan hệ/cardinality hoặc dây ERD; không sửa model, DbContext, `docker/sql/schema`, `docker/sql/upgrades` hay repository SQL riêng; không tác động container và database `backend-*` của nhóm. Giữ nguyên HEAD `83c7c00`, chưa commit/push.
+**Không có thay đổi schema.** Không thêm/sửa/xóa bảng/cột/kiểu/NULL/default/PK/FK/UNIQUE/CHECK/index, không đổi quan hệ/cardinality/dây ERD, không scaffold model/DbContext và không sửa repository SQL riêng. Đây là chỉnh dữ liệu và thứ tự INSERT trong seed phát triển, không phải migration cho database đã sử dụng.
+
+| File | Thay đổi thực tế |
+| --- | --- |
+| docker/sql/seed/RestaurantDb.sql | Bảng Qr có sẵn: đổi4 QrId bị lặp của các bàn có TableId kết thúc017/018/019/020 sang QrId có hậu tố007/008/009/00a. Giữ6 QrId đầu, toàn bộ TableId, TokenHash, CreatedAt, RevokedAt và ImageUrl. Kết quả10 bản ghi/10 PK riêng, không đổi kiểu uniqueidentifier hoặc FK. |
+| docker/sql/seed/InventoryDb.sql | Chuyển nguyên khối Stocktake và StocktakeItem lên trước StockMovement để đáp ứng FK_StockMovement_StocktakeItem. Không sửa bất kỳ giá trị hàng nào; so sánh toàn bộ khối dữ liệu trước/sau cho kết quả giống nhau. |
+| docker/sql/seed/BillingDb.sql | PaymentMethod chỉ INSERT mã chưa tồn tại, dùng NOT EXISTS với UPDLOCK/HOLDLOCK trong transaction của runner; giữ các mã Cash/BankTransfer đã được upgrade tạo và không bật lại bản ghi đã tắt. Giữ4 mã đã có trong bộ seed, không tự thêm phương thức mới. Chuyển nguyên khối CashMovement/CashHandover xuống sau Payment, đáp ứng FK nội bộ; giữ toàn bộ dữ liệu các bảng còn lại. |
+| scratch/generate_seeds.js | Sinh QrId theo chỉ số duy nhất trong TABLES thay vì phần số của TableCode có thể lặp giữa các khu vực; đồng bộ thứ tự bảng Inventory/Billing và quy tắc PaymentMethod để chạy generator lại không tái tạo lỗi. Không chạy generator ghi đè7 file trong repository; kiểm tra bằng bản sao ở thư mục tạm. |
+| scripts/Test-UnicodeDockerBootstrap.ps1 | Cập nhật điểm kiểm UTF-8 theo IngredientCode=RICE và tên bắt đầu bằng Gạo, phù hợp dataset mới có tên Gạo ST25. Giữ kiểm tra fresh Unicode và legacy ANSI loss; không đổi dữ liệu nguyên liệu để qua test. |
+
+Bằng chứng trước sửa từ SQL Server cô lập:
+
+- Seed Restaurant: init exit1, PK_Qr trùng; Identity8 role/15 user đã seed nhưng Restaurant0 nhà hàng/0 phân công/0 QR do rollback.
+- Sau sửa QR mới đến bước Inventory: FK_StockMovement_StocktakeItem vì chèn con trước cha.
+- Sau sửa thứ tự Inventory mới đến Billing: PK_PaymentMethod trùng Cash do upgrade đã tạo trước seed; rà FK nội bộ còn thấy CashMovement/CashHandover chèn trước Payment.
+
+Kiểm chứng sau sửa:
+
+- node --check scratch/generate_seeds.js đạt. Chạy generator thực tế trong thư mục tạm,10 QR riêng và mapping ID/bàn/token khớp seed đã sửa; đầu ra Inventory/Billing giữ thứ tự cha trước con và PaymentMethod bỏ qua mã đã có.
+- Build image db-init từ working tree, chạy đúng init.sh có auto seed trên SQL Server/volume mới riêng: exit0, đủ marker seed ở7 database; Identity8 role/15 user; Restaurant2 nhà hàng/9 phân công/10 QR.
+- Chạy lại initializer trên cùng database thử: exit0, số dòng của mọi bảng ở cả7 database giữ nguyên.
+- Trong database thử, tắt Cash rồi chạy lại khối seed PaymentMethod: vẫn tắt, không phát sinh mã trùng; tổng4 phương thức.
+- Build/start Identity, Restaurant và Gateway từ source trên project thử: Admin admin@sen-viet.test đăng nhập được; GET /api/roles HTTP200 trả cashier/inventory/kitchen/manager/waiter. Đã logout phiên thử. Chưa kiểm thử giao diện hoặc luồng nghiệp vụ/thanh toán của toàn bộ dữ liệu mẫu một tháng.
+- Chạy đúng bài bootstrap CI: ./scripts/Test-UnicodeDockerBootstrap.ps1 -VerifyEf đạt fresh/repeat, tái hiện VARCHAR loss, nâng cấp legacy giữ nguyên dữ liệu/số dòng/index, từ chối an toàn custom statistic và khôi phục sau xử lý tường minh; 112 test EF/SQL Server đạt,0 lỗi,0 bỏ qua. Bài có build Foundation.Tests và các DAL; còn cảnh báo CS0108/CS0114 có sẵn ở Promotion/Voucher, không sửa ngoài phạm vi.
+- Không cập nhật database/volume nhóm; container, volume, tag image và credential của project thử được dọn. File seed không tự sửa lại database đã có DockerSeedVersion; không xóa marker hoặc volume để ép nạp lại dữ liệu.
+
+Các chỉnh sửa CI về DI hai model chuyển bàn và test ngân sách AI đang có sẵn trước lượt này được giữ nguyên, không gộp thành thay đổi dữ liệu mẫu. Chưa stage/commit/push.
+
+Tên commit đề xuất: **Sửa khóa trùng và thứ tự nạp dữ liệu mẫu Docker**.
+Mô tả: **Tạo mã QR riêng, tránh chèn trùng phương thức thanh toán đã có, sắp thứ tự seed theo FK và đồng bộ generator; cập nhật kiểm tra Unicode theo bộ mẫu mới. Không thay đổi schema hoặc dữ liệu nhóm.**
 
 
-### 2026-11-26 — Đối chiếu độc lập bộ chạy R6
+## 2026-11-26 — Rà lại Unicode trong backend và dữ liệu Docker
 
-**Không có thay đổi schema.** Chỉ siết rào chắn native exit/image/readiness/cleanup và fingerprint trong runner, cập nhật bằng chứng kiểm thử PowerShell7/5.1 trong tài liệu hiện có. Không sửa bảng/cột/NULL/default/khóa/index/quan hệ/cardinality/ERD hoặc SQL production/model/DbContext/repo SQL riêng; fixture vẫn chỉ trong project thử đã dọn. Giữ HEAD83c7c00, chưa commit/push.
+Không có thay đổi schema. Không thêm/sửa bảng, cột, kiểu dữ liệu, NULL/DEFAULT, PK/FK/index hoặc quan hệ ERD trong đợt này. Các cột `BillingDb.CashMovement.Reason` và `BillingDb.ShiftReport.DifferenceReason` đã là `nvarchar(1000) NULL` trong SQL tạo mới và manifest nâng cấp `docker/sql/upgrades/UnicodeText.sql`; không tạo migration mới.
+
+Thay đổi code:
+- `CashMovementService.ValidateReason` và `ShiftReportService.NormalizeReason`: bỏ kiểm tra khả năng biểu diễn CP1252 còn sót từ schema cũ. Giữ nguyên trim, giới hạn 1000 ký tự, từ chối ký tự điều khiển và các kiểm tra quyền/tiền/transaction.
+- Bổ sung test tiếng Việt/Unicode ở service, test đọc lại từ context SQL Server mới, và kiểm tra JSON qua Gateway test host (gRPC giả lập). Không coi Gateway giả lập là Docker toàn luồng.
+- `scripts/Test-UnicodeDockerBootstrap.ps1`: đọc SQL/script tường minh UTF-8, dùng tiền tố Unicode không phụ thuộc encoding file, đặt/khôi phục OutputEncoding; khai báo PowerShell 7 theo môi trường CI hiện có. Windows PowerShell 5.1 bị từ chối trước khi tạo tài nguyên, vì lần chạy thực tế trên 5.1 gặp lỗi xử lý native stderr/cleanup; không tuyên bố hỗ trợ 5.1.
+- README: sửa hướng dẫn cũ còn nói chỉ cho phép CP1252 thành NVARCHAR và yêu cầu nâng cấp database cũ trước khi chạy service.
+
+Khảo sát chỉ đọc trên SQL Server Docker nhóm `backend-sqlserver-1`:
+- Quét 7 database; tìm 20 ô văn bản chứa `?` trên 9 cột. Đây là danh sách ứng viên, không mặc định mọi dấu hỏi đều là dữ liệu hỏng.
+- IdentityDb: Role.RoleName (6), User.FullName (6).
+- RestaurantDb: Restaurant.Address (1), Area.AreaName (1).
+- InventoryDb: Ingredient.IngredientName (1).
+- CatalogDb: Category.CategoryName (1), Item.ItemName (1), OptionGroup.OptionGroupName (1).
+- OrderingDb: KitchenStation.KitchenStationName (2).
+- CustomerDb/BillingDb: không có dấu hỏi tại các cột tên/mô tả/lý do/địa chỉ/ghi chú đã quét; không khẳng định toàn bộ dữ liệu hai database không có vấn đề.
+- Xác minh Role.RoleName và User.FullName trên container hiện tại vẫn là varchar; hex lưu của vai trò kitchen có byte 3F (`B?p`), chứng minh đã mất ký tự trước khi trả API. Các file schema/nâng cấp mới không tự sửa dữ liệu từng bị mất dấu. Chưa nâng cấp hoặc ghi đè database nhóm trong lượt này; không xóa volume, không tự suy đoán tên/người/địa chỉ để phục hồi.
+
+Quét source và cấu hình: 1.395 file văn bản tracked/untracked không bị ignore đều đọc được UTF-8, không phát hiện U+FFFD hoặc mẫu mojibake đã kiểm tra. Quét bổ sung toàn thư mục, kể cả ignored, 1.353 file văn bản dưới 3 MB ngoài .git/bin/obj/node_modules/TestResults/.vs/packages, không phát hiện mẫu tương tự. Hai tập có chồng lặp, không cộng thành tổng file duy nhất. Không in giá trị secret. Không có literal Unicode SQL thiếu tiền tố N trong các file SQL đã quét. Kết quả này không chứng minh mọi chuỗi từng bị biến thành dấu hỏi đều có thể nhận diện tự động.
+
+Kiểm chứng:
+- Trước sửa: 4 ca mới UnicodeReasonIsPreserved/UnicodeDifferenceReasonIsPreserved đều lỗi đúng tại kiểm tra CP1252.
+- Sau sửa bước đầu: 460 test Billing đạt, 0 lỗi, 42 test SQL bỏ qua vì chưa cấp connection; không tính skipped là đạt.
+- `pwsh -NoProfile -File scripts/Test-UnicodeDockerBootstrap.ps1 -VerifyEf`: đạt fresh/repeat, fixture mất dấu VARCHAR, nâng cấp bảo toàn dữ liệu/index/ràng buộc, từ chối dependency không hỗ trợ; 112/112 test EF/SQL Server đạt, 0 skipped. Tài nguyên thử riêng được dọn, không dùng volume nhóm.
+
+- Lượt cuối cấp BILLING_SQL_TEST_CONNECTION tới container SQL Server riêng: 503/503 test Billing đạt, 0 lỗi, 0 skipped; có VietnameseLedgerAndClosingReasonsRoundTripSqlServer đọc lại bằng DbContext mới và Gateway test host với gRPC giả lập. Kết quả: TestResults/Encoding/encoding.trx (artifact không commit).
+- `dotnet build Backend.sln -c Release --no-restore -m:1`: đạt, 0 warning/0 error trong lượt cuối; `git diff --check`: đạt. Chưa build/chạy image Billing mới qua Gateway Docker của nhóm; kiểm chứng HTTP dùng Gateway test host, không gọi là toàn luồng Docker.
+- Toàn bộ container/network/image SQL thử đã dọn. Nhánh data/seed-data-docker, giữ nguyên HEAD 4253d53; thay đổi để review, chưa commit/push.
+
+
+## 2026-11-26 — Sửa xung đột fixture báo cáo với seed Docker mới
+
+Không có thay đổi schema: không đổi bảng/cột, kiểu, NULL/DEFAULT, PK/FK/UNIQUE/CHECK/index hoặc dây ERD. Giữ nguyên UX_CashRegister_Restaurant; không sửa database nhóm hay seed demo một tháng.
+
+- Tái hiện thực tế: bootstrap hiện tại nạp seed demo, sau đó fixture BillingDb.sql chèn quầy gây Msg 2601 tại dòng 5, trùng quầy nhà hàng 20000000-0000-0000-0000-000000000001. Bài test cũ trên snapshot origin/dev trước seed một tháng vẫn đạt 64 HTTP checks.
+- scripts/Test-RestaurantReports.ps1: dùng thư mục fixture seed read-only riêng cho initializer của project Docker thử; bỏ INSERT fixture lần hai, giữ lượt seed tường minh chạy lặp theo marker. Lỗi SQL thêm mã Msg/exit code, chi tiết giữ trong log riêng.
+- Tests/Fixtures/RestaurantReports/IdentityDb.sql (mới): tài khoản/role tổng hợp phục vụ test, độc lập seed demo. RestaurantDb.sql: thêm nhà hàng A và sáu phân công cần cho kiểm thử quyền. Chỉ INSERT dữ liệu thử vào database cô lập, không phải migration/production seed.
+- Không thay fixture BillingDb.sql/OrderingDb.sql/expected.json, không thay backend endpoint/công thức/quyền.
+- Lệnh CI tương đương đã chạy local: pwsh -NoProfile -File scripts/Test-RestaurantReports.ps1 -OutputDirectory TestResults/RestaurantReports. Kết quả 19/19 ca, 64 HTTP checks đạt; 11 Covered/8 Partial; cleanupSucceeded=true. Build lại đủ image từ working tree rồi gọi API qua Gateway Docker thật; không gọi PayOS/Gemini thật. Kết quả TestResults/RestaurantReports/results.json là artifact không commit. Chưa chạy lại GitHub Actions Ubuntu sau sửa.
+- Đã fast-forward nhánh local data/seed-data-docker từ 4253d53 đến commit remote đã có 5876c43 để sửa đúng phiên bản CI; giữ nguyên toàn bộ thay đổi Unicode chưa commit. Không tạo commit mới, không push, không sửa lịch sử.

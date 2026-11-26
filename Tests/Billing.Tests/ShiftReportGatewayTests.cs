@@ -30,7 +30,7 @@ public sealed class ShiftReportGatewayTests
             Assert.Equal(shiftId.ToString(), request.CashShiftId);
             Assert.Equal("1330", request.ActualCash);
             Assert.Equal("1000", request.CashHandleOver);
-            Assert.Equal("Shortage", request.DifferenceReason);
+            Assert.Equal("Thiếu tiền kiểm đếm", request.DifferenceReason);
             return new Wire.CloseCashShiftReply
             {
                 Report = report,
@@ -43,12 +43,13 @@ public sealed class ShiftReportGatewayTests
         {
             ActualCash = 1330,
             CashHandleOver = 1000,
-            DifferenceReason = "Shortage"
+            DifferenceReason = "Thiếu tiền kiểm đếm"
         });
         Assert.Equal(status, (int)response.StatusCode);
         Assert.Equal(created ? $"/api/shift-reports/{report.ShiftReportId}" : null, response.Headers.Location?.ToString());
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var result = json.RootElement.GetProperty("result");
+        Assert.Equal("Thiếu tiền kiểm đếm", result.GetProperty("differenceReason").GetString());
         Assert.Equal(-2, result.GetProperty("difference").GetDecimal());
         Assert.Equal(330, result.GetProperty("remainingCash").GetDecimal());
     }
@@ -172,7 +173,7 @@ public sealed class ShiftReportGatewayTests
             CashHandleOver = "1000",
             Difference = "-2",
             RemainingCash = "330",
-            DifferenceReason = "Shortage",
+            DifferenceReason = "Thiếu tiền kiểm đếm",
             ClosedAt = "2026-10-28T01:00:00Z"
         };
     }

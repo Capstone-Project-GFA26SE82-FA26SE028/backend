@@ -71,6 +71,37 @@ public sealed class CashMovementSqlServerTests : IAsyncLifetime
     }
 
     [BillingSqlServerFact]
+    public async Task VietnameseLedgerAndClosingReasonsRoundTripSqlServer()
+    {
+        var source = new BillServiceTests.BillSource();
+        var actor = CashActor(source);
+        var prepared = await PrepareCash(source, actor);
+        const string movementReason = "Nộp tiền lẻ vào quỹ";
+        const string differenceReason = "Thiếu tiền do trả nhầm tiền thừa";
+        await using (var db = Context())
+        {
+            var body = CashMovementServiceTests.Body("CashIn", 1);
+            body.Reason = movementReason;
+            var movement = await CashMovementServiceTests.Make(db, actor).Create(
+                prepared.Body.CashShiftId, Guid.NewGuid().ToString(), body, default);
+            Assert.Equal(movementReason, movement.Movement.Reason);
+
+            var closed = await ShiftReportServiceTests.Make(db, actor).Close(
+                prepared.Body.CashShiftId, new CloseCashShiftDTO
+                {
+                    ActualCash = 1000,
+                    CashHandleOver = 0,
+                    DifferenceReason = differenceReason
+                }, default);
+            Assert.Equal(differenceReason, closed.Report.DifferenceReason);
+        }
+
+        await using var check = Context();
+        Assert.Equal(movementReason, (await check.CashMovements.SingleAsync()).Reason);
+        Assert.Equal(differenceReason, (await check.ShiftReports.SingleAsync()).DifferenceReason);
+    }
+
+    [BillingSqlServerFact]
     public async Task ConcurrentWithdrawalsCannotOverdrawShift()
     {
         var source = new BillServiceTests.BillSource();

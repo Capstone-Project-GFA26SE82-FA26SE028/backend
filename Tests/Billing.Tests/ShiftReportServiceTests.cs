@@ -12,6 +12,20 @@ namespace Billing.Tests;
 
 public sealed class ShiftReportServiceTests
 {
+    [Theory]
+    [InlineData("Thiếu tiền do trả nhầm tiền thừa")]
+    [InlineData("Chênh lệch kiểm đếm – 一")]
+    public async Task UnicodeDifferenceReasonIsPreserved(string reason)
+    {
+        await using var f = await CashPaymentServiceTests.Fixture.Create();
+        var service = Make(f.Db, f.Core.Actor);
+
+        var result = await service.Close(f.ShiftId, Body(999, 0, reason), default);
+
+        Assert.Equal(reason, result.Report.DifferenceReason);
+        Assert.Equal(reason, (await f.Db.ShiftReports.SingleAsync()).DifferenceReason);
+    }
+
     [Fact]
     public async Task ClosingSnapshotsCashBeforeHandoverWithoutPostingCashOut()
     {
@@ -79,7 +93,7 @@ public sealed class ShiftReportServiceTests
         var service = Make(f.Db, f.Core.Actor);
         foreach (var body in new[] { Body(null, 0), Body(1000, null), Body(-1, 0), Body(1.5m, 0),
             Body(1000, -1), Body(1000, 1001), Body(10000000000000000m, 0), Body(1000, 0, new string('a', 1001)),
-            Body(1000, 0, "Bad\nreason"), Body(1000, 0, "Unsupported \u4e00") })
+            Body(1000, 0, "Bad\nreason") })
         {
             await Status(400, () => service.Close(f.ShiftId, body, default));
         }

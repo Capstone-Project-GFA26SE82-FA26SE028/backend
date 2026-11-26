@@ -50,18 +50,23 @@ public sealed class GrpcFlowTests
     public async Task TotalBudgetIncludesDataReadAndModelTime()
     {
         var data = new AssistantTestContext();
-        var delayed = new DelayedDependencies(data);
+        var dependencies = new BudgetDependencies(data);
         await using var host = await Start(data, services =>
         {
-            services.AddSingleton<IGuestAccessClient>(delayed);
-            services.AddSingleton<IAssistantModelClient>(delayed);
+            services.AddSingleton<IGuestAccessClient>(dependencies);
+            services.AddSingleton<IAssistantModelClient>(dependencies);
         }, ("AI:RequestTimeoutSeconds", "1"));
         using var channel = Channel(host);
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        var error = await Assert.ThrowsAsync<RpcException>(() => new ChatGrpc.ChatGrpcClient(channel).ChatAsync(Question(data)).ResponseAsync);
+        // Observe the shared request budget, not client/JIT latency under parallel CI load.
+        var response = new ChatGrpc.ChatGrpcClient(channel).ChatAsync(Question(data)).ResponseAsync;
+        var error = await Assert.ThrowsAsync<RpcException>(() => response.WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.Equal(StatusCode.DeadlineExceeded, error.StatusCode);
-        Assert.True(delayed.ModelStarted);
-        Assert.InRange(watch.Elapsed.TotalSeconds, 0.8, 1.8);
+        Assert.True(dependencies.GuestCompleted);
+        Assert.True(dependencies.ModelStarted);
+        Assert.True(dependencies.ModelCancelled);
+        Assert.True(dependencies.GuestCancellation.CanBeCanceled);
+        Assert.Equal(dependencies.GuestCancellation, dependencies.ModelCancellation);
+        Assert.True(dependencies.GuestCancellation.IsCancellationRequested);
     }
 
     [Theory]
@@ -129,20 +134,36 @@ public sealed class GrpcFlowTests
         }
     }
 
-    private sealed class DelayedDependencies(AssistantTestContext data) : IGuestAccessClient, IAssistantModelClient
+    private sealed class BudgetDependencies(AssistantTestContext data) : IGuestAccessClient, IAssistantModelClient
     {
+        public bool GuestCompleted { get; private set; }
         public bool ModelStarted { get; private set; }
+        public bool ModelCancelled { get; private set; }
+        public CancellationToken GuestCancellation { get; private set; }
+        public CancellationToken ModelCancellation { get; private set; }
 
         public async Task<VerifiedGuest> VerifyAsync(GuestContext guest, CancellationToken ct)
         {
-            await Task.Delay(600, ct);
-            return await data.VerifyAsync(guest, ct);
+            GuestCancellation = ct;
+            var verified = await data.VerifyAsync(guest, ct);
+            GuestCompleted = true;
+            return verified;
         }
 
         public async Task<ChatPlanDTO> ChatAsync(ChatModelRequestDTO request, CancellationToken ct)
         {
+            ModelCancellation = ct;
             ModelStarted = true;
-            await Task.Delay(600, ct);
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                ModelCancelled = true;
+                throw;
+            }
+
             return await data.ChatAsync(request, ct);
         }
 
