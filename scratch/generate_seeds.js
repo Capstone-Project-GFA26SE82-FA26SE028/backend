@@ -632,9 +632,7 @@ CUSTOMERS.forEach(c => {
 // Billing Master Data
 db_billing.PaymentMethod.push(
   { MethodCode: 'Cash', IsEnabled: true },
-  { MethodCode: 'BankTransfer', IsEnabled: true },
-  { MethodCode: 'PayOS', IsEnabled: true },
-  { MethodCode: 'Card', IsEnabled: true }
+  { MethodCode: 'PayOS', IsEnabled: true }
 );
 
 db_billing.PaymentProviderConfig.push({

@@ -12,3 +12,10 @@ public sealed class SavePayOsConfigurationDTO
     public string CancelUrl { get; set; } = string.Empty;
     public bool Enabled { get; set; }
 }
+
+public sealed class TestPayOsConfigurationDTO
+{
+    public string? ClientId { get; set; }
+    public string? ApiKey { get; set; }
+    public string? ChecksumKey { get; set; }
+}

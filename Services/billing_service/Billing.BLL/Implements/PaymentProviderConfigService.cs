@@ -24,23 +24,30 @@ public sealed class PaymentProviderConfigService(IPaymentProviderConfigRepositor
     public async Task<PayOsConfigurationDTO> Update(Guid restaurantId, SavePayOsConfigurationDTO request, CancellationToken ct)
     {
         await Authorize(restaurantId, ct);
-        if (!Token(request.ClientId, 255) || !Token(request.ApiKey, 512) || !Token(request.ChecksumKey, 512)
-            || !Https(request.ReturnUrl) || !Https(request.CancelUrl))
+        var returnUrl = string.IsNullOrWhiteSpace(request.ReturnUrl)
+            ? "http://localhost:5173/payment/success"
+            : request.ReturnUrl;
+        var cancelUrl = string.IsNullOrWhiteSpace(request.CancelUrl)
+            ? "http://localhost:5173/payment/cancel"
+            : request.CancelUrl;
+
+        if (!Token(request.ClientId, 255) || !Https(returnUrl) || !Https(cancelUrl))
         {
-            throw new BillingException(400, "Vui lòng nhập Client ID, API Key, Checksum Key và đường dẫn HTTPS return, cancel hợp lệ.");
+            throw new BillingException(400, "Vui lòng nhập Client ID và đường dẫn return, cancel hợp lệ.");
         }
 
         var webhook = Webhook(restaurantId);
         return await work.ExecuteInTransactionAsync(async () =>
         {
             var configuration = await repository.GetByRestaurantAsync(restaurantId, ct);
-            if (configuration is not null && configuration.ClientId != request.ClientId)
-            {
-                throw new BillingException(409, "Không thể đổi Client ID của kênh đã cấu hình vì các giao dịch cũ vẫn thuộc kênh đó. Có thể cập nhật khóa của cùng kênh.");
-            }
 
             if (configuration is null)
             {
+                if (!Token(request.ApiKey, 512) || !Token(request.ChecksumKey, 512))
+                {
+                    throw new BillingException(400, "Vui lòng nhập đầy đủ API Key và Checksum Key khi cấu hình lần đầu.");
+                }
+
                 configuration = new PaymentProviderConfig
                 {
                     PaymentProviderConfigId = Guid.NewGuid(),
@@ -51,13 +58,22 @@ public sealed class PaymentProviderConfigService(IPaymentProviderConfigRepositor
             }
 
             configuration.ClientId = request.ClientId;
-            configuration.SecretReference = secrets.Protect(restaurantId, new PayOsCredentials
+
+            if (!string.IsNullOrWhiteSpace(request.ApiKey) && !string.IsNullOrWhiteSpace(request.ChecksumKey))
             {
-                ApiKey = request.ApiKey,
-                ChecksumKey = request.ChecksumKey
-            });
-            configuration.ReturnUrl = request.ReturnUrl;
-            configuration.CancelUrl = request.CancelUrl;
+                if (!Token(request.ApiKey, 512) || !Token(request.ChecksumKey, 512))
+                {
+                    throw new BillingException(400, "API Key hoặc Checksum Key không hợp lệ.");
+                }
+
+                configuration.SecretReference = secrets.Protect(restaurantId, new PayOsCredentials
+                {
+                    ApiKey = request.ApiKey,
+                    ChecksumKey = request.ChecksumKey
+                });
+            }
+            configuration.ReturnUrl = returnUrl;
+            configuration.CancelUrl = cancelUrl;
             configuration.WebhookUrl = webhook;
             configuration.Enabled = request.Enabled;
             configuration.IsVerified = false;
@@ -83,7 +99,10 @@ public sealed class PaymentProviderConfigService(IPaymentProviderConfigRepositor
 
     private string Webhook(Guid restaurantId)
     {
-        var baseUrl = settings.Value.WebhookBaseUrl.TrimEnd('/');
+        var rawBase = string.IsNullOrWhiteSpace(settings.Value.WebhookBaseUrl)
+            ? "http://localhost:5000"
+            : settings.Value.WebhookBaseUrl;
+        var baseUrl = rawBase.TrimEnd('/');
         if (!Https(baseUrl) || !Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri)
             || uri.Query.Length > 0 || uri.Fragment.Length > 0)
         {
@@ -115,6 +134,7 @@ public sealed class PaymentProviderConfigService(IPaymentProviderConfigRepositor
     private static bool Https(string value)
     {
         return value.Length <= 1900 && Uri.TryCreate(value, UriKind.Absolute, out var uri)
-            && uri.Scheme == Uri.UriSchemeHttps && uri.UserInfo.Length == 0;
+            && (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback))
+            && uri.UserInfo.Length == 0;
     }
 }

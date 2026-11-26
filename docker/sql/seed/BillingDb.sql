@@ -1,22 +1,22 @@
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 -- Seed data for BillingDb
 -- Auto-generated 1-month comprehensive operational dataset
 
--- Table: dbo.[PaymentMethod] (4 rows)
+-- Table: dbo.[PaymentMethod] (2 rows)
 INSERT dbo.[PaymentMethod] ([MethodCode], [IsEnabled])
 SELECT seed.[MethodCode], seed.[IsEnabled]
 FROM (VALUES
 (N'Cash', 1),
-(N'BankTransfer', 1),
-(N'PayOS', 1),
-(N'Card', 1)) AS seed ([MethodCode], [IsEnabled])
+(N'PayOS', 1)) AS seed ([MethodCode], [IsEnabled])
 WHERE NOT EXISTS (
     SELECT 1 FROM dbo.[PaymentMethod] WITH (UPDLOCK, HOLDLOCK)
     WHERE [MethodCode] = seed.[MethodCode]
 );
 
--- Table: dbo.[PaymentProviderConfig] (1 rows)
-INSERT dbo.[PaymentProviderConfig] ([PaymentProviderConfigId], [RestaurantId], [Provider], [ClientId], [SecretReference], [ReturnUrl], [CancelUrl], [WebhookUrl], [IsVerified], [Enabled]) VALUES
-(N'40000000-0000-0000-0000-000000000063', N'20000000-0000-0000-0000-000000000001', N'PayOS', N'e5222e10-1b40-41dd-8d7f-dded6f5b7a3b', N'payos_secret_key_ref', N'http://localhost:5173/payment/success', N'http://localhost:5173/payment/cancel', N'http://localhost:5000/api/billing/webhook/payos', 1, 1);
+-- Table: dbo.[PaymentProviderConfig] (0 rows seeded)
 
 -- Table: dbo.[DiscountLimit] (2 rows)
 INSERT dbo.[DiscountLimit] ([DiscountLimitId], [RoleRef], [UserRef], [LimitType], [MaximumValue], [EffectiveFrom], [RestaurantId]) VALUES

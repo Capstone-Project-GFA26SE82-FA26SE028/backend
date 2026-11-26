@@ -1,3 +1,7 @@
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 -- Seed data for CatalogDb
 -- Auto-generated 1-month comprehensive operational dataset
 
