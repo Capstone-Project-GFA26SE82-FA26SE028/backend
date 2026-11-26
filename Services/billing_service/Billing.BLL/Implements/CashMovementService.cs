@@ -1,5 +1,4 @@
 using System.Data.SqlTypes;
-using System.Text;
 using Billing.BLL.Interfaces;
 using Billing.Common.Constants;
 using Billing.Common.DTOs;
@@ -195,17 +194,6 @@ public sealed class CashMovementService(ICashMovementRepository movements, ICash
         if (string.IsNullOrWhiteSpace(reason) || reason.Length > 1000 || reason.Any(char.IsControl))
         {
             throw new BillingException(400, "Lý do là bắt buộc, từ 1-1000 ký tự và không chứa ký tự điều khiển.");
-        }
-
-        var encoding = (Encoding)CodePagesEncodingProvider.Instance.GetEncoding(1252)!.Clone();
-        encoding.EncoderFallback = EncoderFallback.ExceptionFallback;
-        try
-        {
-            encoding.GetBytes(reason);
-        }
-        catch (EncoderFallbackException)
-        {
-            throw new BillingException(400, "Lý do chứa ký tự không được cột văn bản hiện tại trong cơ sở dữ liệu hỗ trợ.");
         }
 
         return reason;

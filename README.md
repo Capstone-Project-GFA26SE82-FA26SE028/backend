@@ -358,7 +358,7 @@ Content-Type: application/json
 }
 ```
 
-Amount is a positive whole-VND value; the backend stores CashIn as positive and CashOut as negative. Reason is required, trimmed, at most 1000 characters, without controls, and must be representable in the existing SQL varchar/CP1252 column. Unsupported text is rejected rather than silently corrupted; this increment does not change the database to Unicode.
+Amount is a positive whole-VND value; the backend stores CashIn as positive and CashOut as negative. Reason is required, trimmed, at most 1000 characters and without control characters. Vietnamese and other Unicode text are stored in the NVARCHAR column; existing databases must run the Unicode upgrade through the current db-init image before starting services.
 
 A new entry returns 201 and Location `/api/cash-movements/{id}`. Retry the exact payload with the same UUID to receive 200/the original entry without posting again. A changed payload with that UUID returns 409. Successful replay remains readable after closing the shift, but new postings are rejected. Current account/session, branch access and ownership still apply. After a timeout, retry the same UUID rather than guessing the result or making a new request key.
 

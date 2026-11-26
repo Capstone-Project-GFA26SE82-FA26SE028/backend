@@ -32,7 +32,7 @@ public sealed class CashMovementGatewayTests
             Assert.Equal(key, request.IdempotencyKey);
             Assert.Equal("100", request.Amount);
             Assert.Equal("CashOut", request.Type);
-            Assert.Equal("Supplies", request.Reason);
+            Assert.Equal("Chi mua vật tư", request.Reason);
             return new Wire.CashMovementReply
             {
                 Movement = movement,
@@ -46,12 +46,13 @@ public sealed class CashMovementGatewayTests
         {
             Type = "CashOut",
             Amount = 100,
-            Reason = "Supplies"
+            Reason = "Chi mua vật tư"
         });
         Assert.Equal(expected, (int)response.StatusCode);
         Assert.Equal(created ? $"/api/cash-movements/{movement.CashMovementId}" : null, response.Headers.Location?.ToString());
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var result = json.RootElement.GetProperty("result");
+        Assert.Equal("Chi mua vật tư", result.GetProperty("reason").GetString());
         Assert.Equal(-100, result.GetProperty("signedAmount").GetDecimal());
         Assert.Equal("ShiftOwnerDerived", result.GetProperty("performerSource").GetString());
         Assert.Equal(JsonValueKind.Null, result.GetProperty("paymentId").ValueKind);
@@ -140,7 +141,7 @@ public sealed class CashMovementGatewayTests
             RestaurantId = Guid.NewGuid().ToString(),
             Type = "CashOut",
             SignedAmount = "-100",
-            Reason = "Supplies",
+            Reason = "Chi mua vật tư",
             PostedAt = "2026-10-28T01:00:00Z",
             PerformedByRef = Guid.NewGuid().ToString(),
             PerformerSource = "ShiftOwnerDerived"

@@ -12,6 +12,23 @@ namespace Billing.Tests;
 
 public sealed class CashMovementServiceTests
 {
+    [Theory]
+    [InlineData("Nộp tiền lẻ vào quỹ")]
+    [InlineData("Bổ sung tiền – 一")]
+    public async Task UnicodeReasonIsPreserved(string reason)
+    {
+        await using var f = await CashPaymentServiceTests.Fixture.Create();
+        var service = Make(f.Db, f.Core.Actor);
+        var body = Body("CashIn", 1);
+        body.Reason = reason;
+
+        var result = await service.Create(f.ShiftId, Guid.NewGuid().ToString(), body, default);
+
+        Assert.Equal(reason, result.Movement.Reason);
+        Assert.Equal(reason, (await service.GetById(result.Movement.CashMovementId, default)).Reason);
+        Assert.Equal(reason, (await f.Db.CashMovements.SingleAsync()).Reason);
+    }
+
     [Fact]
     public async Task ManualCashAndPaymentSaleAreCountedOnceWithDistinctPerformerSources()
     {
@@ -66,7 +83,7 @@ public sealed class CashMovementServiceTests
             await Status(400, () => service.Create(f.ShiftId, Guid.NewGuid().ToString(), Body("CashIn", amount), default));
         }
 
-        foreach (var reason in new[] { "", " ", new string('a', 1001), "Invalid\nreason", "Unstorable \u4e00" })
+        foreach (var reason in new[] { "", " ", new string('a', 1001), "Invalid\nreason" })
         {
             var body = Body("CashIn", 1);
             body.Reason = reason;

@@ -1,6 +1,10 @@
+#requires -Version 7.0
 param([switch]$KeepEnvironment, [switch]$VerifyEf)
 
 $ErrorActionPreference = 'Stop'
+$originalOutputEncoding = $OutputEncoding
+# Windows PowerShell 5.1 otherwise sends native stdin as ASCII.
+$OutputEncoding = [Text.UTF8Encoding]::new($false)
 $repo = Split-Path $PSScriptRoot -Parent
 $id = [Guid]::NewGuid().ToString('N').Substring(0, 12)
 $network = "unicode-$id"
@@ -73,7 +77,8 @@ $rowSql = 'SET NOCOUNT ON; SELECT CONCAT(t.name,N''|'',SUM(p.rows)) FROM sys.tab
 try {
     New-Item -ItemType Directory -Path $work | Out-Null
     $sqlRoot = Join-Path $repo 'docker/sql'
-    $manifestSql = Get-Content (Join-Path $sqlRoot 'upgrades/UnicodeText.sql') -Raw
+    $riceNamePrefix = 'G' + [char]0x1EA1 + 'o%'
+    $manifestSql = Get-Content (Join-Path $sqlRoot 'upgrades/UnicodeText.sql') -Raw -Encoding UTF8
     $manifest = [regex]::Matches($manifestSql, "\(N'(?<db>\w+)',N'(?<table>\w+)',N'(?<column>\w+)',(?<size>-?\d+),(?<nullable>[01])\)")
     if ($manifest.Count -ne 56) {
         throw 'Update this test deliberately when the reviewed Unicode column manifest changes.'
@@ -86,7 +91,7 @@ try {
     Start-Sql
     Initialize $tag
     Seed $tag
-    Query 'InventoryDb' "IF NOT EXISTS(SELECT 1 FROM dbo.Ingredient WHERE IngredientCode='RICE' AND IngredientName LIKE N'Gạo%') THROW 51000,'Fresh UTF-8/NVARCHAR seed lost Vietnamese.',1; PRINT 'PASS fresh Vietnamese seed';" | Write-Output
+    Query 'InventoryDb' "IF NOT EXISTS(SELECT 1 FROM dbo.Ingredient WHERE IngredientCode='RICE' AND IngredientName LIKE N'$riceNamePrefix') THROW 51000,'Fresh UTF-8/NVARCHAR seed lost Vietnamese.',1; PRINT 'PASS fresh Vietnamese seed';" | Write-Output
     Initialize $tag
     Write-Output 'PASS fresh bootstrap and repeat'
 
@@ -96,7 +101,7 @@ try {
     Copy-Item -LiteralPath $sqlRoot -Destination $legacy -Recurse
     foreach ($database in $databases) {
         $path = Join-Path $legacy "schema/$database.sql"
-        $text = Get-Content -LiteralPath $path -Raw
+        $text = Get-Content -LiteralPath $path -Raw -Encoding UTF8
         foreach ($entry in $manifest | Where-Object { $_.Groups['db'].Value -eq $database }) {
             $table = [regex]::Escape($entry.Groups['table'].Value)
             $column = [regex]::Escape($entry.Groups['column'].Value)
@@ -106,14 +111,14 @@ try {
         [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
     }
     $legacyInitPath = Join-Path $legacy 'init.sh'
-    $legacyInit = [regex]::Replace((Get-Content $legacyInitPath -Raw), '(?ms)^# UNICODE_UPGRADE_BEGIN.*?^# UNICODE_UPGRADE_END\r?\n', '')
+    $legacyInit = [regex]::Replace((Get-Content $legacyInitPath -Raw -Encoding UTF8), '(?ms)^# UNICODE_UPGRADE_BEGIN.*?^# UNICODE_UPGRADE_END\r?\n', '')
     [IO.File]::WriteAllText($legacyInitPath, $legacyInit, [Text.UTF8Encoding]::new($false))
     docker build -t $legacyTag $legacy
     Check 'Build legacy fixture initializer'
     Start-Sql
     Initialize $legacyTag
     Seed $legacyTag
-    Query 'InventoryDb' "IF EXISTS(SELECT 1 FROM dbo.Ingredient WHERE IngredientCode='RICE' AND IngredientName LIKE N'Gạo%') THROW 51000,'Legacy fixture did not reproduce ANSI loss.',1; PRINT 'PASS reproduced VARCHAR loss';" | Write-Output
+    Query 'InventoryDb' "IF EXISTS(SELECT 1 FROM dbo.Ingredient WHERE IngredientCode='RICE' AND IngredientName LIKE N'$riceNamePrefix') THROW 51000,'Legacy fixture did not reproduce ANSI loss.',1; PRINT 'PASS reproduced VARCHAR loss';" | Write-Output
     # Exercise dependent objects as well as the repository baseline (which has no text indexes on these columns).
     Query 'InventoryDb' "CREATE UNIQUE INDEX IX_UnicodeTest_Name ON dbo.Ingredient(IngredientName DESC) INCLUDE(BaseUnit) WHERE IsActive=1 WITH(FILLFACTOR=90); ALTER TABLE dbo.Ingredient ADD CONSTRAINT DF_UnicodeTest_Name DEFAULT ('Legacy') FOR IngredientName; ALTER TABLE dbo.Ingredient ADD CONSTRAINT CK_UnicodeTest_Name CHECK (LEN(IngredientName)>0);" | Out-Null
     $constraintsSql = "SET NOCOUNT ON; SELECT CONCAT(OBJECT_NAME(parent_object_id),N'|',name,N'|',definition) FROM sys.default_constraints UNION ALL SELECT CONCAT(OBJECT_NAME(parent_object_id),N'|',name,N'|',definition,N'|',is_not_trusted,N'|',is_disabled) FROM sys.check_constraints ORDER BY 1;"
@@ -181,6 +186,7 @@ try {
     $testSucceeded = $true
 }
 finally {
+    $OutputEncoding = $originalOutputEncoding
     $env:MSSQL_SA_PASSWORD = $originalPassword
     $env:SQLCMDPASSWORD = $originalSqlPassword
     if (-not $KeepEnvironment -or -not $testSucceeded) {

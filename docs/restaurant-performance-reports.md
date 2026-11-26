@@ -1038,3 +1038,14 @@ Các lệnh Docker của hai lượt trên chạy Docker Engine thật, SQL Serv
 Đây là18 nhóm kiểm tra theo TC-WF05-01..18 và1 nhóm luồng tổng hợp, không phải19 phương thức xUnit mới; không đếm64 HTTP thành64 tiêu chí BM04. execution=Passed chứng minh assertion hiện tại đúng, không đồng nghĩa19/19 tiêu chí nghiệp vụ đã nghiệm thu đầy đủ. 8 nhóm Partial vẫn phải giữ rõ GAP-01..03, điều kiện kỳ rỗng, thao tác xác nhận thu tiền thật và lợi nhuận ròng toàn nhà hàng.
 
 **Không có thay đổi schema.** Giữ8 file R6 đã liệt kê; không sửa source nghiệp vụ, model/DbContext, SQL tạo mới/upgrade hoặc repo SQL riêng. git diff --check đạt. Giữ HEAD83c7c00 và branch feature/restaurant-performance-reports; chưa stage/commit/push. Tên/mô tả commit đề xuất R6 ở trên vẫn áp dụng, không tạo commit fix riêng.
+
+
+### 2026-11-26 — Tách fixture báo cáo khỏi seed demo một tháng
+
+Sau khi ghép seed mới, `db-init` tự chạy `seed.sh`. Runner cũ nạp tiếp fixture Billing và vi phạm index một quầy mỗi nhà hàng (`Msg 2601`, `UX_CashRegister_Restaurant`, BillingDb.sql dòng 5). Đây là lỗi thiết lập dữ liệu thử trước khi gọi API, không sửa bằng cách nới ràng buộc quầy hoặc đổi số kỳ vọng báo cáo.
+
+Runner hiện tạo thư mục seed riêng, gắn read-only vào `/init/seed` chỉ của `db-init` thuộc project `report-r6-<10hex>`. Bốn database dùng fixture Identity/Restaurant/Ordering/Billing; ba database còn lại dùng seed rỗng có chủ đích. Cả initializer tự seed lẫn lượt gọi seed tường minh dùng cùng fixture và cơ chế seed marker. Không nạp fixture lần hai bằng INSERT. Tài khoản tổng hợp nằm trong `Tests/Fixtures/RestaurantReports/IdentityDb.sql`; Restaurant fixture tự tạo nhà hàng A và phân công cần cho test. Không phụ thuộc email hoặc giao dịch của seed demo, không sửa dữ liệu nhóm hay seed một tháng.
+
+Chạy lại: `pwsh -NoProfile -File scripts/Test-RestaurantReports.ps1 -OutputDirectory TestResults/RestaurantReports`. Đã chạy trên PowerShell 7 với Docker Linux containers: 19/19 ca đạt, 64 HTTP checks đạt, 0 failed/0 notRun, cleanupSucceeded=true; nghiệm thu giữ nguyên 11 Covered/8 Partial. Kiểm thử build image từ working tree có các thay đổi Unicode chưa commit. File BillingDb.sql, OrderingDb.sql và expected.json của fixture tài chính không đổi. Chưa xác minh bằng GitHub Actions Ubuntu sau sửa vì chưa push; không tuyên bố remote CI đã xanh.
+
+Thông báo SQL khi lỗi thêm exit code/mã Msg; chi tiết nằm trong log SQL riêng, không in câu SQL hoặc secret lên console. Các rào chắn project/nhãn container vẫn giữ nguyên. Không có thay đổi schema/SQL ERD hoặc code nghiệp vụ báo cáo.
