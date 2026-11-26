@@ -47,15 +47,25 @@ public sealed class PromotionController(PromotionGrpc.PromotionGrpcClient client
                 request.EndAt = body.EndAt.Value.ToString("o");
             }
 
-            if (body.Targets.Count > 0)
+            foreach (var target in body.Targets)
             {
-                request.Targets.AddRange(body.Targets.Select(t => new CreatePromotionTargetInfo
+                var item = new CreatePromotionTargetInfo
                 {
-                    ItemRef = t.ItemRef?.ToString(),
-                    CategoryRef = t.CategoryRef?.ToString(),
-                    Role = t.Role,
-                    RequiredQuantity = t.RequiredQuantity.ToString(CultureInfo.InvariantCulture)
-                }));
+                    Role = target.Role,
+                    RequiredQuantity = target.RequiredQuantity.ToString(CultureInfo.InvariantCulture)
+                };
+
+                if (target.ItemRef.HasValue)
+                {
+                    item.ItemRef = target.ItemRef.Value.ToString();
+                }
+
+                if (target.CategoryRef.HasValue)
+                {
+                    item.CategoryRef = target.CategoryRef.Value.ToString();
+                }
+
+                request.Targets.Add(item);
             }
 
             return Map(await client.CreateAsync(request, options));
