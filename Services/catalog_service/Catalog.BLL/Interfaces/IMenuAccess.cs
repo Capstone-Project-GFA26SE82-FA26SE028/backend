@@ -7,5 +7,7 @@ public interface IMenuAccess
         return RequireReadAsync(null, null, cancellationToken);
     }
 
+    Task RequireTakeawayValidationAsync(Guid restaurantId, CancellationToken cancellationToken);
+
     Task RequireReadAsync(Guid? tableSessionId, string? guestToken, CancellationToken cancellationToken);
 }

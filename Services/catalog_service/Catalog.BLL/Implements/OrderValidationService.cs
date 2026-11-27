@@ -24,7 +24,11 @@ public sealed class OrderValidationService(
     public async Task<ResponseDTO> ValidateOrderItems(
         ValidateOrderItemsDTO request, Guid? tableSessionId, string? guestToken, CancellationToken cancellationToken)
     {
-        if (request.RestaurantId.HasValue)
+        if (request.RestaurantId.HasValue && request.Channel == "Takeaway")
+        {
+            await access.RequireTakeawayValidationAsync(request.RestaurantId.Value, cancellationToken);
+        }
+        else if (request.RestaurantId.HasValue)
         {
             await access.RequireOnlineReadAsync(request.RestaurantId.Value, cancellationToken);
         }
