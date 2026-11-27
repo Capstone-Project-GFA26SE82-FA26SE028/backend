@@ -61,11 +61,12 @@ public sealed class GuestAccessController(
                 result.AvailablePoints = availablePoints;
                 result.LoyaltyTierName = loyaltyTierName;
             }
+            var isHttps = Request.IsHttps;
             Response.Cookies.Append(CookieName(sessionId), reply.Token, new CookieOptions
             {
                 HttpOnly = true,
-                Secure = Request.IsHttps,
-                SameSite = SameSiteMode.Lax,
+                Secure = isHttps,
+                SameSite = isHttps ? SameSiteMode.None : SameSiteMode.Lax,
                 Path = "/api",
                 Expires = new DateTimeOffset(result.ExpiresAt)
             });
