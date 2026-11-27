@@ -19,14 +19,27 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
     IBillingAccess access, IBillService billService, ICheckoutSourceClient ordering,
     IOptions<CashRegisterAccessSettings> roles, IOptions<CashPaymentSettings> settings, TimeProvider clock,
     IVoucherRedemptionRepository? voucherRedemptions = null,
-    ICustomerLoyaltyClient? loyaltyClient = null) : IPaymentService
+    ICustomerLoyaltyClient? loyaltyClient = null,
+    IPayOsPaymentService? payOs = null, IPaymentMethodRepository? methods = null,
+    IPaidSessionClosureClient? closure = null) : IPaymentService
 {
     internal const decimal MaximumMoney = 9999999999999999.99m;
 
-    public Task<(PaymentDTO Payment, bool Created)> PayCash(Guid billId, string key,
+    public async Task<(PaymentDTO Payment, bool Created)> PayCash(Guid billId, string key,
         CreateCashPaymentDTO request, CancellationToken ct)
     {
-        return SettleCash(billId, key, request, null, ct);
+        var result = await SettleCash(billId, key, request, null, ct);
+        if (closure is not null)
+        {
+            var bill = await bills.GetDetailsAsync(billId, ct);
+            var sessionId = bill?.BillLines.FirstOrDefault()?.TableSessionRef;
+            if (sessionId.HasValue)
+            {
+                await closure.TryCloseAsync(result.Payment.RestaurantId, sessionId.Value, ct);
+            }
+        }
+
+        return result;
     }
 
     public Task<(PaymentDTO Payment, bool Created)> ConfirmCashHandover(Guid paymentId, Guid billId, string key,
@@ -36,6 +49,41 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
     }
 
     private async Task<(PaymentDTO Payment, bool Created)> SettleCash(Guid billId, string key,
+        CreateCashPaymentDTO request, Guid? handoverPaymentId, CancellationToken ct)
+    {
+        try
+        {
+            return await SettleCashCore(billId, key, request, handoverPaymentId, ct);
+        }
+        catch (OpenPayOsException open)
+        {
+            if (payOs is not null)
+            {
+                try
+                {
+                    await payOs.Cancel(open.PaymentId, ct);
+                }
+                catch (BillingException error) when (error.StatusCode is 409 or 503)
+                {
+                    // A concurrent webhook or an uncertain cancel is resolved from the latest persisted state below.
+                }
+
+                payments.ResetProviderTracking();
+                try
+                {
+                    return await SettleCashCore(billId, key, request, handoverPaymentId, ct);
+                }
+                catch (OpenPayOsException)
+                {
+                    // A verified terminal state is required before posting cash.
+                }
+            }
+
+            throw new BillingException(409, "Chờ đối soát PayOS. Chưa ghi nhận tiền mặt.", "PendingReconciliation");
+        }
+    }
+
+    private async Task<(PaymentDTO Payment, bool Created)> SettleCashCore(Guid billId, string key,
         CreateCashPaymentDTO request, Guid? handoverPaymentId, CancellationToken ct)
     {
         var actor = await access.GetCurrentScopeAsync(null, ct);
@@ -83,19 +131,19 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
                 }
 
                 var existing = await payments.GetByKeyAsync(key, ct);
-                if (existing is null || (handoverPaymentId.HasValue && existing.PaymentId != handoverPaymentId.Value)
-                    || (!handoverPaymentId.HasValue && existing.CashHandover is not null))
+                if ((handoverPaymentId.HasValue && existing?.PaymentId != handoverPaymentId.Value)
+                    || (!handoverPaymentId.HasValue && existing?.CashHandover is not null))
                 {
-                    throw new BillingException(409, "Phục vụ phải ghi nhận thu hộ và thu ngân phải dùng yêu cầu xác nhận bàn giao.");
+                    throw new BillingException(409, "Dùng đúng yêu cầu xác nhận của khoản tiền mặt đã ghi nhận.");
                 }
 
-                if (existing.BillId != billId || existing.CashShiftId != request.CashShiftId
-                    || existing.CashReceived != received)
+                if (existing is not null && (existing.BillId != billId || existing.CashShiftId != request.CashShiftId
+                    || existing.CashReceived != received || existing.MethodCode != settings.Value.MethodCode))
                 {
                     throw new BillingException(409, "Toàn bộ số tiền xác nhận phải khớp với khoản phục vụ đã ghi nhận.");
                 }
 
-                if (existing.Status == PaymentStatuses.Paid)
+                if (existing?.Status == PaymentStatuses.Paid)
                 {
                     if (existing.ConfirmedByRef != verified.UserId)
                     {
@@ -111,11 +159,9 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
                     return (Map(existing, checkout.CheckoutId), false);
                 }
 
-                if (!handoverPaymentId.HasValue || checkout.Status != "Presented" || !checkout.PresentedAt.HasValue
-                    || !checkout.PreparedAt.HasValue || !checkout.PreparedByRef.HasValue || !checkout.SubmittedAt.HasValue
-                    || !checkout.CashRegisterId.HasValue || string.IsNullOrEmpty(checkout.SourceHash))
+                if (checkout.Status is not ("Presented" or PaymentStatuses.Paid) || !PayOsPaymentRules.HasPresentedBill(checkout))
                 {
-                    throw new BillingException(409, "Chỉ xác nhận tiền mặt sau khi phục vụ đã đưa hóa đơn cho khách và ghi nhận thu hộ.");
+                    throw new BillingException(409, "Hãy giao hóa đơn để khách kiểm tra trước khi xác nhận tiền mặt.");
                 }
 
                 var shiftInfo = await shifts.GetDetailsAsync(request.CashShiftId, ct)
@@ -144,8 +190,16 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
                 }
 
                 var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
+                var payOsAttempts = bill.Payments.Where(value => PayOsPaymentRules.BelongsToCheckout(value, checkout.CheckoutId)).ToArray();
+                if (bill.RestaurantId == register.RestaurantId && payOsAttempts.Any(PayOsPaymentRules.IsVerifiedPaid))
+                {
+                    throw new BillingException(409, "Hóa đơn đã thanh toán qua PayOS. Trả lại toàn bộ tiền mặt đã nhận.",
+                        "CashReturnRequired", received);
+                }
+
                 if (bill.RestaurantId != register.RestaurantId || bill.Status != "Unpaid" || bill.PaidAt.HasValue
-                    || bill.Payments.Any(value => value.PaymentId != existing.PaymentId && PayOsPaymentRules.IsBlocking(value))
+                    || bill.Payments.Any(value => value.PaymentId != existing?.PaymentId && PayOsPaymentRules.IsBlocking(value)
+                        && !PayOsPaymentRules.BelongsToCheckout(value, checkout.CheckoutId))
                     || bill.Currency != "VND" || bill.TotalAmount <= 0
                     || bill.TotalAmount > MaximumMoney || decimal.Truncate(bill.TotalAmount) != bill.TotalAmount)
                 {
@@ -154,22 +208,22 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
 
                 if (received < bill.TotalAmount)
                 {
-                    throw new BillingException(400, "Tiền khách đưa phải đủ thanh toán toàn bộ hóa đơn.");
+                    throw new BillingException(400, "Tiền khách đưa chưa đủ thanh toán hóa đơn.",
+                        "InsufficientCash", bill.TotalAmount - received);
                 }
 
-                var payment = bill.Payments.SingleOrDefault(value => value.PaymentId == existing.PaymentId);
-                if (payment is null || payment.CashHandover is not { } handover
-                    || payment.Status != CashHandoverStatuses.PendingPayment || handover.Status != CashHandoverStatuses.Pending
-                    || handover.WaiterUserRef == Guid.Empty || handover.CashierUserRef.HasValue
-                    || handover.ConfirmedAt.HasValue || handover.ConfirmedAmount.HasValue
-                    || payment.PaidAt.HasValue || payment.ConfirmedByRef.HasValue || payment.VerificationSource is not null
-                    || payment.MethodCode != settings.Value.MethodCode || payment.ProviderOrderCode is not null
-                    || payment.ProviderTransactionId is not null || payment.ProviderPaymentLinkId is not null
-                    || payment.Refunds.Count != 0 || payment.CashMovements.Count != 0
-                    || payment.Amount != bill.TotalAmount || payment.CashReceived != received
-                    || payment.ChangeAmount != received - bill.TotalAmount)
+                var payment = bill.Payments.SingleOrDefault(value => value.PaymentId == existing?.PaymentId);
+                var handover = payment?.CashHandover;
+                if (handoverPaymentId.HasValue && (payment is null || !PayOsPaymentRules.IsPendingCashHandover(payment)
+                    || handover!.WaiterUserRef == Guid.Empty || payment.Amount != bill.TotalAmount || payment.CashReceived != received))
                 {
                     throw new BillingException(409, "Bản ghi thu hộ không còn chờ bàn giao hoặc không khớp với hóa đơn.");
+                }
+
+                if (!handoverPaymentId.HasValue && (existing is not null || methods is null
+                    || (await methods.LockByCodeAsync(settings.Value.MethodCode, ct))?.IsEnabled != true))
+                {
+                    throw new BillingException(409, "Không thể tạo khoản thu tiền mặt trực tiếp với yêu cầu này.");
                 }
 
                 var current = await billService.GetById(billId, ct);
@@ -192,10 +246,45 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
                     throw new BillingException(409, "Số tiền mặt dự kiến sau giao dịch vượt quá giới hạn hỗ trợ. Chưa ghi nhận thanh toán.");
                 }
 
+                var outstanding = payOsAttempts.Where(PayOsPaymentRules.IsBlocking).ToArray();
+                if (outstanding.Length > 1)
+                {
+                    throw new BillingException(409, "Chờ đối soát các giao dịch PayOS của hóa đơn.", "PendingReconciliation");
+                }
+
+                if (outstanding.Length == 1)
+                {
+                    throw new OpenPayOsException(outstanding[0].PaymentId);
+                }
+
+                if ((!handoverPaymentId.HasValue || payOsAttempts.Length > 0)
+                    && !payOsAttempts.Any(value => value.Amount == bill.TotalAmount && PayOsPaymentRules.HasIssuedQr(value)
+                        && PayOsPaymentRules.IsVerifiedZero(value)))
+                {
+                    throw new BillingException(409, "Cần tạo QR PayOS cho hóa đơn trước khi thu tiền mặt.", "QrRequired");
+                }
+
                 var paidAt = CashTimestamp(clock.GetUtcNow());
-                if (handover.CollectedAt > paidAt)
+                if (handover is not null && handover.CollectedAt > paidAt)
                 {
                     throw new BillingException(409, "Thời điểm xác nhận không hợp lệ so với thời điểm phục vụ thu hộ.");
+                }
+
+                if (payment is null)
+                {
+                    payment = new Payment
+                    {
+                        PaymentId = Guid.NewGuid(),
+                        BillId = billId,
+                        Bill = bill,
+                        CashShiftId = shift.CashShiftId,
+                        MethodCode = settings.Value.MethodCode,
+                        Amount = bill.TotalAmount,
+                        CashReceived = received,
+                        ChangeAmount = received - bill.TotalAmount,
+                        IdempotencyKey = key
+                    };
+                    await payments.AddAsync(payment);
                 }
 
                 payment.CashShift = shift;
@@ -203,10 +292,13 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
                 payment.PaidAt = paidAt;
                 payment.ConfirmedByRef = verified.UserId;
                 payment.VerificationSource = PaymentStatuses.CashierVerification;
-                handover.Status = CashHandoverStatuses.Confirmed;
-                handover.CashierUserRef = verified.UserId;
-                handover.ConfirmedAt = paidAt;
-                handover.ConfirmedAmount = received;
+                if (handover is not null)
+                {
+                    handover.Status = CashHandoverStatuses.Confirmed;
+                    handover.CashierUserRef = verified.UserId;
+                    handover.ConfirmedAt = paidAt;
+                    handover.ConfirmedAmount = received;
+                }
                 await movements.AddAsync(new CashMovement
                 {
                     CashMovementId = Guid.NewGuid(),
@@ -345,6 +437,11 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
             && handover.CashierUserRef.HasValue && handover.CashierUserRef == payment.ConfirmedByRef
             && handover.ConfirmedAt.HasValue && handover.ConfirmedAt == payment.PaidAt
             && handover.CollectedAt <= handover.ConfirmedAt && handover.ConfirmedAmount == payment.CashReceived;
+    }
+
+    private sealed class OpenPayOsException(Guid paymentId) : Exception
+    {
+        public Guid PaymentId { get; } = paymentId;
     }
 
     internal static DateTime CashTimestamp(DateTimeOffset now)

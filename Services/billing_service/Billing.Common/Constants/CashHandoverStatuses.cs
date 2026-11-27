@@ -4,5 +4,7 @@ public static class CashHandoverStatuses
 {
     public const string Pending = "Pending";
     public const string Confirmed = "Confirmed";
+    public const string ReturnRequired = "ReturnRequired";
+    public const string SupersededByPayOs = "SupersededByPayOs";
     public const string PendingPayment = "PendingHandover";
 }

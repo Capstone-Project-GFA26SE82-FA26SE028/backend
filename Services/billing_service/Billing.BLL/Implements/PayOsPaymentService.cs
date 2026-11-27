@@ -94,7 +94,8 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
             }
 
             var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
-            if (bill.Status != "Unpaid" || bill.PaidAt.HasValue || bill.Payments.Any(PayOsPaymentRules.IsBlocking)
+            if (bill.Status != "Unpaid" || bill.PaidAt.HasValue || bill.Payments.Any(payment =>
+                PayOsPaymentRules.IsBlocking(payment) && !PayOsPaymentRules.IsPendingCashHandover(payment))
                 || bill.Currency != "VND" || bill.TotalAmount <= 0 || bill.TotalAmount > 9999999999999999.99m
                 || decimal.Truncate(bill.TotalAmount) != bill.TotalAmount)
             {

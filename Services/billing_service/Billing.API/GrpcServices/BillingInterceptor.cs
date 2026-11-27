@@ -1,3 +1,4 @@
+using System.Globalization;
 using Billing.Common.Exceptions;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
@@ -24,7 +25,18 @@ public sealed class BillingInterceptor(ILogger<BillingInterceptor> logger) : Int
                 409 => StatusCode.AlreadyExists,
                 _ => StatusCode.Unavailable
             };
-            throw new RpcException(new Status(status, error.Message));
+            var trailers = new Metadata();
+            if (error.Code is not null)
+            {
+                trailers.Add("billing-error-code", error.Code);
+            }
+
+            if (error.Amount.HasValue)
+            {
+                trailers.Add("billing-error-amount", error.Amount.Value.ToString(CultureInfo.InvariantCulture));
+            }
+
+            throw new RpcException(new Status(status, error.Message), trailers);
         }
         catch (Shared.Persistence.RestaurantIsolation.RestaurantScopeException error)
         {
