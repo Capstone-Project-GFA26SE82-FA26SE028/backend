@@ -145,7 +145,7 @@ public sealed class CashPaymentSqlServerTests : IAsyncLifetime
             {
                 CashierRoleIds = ["cashier"]
             }), TimeProvider.System, new CashRegisterRepository(cancelling), new CashShiftRepository(cancelling),
-            new TestPaymentReviewClient());
+            new TestPaymentReviewClient(), new TestPaidSessionClosureClient());
         async Task<int> Result(Func<Task> action, int success)
         {
             try

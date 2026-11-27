@@ -8,9 +8,24 @@ internal static class PayOsPaymentRules
 {
     public static bool HasPresentedBill(BillCheckout? checkout)
     {
+        return HasPreparedBill(checkout) && checkout?.PresentedAt is not null;
+    }
+
+    public static bool HasPreparedBill(BillCheckout? checkout)
+    {
         return checkout is { ReleasedAt: null, BillId: not null, CashRegisterId: not null, SubmittedAt: not null,
-            PreparedByRef: not null, PreparedAt: not null, PresentedAt: not null }
+            PreparedByRef: not null, PreparedAt: not null }
             && !string.IsNullOrWhiteSpace(checkout.SourceHash);
+    }
+
+    public static bool CanUsePreparedBill(BillCheckout checkout)
+    {
+        return checkout.Status switch
+        {
+            "Prepared" => HasPreparedBill(checkout),
+            "Presented" => HasPresentedBill(checkout),
+            _ => false
+        };
     }
 
     public static bool BelongsToCheckout(Payment payment, Guid checkoutId)
