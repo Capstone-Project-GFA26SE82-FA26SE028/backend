@@ -11,6 +11,8 @@ public partial class OptionGroup
 
     public string OptionGroupName { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public virtual ICollection<ItemOptionGroup> ItemOptionGroups { get; set; } = new List<ItemOptionGroup>();
 
     public virtual ICollection<Option> Options { get; set; } = new List<Option>();

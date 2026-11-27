@@ -17,9 +17,13 @@ public sealed class CashRegisterRepositoryTests
         await using var db = await CreateContext(connection);
         var firstRestaurant = Guid.NewGuid();
         var secondRestaurant = Guid.NewGuid();
+        var posA = Register(firstRestaurant, "POS-A");
+        posA.CreatedAt = DateTime.UtcNow.AddMinutes(-2);
+        var posB = Register(firstRestaurant, "POS-B");
+        posB.CreatedAt = DateTime.UtcNow.AddMinutes(-1);
         db.CashRegisters.AddRange(
-            Register(firstRestaurant, "POS-A"),
-            Register(firstRestaurant, "POS-B"),
+            posA,
+            posB,
             Register(firstRestaurant, "OTHER"),
             Register(secondRestaurant, "POS-C"));
         await db.SaveChangesAsync();
@@ -33,7 +37,7 @@ public sealed class CashRegisterRepositoryTests
         }, [firstRestaurant], default);
 
         Assert.Equal(2, result.TotalCount);
-        Assert.Equal("POS-B", Assert.Single(result.Items).Code);
+        Assert.Equal("POS-A", Assert.Single(result.Items).Code);
         var empty = await repository.GetPageAsync(new CashRegisterQueryDTO
         {
             RestaurantId = secondRestaurant
@@ -84,7 +88,7 @@ public sealed class CashRegisterRepositoryTests
     private static async Task<BillingDbContext> CreateContext(SqliteConnection connection)
     {
         var db = new BillingDbContext(new DbContextOptionsBuilder<BillingDbContext>().UseSqlite(connection).Options);
-        await db.Database.ExecuteSqlRawAsync("CREATE TABLE CashRegister (CashRegisterId TEXT NOT NULL PRIMARY KEY, RestaurantId TEXT NOT NULL, Code TEXT NOT NULL);");
+        await db.Database.ExecuteSqlRawAsync("CREATE TABLE CashRegister (CashRegisterId TEXT NOT NULL PRIMARY KEY, RestaurantId TEXT NOT NULL, Code TEXT NOT NULL, CreatedAt TEXT NOT NULL);");
         return db;
     }
 

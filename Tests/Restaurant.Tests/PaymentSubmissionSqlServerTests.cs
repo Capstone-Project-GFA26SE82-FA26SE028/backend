@@ -109,8 +109,8 @@ public sealed partial class ReservationSqlServerTests
         var orderItemId = Guid.NewGuid();
         var kitchenTaskId = Guid.NewGuid();
         var server = Environment.GetEnvironmentVariable("RESTAURANT_SQL_TEST_SERVER")!;
-        var billingConnection = Connection(server, "CodexB2Billing_" + Guid.NewGuid().ToString("N"));
-        var orderingConnection = Connection(server, "CodexB2Ordering_" + Guid.NewGuid().ToString("N"));
+        var billingConnection = Connection(server, "TestB2Billing_" + Guid.NewGuid().ToString("N"));
+        var orderingConnection = Connection(server, "TestB2Ordering_" + Guid.NewGuid().ToString("N"));
         try
         {
             await CreatePaymentSubmissionSchema(billingConnection, "Billing");
@@ -373,8 +373,8 @@ public sealed partial class ReservationSqlServerTests
         }
         finally
         {
-            await DeleteTestDatabase(billingConnection, "CodexB2Billing_");
-            await DeleteTestDatabase(orderingConnection, "CodexB2Ordering_");
+            await DeleteTestDatabase(billingConnection, "TestB2Billing_");
+            await DeleteTestDatabase(orderingConnection, "TestB2Ordering_");
         }
     }
 
@@ -594,7 +594,7 @@ public sealed partial class ReservationSqlServerTests
     {
         var parsed = new SqlConnectionStringBuilder(connection);
         var name = parsed.InitialCatalog;
-        var prefix = $"CodexB2{service}_";
+        var prefix = $"TestB2{service}_";
         if (!name.StartsWith(prefix, StringComparison.Ordinal) || !Guid.TryParseExact(name[prefix.Length..], "N", out _))
         {
             throw new InvalidOperationException("Only an isolated B2 database can be initialized.");

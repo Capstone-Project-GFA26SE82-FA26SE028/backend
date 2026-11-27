@@ -18,7 +18,7 @@ public sealed class RestaurantRepository(RestaurantDbContext db) : GenericReposi
         }
 
         var count = await source.CountAsync(ct);
-        var items = await source.OrderBy(x => x.RestaurantName).ThenBy(x => x.RestaurantId)
+        var items = await source.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.RestaurantId)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync(ct);
         return new PageResult<global::Restaurant.DAL.Models.Restaurant>
         {

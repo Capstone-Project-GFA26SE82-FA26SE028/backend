@@ -65,8 +65,8 @@ public sealed partial class ReservationSqlServerTests : IAsyncLifetime
         }
 
         var suffix = Guid.NewGuid().ToString("N");
-        _identityConnection = Connection(server, "CodexReservationIdentity_" + suffix);
-        _restaurantConnection = Connection(server, "CodexReservationRestaurant_" + suffix);
+        _identityConnection = Connection(server, "TestReservationIdentity_" + suffix);
+        _restaurantConnection = Connection(server, "TestReservationRestaurant_" + suffix);
         var key = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
         _identity = new WebApplicationFactory<IdentityMarker>().WithWebHostBuilder(builder =>
         {
@@ -199,7 +199,7 @@ public sealed partial class ReservationSqlServerTests : IAsyncLifetime
     private async Task InitializeRestaurantSchema()
     {
         var connection = new SqlConnectionStringBuilder(_restaurantConnection);
-        const string prefix = "CodexReservationRestaurant_";
+        const string prefix = "TestReservationRestaurant_";
         var databaseName = connection.InitialCatalog;
         if (!databaseName.StartsWith(prefix, StringComparison.Ordinal)
             || !Guid.TryParseExact(databaseName[prefix.Length..], "N", out _))
@@ -651,8 +651,8 @@ public sealed partial class ReservationSqlServerTests : IAsyncLifetime
         }
         finally
         {
-            await DeleteTestDatabase(_restaurantConnection, "CodexReservationRestaurant_");
-            await DeleteTestDatabase(_identityConnection, "CodexReservationIdentity_");
+            await DeleteTestDatabase(_restaurantConnection, "TestReservationRestaurant_");
+            await DeleteTestDatabase(_identityConnection, "TestReservationIdentity_");
         }
     }
 

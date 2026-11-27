@@ -86,17 +86,29 @@ public sealed class RestaurantPayOsConfigurationTests : IDisposable
     }
 
     [Fact]
-    public async Task ExistingChannelCannotBeReplacedButItsKeysCanBeRotated()
+    public async Task ExistingConfigurationCanUpdateChannelAndRotateKeys()
     {
         var scope = new RestaurantDataScope();
         using var db = new BillingDbContext(options, scope);
         var service = Service(db, scope, first);
         await service.Update(first, Request("first"), default);
-        Assert.Equal(409, (await Assert.ThrowsAsync<BillingException>(() => service.Update(first, Request("second"), default))).StatusCode);
-        var replacement = Request("first");
+
+        var updatedChannel = await service.Update(first, Request("second"), default);
+        Assert.Equal("client-second", updatedChannel.ClientId);
+        Assert.Equal("api-second", secrets.Unprotect(first, (await db.PaymentProviderConfigs.SingleAsync()).SecretReference).ApiKey);
+
+        var replacement = Request("second");
         replacement.ApiKey = "rotated-api";
         replacement.ChecksumKey = "rotated-checksum";
         await service.Update(first, replacement, default);
+        Assert.Equal("rotated-api", secrets.Unprotect(first, (await db.PaymentProviderConfigs.SingleAsync()).SecretReference).ApiKey);
+
+        var keepKeys = Request("second");
+        keepKeys.ApiKey = string.Empty;
+        keepKeys.ChecksumKey = string.Empty;
+        keepKeys.Enabled = false;
+        var kept = await service.Update(first, keepKeys, default);
+        Assert.False(kept.Enabled);
         Assert.Equal("rotated-api", secrets.Unprotect(first, (await db.PaymentProviderConfigs.SingleAsync()).SecretReference).ApiKey);
     }
 

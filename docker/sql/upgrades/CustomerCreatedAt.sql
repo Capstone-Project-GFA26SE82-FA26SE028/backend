@@ -1,0 +1,10 @@
+SET XACT_ABORT ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+IF COL_LENGTH(N'dbo.Customer', N'CreatedAt') IS NULL
+BEGIN
+    ALTER TABLE dbo.[Customer]
+        ADD [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_Customer_CreatedAt] DEFAULT (SYSUTCDATETIME());
+END;
+GO

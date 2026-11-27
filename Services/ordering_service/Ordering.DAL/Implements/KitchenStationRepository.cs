@@ -20,8 +20,8 @@ public sealed class KitchenStationRepository(OrderingDbContext db) : IKitchenSta
                 || station.KitchenStationName.Contains(search));
         }
         var total = await query.CountAsync(ct);
-        var items = await query.OrderBy(station => station.KitchenStationCode)
-            .ThenBy(station => station.KitchenStationId)
+        var items = await query.OrderByDescending(station => station.CreatedAt)
+            .ThenByDescending(station => station.KitchenStationId)
             .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
         return (items, total);
     }

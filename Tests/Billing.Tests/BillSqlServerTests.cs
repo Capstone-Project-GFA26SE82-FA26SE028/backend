@@ -14,7 +14,7 @@ namespace Billing.Tests;
 
 public sealed class BillSqlServerTests : IAsyncLifetime
 {
-    private const string Prefix = "CodexBillingBill_";
+    private const string Prefix = "TestBillingBill_";
     private readonly string _database = Prefix + Guid.NewGuid().ToString("N");
     private string _master = string.Empty;
     private string _connection = string.Empty;

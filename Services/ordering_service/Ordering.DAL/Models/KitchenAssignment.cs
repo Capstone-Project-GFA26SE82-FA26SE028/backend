@@ -11,5 +11,7 @@ public partial class KitchenAssignment
 
     public Guid UserRef { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public virtual KitchenStation KitchenStation { get; set; }
 }

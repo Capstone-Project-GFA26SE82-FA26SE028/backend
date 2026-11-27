@@ -9,7 +9,8 @@ CREATE TABLE dbo.[Customer]
     [CustomerName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [LoyaltyTierId] uniqueidentifier NOT NULL,
     [Version] timestamp NOT NULL,
-    [RestaurantId] uniqueidentifier NULL
+    [RestaurantId] uniqueidentifier NULL,
+    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_Customer_CreatedAt] DEFAULT (SYSUTCDATETIME())
 );
 GO
 

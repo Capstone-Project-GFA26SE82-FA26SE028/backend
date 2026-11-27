@@ -19,8 +19,8 @@ public sealed class OptionGroupRepository(CatalogDbContext context) : IOptionGro
         }
 
         var count = await source.CountAsync(cancellationToken);
-        var entities = await source.OrderBy(entity => entity.OptionGroupName)
-            .ThenBy(entity => entity.OptionGroupId)
+        var entities = await source.OrderByDescending(entity => entity.CreatedAt)
+            .ThenByDescending(entity => entity.OptionGroupId)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .ToListAsync(cancellationToken);

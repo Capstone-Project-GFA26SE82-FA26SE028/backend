@@ -47,8 +47,8 @@ public sealed class KitchenAssignmentRepository(OrderingDbContext db) : IKitchen
     {
         var query = db.KitchenAssignments.AsNoTracking();
         var total = await query.CountAsync(ct);
-        var items = await query.Include(item => item.KitchenStation).OrderBy(item => item.KitchenStation.KitchenStationCode)
-            .ThenBy(item => item.KitchenStationId).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
+        var items = await query.Include(item => item.KitchenStation).OrderByDescending(item => item.CreatedAt)
+            .ThenByDescending(item => item.KitchenStationId).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
         return (items, total);
     }
 

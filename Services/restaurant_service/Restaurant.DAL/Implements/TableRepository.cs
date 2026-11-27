@@ -45,7 +45,7 @@ public sealed class TableRepository(RestaurantDbContext db) : GenericRepository<
         var tables = await source.Include(table => table.Area)
             .Include(table => table.SessionTables.Where(link => link.ReleasedAt == null
                 && link.TableSession.Status == "Open" && link.TableSession.ClosedAt == null))
-            .OrderBy(table => table.TableCode).ThenBy(table => table.TableId)
+            .OrderByDescending(table => table.CreatedAt).ThenByDescending(table => table.TableId)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).AsSplitQuery().ToListAsync(ct);
         return new PageResult<TableEntity>
         {
@@ -108,7 +108,7 @@ public sealed class TableRepository(RestaurantDbContext db) : GenericRepository<
         }
 
         var count = await source.CountAsync(ct);
-        var items = await source.OrderBy(x => x.TableCode).ThenBy(x => x.TableId)
+        var items = await source.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.TableId)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync(ct);
         return new PageResult<global::Restaurant.DAL.Models.Table>
         {
@@ -143,7 +143,7 @@ public sealed class TableRepository(RestaurantDbContext db) : GenericRepository<
     public async Task<IReadOnlyList<TableEntity>> GetForReservationAreaAsync(Guid areaId, CancellationToken ct)
     {
         return await GetAll().AsNoTracking().Where(table => table.AreaId == areaId)
-            .OrderBy(table => table.TableCode).ThenBy(table => table.TableId).ToListAsync(ct);
+            .OrderByDescending(table => table.CreatedAt).ThenByDescending(table => table.TableId).ToListAsync(ct);
     }
 
     public Task<bool> HasHistoryAsync(Guid id, CancellationToken ct)

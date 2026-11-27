@@ -14,7 +14,7 @@ namespace Billing.Tests;
 
 public sealed class CashShiftSqlServerTests : IAsyncLifetime
 {
-    private const string Prefix = "CodexBillingShift_";
+    private const string Prefix = "TestBillingShift_";
     private readonly string _database = Prefix + Guid.NewGuid().ToString("N");
     private readonly Guid _restaurant = Guid.NewGuid();
     private readonly Guid _register = Guid.NewGuid();

@@ -48,8 +48,8 @@ public sealed class StaffTransferFlowTests : IAsyncLifetime
         }
         else
         {
-            identitySql = SqlConnection(server, "CodexStaffTransferIdentity_");
-            restaurantSql = SqlConnection(server, "CodexStaffTransferRestaurant_");
+            identitySql = SqlConnection(server, "TestStaffTransferIdentity_");
+            restaurantSql = SqlConnection(server, "TestStaffTransferRestaurant_");
             identityOptions.UseSqlServer(identitySql);
             restaurantOptions.UseSqlServer(restaurantSql);
         }
@@ -286,13 +286,13 @@ public sealed class StaffTransferFlowTests : IAsyncLifetime
     {
         if (identitySql is not null && identity is not null)
         {
-            CheckTestDatabase(identitySql, "CodexStaffTransferIdentity_");
+            CheckTestDatabase(identitySql, "TestStaffTransferIdentity_");
             await identity.Database.EnsureDeletedAsync();
         }
 
         if (restaurantSql is not null && restaurant is not null)
         {
-            CheckTestDatabase(restaurantSql, "CodexStaffTransferRestaurant_");
+            CheckTestDatabase(restaurantSql, "TestStaffTransferRestaurant_");
             await restaurant.Database.EnsureDeletedAsync();
         }
 

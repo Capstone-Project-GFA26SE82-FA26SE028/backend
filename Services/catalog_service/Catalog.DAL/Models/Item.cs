@@ -29,6 +29,8 @@ public partial class Item
 
     public byte[] Version { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public virtual Category Category { get; set; }
 
     public virtual ICollection<ItemOptionGroup> ItemOptionGroups { get; set; } = new List<ItemOptionGroup>();

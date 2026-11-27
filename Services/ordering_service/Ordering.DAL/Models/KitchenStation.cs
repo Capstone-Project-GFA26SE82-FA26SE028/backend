@@ -15,6 +15,8 @@ public partial class KitchenStation
 
     public bool IsActive { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public virtual KitchenAssignment KitchenAssignment { get; set; }
 
     public virtual ICollection<KitchenTask> KitchenTasks { get; set; } = new List<KitchenTask>();

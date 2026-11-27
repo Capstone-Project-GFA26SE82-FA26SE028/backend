@@ -39,7 +39,8 @@ CREATE TABLE dbo.[Ingredient]
     [LowStockThreshold] decimal(18,6) NOT NULL,
     [StockVersion] timestamp NOT NULL,
     [IsActive] bit NOT NULL,
-    [RestaurantId] uniqueidentifier NULL
+    [RestaurantId] uniqueidentifier NULL,
+    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_Ingredient_CreatedAt] DEFAULT (SYSUTCDATETIME())
 );
 GO
 
@@ -112,7 +113,8 @@ CREATE TABLE dbo.[Unit]
     [UnitId] uniqueidentifier NOT NULL,
     [Code] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [Name] nvarchar(100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [RestaurantId] uniqueidentifier NULL
+    [RestaurantId] uniqueidentifier NULL,
+    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_Unit_CreatedAt] DEFAULT (SYSUTCDATETIME())
 );
 GO
 

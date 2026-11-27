@@ -28,8 +28,8 @@ public sealed class OptionRepository(CatalogDbContext context) : IOptionReposito
         }
 
         var count = await source.CountAsync(cancellationToken);
-        var entities = await source.OrderBy(entity => entity.OptionName)
-            .ThenBy(entity => entity.OptionId)
+        var entities = await source.OrderByDescending(entity => entity.CreatedAt)
+            .ThenByDescending(entity => entity.OptionId)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .ToListAsync(cancellationToken);

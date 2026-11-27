@@ -18,7 +18,7 @@ public sealed class CashHandoverRepository(BillingDbContext db) : ICashHandoverR
         var query = Details().Where(value => value.Payment.CashShiftId == shiftId && value.Status == CashHandoverStatuses.Pending
             && value.Payment.Status == CashHandoverStatuses.PendingPayment);
         var total = await query.CountAsync(ct);
-        var items = await query.OrderBy(value => value.CollectedAt).ThenBy(value => value.PaymentId)
+        var items = await query.OrderByDescending(value => value.CollectedAt).ThenByDescending(value => value.PaymentId)
             .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
         return new PagedResult<CashHandover>(items, total, page, pageSize);
     }

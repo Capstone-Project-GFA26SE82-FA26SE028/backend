@@ -13,6 +13,8 @@ public partial class CashRegister
 
     public string Code { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public virtual ICollection<BillCheckout> BillCheckouts { get; set; } = new List<BillCheckout>();
 
     public virtual ICollection<CashShift> CashShifts { get; set; } = new List<CashShift>();

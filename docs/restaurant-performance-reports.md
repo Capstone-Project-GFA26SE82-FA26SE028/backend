@@ -969,7 +969,7 @@ Cột **Thực thi** phản ánh kết quả kiểm tra tự động hiện tạ
 
 ### Bằng chứng R6 trước lượt kiểm tra độc lập
 
-Các kết quả Windows PowerShell 5.1, project và mã băm bên dưới do Antigravity ghi nhận, đã đối chiếu khớp biên bản cũ `TestResults/RestaurantReports/results-antigravity.json`. Bản chạy và bằng chứng mới nhất của Codex nằm ở mục kiểm tra độc lập sau bảng này.
+Các kết quả Windows PowerShell 5.1, project và mã băm bên dưới do Antigravity ghi nhận, đã đối chiếu khớp biên bản cũ `TestResults/RestaurantReports/results-antigravity.json`. Bản chạy và bằng chứng mới nhất nằm ở mục kiểm tra độc lập sau bảng này.
 
 - `dotnet build Backend.sln -c Release`: đạt, **0 error** (có cảnh báo nullable CS8618/CS8603 sẵn có ngoài phạm vi khi build mới từ đầu).
 - `dotnet test Backend.sln -c Release --no-build --no-restore -m:1 --logger trx --results-directory TestResults/R6`: **1.485 passed, 0 failed, 104 skipped** trên 9 project kiểm thử (`TestResults/R6/*.trx`). 104 bài skipped là các SQL Server test opt-in cần biến kết nối riêng, không tính là đạt.
