@@ -460,6 +460,26 @@ message OnlinePaymentReply {
 service PaymentProviderConfigGrpc {
   rpc GetById(PayOsConfigurationRequest) returns (PayOsConfigurationInfo);
   rpc Update(SavePayOsConfigurationRequest) returns (PayOsConfigurationInfo);
+  rpc TestQr(TestPayOsConfigurationRequest) returns (PayOsTestQrInfo);
+}
+message TestPayOsConfigurationRequest {
+  string restaurant_id = 1;
+  string client_id = 2;
+  string api_key = 3;
+  string checksum_key = 4;
+  bool use_saved_configuration = 5;
+}
+message PayOsTestQrInfo {
+  int64 order_code = 1;
+  int64 amount = 2;
+  string description = 3;
+  string qr_code = 4;
+  string checkout_url = 5;
+  string payment_link_id = 6;
+  string status = 7;
+  string account_name = 8;
+  string account_number = 9;
+  string bin = 10;
 }
 message PayOsConfigurationRequest { string restaurant_id = 1; }
 message SavePayOsConfigurationRequest {

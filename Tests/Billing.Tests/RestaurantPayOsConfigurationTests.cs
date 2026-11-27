@@ -1,4 +1,8 @@
+extern alias Gateway;
+
 using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Backend.Contracts.Billing;
@@ -12,6 +16,12 @@ using Billing.Common.Settings;
 using Billing.DAL.Implements;
 using Billing.DAL.Models;
 using Grpc.Core;
+using Grpc.Net.Client;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Wire = Gateway::Backend.Contracts.Billing;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -187,13 +197,155 @@ public sealed class RestaurantPayOsConfigurationTests : IDisposable
         await Service(db, scope, restaurantId).Update(restaurantId, Request(suffix), default);
     }
 
-    private PaymentProviderConfigService Service(BillingDbContext db, RestaurantDataScope scope, Guid assigned, string role = "admin")
+    [Fact]
+    public async Task TestQrUsesSavedOrNewCredentialsWithoutSavingChanges()
+    {
+        await Seed(first, "first");
+        var scope = new RestaurantDataScope();
+        using var db = new BillingDbContext(options, scope);
+        var provider = new QrClient();
+        var service = Service(db, scope, first, testClient: provider);
+
+        var result = await service.TestQr(first, new(), default);
+        Assert.Equal("test-qr", result.QrCode);
+        Assert.Equal(("client-first", "api-first", "checksum-first"), Assert.Single(provider.Calls));
+
+        await service.TestQr(first, new TestPayOsConfigurationDTO
+        {
+            ClientId = "client-new",
+            ApiKey = "api-new",
+            ChecksumKey = "checksum-new"
+        }, default);
+        Assert.Equal(("client-new", "api-new", "checksum-new"), provider.Calls[1]);
+        var saved = await db.PaymentProviderConfigs.SingleAsync();
+        Assert.Equal("client-first", saved.ClientId);
+        Assert.Equal("api-first", secrets.Unprotect(first, saved.SecretReference).ApiKey);
+    }
+
+    [Theory]
+    [InlineData("admin", false)]
+    [InlineData("manager", true)]
+    [InlineData("platform_admin", true)]
+    public async Task TestQrDeniesUnauthorizedRequestsInBothModes(string role, bool assigned)
+    {
+        using var db = new BillingDbContext(options);
+        var provider = new QrClient();
+        var service = Service(db, new RestaurantDataScope(), assigned ? first : second, role, provider);
+        var saved = await Assert.ThrowsAsync<BillingException>(() => service.TestQr(first,
+            new TestPayOsConfigurationDTO { UseSavedConfiguration = true }, default));
+        var supplied = await Assert.ThrowsAsync<BillingException>(() => service.TestQr(first,
+            new TestPayOsConfigurationDTO { ClientId = "client", ApiKey = "api", ChecksumKey = "checksum" }, default));
+
+        Assert.Equal(403, saved.StatusCode);
+        Assert.Equal(403, supplied.StatusCode);
+        Assert.Empty(provider.Calls);
+    }
+
+    [Fact]
+    public async Task TestQrRejectsMissingConfigurationAndIncompleteOrConflictingCredentials()
+    {
+        var scope = new RestaurantDataScope();
+        using var db = new BillingDbContext(options, scope);
+        var provider = new QrClient();
+        var service = Service(db, scope, first, testClient: provider);
+
+        var missing = await Assert.ThrowsAsync<BillingException>(() => service.TestQr(first, new(), default));
+        Assert.Equal(409, missing.StatusCode);
+        Assert.Contains("chưa cấu hình PayOS", missing.Message);
+        var partial = await Assert.ThrowsAsync<BillingException>(() => service.TestQr(first,
+            new TestPayOsConfigurationDTO { ClientId = "client" }, default));
+        var mixed = await Assert.ThrowsAsync<BillingException>(() => service.TestQr(first,
+            new TestPayOsConfigurationDTO { UseSavedConfiguration = true, ApiKey = "api" }, default));
+        Assert.Equal(400, partial.StatusCode);
+        Assert.Equal(400, mixed.StatusCode);
+        Assert.Empty(provider.Calls);
+    }
+
+    [Fact]
+    public async Task GatewayAcceptsPostWithoutBodyAndOnlyReturnsPublicQrFields()
+    {
+        await Seed(first, "first");
+        var scope = new RestaurantDataScope();
+        using var db = new BillingDbContext(options, scope);
+        var provider = new QrClient();
+        var billingBuilder = WebApplication.CreateBuilder();
+        billingBuilder.WebHost.UseTestServer();
+        billingBuilder.Services.AddGrpc(grpc => grpc.Interceptors.Add<BillingInterceptor>());
+        billingBuilder.Services.AddSingleton<IPaymentProviderConfigService>(Service(db, scope, first, testClient: provider));
+        await using var billing = billingBuilder.Build();
+        billing.MapGrpcService<PaymentProviderConfigGrpcService>();
+        await billing.StartAsync();
+        using var channel = GrpcChannel.ForAddress("http://localhost", new GrpcChannelOptions
+        {
+            HttpHandler = billing.GetTestServer().CreateHandler()
+        });
+
+        var gatewayBuilder = WebApplication.CreateBuilder();
+        gatewayBuilder.WebHost.UseTestServer();
+        gatewayBuilder.Services.AddControllers().AddApplicationPart(typeof(Gateway::ApiGateway.ApiAssembly).Assembly);
+        gatewayBuilder.Services.Configure<Gateway::ApiGateway.Settings.BillingClientSettings>(settings =>
+        {
+            settings.TimeoutSeconds = 15;
+        });
+        gatewayBuilder.Services.AddSingleton(new Wire.PaymentProviderConfigGrpc.PaymentProviderConfigGrpcClient(channel));
+        await using var gateway = gatewayBuilder.Build();
+        gateway.MapControllers();
+        await gateway.StartAsync();
+        using var http = gateway.GetTestClient();
+        var route = $"/api/restaurants/{first}/payment-settings/payos/test-qr";
+
+        using var anonymous = await http.PostAsync(route, null);
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        Assert.Empty(provider.Calls);
+
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "test-admin");
+        using var saved = await http.PostAsync(route, null);
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        Assert.Equal("no-store", saved.Headers.CacheControl?.ToString());
+        var json = await saved.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal("test-qr", document.RootElement.GetProperty("result").GetProperty("qrCode").GetString());
+        Assert.DoesNotContain("api-first", json);
+        Assert.DoesNotContain("checksum-first", json);
+
+        using var supplied = await http.PostAsJsonAsync(route, new
+        {
+            ClientId = "client-new",
+            ApiKey = "api-new",
+            ChecksumKey = "checksum-new"
+        });
+        Assert.Equal(HttpStatusCode.OK, supplied.StatusCode);
+        Assert.Equal(("client-new", "api-new", "checksum-new"), provider.Calls[1]);
+        var suppliedJson = await supplied.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("api-new", suppliedJson);
+        Assert.DoesNotContain("checksum-new", suppliedJson);
+
+        using var foreign = await http.PostAsJsonAsync($"/api/restaurants/{second}/payment-settings/payos/test-qr",
+            new { UseSavedConfiguration = true });
+        Assert.Equal(HttpStatusCode.Forbidden, foreign.StatusCode);
+        Assert.Equal(2, provider.Calls.Count);
+    }
+
+    private sealed class QrClient : IPayOsTestClient
+    {
+        public List<(string Client, string ApiKey, string Checksum)> Calls { get; } = [];
+
+        public Task<PayOsProviderResult> CreateTestAsync(string clientId, PayOsCredentials credentials,
+            string returnUrl, string cancelUrl, CancellationToken ct)
+        {
+            Calls.Add((clientId, credentials.ApiKey, credentials.ChecksumKey));
+            return Task.FromResult(new PayOsProviderResult(101, 2000, "PENDING", "test-link",
+                null, null, null, "https://pay.example/test", "test-qr"));
+        }
+    }
+
+    private PaymentProviderConfigService Service(BillingDbContext db, RestaurantDataScope scope, Guid assigned, string role = "admin", IPayOsTestClient? testClient = null)
     {
         return new PaymentProviderConfigService(new PaymentProviderConfigRepository(db), new UnitOfWork<BillingDbContext>(db),
             new Actor(assigned, role), scope, secrets, Options.Create(new PaymentProviderConfigurationSettings
             {
                 WebhookBaseUrl = "https://gateway.example"
-            }));
+            }), testClient ?? new QrClient());
     }
 
     private RestaurantPayOsOptions Runtime(BillingDbContext db, RestaurantDataScope scope)

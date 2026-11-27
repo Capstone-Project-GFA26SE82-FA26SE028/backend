@@ -33,13 +33,15 @@ public static class BillingServiceExtensions
             protection.PersistKeysToFileSystem(new DirectoryInfo(keyDirectory));
         }
 
-        services.AddHttpClient<IPayOsClient, PayOsClient>(http =>
+        services.AddHttpClient<PayOsClient>(http =>
         {
             http.MaxResponseContentBufferSize = 262144;
         }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
         {
             AllowAutoRedirect = false
         }).RedactLoggedHeaders(_ => true);
+        services.AddScoped<IPayOsClient>(sp => sp.GetRequiredService<PayOsClient>());
+        services.AddScoped<IPayOsTestClient>(sp => sp.GetRequiredService<PayOsClient>());
         services.AddScoped<IPayOsPaymentService, PayOsPaymentService>();
         services.AddScoped<IOnlinePaymentService, OnlinePaymentService>();
         services.AddScoped<IPaymentWebhookService, PaymentWebhookService>();

@@ -13,8 +13,10 @@ public sealed class SavePayOsConfigurationDTO
     public bool Enabled { get; set; }
 }
 
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed class TestPayOsConfigurationDTO
 {
+    public bool UseSavedConfiguration { get; set; }
     public string? ClientId { get; set; }
     public string? ApiKey { get; set; }
     public string? ChecksumKey { get; set; }
