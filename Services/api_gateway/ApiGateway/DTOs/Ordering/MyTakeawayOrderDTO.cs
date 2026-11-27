@@ -9,5 +9,10 @@ public sealed class MyTakeawayOrderDTO
     public string Status { get; set; } = string.Empty;
     public string? PaymentStatus { get; set; }
     public decimal TotalAmount { get; set; }
-    public List<OrderLineDTO> Items { get; set; } = [];
+    public List<MyTakeawayOrderItemDTO> Items { get; set; } = [];
+}
+
+public sealed class MyTakeawayOrderItemDTO : OrderLineDTO
+{
+    public string? ImageUrl { get; set; }
 }

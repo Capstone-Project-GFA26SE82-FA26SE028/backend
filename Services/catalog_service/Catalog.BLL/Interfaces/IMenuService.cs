@@ -7,5 +7,7 @@ public interface IMenuService
 {
     Task<ResponseDTO> GetAll(MenuQueryDTO query, Guid? tableSessionId, string? guestToken, CancellationToken cancellationToken);
 
+    Task<Dictionary<Guid, string>> GetItemImages(Guid restaurantId, Guid[] itemIds, CancellationToken cancellationToken);
+
     Task<ResponseDTO> GetById(Guid id, string channel, Guid? tableSessionId, string? guestToken, CancellationToken cancellationToken);
 }

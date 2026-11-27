@@ -117,7 +117,7 @@ public sealed class OrderDTO
     public List<OrderLineDTO> Items { get; set; } = [];
 }
 
-public sealed class OrderLineDTO
+public class OrderLineDTO
 {
     public Guid OrderItemId { get; set; }
     public Guid ItemId { get; set; }

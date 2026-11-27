@@ -540,7 +540,13 @@ message RecipeListReply {
 service MenuGrpc {
   rpc GetAll (MenuListRequest) returns (MenuListReply);
   rpc GetById (MenuItemRequest) returns (MenuItemReply);
+  rpc GetItemImages (MenuItemImagesRequest) returns (MenuItemImagesReply);
 }
+message MenuItemImagesRequest {
+  string restaurant_id = 1;
+  repeated string item_ids = 2;
+}
+message MenuItemImagesReply { map<string, string> image_urls = 1; }
 message MenuAccessRequest {
   optional string table_session_id = 1;
   string guest_token = 2;

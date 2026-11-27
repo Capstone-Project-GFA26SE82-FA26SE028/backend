@@ -91,7 +91,12 @@ internal static class OrderingMapping
 
     public static OrderLineDTO Map(OrderLineInfo value)
     {
-        return new OrderLineDTO
+        return MapOrderLine<OrderLineDTO>(value);
+    }
+
+    public static T MapOrderLine<T>(OrderLineInfo value) where T : OrderLineDTO, new()
+    {
+        return new T
         {
             OrderItemId = Guid.Parse(value.OrderItemId),
             ItemId = Guid.Parse(value.ItemId),
