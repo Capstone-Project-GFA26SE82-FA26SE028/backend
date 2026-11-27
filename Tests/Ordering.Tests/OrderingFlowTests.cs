@@ -97,25 +97,57 @@ public sealed class OrderingFlowTests
     }
 
     [Fact]
-    public async Task CartOwnershipVersionAndReplacementSurviveReload()
+    public async Task CartIsSharedBySessionAndAnotherGuestCanEditAndClearIt()
     {
         using var app = new Fixture();
+        var firstGuest = app.Guest;
         var cart = await app.FilledCart();
         app.Db.ChangeTracker.Clear();
-        var loaded = await app.Carts.GetById(app.Session, cart.CartId, "guest", default);
-        Assert.Equal(cart.Version, loaded.Version);
-        await Error(409, () => app.Carts.Update(app.Session, cart.CartId,
-            new CartWriteDTO { Version = "stale" }, "guest", default));
-        var oldGuest = app.Guest;
+
         app.Guest = Guid.NewGuid();
-        await Error(404, () => app.Carts.GetById(app.Session, cart.CartId, "guest", default));
-        app.Guest = oldGuest;
-        var empty = await app.Carts.Update(app.Session, cart.CartId,
-            new CartWriteDTO { Version = cart.Version }, "guest", default);
-        Assert.Empty(empty.Items);
+        var shared = await app.Carts.Create(app.Session, "second-guest", default);
+        Assert.Equal(cart.CartId, shared.CartId);
+        Assert.Equal(cart.Version, shared.Version);
+        Assert.Single(shared.Items);
+        await Error(404, () => app.Carts.GetById(Guid.NewGuid(), cart.CartId, "second-guest", default));
+        await Error(409, () => app.Carts.Update(app.Session, cart.CartId,
+            new CartWriteDTO { Version = "stale" }, "second-guest", default));
+        var lines = app.Lines();
+        lines[0].Quantity = 3;
+        var edited = await app.Carts.Update(app.Session, cart.CartId,
+            new CartWriteDTO { Version = shared.Version, Items = lines }, "second-guest", default);
+
+        app.Guest = firstGuest;
+        var loaded = await app.Carts.GetById(app.Session, cart.CartId, "guest", default);
+        Assert.Equal(3, Assert.Single(loaded.Items).Quantity);
+        Assert.Equal(edited.Version, loaded.Version);
+        await Error(409, () => app.Carts.Delete(app.Session, cart.CartId, shared.Version, "guest", default));
+        await app.Carts.Delete(app.Session, cart.CartId, loaded.Version, "guest", default);
+
+        Assert.Empty((await app.Carts.GetById(app.Session, cart.CartId, "guest", default)).Items);
         Assert.Empty(await app.Db.CartItemOptions.ToListAsync());
-        await app.Carts.Delete(app.Session, cart.CartId, empty.Version, "guest", default);
-        Assert.Empty(await app.Db.Carts.ToListAsync());
+        Assert.Equal(cart.CartId, (await app.Db.Carts.SingleAsync()).CartId);
+    }
+
+    [Fact]
+    public async Task AnotherGuestCannotSubmitTheSameCartVersionTwice()
+    {
+        using var app = new Fixture();
+        var firstGuest = app.Guest;
+        var cart = await app.FilledCart();
+        var request = new CreateOrderDTO
+        {
+            CartId = cart.CartId,
+            CartVersion = cart.Version
+        };
+
+        app.Guest = Guid.NewGuid();
+        var first = await app.Orders.Create(app.Session, "send", request, "second-guest", default);
+        Assert.True(first.Created);
+        app.Guest = firstGuest;
+        await Error(409, () => app.Orders.Create(app.Session, "another-key", request, "guest", default));
+        Assert.Equal(first.Order.OrderId, (await app.Db.Orders.SingleAsync()).OrderId);
+        Assert.Empty((await app.Carts.GetById(app.Session, cart.CartId, "guest", default)).Items);
     }
 
     [Fact]
@@ -361,7 +393,7 @@ public sealed class OrderingFlowTests
             Db.SaveChanges();
             var carts = new CartRepository(Db);
             var transaction = new OrderingTransaction(new UnitOfWork<OrderingDbContext>(Db));
-            Carts = new CartService(carts, transaction, this, this, TimeProvider.System, this);
+            Carts = new CartService(carts, transaction, this, this, TimeProvider.System, this, new CheckoutLockRepository(Db));
             Orders = new OrderService(new OrderRepository(Db), carts, new KitchenTaskRepository(Db),
                 transaction, this, this, Options.Create(new OrderingSettings()), TimeProvider.System, new CheckoutLockRepository(Db), this, this);
         }
