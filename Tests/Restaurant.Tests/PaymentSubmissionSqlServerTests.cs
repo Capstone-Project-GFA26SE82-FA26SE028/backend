@@ -62,6 +62,12 @@ public sealed partial class ReservationSqlServerTests
     }
 
     [SqlServerFact]
+    public Task PaymentSubmissionAtCounterPreparesWithoutWaiterAndAutomaticallyClosesQr()
+    {
+        return VerifyPaymentSubmission(PayOsScenario.DirectCash);
+    }
+
+    [SqlServerFact]
     public Task PaymentSubmissionKeepsPayOsWebhookUnderReviewWithoutRequeryingProvider()
     {
         return VerifyPaymentSubmission(PayOsScenario.Review);
@@ -133,13 +139,10 @@ public sealed partial class ReservationSqlServerTests
                         .ConfigurePrimaryHttpMessageHandler(() => billingTarget!.Server.CreateHandler());
                 });
             });
-            var payOs = payOsScenario.HasValue ? new PayOsHttpFixture() : null;
+            var payOs = new PayOsHttpFixture();
             await using var billing = CreatePaymentSubmissionBillingHost(billingConnection, reviewingRestaurant, ordering, payOs, recoverClosure);
             billingTarget = billing;
-            if (payOs is not null)
-            {
-                await SeedPayOsConfiguration(billing.Services, location.RestaurantId, otherRestaurant.RestaurantId);
-            }
+            await SeedPayOsConfiguration(billing.Services, location.RestaurantId, otherRestaurant.RestaurantId);
 
             await using var gateway = _gateway.WithWebHostBuilder(builder =>
             {
@@ -215,6 +218,13 @@ public sealed partial class ReservationSqlServerTests
                 pending.Status = "Cancelled";
                 await orders.SaveChangesAsync();
             }
+            if (payOsScenario == PayOsScenario.DirectCash)
+            {
+                await SeedTaxPolicy(billing.Services, location.RestaurantId);
+                await VerifyDirectCash(payOs, session, opened, cashier, waiter);
+                return;
+            }
+
             var sent = await Read<SubmissionResult>(await waiter.PostAsync(submit, null));
             Assert.Equal(id, sent.CheckoutId);
             Assert.Equal(session, sent.TableSessionId);
@@ -301,8 +311,9 @@ public sealed partial class ReservationSqlServerTests
                 $"/api/table-sessions/{session}/guest-access/join", new { phoneOrCode = "123" }));
             await VerifyClosureRequiresPaidSession(reviewingRestaurant, billing, location, session, otherRestaurant.RestaurantId, guest);
 
-            if (payOs is null)
+            if (payOsScenario is null)
             {
+                await Read<PayOsPaymentDTO>(await CreatePayOs(nextCashier, presented, reopened, Guid.NewGuid()), HttpStatusCode.Created);
                 await VerifyCashHandover(db, presented, reopened, nextCashier, cashier, waiter, sameRestaurantWaiter, otherWaiter, guest);
             }
             else
@@ -378,6 +389,23 @@ public sealed partial class ReservationSqlServerTests
         }
     }
 
+    private static async Task SeedTaxPolicy(IServiceProvider services, Guid restaurantId)
+    {
+        using var scope = services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<Shared.Persistence.RestaurantIsolation.RestaurantDataScope>().Select(restaurantId);
+        var db = scope.ServiceProvider.GetRequiredService<BillingDb>();
+        db.TaxFeePolicies.Add(new Billing.DAL.Models.TaxFeePolicy
+        {
+            TaxFeePolicyId = Guid.NewGuid(),
+            Version = 1,
+            VatRate = 0.1m,
+            ServiceRate = 0.05m,
+            ServiceEnabled = true,
+            EffectiveFrom = DateTime.UtcNow.AddDays(-1)
+        });
+        await db.SaveChangesAsync();
+    }
+
     private async Task<PreparedResult> VerifyBillPreparation(WebApplicationFactory<BillingGrpc> billing,
         WebApplicationFactory<OrderingGrpc> ordering, LocationIds location, Guid pendingOrderId, string requestPath,
         HttpClient oldCashier, HttpClient cashier, HttpClient waiter, HttpClient otherWaiter, HttpClient guest,
@@ -397,22 +425,7 @@ public sealed partial class ReservationSqlServerTests
         await SetOrderStatus(ordering, location.RestaurantId, pendingOrderId, "Cancelled");
         Assert.Equal(HttpStatusCode.Conflict, (await cashier.PostAsync(prepare, null)).StatusCode);
 
-        using (var scope = billing.Services.CreateScope())
-        {
-            scope.ServiceProvider.GetRequiredService<Shared.Persistence.RestaurantIsolation.RestaurantDataScope>()
-                .Select(location.RestaurantId);
-            var db = scope.ServiceProvider.GetRequiredService<BillingDb>();
-            db.TaxFeePolicies.Add(new Billing.DAL.Models.TaxFeePolicy
-            {
-                TaxFeePolicyId = Guid.NewGuid(),
-                Version = 1,
-                VatRate = 0.1m,
-                ServiceRate = 0.05m,
-                ServiceEnabled = true,
-                EffectiveFrom = DateTime.UtcNow.AddDays(-1)
-            });
-            await db.SaveChangesAsync();
-        }
+        await SeedTaxPolicy(billing.Services, location.RestaurantId);
 
         var responses = await Task.WhenAll(cashier.PostAsync(prepare, null), cashier.PostAsync(prepare, null));
         var prepared = await Read<PreparedResult>(responses[0]);
@@ -723,6 +736,7 @@ public sealed partial class ReservationSqlServerTests
     {
         Settlement,
         BeforePresentation,
+        DirectCash,
         Review,
         ConflictingWebhook,
         TimeoutRecovery

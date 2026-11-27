@@ -19,6 +19,18 @@ public sealed class BillPreparationController(BillCheckoutGrpc.BillCheckoutGrpcC
         return Execute(async options => Map(await client.PrepareAsync(RequestFor(sessionId, id), options)), ct);
     }
 
+    [HttpPost("/api/table-sessions/{sessionId:guid}/checkout/prepare-at-counter")]
+    public Task<IActionResult> PrepareAtCounter(Guid sessionId, [FromHeader(Name = "Idempotency-Key")] Guid checkoutId, CancellationToken ct)
+    {
+        return Execute(async options => Map(await client.PrepareAtCounterAsync(RequestFor(sessionId, checkoutId), options)), ct);
+    }
+
+    [HttpPost("/api/table-sessions/{sessionId:guid}/checkout/{id:guid}/present-at-counter")]
+    public Task<IActionResult> PresentAtCounter(Guid sessionId, Guid id, CancellationToken ct)
+    {
+        return Execute(async options => Map(await client.PresentAtCounterAsync(RequestFor(sessionId, id), options)), ct);
+    }
+
     [HttpGet("bill")]
     public Task<IActionResult> GetPrepared(Guid sessionId, Guid id, CancellationToken ct)
     {

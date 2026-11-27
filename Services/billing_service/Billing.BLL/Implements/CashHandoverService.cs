@@ -101,7 +101,9 @@ public sealed class CashHandoverService(ICashHandoverRepository handovers, IPaym
                 var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
                 if (bill.RestaurantId != register.RestaurantId || bill.Status != "Unpaid" || bill.PaidAt.HasValue
                     || bill.Currency != "VND" || bill.TotalAmount <= 0 || bill.TotalAmount > PaymentService.MaximumMoney
-                    || decimal.Truncate(bill.TotalAmount) != bill.TotalAmount || bill.Payments.Any(PayOsPaymentRules.IsBlocking)
+                    || decimal.Truncate(bill.TotalAmount) != bill.TotalAmount
+                    || bill.Payments.Any(payment => PayOsPaymentRules.IsBlocking(payment)
+                        && !PayOsPaymentRules.BelongsToCheckout(payment, checkout.CheckoutId))
                     || GetSessionId(bill) != sessionId || BillCheckoutService.BillHash(BillService.Map(bill)) != checkout.SourceHash)
                 {
                     throw new BillingException(409, "Hóa đơn không còn đủ điều kiện thu hộ, đã có giao dịch hoặc không khớp bản chụp món.");
@@ -110,6 +112,12 @@ public sealed class CashHandoverService(ICashHandoverRepository handovers, IPaym
                 if (received < bill.TotalAmount)
                 {
                     throw new BillingException(400, "Tiền khách đưa phải đủ toàn bộ giá trị hóa đơn.");
+                }
+
+                if (!bill.Payments.Any(payment => PayOsPaymentRules.BelongsToCheckout(payment, checkout.CheckoutId)
+                    && payment.Amount == bill.TotalAmount && PayOsPaymentRules.HasIssuedQr(payment)))
+                {
+                    throw new BillingException(409, "Cần tạo QR PayOS trên hóa đơn trước khi thu hộ.", "QrRequired");
                 }
 
                 var method = await methods.LockByCodeAsync(settings.Value.MethodCode, ct);

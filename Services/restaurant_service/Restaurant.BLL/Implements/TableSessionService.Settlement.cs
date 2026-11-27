@@ -10,7 +10,7 @@ public sealed partial class TableSessionService
     public async Task<OrderSessionDto> GetForServing(Guid sessionId, CancellationToken ct)
     {
         var userId = await orderAccess.RequireStaffAsync(ct);
-        await dataScope.Resolve(null, sessionId, string.Empty, false, ct);
+        var restaurantId = await dataScope.Resolve(null, sessionId, string.Empty, false, ct);
 
         var session = await sessions.GetForBillingAsync(sessionId, ct)
             ?? throw new ManagementException(404, "Không tìm thấy phiên phục vụ bàn.");
@@ -18,6 +18,7 @@ public sealed partial class TableSessionService
         if (session.Status == "Closed" && session.ClosedAt.HasValue)
         {
             paidCheckoutId = await requests.GetClosingPaymentIdAsync(sessionId, session.ClosedAt.Value, ct)
+                ?? await payments.GetCheckoutAsync(restaurantId, sessionId, ct)
                 ?? throw new ManagementException(409, "Phiên bàn đã đóng mà chưa xác minh được hóa đơn đã thanh toán.");
         }
         else if (session.Status != "Open" || session.ClosedAt.HasValue || !session.SessionTables.Any(link =>
@@ -88,9 +89,9 @@ public sealed partial class TableSessionService
             }
 
             var request = await requests.GetByIdAsync(checkoutId.Value, ct);
-            if (request is null || request.TableSessionId != sessionId || request.Type != PaymentRequestStatuses.Type
+            if (request is not null && (request.TableSessionId != sessionId || request.Type != PaymentRequestStatuses.Type
                 || request.Status != PaymentRequestStatuses.Acknowledged || !request.HandledByRef.HasValue
-                || !request.AcknowledgedAt.HasValue || request.CompletedAt.HasValue)
+                || !request.AcknowledgedAt.HasValue || request.CompletedAt.HasValue))
             {
                 throw new ManagementException(409, "Yêu cầu thanh toán không khớp với phiên bàn cần đóng.");
             }
@@ -107,8 +108,24 @@ public sealed partial class TableSessionService
             var now = new SqlDateTime(clock.GetUtcNow().UtcDateTime).Value;
             current.Status = "Closed";
             current.ClosedAt = now;
-            request.Status = PaymentRequestStatuses.Completed;
-            request.CompletedAt = now;
+            if (request is null)
+            {
+                var pending = await requests.GetPendingPaymentAsync(sessionId, ct);
+                if (pending is not null)
+                {
+                    var superseded = await requests.GetByIdAsync(pending.ServiceRequestId, ct);
+                    if (superseded is not null)
+                    {
+                        superseded.Status = "Cancelled";
+                        superseded.CompletedAt = now;
+                    }
+                }
+            }
+            else
+            {
+                request.Status = PaymentRequestStatuses.Completed;
+                request.CompletedAt = now;
+            }
             await requests.CancelPendingStaffCallsAsync(sessionId, now, ct);
             foreach (var link in activeLinks)
             {

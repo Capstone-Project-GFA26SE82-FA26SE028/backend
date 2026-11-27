@@ -7,6 +7,100 @@ namespace Billing.BLL.Implements;
 
 public sealed partial class BillCheckoutService
 {
+    public async Task<PreparedBillDTO> PrepareAtCounter(Guid sessionId, Guid id, CancellationToken ct)
+    {
+        ValidateIds(sessionId, id);
+        var snapshot = await source.GetBySessionAsync(sessionId, ct);
+        var actor = await access.GetCurrentScopeAsync(snapshot.RestaurantId, ct);
+        if (actor.UserId == Guid.Empty || actor.IsAdministrator
+            || !roles.Value.CashierRoleIds.Contains(actor.RoleId, StringComparer.Ordinal)
+            || !actor.RestaurantIds.Contains(snapshot.RestaurantId))
+        {
+            throw new BillingException(403, "Chỉ thu ngân được phân công mới được chốt hóa đơn tại quầy.");
+        }
+
+        await ordering.VerifyAsync(sessionId, string.Empty, ct);
+        var checkoutId = await InSession(sessionId, async () =>
+        {
+            var register = await DefaultCashRegister.LockAsync(registers, snapshot.RestaurantId, ct);
+            var open = await shifts.GetUnclosedAsync(register.CashRegisterId, ct);
+            if (open.Count != 1 || open[0].Status != CashShiftStatuses.Active || open[0].CashierUserRef != actor.UserId)
+            {
+                throw new BillingException(403, "Thu ngân cần đứng ca tại quầy để chốt hóa đơn.");
+            }
+
+            var existing = await checkouts.GetActiveAsync(sessionId, ct);
+            if (existing is not null)
+            {
+                RequireRouted(existing);
+                if (existing.CashRegisterId != register.CashRegisterId)
+                {
+                    throw new BillingException(409, "Yêu cầu thanh toán đang thuộc quầy khác.");
+                }
+
+                return existing.CheckoutId;
+            }
+
+            if (await checkouts.GetByIdAsync(id, ct) is not null
+                || await checkouts.HasPaymentOrFinalBillAsync(sessionId, ct, PayOsPaymentRules.BlockingExpression))
+            {
+                throw new BillingException(409, "Phiên đã có thanh toán hoặc mã yêu cầu đang được sử dụng.");
+            }
+
+            var now = clock.GetUtcNow().UtcDateTime;
+            checkouts.Add(new BillCheckout
+            {
+                CheckoutId = id,
+                TableSessionRef = sessionId,
+                CashRegisterId = register.CashRegisterId,
+                CreatedAt = now,
+                SubmittedAt = now,
+                Status = "Submitted"
+            });
+            return id;
+        }, ct);
+        return await Prepare(sessionId, checkoutId, ct);
+    }
+
+    public async Task<PreparedBillDTO> PresentAtCounter(Guid sessionId, Guid id, CancellationToken ct)
+    {
+        ValidateIds(sessionId, id);
+        var prepared = await AsReceivingCashier(sessionId, id, async (checkout, _, token) =>
+        {
+            if (checkout.Status == PaymentStatuses.Paid)
+            {
+                var paid = await ReadPaidPayOsBill(checkout, token);
+                checkout.PresentedAt ??= clock.GetUtcNow().UtcDateTime;
+                return MapPrepared(checkout, paid.Bill);
+            }
+
+            var result = await ReadPrepared(checkout, token);
+            if (checkout.PresentedAt.HasValue)
+            {
+                return result;
+            }
+
+            var bill = await bills.GetForRefreshAsync(result.Bill.BillId, token)
+                ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
+            if (!bill.Payments.Any(payment => PayOsPaymentRules.BelongsToCheckout(payment, id)
+                && PayOsPaymentRules.HasIssuedQr(payment) && payment.Status == PayOsStates.Pending
+                && payment.ProviderTransactionId is null && payment.ExpiredAt > clock.GetUtcNow().UtcDateTime))
+            {
+                throw new BillingException(409, "Cần tạo QR PayOS còn hiệu lực trước khi giao hóa đơn.");
+            }
+
+            checkout.PresentedAt ??= clock.GetUtcNow().UtcDateTime;
+            checkout.Status = "Presented";
+            return MapPrepared(checkout, result.Bill);
+        }, ct, allowPaid: true);
+        if (prepared.CheckoutStatus == PaymentStatuses.Paid)
+        {
+            await closure.TryCloseAsync(prepared.Bill.RestaurantId, sessionId, ct);
+        }
+
+        return prepared;
+    }
+
     public async Task<PreparedBillDTO> Prepare(Guid sessionId, Guid id, CancellationToken ct)
     {
         ValidateIds(sessionId, id);
@@ -178,7 +272,7 @@ public sealed partial class BillCheckoutService
     }
 
     private async Task<T> AsReceivingCashier<T>(Guid sessionId, Guid id,
-        Func<BillCheckout, Guid, CancellationToken, Task<T>> action, CancellationToken ct)
+        Func<BillCheckout, Guid, CancellationToken, Task<T>> action, CancellationToken ct, bool allowPaid = false)
     {
         var actor = await access.GetCurrentScopeAsync(null, ct);
         if (actor.UserId == Guid.Empty || actor.IsAdministrator
@@ -190,7 +284,11 @@ public sealed partial class BillCheckoutService
         return await InSession(sessionId, async () =>
         {
             var current = await Find(sessionId, id, ct);
-            RequireRouted(current);
+            if (!(allowPaid && current.Status == PaymentStatuses.Paid && PayOsPaymentRules.HasPreparedBill(current)))
+            {
+                RequireRouted(current);
+            }
+
             var register = await registers.LockByIdAsync(current.CashRegisterId!.Value, ct)
                 ?? throw new BillingException(409, "Quầy thu ngân của yêu cầu không còn khả dụng.");
             var verified = await access.GetCurrentScopeAsync(register.RestaurantId, ct);

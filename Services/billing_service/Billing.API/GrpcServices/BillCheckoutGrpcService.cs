@@ -29,6 +29,16 @@ public sealed class BillCheckoutGrpcService(IBillCheckoutService service) : Bill
         return MapPrepared(await service.Prepare(Id(request.TableSessionId), Id(request.CheckoutId), context.CancellationToken));
     }
 
+    public override async Task<PreparedBillInfo> PrepareAtCounter(BillCheckoutRequest request, ServerCallContext context)
+    {
+        return MapPrepared(await service.PrepareAtCounter(Id(request.TableSessionId), Id(request.CheckoutId), context.CancellationToken));
+    }
+
+    public override async Task<PreparedBillInfo> PresentAtCounter(BillCheckoutRequest request, ServerCallContext context)
+    {
+        return MapPrepared(await service.PresentAtCounter(Id(request.TableSessionId), Id(request.CheckoutId), context.CancellationToken));
+    }
+
     public override async Task<PreparedBillInfo> GetPrepared(BillCheckoutRequest request, ServerCallContext context)
     {
         return MapPrepared(await service.GetPrepared(Id(request.TableSessionId), Id(request.CheckoutId), context.CancellationToken));

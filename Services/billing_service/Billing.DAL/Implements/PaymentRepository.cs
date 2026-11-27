@@ -198,7 +198,10 @@ public sealed class PaymentRepository(BillingDbContext db)
     public async Task<IReadOnlyList<Guid>> GetBlockingIdsAsync(Guid billId, Expression<Func<Payment, bool>> predicate, CancellationToken ct)
     {
         return await _context.Payments.AsNoTracking().Where(value => value.BillId == billId)
-            .Where(predicate).OrderBy(value => value.PaymentId).Select(value => value.PaymentId).Take(2).ToListAsync(ct);
+            .Where(predicate).Where(value => value.Status != CashHandoverStatuses.PendingPayment
+                || value.CashHandover == null || value.CashHandover.Status != CashHandoverStatuses.Pending
+                || value.PaidAt != null || value.CashMovements.Any())
+            .OrderBy(value => value.PaymentId).Select(value => value.PaymentId).Take(2).ToListAsync(ct);
     }
 
     private IQueryable<Payment> Details()

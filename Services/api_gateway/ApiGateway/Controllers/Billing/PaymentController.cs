@@ -35,7 +35,7 @@ public sealed class PaymentController(PaymentGrpc.PaymentGrpcClient client, IOpt
                 request.CashReceived = body.CashReceived.Value.ToString(CultureInfo.InvariantCulture);
             }
 
-            var reply = await client.PayCashAsync(request, options);
+            var reply = await client.PayCashAsync(request, options.WithDeadline(DateTime.UtcNow.AddSeconds(45)));
             if (reply.Created)
             {
                 Response.Headers.Location = $"/api/payments/{reply.Payment.PaymentId}";

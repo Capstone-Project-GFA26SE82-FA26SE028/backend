@@ -45,12 +45,37 @@ internal static class PayOsPaymentRules
             && payment.CashMovements.Count == 0 && payment.Refunds.Count == 0;
     }
 
+    public static bool HasIssuedQr(Payment value)
+    {
+        return IsPayOs(value) && !string.IsNullOrWhiteSpace(value.ProviderPaymentLinkId)
+            && !string.IsNullOrWhiteSpace(value.ProviderQrCode) && !string.IsNullOrWhiteSpace(value.ProviderCheckoutUrl);
+    }
+
+    public static bool IsPendingCashHandover(Payment value)
+    {
+        return value.Status == CashHandoverStatuses.PendingPayment && value.CashHandover is
+            { Status: CashHandoverStatuses.Pending, CashierUserRef: null, ConfirmedAt: null, ConfirmedAmount: null }
+            && value.CashReceived >= value.Amount && value.ChangeAmount == value.CashReceived - value.Amount
+            && value.PaidAt is null && value.ConfirmedByRef is null && value.VerificationSource is null
+            && value.ProviderOrderCode is null && value.ProviderPaymentLinkId is null && value.ProviderTransactionId is null
+            && value.CashMovements.Count == 0 && value.Refunds.Count == 0;
+    }
+
+    public static bool IsSupersededCash(Payment value)
+    {
+        return value.Status == CashHandoverStatuses.SupersededByPayOs
+            && value.CashHandover?.Status == CashHandoverStatuses.ReturnRequired
+            && value.PaidAt is null && value.CashMovements.Count == 0;
+    }
+
     public static readonly Expression<Func<Payment, bool>> BlockingExpression = value => !(value.MethodCode == PayOsStates.Method
         && value.IdempotencyKey.StartsWith(PayOsStates.KeyPrefix) && value.ProviderOrderCode != null
         && value.ProviderPaymentLinkId != null && value.ProviderPaymentLinkId != ""
         && PayOsStates.ZeroStatuses.Contains(value.Status) && value.VerificationSource == PayOsStates.ZeroVerified
         && value.PaidAt == null && value.ProviderTransactionId == null && value.CashReceived == null
-        && value.ChangeAmount == null && !value.CashMovements.Any() && !value.Refunds.Any() && value.CashHandover == null);
+        && value.ChangeAmount == null && !value.CashMovements.Any() && !value.Refunds.Any() && value.CashHandover == null)
+        && !(value.Status == CashHandoverStatuses.SupersededByPayOs && value.CashHandover != null
+            && value.CashHandover.Status == CashHandoverStatuses.ReturnRequired && value.PaidAt == null && !value.CashMovements.Any());
     private static readonly Func<Payment, bool> Blocking = BlockingExpression.Compile();
 
     public static bool IsBlocking(Payment value)
@@ -60,7 +85,7 @@ internal static class PayOsPaymentRules
 
     public static bool IsVerifiedZero(Payment value)
     {
-        return !Blocking(value);
+        return IsPayOs(value) && !Blocking(value);
     }
 
     public static bool IsVerifiedPaid(Payment value)

@@ -68,7 +68,7 @@ public sealed class CashHandoverController(CashHandoverGrpc.CashHandoverGrpcClie
                 request.ConfirmedAmount = body.ConfirmedAmount.Value.ToString(CultureInfo.InvariantCulture);
             }
 
-            return Map(await client.ConfirmAsync(request, options));
+            return Map(await client.ConfirmAsync(request, options.WithDeadline(DateTime.UtcNow.AddSeconds(45))));
         }, ct);
     }
 

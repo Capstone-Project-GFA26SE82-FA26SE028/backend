@@ -15,8 +15,9 @@ public sealed class CashHandoverRepository(BillingDbContext db) : ICashHandoverR
 
     public async Task<PagedResult<CashHandover>> GetPageAsync(Guid shiftId, int page, int pageSize, CancellationToken ct)
     {
-        var query = Details().Where(value => value.Payment.CashShiftId == shiftId && value.Status == CashHandoverStatuses.Pending
-            && value.Payment.Status == CashHandoverStatuses.PendingPayment);
+        var query = Details().Where(value => value.Payment.CashShiftId == shiftId
+            && (value.Status == CashHandoverStatuses.Pending && value.Payment.Status == CashHandoverStatuses.PendingPayment
+                || value.Status == CashHandoverStatuses.ReturnRequired && value.Payment.Status == CashHandoverStatuses.SupersededByPayOs));
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(value => value.CollectedAt).ThenByDescending(value => value.PaymentId)
             .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);

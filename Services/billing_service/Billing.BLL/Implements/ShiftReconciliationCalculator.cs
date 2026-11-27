@@ -47,7 +47,7 @@ internal static class ShiftReconciliationCalculator
 
         foreach (var payment in payments)
         {
-            if (PayOsPaymentRules.IsVerifiedZero(payment))
+            if (PayOsPaymentRules.IsVerifiedZero(payment) || PayOsPaymentRules.IsSupersededCash(payment))
             {
                 continue;
             }

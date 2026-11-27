@@ -22,6 +22,68 @@ namespace Restaurant.Tests;
 
 public sealed partial class ReservationSqlServerTests
 {
+    private async Task VerifyDirectCash(PayOsHttpFixture provider, Guid sessionId, CashShiftDTO shift,
+        HttpClient cashier, HttpClient waiter)
+    {
+        using var tables = JsonDocument.Parse(await cashier.GetStringAsync($"/api/tables/service?restaurantId={shift.RestaurantId}"));
+        Assert.Contains(tables.RootElement.GetProperty("result").GetProperty("items").EnumerateArray(),
+            table => table.GetProperty("openSessionIds").EnumerateArray().Any(value => value.GetGuid() == sessionId));
+        var checkoutPath = $"/api/table-sessions/{sessionId}/checkout";
+        var key = Guid.NewGuid();
+        async Task<HttpResponseMessage> Prepare(HttpClient client)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, checkoutPath + "/prepare-at-counter");
+            request.Headers.Add("Idempotency-Key", key.ToString());
+            return await client.SendAsync(request);
+        }
+
+        using var forbidden = await Prepare(waiter);
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+        var prepared = await Read<PreparedResult>(await Prepare(cashier));
+        Assert.Equal("Prepared", prepared.CheckoutStatus);
+        Assert.Equal(key, prepared.CheckoutId);
+        var present = $"{checkoutPath}/{prepared.CheckoutId}/present-at-counter";
+        using var noQr = await cashier.PostAsync(present, null);
+        Assert.Equal(HttpStatusCode.Conflict, noQr.StatusCode);
+
+        var qr = await Read<PayOsPaymentDTO>(await CreatePayOs(cashier, prepared, shift, Guid.NewGuid()), HttpStatusCode.Created);
+        Assert.Equal(PayOsHttpFixture.Qr, qr.QrCode);
+        var presented = await Read<PreparedResult>(await cashier.PostAsync(present, null));
+        Assert.Equal("Presented", presented.CheckoutStatus);
+
+        var cashKey = Guid.NewGuid();
+        async Task<HttpResponseMessage> Cash(decimal received)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/bills/{prepared.Bill.BillId}/payments/cash")
+            {
+                Content = JsonContent.Create(new { checkoutId = prepared.CheckoutId, cashShiftId = shift.CashShiftId, cashReceived = received })
+            };
+            request.Headers.Add("Idempotency-Key", cashKey.ToString());
+            return await cashier.SendAsync(request);
+        }
+
+        using var shortCash = await Cash(prepared.Bill.TotalAmount - 1000);
+        Assert.Equal(HttpStatusCode.BadRequest, shortCash.StatusCode);
+        using var shortage = JsonDocument.Parse(await shortCash.Content.ReadAsStringAsync());
+        Assert.Equal("InsufficientCash", shortage.RootElement.GetProperty("result").GetProperty("status").GetString());
+        Assert.Equal(1000m, shortage.RootElement.GetProperty("result").GetProperty("amount").GetDecimal());
+
+        provider.Offline = true;
+        using var waiting = await Cash(30000);
+        Assert.Equal(HttpStatusCode.Conflict, waiting.StatusCode);
+        using var pending = JsonDocument.Parse(await waiting.Content.ReadAsStringAsync());
+        Assert.Equal("PendingReconciliation", pending.RootElement.GetProperty("result").GetProperty("status").GetString());
+        Assert.Null(await ReadClosedAt(sessionId));
+
+        provider.Offline = false;
+        var paid = await Read<PaymentDTO>(await Cash(30000), HttpStatusCode.Created);
+        Assert.Equal(1483m, paid.ChangeAmount);
+        Assert.Equal(paid.PaymentId, (await Read<PaymentDTO>(await Cash(30000))).PaymentId);
+        var closed = await Read<PayOsPaymentDTO>(await cashier.GetAsync($"/api/payments/{qr.PaymentId}/payos"));
+        Assert.True(closed.IsVerifiedZero);
+        Assert.NotNull(await ReadClosedAt(sessionId));
+    }
+
     private async Task<PreparedResult> VerifyPayOsBeforePresentation(PayOsHttpFixture provider, PreparedResult prepared,
         CashShiftDTO shift, HttpClient cashier, HttpClient oldCashier, HttpClient waiter, HttpClient otherWaiter,
         HttpClient webhookClient, string billPath, string presentPath)
@@ -162,7 +224,14 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal(HttpStatusCode.Conflict, pendingClose.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await cashier.GetAsync(shiftPath + "/report")).StatusCode);
 
+        var reportedCash = await Read<CashHandoverDTO>(
+            await CollectCash(waiter, presented.Bill.BillId, presented.CheckoutId, 30000m, Guid.NewGuid()),
+            HttpStatusCode.Created);
+        Assert.Equal("Pending", reportedCash.Status);
+        Assert.Equal("Unpaid", (await db.Bills.AsNoTracking().SingleAsync(value => value.BillId == presented.Bill.BillId)).Status);
+        var confirmPath = $"/api/cash-handovers/{reportedCash.PaymentId}/confirm";
         provider.Settle(orderCode);
+        var cashAttempt = cashier.PostAsJsonAsync(confirmPath, new { confirmedAmount = 30000m });
         var deliveries = await Task.WhenAll(guest.PostAsJsonAsync(webhook, payload),
             guest.PostAsJsonAsync("/api/payments/payos/webhook", payload));
         foreach (var response in deliveries)
@@ -172,6 +241,17 @@ public sealed partial class ReservationSqlServerTests
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             }
         }
+
+        using var firstCashResult = await cashAttempt;
+        Assert.Equal(HttpStatusCode.Conflict, firstCashResult.StatusCode);
+        using var retriedCash = await cashier.PostAsJsonAsync(confirmPath, new { confirmedAmount = 30000m });
+        Assert.Equal(HttpStatusCode.Conflict, retriedCash.StatusCode);
+        using var returnBody = JsonDocument.Parse(await retriedCash.Content.ReadAsStringAsync());
+        Assert.Equal("CashReturnRequired", returnBody.RootElement.GetProperty("result").GetProperty("status").GetString());
+        Assert.Equal(30000m, returnBody.RootElement.GetProperty("result").GetProperty("amount").GetDecimal());
+        Assert.Equal("ReturnRequired", (await Read<CashHandoverDTO>(await cashier.GetAsync(
+            $"/api/cash-handovers/{reportedCash.PaymentId}"))).Status);
+        Assert.Empty(await db.CashMovements.AsNoTracking().ToListAsync());
 
         var verified = await Read<WaiterPayOsPaymentDTO>(await waiter.GetAsync(finalDetail));
         Assert.Equal("Paid", verified.Status);
@@ -192,7 +272,7 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal(HttpStatusCode.OK, (await guest.PostAsJsonAsync(webhook, payload)).StatusCode);
         Assert.Equal(queryCount, provider.QueryCount);
         Assert.Equal(closedAt, await ReadClosedAt(presented.TableSessionId));
-        Assert.Equal(2, await db.Payments.AsNoTracking().CountAsync());
+        Assert.Equal(3, await db.Payments.AsNoTracking().CountAsync());
         var paid = await db.Payments.AsNoTracking().SingleAsync(value => value.Status == "Paid");
         Assert.Equal(second.PaymentId, paid.PaymentId);
         Assert.Equal("PayOSQuery", paid.VerificationSource);
@@ -204,7 +284,10 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal("Paid", (await db.BillCheckouts.AsNoTracking().SingleAsync(value => value.CheckoutId == presented.CheckoutId)).Status);
         Assert.Equal("Applied", (await db.PaymentWebhooks.AsNoTracking().SingleAsync()).ProcessingStatus);
         Assert.Empty(await db.CashMovements.AsNoTracking().ToListAsync());
-        Assert.Empty(await db.CashHandovers.AsNoTracking().ToListAsync());
+        var recordedReturn = await db.CashHandovers.AsNoTracking().SingleAsync();
+        Assert.Equal(reportedCash.PaymentId, recordedReturn.PaymentId);
+        Assert.Equal("ReturnRequired", recordedReturn.Status);
+        Assert.Null(recordedReturn.ConfirmedAt);
 
         var paidReconciliation = await Read<ShiftReconciliationDTO>(await cashier.GetAsync(shiftPath + "/reconciliation"));
         Assert.True(paidReconciliation.CanClose);

@@ -109,6 +109,8 @@ service BillCheckoutGrpc {
   rpc GetCurrent(BillCheckoutRequest) returns (BillCheckoutInfo);
   rpc Synchronize(BillCheckoutRequest) returns (BillCheckoutInfo);
   rpc Prepare(BillCheckoutRequest) returns (PreparedBillInfo);
+  rpc PrepareAtCounter(BillCheckoutRequest) returns (PreparedBillInfo);
+  rpc PresentAtCounter(BillCheckoutRequest) returns (PreparedBillInfo);
   rpc GetPrepared(BillCheckoutRequest) returns (PreparedBillInfo);
   rpc Present(BillCheckoutRequest) returns (PreparedBillInfo);
   rpc Cancel(BillCheckoutRequest) returns (BillCheckoutInfo);

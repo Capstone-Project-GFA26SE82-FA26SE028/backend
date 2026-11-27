@@ -128,7 +128,8 @@ public sealed class PayOsPaymentServiceTests
         var result = await fixture.Service.Reconcile(first.Payment.PaymentId, default);
         Assert.True(result.RequiresReview);
         Assert.Equal("Unpaid", (await fixture.Core.Db.Bills.AsNoTracking().SingleAsync()).Status);
-        await Status(409, () => fixture.Core.RecordCash(300));
+        await fixture.Core.RecordCash(300);
+        Assert.Equal("PendingHandover", (await fixture.Core.Db.Payments.SingleAsync(value => value.MethodCode == "Cash")).Status);
     }
 
     [Fact]
@@ -143,7 +144,7 @@ public sealed class PayOsPaymentServiceTests
         var result = await fixture.Service.Reconcile(first.Payment.PaymentId, default);
         Assert.Equal("CancelRequested", result.Status);
         Assert.False(result.IsVerifiedZero);
-        await Status(409, () => fixture.Core.RecordCash(300));
+        await fixture.Core.RecordCash(300);
         fixture.Provider.CancelTimeout = false;
         result = await fixture.Service.Reconcile(first.Payment.PaymentId, default);
         Assert.True(result.IsVerifiedZero);

@@ -8,13 +8,19 @@ namespace Restaurant.BLL.Implements;
 
 public sealed class TableService(ITableRepository repository, IAreaRepository areas,
     IManagementTransaction transaction, ILayoutManagementAccess access, ITableSessionOrderAccess waiterAccess,
-    IRestaurantStaffRepository staff) : ITableService
+    IRestaurantStaffRepository staff, IStaffIdentity identity) : ITableService
 {
     public async Task<PageResult<ServiceTableDto>> GetServiceTables(ListQuery query, CancellationToken ct)
     {
-        var userId = await waiterAccess.RequireStaffAsync(ct);
+        var actor = await identity.GetCurrentAsync(ct);
+        var cashier = !actor.IsAdministrator && actor.RoleId == "cashier";
+        var userId = cashier ? actor.UserId : await waiterAccess.RequireStaffAsync(ct);
         ManagementValidation.Query(query);
         var assigned = await staff.GetRestaurantIdsAsync(userId, ct);
+        if (cashier && actor.RestaurantId.HasValue)
+        {
+            assigned = assigned.Where(id => id == actor.RestaurantId.Value).ToArray();
+        }
         if (query.RestaurantId.HasValue && !assigned.Contains(query.RestaurantId.Value))
         {
             throw new ManagementException(403, "Bạn không được phân công tại nhà hàng này.");

@@ -38,10 +38,13 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal(HttpStatusCode.NotFound, (await CollectCash(crossRestaurantWaiter, billId, checkoutId, received, key)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await CollectCash(waiter, billId, checkoutId, 25000, key)).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await CollectCash(waiter, billId, checkoutId, 30000.50m, key)).StatusCode);
+        var cashMethod = await db.PaymentMethods.SingleAsync(value => value.MethodCode == "Cash");
+        cashMethod.IsEnabled = false;
+        await db.SaveChangesAsync();
         Assert.Equal(HttpStatusCode.Conflict, (await CollectCash(waiter, billId, checkoutId, received, key)).StatusCode);
-        Assert.Empty(await db.Payments.AsNoTracking().ToListAsync());
+        Assert.False(await db.Payments.AsNoTracking().AnyAsync(value => value.MethodCode == "Cash"));
 
-        db.PaymentMethods.Add(new Billing.DAL.Models.PaymentMethod { MethodCode = "Cash", IsEnabled = true });
+        cashMethod.IsEnabled = true;
         await db.SaveChangesAsync();
 
         var otherKey = Guid.NewGuid();
@@ -102,7 +105,7 @@ public sealed partial class ReservationSqlServerTests
         Assert.False(before.CanClose);
         Assert.Equal(shift.OpeningCash, before.ExpectedCash);
         Assert.Equal(0, before.SaleTotal);
-        var blocker = Assert.Single(before.Blockers);
+        var blocker = Assert.Single(before.Blockers, value => value.Code == "UnresolvedPayment");
         Assert.Equal(collected.PaymentId, blocker.PaymentId);
         Assert.Equal("UnresolvedPayment", blocker.Code);
         Assert.Contains("chưa xác nhận bàn giao", blocker.Message);
@@ -115,7 +118,7 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal(HttpStatusCode.Forbidden, (await oldCashier.PostAsJsonAsync(confirm, new { confirmedAmount = received })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await cashier.PostAsJsonAsync(confirm, new { confirmedAmount = 28517 })).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await cashier.PostAsJsonAsync(confirm, new { confirmedAmount = 31000 })).StatusCode);
-        Assert.Equal("PendingHandover", (await db.Payments.AsNoTracking().SingleAsync()).Status);
+        Assert.Equal("PendingHandover", (await db.Payments.AsNoTracking().SingleAsync(value => value.MethodCode == "Cash")).Status);
         Assert.Empty(await db.CashMovements.AsNoTracking().ToListAsync());
         Assert.Equal(HttpStatusCode.OK, (await guest.GetAsync(
             $"/api/table-sessions/{presented.TableSessionId}/guest-access/me")).StatusCode);
@@ -135,7 +138,7 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equivalent(confirmed, await Read<CashHandoverDTO>(await waiter.GetAsync(paymentPath)), strict: true);
         Assert.Empty((await Read<PagedResult<CashHandoverDTO>>(await cashier.GetAsync(queue))).Items);
 
-        var payment = await db.Payments.AsNoTracking().SingleAsync();
+        var payment = await db.Payments.AsNoTracking().SingleAsync(value => value.MethodCode == "Cash");
         Assert.Equal(collected.PaymentId, payment.PaymentId);
         Assert.Equal("Paid", payment.Status);
         Assert.Equal("Cashier", payment.VerificationSource);

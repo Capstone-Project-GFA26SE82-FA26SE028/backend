@@ -58,7 +58,8 @@ public sealed class PaymentSettlementService(IBillRepository bills, IBillCheckou
     private bool IsVerifiedCash(Payment payment)
     {
         return payment.MethodCode == settings.Value.MethodCode && payment.Status == PaymentStatuses.Paid
-            && payment.VerificationSource == PaymentStatuses.CashierVerification && PaymentService.IsConfirmedHandover(payment)
+            && payment.VerificationSource == PaymentStatuses.CashierVerification
+            && (payment.CashHandover is null || PaymentService.IsConfirmedHandover(payment))
             && payment.ProviderPaymentLinkId is null && payment.ProviderOrderCode is null && payment.ProviderTransactionId is null
             && payment.Refunds.Count == 0 && payment.PaidAt == payment.Bill.PaidAt
             && payment.ConfirmedByRef == payment.CashShift.CashierUserRef && payment.CashShift.CashierUserRef != Guid.Empty

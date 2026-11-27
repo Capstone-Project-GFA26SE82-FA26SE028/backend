@@ -1,3 +1,4 @@
+using System.Globalization;
 using ApiGateway.Settings;
 using Grpc.Core;
 using Microsoft.AspNetCore.Mvc;
@@ -53,7 +54,11 @@ public abstract class BillingControllerBase(IOptions<BillingClientSettings> sett
             var message = code is 502 or 503 or 504
                 ? "Hệ thống hiện đang bận hoặc tạm thời không khả dụng, vui lòng thử lại sau."
                 : error.Status.Detail;
-            return StatusCode(code, new ResponseDTO(message, code));
+            var errorCode = error.Trailers.GetValue("billing-error-code");
+            var amount = decimal.TryParse(error.Trailers.GetValue("billing-error-amount"), NumberStyles.Number,
+                CultureInfo.InvariantCulture, out var parsed) ? parsed : (decimal?)null;
+            var result = errorCode is null ? null : new { Status = errorCode, Amount = amount };
+            return StatusCode(code, new ResponseDTO(message, code, result: result));
         }
     }
 }
