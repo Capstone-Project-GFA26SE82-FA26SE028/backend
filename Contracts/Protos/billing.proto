@@ -246,7 +246,11 @@ service BillGrpc {
 }
 message CreateBillRequest { string table_session_id = 1; }
 message BillIdRequest { string bill_id = 1; }
-message AssignCustomerRequest { string bill_id = 1; string customer_id = 2; }
+message AssignCustomerRequest {
+  string bill_id = 1;
+  string customer_id = 2;
+  optional string phone_number = 3;
+}
 message BillListRequest {
   optional string restaurant_id = 1;
   optional string search = 2;

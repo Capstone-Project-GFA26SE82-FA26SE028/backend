@@ -4,7 +4,6 @@ using ApiGateway.DTOs.Billing;
 using ApiGateway.Settings;
 using ApiGateway.Swagger;
 using Backend.Contracts.Billing;
-using Grpc.Core;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Shared.Common.DTOs;
@@ -17,7 +16,6 @@ namespace ApiGateway.Controllers.Billing;
 [RequireBearerToken]
 public sealed class BillController(
     BillGrpc.BillGrpcClient client,
-    Backend.Contracts.Customer.CustomerGrpc.CustomerGrpcClient customerClient,
     IOptions<BillingClientSettings> settings) : BillingControllerBase(settings)
 {
     [HttpPost]
@@ -128,27 +126,17 @@ public sealed class BillController(
     {
         return Execute(async options =>
         {
-            var customerId = body.CustomerId;
-            if (!customerId.HasValue && !string.IsNullOrWhiteSpace(body.PhoneNumber))
-            {
-                var customer = await customerClient.GetOrCreateAsync(new Backend.Contracts.Customer.CreateCustomerRequest
-                {
-                    Phone = body.PhoneNumber.Trim(),
-                    Name = ""
-                }, options);
-                customerId = Guid.Parse(customer.CustomerId);
-            }
-
-            if (!customerId.HasValue || customerId.Value == Guid.Empty)
-            {
-                throw new RpcException(new Status(Grpc.Core.StatusCode.InvalidArgument, "Vui lòng cung cấp mã khách hàng hoặc số điện thoại thành viên hợp lệ."));
-            }
-
-            var reply = await client.AssignCustomerAsync(new AssignCustomerRequest
+            var request = new AssignCustomerRequest
             {
                 BillId = id.ToString(),
-                CustomerId = customerId.Value.ToString()
-            }, options);
+                CustomerId = body.CustomerId?.ToString() ?? string.Empty
+            };
+            if (body.PhoneNumber is not null)
+            {
+                request.PhoneNumber = body.PhoneNumber;
+            }
+
+            var reply = await client.AssignCustomerAsync(request, options);
 
             return Map(reply);
         }, ct);

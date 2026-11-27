@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -10,25 +9,35 @@ using Shared.Common.Images;
 
 namespace Restaurant.API.Management;
 
-public sealed class CloudinaryRegistrationDocuments(HttpClient client, CloudinarySettings settings, TimeProvider clock)
+public sealed class CloudinaryRegistrationDocuments(HttpClient client, CloudinarySettings settings, TimeProvider clock,
+    ILogger<CloudinaryRegistrationDocuments> logger)
     : IRestaurantRegistrationDocuments
 {
     public async Task<string> UploadAsync(byte[] image, string publicId, CancellationToken ct)
     {
+        var endpoint = Endpoint("image/upload");
+        var fields = Sign(new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["allowed_formats"] = "jpg,png,webp",
+            ["overwrite"] = "false",
+            ["public_id"] = publicId,
+            ["type"] = "authenticated"
+        });
         using var form = new MultipartFormDataContent();
         form.Add(new ByteArrayContent(image), "file", "document");
-        form.Add(new StringContent(publicId), "public_id");
-        form.Add(new StringContent("false"), "overwrite");
-        form.Add(new StringContent("jpg,png,webp"), "allowed_formats");
-        using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint("image/authenticated"))
+        foreach (var (name, value) in fields)
+        {
+            form.Add(new StringContent(value), name);
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
             Content = form
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Basic",
-            Convert.ToBase64String(Encoding.UTF8.GetBytes($"{settings.ApiKey}:{settings.ApiSecret}")));
-        using var response = await SendAsync(request, ct);
+        using var response = await SendAsync(request, "upload", ct);
         if (!response.IsSuccessStatusCode)
         {
+            logger.LogWarning("Cloudinary từ chối tải lên giấy tờ. HTTP {StatusCode}.", (int)response.StatusCode);
             throw new ManagementException(response.StatusCode == HttpStatusCode.BadRequest ? 400 : 503,
                 "Cloudinary không thể lưu ảnh giấy tờ.");
         }
@@ -53,22 +62,18 @@ public sealed class CloudinaryRegistrationDocuments(HttpClient client, Cloudinar
 
     public async Task<byte[]> ReadAsync(string assetId, CancellationToken ct)
     {
-        var timestamp = clock.GetUtcNow().ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
-        var signed = $"asset_id={assetId}&timestamp={timestamp}{settings.ApiSecret}";
-        var signature = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(signed))).ToLowerInvariant();
-        using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint("asset/download"))
+        var endpoint = Endpoint("asset/download");
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
         {
-            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            Content = new FormUrlEncodedContent(Sign(new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
-                ["asset_id"] = assetId,
-                ["timestamp"] = timestamp,
-                ["api_key"] = settings.ApiKey,
-                ["signature"] = signature
-            })
+                ["asset_id"] = assetId
+            }))
         };
-        using var response = await SendAsync(request, ct);
+        using var response = await SendAsync(request, "download", ct);
         if (!response.IsSuccessStatusCode)
         {
+            logger.LogWarning("Cloudinary từ chối tải xuống giấy tờ. HTTP {StatusCode}.", (int)response.StatusCode);
             throw new ManagementException(response.StatusCode == HttpStatusCode.NotFound ? 404 : 503,
                 "Không thể đọc ảnh giấy tờ từ Cloudinary.");
         }
@@ -76,18 +81,28 @@ public sealed class CloudinaryRegistrationDocuments(HttpClient client, Cloudinar
         return await response.Content.ReadAsByteArrayAsync(ct);
     }
 
+    private SortedDictionary<string, string> Sign(SortedDictionary<string, string> fields)
+    {
+        fields["timestamp"] = clock.GetUtcNow().ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+        var signed = string.Join("&", fields.Select(field => $"{field.Key}={field.Value}")) + settings.ApiSecret;
+        fields["signature"] = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(signed))).ToLowerInvariant();
+        fields["api_key"] = settings.ApiKey;
+        return fields;
+    }
+
     private string Endpoint(string action)
     {
         if (string.IsNullOrWhiteSpace(settings.CloudName) || string.IsNullOrWhiteSpace(settings.ApiKey)
             || string.IsNullOrWhiteSpace(settings.ApiSecret))
         {
+            logger.LogWarning("Thiếu cấu hình Cloudinary cho ảnh giấy tờ.");
             throw new ManagementException(503, "Chưa cấu hình Cloudinary cho ảnh giấy tờ.");
         }
 
         return $"https://api.cloudinary.com/v1_1/{Uri.EscapeDataString(settings.CloudName)}/{action}";
     }
 
-    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, string operation, CancellationToken ct)
     {
         try
         {
@@ -95,6 +110,8 @@ public sealed class CloudinaryRegistrationDocuments(HttpClient client, Cloudinar
         }
         catch (Exception error) when (error is HttpRequestException or OperationCanceledException && !ct.IsCancellationRequested)
         {
+            logger.LogWarning("Không thể kết nối Cloudinary khi thực hiện {Operation}. Lỗi {ErrorType}.",
+                operation, error.GetType().Name);
             throw new ManagementException(503, "Cloudinary tạm thời không khả dụng.");
         }
     }

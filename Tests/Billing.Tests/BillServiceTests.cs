@@ -45,9 +45,10 @@ public sealed class BillServiceTests
         var bill = await fixture.Service.Create(fixture.Source.Value.TableSessionId, default);
         Assert.Null(bill.CustomerRef);
 
-        var customerId = Guid.NewGuid();
-        var updated = await fixture.Service.AssignCustomer(bill.BillId, customerId, default);
+        var customerId = fixture.Customers.CustomerId;
+        var updated = await fixture.Service.AssignCustomer(bill.BillId, null, "0901234567", default);
         Assert.Equal(customerId, updated.CustomerRef);
+        Assert.Equal((bill.RestaurantId, (Guid?)null, "0901234567"), Assert.Single(fixture.Customers.Requests));
 
         var stored = await fixture.Service.GetById(bill.BillId, default);
         Assert.Equal(customerId, stored.CustomerRef);
@@ -56,9 +57,34 @@ public sealed class BillServiceTests
         dbBill!.Status = "Paid";
         await fixture.Db.SaveChangesAsync();
 
-        await Status(409, () => fixture.Service.AssignCustomer(bill.BillId, Guid.NewGuid(), default));
+        await Status(409, () => fixture.Service.AssignCustomer(bill.BillId, Guid.NewGuid(), null, default));
+        Assert.Single(fixture.Customers.Requests);
     }
 
+    [Fact]
+    public async Task AssignCustomerChecksRestaurantAndCashierBeforeCustomerLookup()
+    {
+        await using var fixture = await BillFixture.Create();
+        var bill = await fixture.Service.Create(fixture.Source.Value.TableSessionId, default);
+        var actorId = fixture.Actor.Scope.UserId;
+        fixture.Actor.Scope = new BillingAccessScope
+        {
+            UserId = actorId,
+            RoleId = "cashier",
+            RestaurantIds = [Guid.NewGuid()]
+        };
+        await Status(403, () => fixture.Service.AssignCustomer(bill.BillId, null, "0901234567", default));
+
+        fixture.Actor.Scope = new BillingAccessScope
+        {
+            UserId = actorId,
+            RoleId = "manager",
+            RestaurantIds = [bill.RestaurantId]
+        };
+        await Status(403, () => fixture.Service.AssignCustomer(bill.BillId, null, "0901234567", default));
+        Assert.Empty(fixture.Customers.Requests);
+        Assert.Null((await fixture.Db.Bills.AsNoTracking().SingleAsync()).CustomerRef);
+    }
 
     [Fact]
     public async Task CookingAndServingProgressDoesNotInvalidateFinancialSnapshot()
@@ -274,6 +300,7 @@ public sealed class BillServiceTests
             OrderPriceBasis = "Exclusive"
         };
         public BillService Service { get; }
+        public BillCustomerClient Customers { get; } = new();
 
         private BillFixture(SqliteConnection connection)
         {
@@ -290,7 +317,7 @@ public sealed class BillServiceTests
                 {
                     CashierRoleIds = ["cashier"],
                     ManagerRoleIds = ["manager"]
-                }), Options.Create(Settings), TimeProvider.System);
+                }), Options.Create(Settings), TimeProvider.System, Customers);
         }
 
         public static async Task<BillFixture> Create()
@@ -308,6 +335,28 @@ public sealed class BillServiceTests
         {
             await Db.DisposeAsync();
             await connection.DisposeAsync();
+        }
+    }
+
+    internal sealed class BillCustomerClient : ICustomerLoyaltyClient
+    {
+        public Guid CustomerId { get; } = Guid.NewGuid();
+        public List<(Guid RestaurantId, Guid? CustomerId, string? PhoneNumber)> Requests { get; } = [];
+
+        public Task<Guid> ResolveForBillAsync(Guid restaurantId, Guid? customerId, string? phoneNumber, CancellationToken ct)
+        {
+            Requests.Add((restaurantId, customerId, phoneNumber));
+            return Task.FromResult(CustomerId);
+        }
+
+        public Task EarnPointsAsync(Guid customerId, Guid billId, decimal finalAmount, CancellationToken ct)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task CommitPointsAsync(Guid billId, CancellationToken ct)
+        {
+            throw new NotSupportedException();
         }
     }
 

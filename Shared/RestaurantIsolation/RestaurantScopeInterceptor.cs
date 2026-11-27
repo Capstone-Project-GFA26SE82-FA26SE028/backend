@@ -12,13 +12,20 @@ public sealed class RestaurantScopeInterceptor(RestaurantAccessGrpc.RestaurantAc
     public override async Task<TResponse> UnaryServerHandler<TRequest, TResponse>(TRequest request,
         ServerCallContext context, UnaryServerMethod<TRequest, TResponse> continuation)
     {
+        var message = request as IMessage;
+        var explicitRestaurant = Text(message, "restaurant_id");
+        if (explicitRestaurant.Length == 0
+            && context.Method is ("/customer.CustomerGrpc/GetById" or "/customer.CustomerGrpc/GetOrCreate"))
+        {
+            return await continuation(request, context);
+        }
+
         // These entry points establish scope after checking their service key or webhook signature,
         // or serve public/customer lookups that do not require staff session.
         if (context.Method is "/billing.OnlinePaymentGrpc/Execute" or "/billing.PaymentWebhookGrpc/Process"
             or "/billing.PaymentSettlementGrpc/GetVerifiedCheckout"
             or "/customer.FeedbackGrpc/Submit" or "/ordering.StaffTransferGuardGrpc/Check"
-            or "/customer.CustomerGrpc/GetById"
-            or "/customer.CustomerGrpc/GetOrCreate" or "/customer.CustomerGrpc/GetTiers"
+            or "/customer.CustomerGrpc/GetTiers"
             or "/customer.CustomerGrpc/EarnPoints" or "/customer.CustomerGrpc/ReservePoints"
             or "/customer.CustomerGrpc/CommitPoints" or "/customer.CustomerGrpc/CancelPoints"
             or "/customer.FeedbackGrpc/CreateAccess")
@@ -32,9 +39,7 @@ public sealed class RestaurantScopeInterceptor(RestaurantAccessGrpc.RestaurantAc
             return await continuation(request, context);
         }
 
-        var message = request as IMessage;
         var access = message?.Descriptor.FindFieldByName("access")?.Accessor.GetValue(message) as IMessage;
-        var explicitRestaurant = Text(message, "restaurant_id");
         var header = context.RequestHeaders.GetValue("x-restaurant-id") ?? "";
         if (explicitRestaurant.Length > 0 && header.Length > 0
             && (!Guid.TryParse(explicitRestaurant, out var bodyId) || !Guid.TryParse(header, out var headerId) || bodyId != headerId))

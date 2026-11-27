@@ -14,7 +14,8 @@ namespace Billing.BLL.Implements;
 
 public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository policies,
     IUnitOfWork unitOfWork, IBillingAccess access, IBillSourceClient source,
-    IOptions<CashRegisterAccessSettings> roles, IOptions<BillSettings> settings, TimeProvider clock) : IBillService
+    IOptions<CashRegisterAccessSettings> roles, IOptions<BillSettings> settings, TimeProvider clock,
+    ICustomerLoyaltyClient? customers = null) : IBillService
 {
     public Task<bool> CanTransfer(Guid source, Guid target, CancellationToken ct)
     {
@@ -429,27 +430,32 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         return result;
     }
 
-    public Task<BillDTO> AssignCustomer(Guid billId, Guid customerId, CancellationToken ct)
+    public async Task<BillDTO> AssignCustomer(Guid billId, Guid? customerId, string? phoneNumber, CancellationToken ct)
     {
-        if (billId == Guid.Empty || customerId == Guid.Empty)
+        if (billId == Guid.Empty || customerId == Guid.Empty
+            || (!customerId.HasValue && string.IsNullOrWhiteSpace(phoneNumber)))
         {
-            throw new BillingException(400, "Mã hóa đơn và mã khách hàng là bắt buộc.");
+            throw new BillingException(400, "Vui lòng cung cấp mã hóa đơn và mã khách hàng hoặc số điện thoại hợp lệ.");
         }
 
-        return unitOfWork.ExecuteInTransactionAsync(async () =>
+        var actor = await access.GetCurrentScopeAsync(null, ct);
+        RequireRole(actor, true);
+        return await unitOfWork.ExecuteInTransactionAsync(async () =>
         {
-            var actor = await access.GetCurrentScopeAsync(null, ct);
-            RequireRole(actor, false);
-            var bill = await bills.GetByIdAsync(billId, ct)
+            var bill = await bills.GetForRefreshAsync(billId, ct)
                 ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
             RequireBranch(actor, bill.RestaurantId);
-            if (bill.Status != "Unpaid")
+            if (bill.Status != "Unpaid" || bill.PaidAt.HasValue)
             {
                 throw new BillingException(409, "Chỉ có thể gán khách hàng thành viên cho hóa đơn chưa thanh toán.");
             }
 
-            bill.CustomerRef = customerId;
-            await bills.UpdateAsync(bill);
+            if (customers is null)
+            {
+                throw new BillingException(503, "Dịch vụ khách hàng chưa khả dụng.");
+            }
+
+            bill.CustomerRef = await customers.ResolveForBillAsync(bill.RestaurantId, customerId, phoneNumber, ct);
             return Map(bill);
         }, ct);
     }
@@ -465,7 +471,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         var manager = roles.Value.ManagerRoleIds.Contains(actor.RoleId, StringComparer.Ordinal);
         if (create ? actor.IsAdministrator || !cashier : !actor.IsAdministrator && !cashier && !manager)
         {
-            throw new BillingException(403, create ? "Chỉ thu ngân mới có quyền tạo hoặc làm mới hóa đơn." : "Yêu cầu quyền xem thông tin hóa đơn.");
+            throw new BillingException(403, create ? "Chỉ thu ngân mới có quyền thực hiện thao tác này trên hóa đơn." : "Yêu cầu quyền xem thông tin hóa đơn.");
         }
 
         if (!actor.IsAdministrator && actor.RestaurantIds.Count == 0)
