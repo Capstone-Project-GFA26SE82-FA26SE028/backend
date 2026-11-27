@@ -131,16 +131,37 @@ public sealed partial class OrderService
     public async Task<List<OrderDTO>> GetAllTakeaway(Guid restaurantId, string? status, int page, int pageSize, CancellationToken ct)
     {
         var actor = await takeawayAccess.GetActorAsync(restaurantId, ct);
+        ValidateTakeawayList(status, page, pageSize);
+        var rows = await transaction.ExecuteAsync(() => orders.GetTakeawayAsync(restaurantId,
+            actor.IsCustomer ? actor.UserId : null, status, page, pageSize, ct), ct);
+        return rows.Select(order => MapTakeaway(order, actor)).ToList();
+    }
+
+    public async Task<(List<OrderDTO> Items, int TotalCount)> GetMyTakeawayOrders(string? status, int page,
+        int pageSize, CancellationToken ct)
+    {
+        var customerId = await takeawayAccess.RequireCustomerAsync(ct);
+        ValidateTakeawayList(status, page, pageSize);
+        var (ordersPage, totalCount) = await transaction.ExecuteAsync(
+            () => orders.GetCustomerTakeawayAsync(customerId, status, page, pageSize, ct), ct);
+
+        var items = ordersPage.Select(order =>
+        {
+            var result = Map(order);
+            result.PaymentStatus = order.PaymentStatus;
+            return result;
+        }).ToList();
+        return (items, totalCount);
+    }
+
+    private static void ValidateTakeawayList(string? status, int page, int pageSize)
+    {
         if (page < 1 || pageSize is < 1 or > 100 || (long)(page - 1) * pageSize > int.MaxValue
             || (status is not null && status is not ("PendingPayment" or "PendingConfirmation" or "Accepted"
                 or "Cooking" or "ReadyForPickup" or "Completed" or "Cancelled" or "Rejected")))
         {
             throw new OrderingException(400, "Thông tin phân trang hoặc trạng thái đơn mang về không hợp lệ.");
         }
-
-        var rows = await transaction.ExecuteAsync(() => orders.GetTakeawayAsync(restaurantId,
-            actor.IsCustomer ? actor.UserId : null, status, page, pageSize, ct), ct);
-        return rows.Select(order => MapTakeaway(order, actor)).ToList();
     }
 
     public async Task<OrderDTO> AcceptTakeaway(Guid restaurantId, Guid id, string version, CancellationToken ct)

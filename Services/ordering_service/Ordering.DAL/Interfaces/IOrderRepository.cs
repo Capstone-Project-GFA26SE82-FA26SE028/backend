@@ -20,6 +20,9 @@ public interface IOrderRepository
 
     Task<List<Order>> GetTakeawayAsync(Guid restaurantId, Guid? customerId, string? status, int page, int pageSize, CancellationToken ct);
 
+    Task<(List<Order> Items, int TotalCount)> GetCustomerTakeawayAsync(Guid customerId, string? status,
+        int page, int pageSize, CancellationToken ct);
+
     Task<List<Order>> GetOnlinePendingAsync(CancellationToken ct);
 
     void Create(Order order);

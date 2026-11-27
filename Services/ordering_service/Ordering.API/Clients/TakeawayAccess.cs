@@ -19,27 +19,16 @@ public sealed class TakeawayAccess(UserGrpc.UserGrpcClient identity,
             throw new OrderingException(400, "Vui lòng cung cấp nhà hàng.");
         }
 
-        var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
-        if (string.IsNullOrWhiteSpace(authorization))
-        {
-            throw new OrderingException(401, "Vui lòng đăng nhập tài khoản. Phiên truy cập qua mã QR bàn không được chấp nhận cho thao tác này.");
-        }
-
-        var headers = new Metadata { { "authorization", authorization } };
+        var headers = AuthorizationHeaders();
         var deadline = DateTime.UtcNow.AddSeconds(settings.Value.DependencyTimeoutSeconds);
-        var user = await identity.GetMeAsync(new GetMeRequest(), headers, deadline: deadline, cancellationToken: ct);
-        if (!user.IsSuccess || user.Result is null || !user.Result.IsActive
-            || !Guid.TryParse(user.Result.UserId, out var userId) || userId == Guid.Empty)
-        {
-            throw new OrderingException(user.StatusCode >= 500 ? 503 : 401, "Tài khoản không hợp lệ, đã bị vô hiệu hóa hoặc phiên đăng nhập đã bị thu hồi.");
-        }
+        var (userId, roleId) = await GetUserAsync(headers, deadline, ct);
 
-        if (user.Result.RoleId == "customer")
+        if (roleId == "customer")
         {
             return new TakeawayActor(userId, true, "customer");
         }
 
-        if (user.Result.RoleId is not ("waiter" or "cashier"))
+        if (roleId is not ("waiter" or "cashier"))
         {
             throw new OrderingException(403, "Yêu cầu tài khoản khách hàng hoặc nhân viên phục vụ, thu ngân được phân công.");
         }
@@ -54,6 +43,41 @@ public sealed class TakeawayAccess(UserGrpc.UserGrpcClient identity,
             throw new OrderingException(403, "Bạn phải đang được phân công làm việc tại nhà hàng này.");
         }
 
-        return new TakeawayActor(userId, false, user.Result.RoleId);
+        return new TakeawayActor(userId, false, roleId);
+    }
+
+    public async Task<Guid> RequireCustomerAsync(CancellationToken ct)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(settings.Value.DependencyTimeoutSeconds);
+        var (userId, roleId) = await GetUserAsync(AuthorizationHeaders(), deadline, ct);
+        if (roleId != "customer")
+        {
+            throw new OrderingException(403, "Yêu cầu tài khoản khách hàng để xem lịch sử đơn mang về.");
+        }
+
+        return userId;
+    }
+
+    private Metadata AuthorizationHeaders()
+    {
+        var authorization = http.HttpContext?.Request.Headers.Authorization.ToString();
+        if (string.IsNullOrWhiteSpace(authorization))
+        {
+            throw new OrderingException(401, "Vui lòng đăng nhập tài khoản. Phiên truy cập qua mã QR bàn không được chấp nhận cho thao tác này.");
+        }
+
+        return new Metadata { { "authorization", authorization } };
+    }
+
+    private async Task<(Guid UserId, string RoleId)> GetUserAsync(Metadata headers, DateTime deadline, CancellationToken ct)
+    {
+        var user = await identity.GetMeAsync(new GetMeRequest(), headers, deadline: deadline, cancellationToken: ct);
+        if (!user.IsSuccess || user.Result is null || !user.Result.IsActive
+            || !Guid.TryParse(user.Result.UserId, out var userId) || userId == Guid.Empty)
+        {
+            throw new OrderingException(user.StatusCode >= 500 ? 503 : 401, "Tài khoản không hợp lệ, đã bị vô hiệu hóa hoặc phiên đăng nhập đã bị thu hồi.");
+        }
+
+        return (userId, user.Result.RoleId);
     }
 }

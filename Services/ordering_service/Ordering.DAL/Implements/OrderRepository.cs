@@ -88,6 +88,25 @@ public sealed class OrderRepository(OrderingDbContext db) : IOrderRepository
             .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
     }
 
+    public async Task<(List<Order> Items, int TotalCount)> GetCustomerTakeawayAsync(Guid customerId, string? status,
+        int page, int pageSize, CancellationToken ct)
+    {
+        var query = db.Orders.IgnoreQueryFilters().AsNoTracking()
+            .Where(order => order.CustomerUserRef == customerId && order.Channel == "Takeaway"
+                && order.TableSessionRef == null);
+        if (status is not null)
+        {
+            query = query.Where(order => order.Status == status);
+        }
+
+        var totalCount = await query.CountAsync(ct);
+        var items = await query.OrderByDescending(order => order.CreatedAt).ThenBy(order => order.OrderId)
+            .Skip((page - 1) * pageSize).Take(pageSize)
+            .Include(order => order.OrderItems).ThenInclude(item => item.OrderItemOptions)
+            .AsSingleQuery().ToListAsync(ct);
+        return (items, totalCount);
+    }
+
     private static IQueryable<Order> Details(IQueryable<Order> query)
     {
         return query
