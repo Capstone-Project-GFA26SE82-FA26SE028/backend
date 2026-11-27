@@ -192,6 +192,10 @@ builder.Services.AddGrpcClient<RoleGrpc.RoleGrpcClient>(
 
 var restaurantAddress = builder.Configuration["GrpcServices:Restaurant"]
     ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Restaurant.");
+builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantRegistrationGrpc.RestaurantRegistrationGrpcClient>(options =>
+{
+    options.Address = new Uri(restaurantAddress);
+});
 builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantGrpc.RestaurantGrpcClient>(options =>
 {
     options.Address = new Uri(restaurantAddress);

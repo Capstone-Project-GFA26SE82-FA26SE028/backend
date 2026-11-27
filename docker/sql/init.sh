@@ -40,16 +40,25 @@ for upgrade in BillingCashRegisterRestaurant.sql BillingBillRestaurant.sql Billi
     echo "Applying BillingDb upgrade: $upgrade"
     "${sqlcmd[@]}" -d BillingDb -i "/init/upgrades/$upgrade"
 done
-for upgrade in OrderingCheckoutLock.sql OrderingRefundAccount.sql NotificationOutbox.sql; do
+for upgrade in OrderingCheckoutLock.sql OrderingRefundAccount.sql OrderingCancellationRequest.sql \
+    OrderingTableTransfer.sql NotificationOutbox.sql; do
     echo "Applying OrderingDb upgrade: $upgrade"
     "${sqlcmd[@]}" -d OrderingDb -i "/init/upgrades/$upgrade"
 done
+
+echo "Applying RestaurantDb upgrade: RestaurantRegistration.sql"
+"${sqlcmd[@]}" -d RestaurantDb -i /init/upgrades/RestaurantRegistration.sql
 
 echo "Applying RestaurantDb upgrade: RestaurantCloudinary.sql"
 "${sqlcmd[@]}" -d RestaurantDb -i /init/upgrades/RestaurantCloudinary.sql
 
 echo "Applying RestaurantDb upgrade: RestaurantReservationOptionalArea.sql"
 "${sqlcmd[@]}" -d RestaurantDb -i /init/upgrades/RestaurantReservationOptionalArea.sql
+
+for upgrade in RestaurantStaffTransferReceipt.sql RestaurantTableTransfer.sql NotificationOutbox.sql; do
+    echo "Applying RestaurantDb upgrade: $upgrade"
+    "${sqlcmd[@]}" -d RestaurantDb -i "/init/upgrades/$upgrade"
+done
 
 # UNICODE_UPGRADE_BEGIN
 for database in IdentityDb RestaurantDb InventoryDb CatalogDb OrderingDb CustomerDb BillingDb; do

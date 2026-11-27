@@ -7,6 +7,9 @@ builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantDataScopeService
 builder.Services.AddGrpc(options =>
 {
     options.Interceptors.Add<Restaurant.API.Management.ManagementInterceptor>();
+}).AddServiceOptions<Restaurant.API.GrpcServices.RestaurantRegistrationGrpcService>(options =>
+{
+    options.MaxReceiveMessageSize = 2 * Shared.Common.Images.CloudinaryImageStorage.MaxImageBytes + 65536;
 });
 builder.Services.AddHttpContextAccessor();
 builder.Services.Configure<Restaurant.Common.Settings.BillingReadSettings>(builder.Configuration.GetSection("BillingRead"));
@@ -30,7 +33,17 @@ builder.Services.AddOptions<Restaurant.Common.Settings.GuestAccessSettings>()
         "GuestAccess:LifetimeHours phải lớn hơn 0 và không vượt quá 8760.")
     .ValidateOnStart();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IManagementAccess, Restaurant.API.Management.IdentityManagementAccess>();
-builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantService, Restaurant.BLL.Implements.RestaurantService>();
+builder.Services.AddScoped<Restaurant.BLL.Implements.RestaurantService>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantService>(provider =>
+    provider.GetRequiredService<Restaurant.BLL.Implements.RestaurantService>());
+builder.Services.AddScoped<Restaurant.BLL.Implements.RestaurantRegistrationService>();
+builder.Services.AddScoped<Restaurant.DAL.Interfaces.IRestaurantRegistrationRepository, Restaurant.DAL.Implements.RestaurantRegistrationRepository>();
+builder.Services.AddScoped<Restaurant.BLL.Interfaces.IRestaurantApplicantClient, Restaurant.API.Management.RestaurantApplicantClient>();
+builder.Services.AddGrpcClient<Backend.Contracts.Identity.RestaurantApplicantGrpc.RestaurantApplicantGrpcClient>(options =>
+{
+    options.Address = new Uri(builder.Configuration["GrpcServices:Identity"]
+        ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Identity."));
+});
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ILayoutManagementAccess, Restaurant.BLL.Implements.LayoutManagementAccess>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IAreaService, Restaurant.BLL.Implements.AreaService>();
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.ITableService, Restaurant.BLL.Implements.TableService>();
@@ -48,6 +61,14 @@ builder.Services.AddHttpClient<Shared.Common.Images.IImageStorage, Shared.Common
     {
         AllowAutoRedirect = false
     };
+});
+builder.Services.AddHttpClient<Restaurant.BLL.Interfaces.IRestaurantRegistrationDocuments, Restaurant.API.Management.CloudinaryRegistrationDocuments>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.MaxResponseContentBufferSize = Shared.Common.Images.CloudinaryImageStorage.MaxImageBytes + 65536;
+}).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+{
+    AllowAutoRedirect = false
 });
 builder.Services.AddScoped<Restaurant.BLL.Interfaces.IQrImageStore, Restaurant.BLL.Implements.QrImageStore>();
 builder.Services.AddGrpcClient<Backend.Contracts.Identity.AccessGrpc.AccessGrpcClient>(options =>
@@ -109,6 +130,7 @@ app.MapGrpcService<Restaurant.API.GrpcServices.TableTransferSessionGrpcService>(
 app.MapGrpcService<Restaurant.API.GrpcServices.StaffTransferReceiptGrpcService>();
 
 app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantGrpcService>();
+app.MapGrpcService<Restaurant.API.GrpcServices.RestaurantRegistrationGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.AreaGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.TableGrpcService>();
 app.MapGrpcService<Restaurant.API.GrpcServices.QrGrpcService>();

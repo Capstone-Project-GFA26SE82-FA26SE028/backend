@@ -2,6 +2,7 @@ using ApiGateway.DTOs.Customer;
 using Backend.Contracts.Customer;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Mvc;
+using Shared.Common.DTOs;
 
 namespace ApiGateway.Controllers.Customer;
 
@@ -25,15 +26,32 @@ public sealed class CustomerController(Backend.Contracts.Customer.CustomerGrpc.C
     }
 
     [HttpGet("by-phone/{phone}")]
-    public Task<IActionResult> GetByPhone(string phone, CancellationToken ct)
+    public Task<IActionResult> GetByPhone(string phone, [FromQuery] Guid? tableSessionId, CancellationToken ct)
     {
         return Execute(async () =>
         {
-            var reply = await client.GetByPhoneAsync(new PhoneRequest
+            var request = new PhoneRequest
             {
                 Phone = phone
-            }, Options(ct));
+            };
+            if (tableSessionId.HasValue)
+            {
+                if (tableSessionId == Guid.Empty)
+                {
+                    return BadRequest(new ResponseDTO("Mã phiên bàn không hợp lệ.", 400));
+                }
 
+                var token = Request.Cookies[$"guest_access_{tableSessionId.Value:N}"];
+                if (string.IsNullOrEmpty(token))
+                {
+                    return Unauthorized(new ResponseDTO("Vui lòng tham gia phiên bàn trước khi tra điểm.", 401));
+                }
+
+                request.TableSessionId = tableSessionId.Value.ToString();
+                request.GuestToken = token;
+            }
+
+            var reply = await client.GetByPhoneAsync(request, Options(ct));
             return MapCustomer(reply);
         }, ct);
     }

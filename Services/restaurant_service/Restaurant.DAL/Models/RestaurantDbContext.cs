@@ -310,6 +310,7 @@ public partial class RestaurantDbContext : DbContext
             entity.Property(item => item.Message).HasMaxLength(500);
         });
         ConfigureTableTransfers(modelBuilder);
+        ConfigureRestaurantRegistrations(modelBuilder);
         OnModelCreatingPartial(modelBuilder);
     }
 

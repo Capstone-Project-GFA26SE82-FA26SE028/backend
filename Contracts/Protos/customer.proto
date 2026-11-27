@@ -5,6 +5,8 @@ import "google/protobuf/empty.proto";
 
 message PhoneRequest {
   string phone = 1;
+  optional string table_session_id = 2;
+  optional string guest_token = 3;
 }
 
 message CustomerIdRequest {

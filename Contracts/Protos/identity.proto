@@ -287,3 +287,22 @@ message StaffTransferInfo {
   google.protobuf.Timestamp created_at = 7;
   google.protobuf.Timestamp completed_at = 8;
 }
+
+service RestaurantApplicantGrpc {
+  rpc Reserve(RestaurantApplicantReserveRequest) returns (RestaurantApplicantInfo);
+  rpc Activate(RestaurantApplicantActivateRequest) returns (RestaurantApplicantInfo);
+}
+message RestaurantApplicantReserveRequest {
+  string registration_id = 1;
+  string email = 2;
+  string password = 3;
+  string full_name = 4;
+  string phone_number = 5;
+}
+message RestaurantApplicantActivateRequest {
+  string registration_id = 1;
+  string user_id = 2;
+  string restaurant_id = 3;
+  bool new_account = 4;
+}
+message RestaurantApplicantInfo { string user_id = 1; string email = 2; }

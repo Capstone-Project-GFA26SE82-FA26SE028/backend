@@ -934,3 +934,16 @@ Tên commit đề xuất: **Cho phép khách đặt bàn không cần chọn khu
 
 
 Kết quả cuối: dotnet test Backend.sln -c Release --no-build --no-restore --logger trx --results-directory TestResults/ReservationSameDay đạt 1.530 passed/0 failed/107 skipped trên 9 project; không tính skipped là đạt. git diff --check đạt. Các file bổ sung của phần giới hạn ngày: ReservationRules.cs, ReservationSettings.cs, hai appsettings của Restaurant, ReservationSameDayFlowTests.cs, cập nhật ReservationDockerConfigurationTests/ReservationFlowTests/ReservationAreaSelectionFlowTests và hai tài liệu hiện có. Không sửa thêm service khác hoặc SQL.
+
+## Hồ sơ đăng ký nhà hàng
+
+- `RestaurantDb.RestaurantRegistration` lưu mã hồ sơ, email người nộp, loại tài khoản, thông tin tạo nhà hàng dưới dạng JSON, hai mã tài nguyên Cloudinary, trạng thái, thời điểm nộp và thông tin duyệt.
+- `RegistrationId` là khóa chính. `RestaurantId` là khóa ngoại nội bộ đến `Restaurant` và có chỉ mục duy nhất lọc trên giá trị khác NULL. Một hồ sơ tạo tối đa một nhà hàng. `ApplicantUserRef` có chỉ mục duy nhất. `ApplicantUserRef` và `ReviewedByRef` tham chiếu logic đến `IdentityDb.User`. Hai mã tài nguyên là tham chiếu đến Cloudinary.
+- Chỉ mục `IX_RestaurantRegistration_Review` phục vụ danh sách theo trạng thái và thời điểm nộp. Ràng buộc CHECK xác thực JSON và các cột liên quan đến trạng thái `Pending`, `Provisioning`, `Approved`.
+- Schema tạo mới ở `docker/sql/schema/RestaurantDb.sql`. Script `docker/sql/upgrades/RestaurantRegistration.sql` được chạy trong Docker bootstrap và có thể chạy lại. Các bảng và bản ghi hiện có được giữ nguyên.
+
+## Nâng cấp schema khi chạy lại Docker trên volume cũ
+
+- OrderingDb. Bổ sung vào `CancellationRequest` các cột `Source varchar(20) NOT NULL DEFAULT ('Customer')`, `DecidedAt datetime NULL`, `DecisionReason nvarchar(1000) NULL` và chỉ mục duy nhất `UX_CancellationRequest_PendingItem` cho yêu cầu Pending. Chuyển `Reason` cũ từ varchar sang nvarchar. Dữ liệu dài hơn 1.000 ký tự được giữ kiểu nvarchar(max) để tránh cắt nội dung. Script dừng nếu đã tồn tại nhiều yêu cầu Pending trên cùng một món.
+- OrderingDb tạo `TableTransfer` và RestaurantDb tạo `TableTransferSession` cùng hai chỉ mục tra cứu phiên nguồn và đích theo trạng thái, đúng schema tạo mới. RestaurantDb cũng tạo `StaffTransferReceipt` với khóa chính `StaffTransferReceiptId` và chạy lại script `NotificationOutbox.sql` có sẵn để tạo outbox cùng các chỉ mục. Các nâng cấp này dùng lại cấu trúc và quan hệ của schema hiện hành.
+- Docker chạy các script trước khi kiểm tra schema. Scripts thêm phần còn thiếu và có thể chạy lại trên database đã nâng cấp.
