@@ -354,7 +354,7 @@ public sealed class BillService(IBillRepository bills, ITaxFeePolicyRepository p
         return Money(item.BaseUnitPrice + item.Options.Sum(option => option.ExtraPrice * option.Quantity));
     }
 
-    private static void CalculateTotals(Bill bill, decimal serviceRate, decimal vatRate)
+    internal static void CalculateTotals(Bill bill, decimal serviceRate, decimal vatRate)
     {
         var discountedSubTotal = Math.Max(0, bill.SubTotal - bill.DiscountAmount);
         bill.ServiceAmount = Money(decimal.Round(discountedSubTotal * serviceRate, 2, MidpointRounding.AwayFromZero));

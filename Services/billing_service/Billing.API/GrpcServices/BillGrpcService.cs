@@ -90,6 +90,39 @@ public sealed class BillGrpcService(IBillService service, IVoucherService vouche
         return value.ToString(CultureInfo.InvariantCulture);
     }
 
+    private static BillAdjustmentInfo MapAdjustment(BillAdjustmentDTO adjustment)
+    {
+        var result = new BillAdjustmentInfo
+        {
+            BillAdjustmentId = adjustment.BillAdjustmentId.ToString(),
+            BillId = adjustment.BillId.ToString(),
+            Type = adjustment.Type,
+            Amount = Decimal(adjustment.Amount),
+            RuleSnapshot = adjustment.RuleSnapshot ?? string.Empty
+        };
+        if (adjustment.VoucherId.HasValue)
+        {
+            result.VoucherId = adjustment.VoucherId.Value.ToString();
+        }
+
+        if (adjustment.PromotionId.HasValue)
+        {
+            result.PromotionId = adjustment.PromotionId.Value.ToString();
+        }
+
+        if (adjustment.ActorUserRef.HasValue)
+        {
+            result.ActorUserRef = adjustment.ActorUserRef.Value.ToString();
+        }
+
+        if (adjustment.Reason is not null)
+        {
+            result.Reason = adjustment.Reason;
+        }
+
+        return result;
+    }
+
     private static BillInfo Map(BillDTO source)
     {
         return Map(source, includeCost: true);
@@ -121,18 +154,7 @@ public sealed class BillGrpcService(IBillService service, IVoucherService vouche
             result.CustomerRef = source.CustomerRef.Value.ToString();
         }
         result.Warnings.AddRange(source.Warnings);
-        result.Adjustments.AddRange(source.Adjustments.Select(adj => new BillAdjustmentInfo
-        {
-            BillAdjustmentId = adj.BillAdjustmentId.ToString(),
-            BillId = adj.BillId.ToString(),
-            VoucherId = adj.VoucherId?.ToString(),
-            PromotionId = adj.PromotionId?.ToString(),
-            Type = adj.Type,
-            Amount = Decimal(adj.Amount),
-            RuleSnapshot = adj.RuleSnapshot,
-            ActorUserRef = adj.ActorUserRef?.ToString(),
-            Reason = adj.Reason
-        }));
+        result.Adjustments.AddRange(source.Adjustments.Select(MapAdjustment));
         result.Items.AddRange(source.Items.Select(line =>
         {
             var item = new BillLineInfo
