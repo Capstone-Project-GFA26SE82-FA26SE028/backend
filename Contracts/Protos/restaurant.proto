@@ -238,6 +238,7 @@ service TableSessionGrpc {
   rpc Scan(QrTokenRequest) returns (TableSessionScanReply);
   rpc GetForOrdering(OrderSessionRequest) returns (OrderSessionReply);
   rpc GetForServing(IdRequest) returns (OrderSessionReply);
+  rpc CloseEmptySession(IdRequest) returns (google.protobuf.Empty);
 }
 
 message OrderSessionRequest {

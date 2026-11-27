@@ -11,7 +11,7 @@ public sealed partial class TableSessionService(IQrService qrService, ITableRepo
     ITableSessionRepository sessions, IGenericRepository<SessionTable> sessionTables,
     IManagementTransaction transaction, IGuestAccessService guestAccess, ITableSessionOrderAccess orderAccess,
     IRestaurantDataScopeService dataScope, IVerifiedPaymentClient payments, IServiceRequestRepository requests,
-    IGuestAccessRepository guests, TimeProvider clock) : ITableSessionService
+    IGuestAccessRepository guests, TimeProvider clock, IPaymentRequestOrderClient? orders = null) : ITableSessionService
 {
     public async Task<TableSessionScanDto> OpenForWaiter(Guid tableId, CancellationToken ct)
     {

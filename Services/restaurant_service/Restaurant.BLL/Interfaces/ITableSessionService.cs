@@ -12,4 +12,5 @@ public interface ITableSessionService
     Task<OrderSessionDto> GetForServing(Guid sessionId, CancellationToken ct);
 
     Task<TableSessionScanDto> Scan(string token, CancellationToken ct);
+    Task<bool> CloseEmptySession(Guid id, CancellationToken ct);
 }
