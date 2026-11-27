@@ -92,6 +92,8 @@ message TakeawayIdRequest {
   string restaurant_id = 1; string order_id = 2; string version = 3; string reason = 4;
   string pickup_code = 5; bool handover_confirmed = 6; string refund_reference = 7; string refund_evidence = 8;
 }
+message MyTakeawayOrdersRequest { int32 page = 1; int32 page_size = 2; optional string status = 3; }
+message MyTakeawayOrdersReply { repeated OrderInfo items = 1; int32 total_count = 2; }
 message TakeawayListRequest { string restaurant_id = 1; int32 page = 2; int32 page_size = 3; optional string status = 4; }
 service OrderGrpc {
   rpc AcceptTakeaway(TakeawayIdRequest) returns (OrderInfo);
@@ -102,6 +104,7 @@ service OrderGrpc {
   rpc CreateTakeaway(TakeawayCreateRequest) returns (CreateOrderReply);
   rpc GetTakeawayById(TakeawayIdRequest) returns (OrderInfo);
   rpc GetAllTakeaway(TakeawayListRequest) returns (OrderListReply);
+  rpc GetMyTakeawayOrders(MyTakeawayOrdersRequest) returns (MyTakeawayOrdersReply);
   rpc CollectTakeaway(TakeawayIdRequest) returns (OrderInfo);
   rpc CancelTakeaway(TakeawayIdRequest) returns (OrderInfo);
   rpc Create(CreateOrderRequest) returns (CreateOrderReply);

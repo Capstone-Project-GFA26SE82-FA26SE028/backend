@@ -70,6 +70,19 @@ public sealed class OrderGrpcService(IOrderService service) : OrderGrpc.OrderGrp
         return reply;
     }
 
+    public override async Task<MyTakeawayOrdersReply> GetMyTakeawayOrders(MyTakeawayOrdersRequest request,
+        ServerCallContext context)
+    {
+        var (items, totalCount) = await service.GetMyTakeawayOrders(
+            request.HasStatus ? request.Status : null, request.Page, request.PageSize, context.CancellationToken);
+        var reply = new MyTakeawayOrdersReply
+        {
+            TotalCount = totalCount
+        };
+        reply.Items.AddRange(items.Select(OrderingMapping.Map));
+        return reply;
+    }
+
     public override async Task<OrderInfo> CollectTakeaway(TakeawayIdRequest request, ServerCallContext context)
     {
         return OrderingMapping.Map(await service.CollectTakeaway(Guid.Parse(request.RestaurantId),

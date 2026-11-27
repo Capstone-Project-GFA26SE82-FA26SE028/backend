@@ -20,6 +20,12 @@ public sealed class RestaurantScopeInterceptor(RestaurantAccessGrpc.RestaurantAc
             return await continuation(request, context);
         }
 
+        // This history read checks the authenticated customer and filters by customer ID across restaurants.
+        if (context.Method == "/ordering.OrderGrpc/GetMyTakeawayOrders")
+        {
+            return await continuation(request, context);
+        }
+
         var message = request as IMessage;
         var access = message?.Descriptor.FindFieldByName("access")?.Accessor.GetValue(message) as IMessage;
         var explicitRestaurant = Text(message, "restaurant_id");

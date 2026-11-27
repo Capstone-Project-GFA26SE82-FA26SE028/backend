@@ -14,6 +14,8 @@ public interface IOrderService
 
     Task<(OrderDTO Order, bool Created)> CreateTakeaway(Guid restaurantId, string key, SubmitTakeawayDTO request, CancellationToken ct);
 
+    Task<(List<OrderDTO> Items, int TotalCount)> GetMyTakeawayOrders(string? status, int page, int pageSize, CancellationToken ct);
+
     Task<OrderDTO> GetTakeawayById(Guid restaurantId, Guid id, CancellationToken ct);
 
     Task<List<OrderDTO>> GetAllTakeaway(Guid restaurantId, string? status, int page, int pageSize, CancellationToken ct);

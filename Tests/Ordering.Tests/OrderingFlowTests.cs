@@ -372,6 +372,16 @@ public sealed class OrderingFlowTests
         public int PaymentCalls { get; private set; }
         public bool PaymentUnavailable { get; set; }
 
+        public Task<Guid> RequireCustomerAsync(CancellationToken ct)
+        {
+            if (Staff)
+            {
+                throw new OrderingException(403, "Customer account required");
+            }
+
+            return Task.FromResult(CustomerUser);
+        }
+
         public Task<TakeawayActor> GetActorAsync(Guid restaurantId, CancellationToken ct)
         {
             if (restaurantId != Restaurant)
