@@ -1,9 +1,12 @@
+using System.Data;
 using System.Text.Json;
 using Billing.BLL.Interfaces;
 using Billing.Common.DTOs;
 using Billing.Common.Exceptions;
 using Billing.DAL.Interfaces;
 using Billing.DAL.Models;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Shared.Common.Pagination;
 using Shared.Persistence.Interfaces;
 
@@ -171,6 +174,16 @@ public class VoucherService : IVoucherService
         }
 
         var normalizedCode = voucherCode.Trim().ToUpperInvariant();
+        return await ChangeVoucher(async () =>
+        {
+            var bill = await GetEditableBill(billId, ct);
+            await ApplyVoucherToBill(bill, normalizedCode, ct);
+            return bill;
+        }, ct);
+    }
+
+    private async Task ApplyVoucherToBill(Bill bill, string normalizedCode, CancellationToken ct)
+    {
         var voucher = await _vouchers.FindByCodeAsync(normalizedCode, ct)
             ?? throw new BillingException(404, $"Không tìm thấy mã voucher '{normalizedCode}'.");
 
@@ -190,22 +203,12 @@ public class VoucherService : IVoucherService
             throw new BillingException(400, "Mã voucher này đã hết hạn sử dụng.");
         }
 
-        var bill = await _bills.GetDetailsAsync(billId, ct)
-            ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
-
-        if (bill.Status != "Unpaid")
-        {
-            throw new BillingException(409, "Chỉ có thể áp dụng mã giảm giá cho hóa đơn chưa thanh toán.");
-        }
-
-        var existingRedemption = await _redemptions.GetByBillAndVoucherAsync(billId, voucher.VoucherId, ct);
-        if (existingRedemption is not null && existingRedemption.Status != "Cancelled")
+        if (bill.VoucherRedemptions.Any(redemption => redemption.VoucherId == voucher.VoucherId && redemption.Status != "Cancelled"))
         {
             throw new BillingException(409, "Mã voucher này đã được áp dụng cho hóa đơn.");
         }
 
-        var billRedemptions = await _redemptions.GetByBillIdAsync(billId, ct);
-        if (billRedemptions.Any(r => r.Status != "Cancelled"))
+        if (bill.VoucherRedemptions.Any(redemption => redemption.Status != "Cancelled"))
         {
             throw new BillingException(409, "Hóa đơn đã được áp dụng mã giảm giá khác. Vui lòng hủy mã cũ trước khi áp dụng mã mới.");
         }
@@ -233,6 +236,7 @@ public class VoucherService : IVoucherService
             discountAmount = Math.Min(bill.SubTotal, voucher.DiscountValue);
         }
 
+        discountAmount = Math.Min(discountAmount, bill.SubTotal - bill.DiscountAmount);
         if (discountAmount <= 0)
         {
             throw new BillingException(400, "Giá trị giảm giá của voucher không hợp lệ trên hóa đơn này.");
@@ -270,55 +274,61 @@ public class VoucherService : IVoucherService
         await _redemptions.AddAsync(redemption, ct);
 
         bill.DiscountAmount += discountAmount;
-        RecalculateTotals(bill);
-
-        await _unitOfWork.SaveAsync(ct);
-
-        bill.BillAdjustments.Add(adjustment);
-        return BillService.Map(bill);
+        BillService.CalculateTotals(bill, bill.ServiceRateSnapshot, bill.VatRateSnapshot);
     }
 
-    public async Task<BillDTO> RemoveVoucher(Guid billId, Guid voucherId, CancellationToken ct)
+    public Task<BillDTO> RemoveVoucher(Guid billId, Guid voucherId, CancellationToken ct)
     {
-        var bill = await _bills.GetDetailsAsync(billId, ct)
+        return ChangeVoucher(async () =>
+        {
+            var bill = await GetEditableBill(billId, ct);
+            var redemption = bill.VoucherRedemptions.FirstOrDefault(item => item.VoucherId == voucherId && item.Status != "Cancelled")
+                ?? throw new BillingException(404, "Không tìm thấy mã giảm giá áp dụng trên hóa đơn này.");
+
+            var adjustment = bill.BillAdjustments.FirstOrDefault(item => item.VoucherId == voucherId);
+            if (adjustment is not null)
+            {
+                bill.DiscountAmount = Math.Max(0, bill.DiscountAmount - adjustment.Amount);
+                await _adjustments.RemoveByBillAndVoucherAsync(billId, voucherId, ct);
+            }
+
+            await _redemptions.DeleteAsync(redemption, ct);
+            BillService.CalculateTotals(bill, bill.ServiceRateSnapshot, bill.VatRateSnapshot);
+            return bill;
+        }, ct);
+    }
+
+    private async Task<Bill> GetEditableBill(Guid billId, CancellationToken ct)
+    {
+        var bill = await _bills.GetForRefreshAsync(billId, ct)
             ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
-
-        if (bill.Status != "Unpaid")
+        if (bill.Status != "Unpaid" || bill.PaidAt.HasValue || bill.Payments.Any(PayOsPaymentRules.IsBlocking))
         {
-            throw new BillingException(409, "Chỉ có thể thay đổi giảm giá trên hóa đơn chưa thanh toán.");
+            throw new BillingException(409, "Chỉ có thể đổi mã giảm giá trên hóa đơn chưa thanh toán và không có giao dịch thanh toán đang xử lý.");
         }
 
-        var redemption = await _redemptions.GetByBillAndVoucherAsync(billId, voucherId, ct);
-        if (redemption is null)
-        {
-            throw new BillingException(404, "Không tìm thấy mã giảm giá áp dụng trên hóa đơn này.");
-        }
-
-        var billAdjustments = await _adjustments.GetByBillIdAsync(billId, ct);
-        var voucherAdjustment = billAdjustments.FirstOrDefault(a => a.VoucherId == voucherId);
-
-        if (voucherAdjustment is not null)
-        {
-            bill.DiscountAmount = Math.Max(0, bill.DiscountAmount - voucherAdjustment.Amount);
-            await _adjustments.RemoveByBillAndVoucherAsync(billId, voucherId, ct);
-        }
-
-        await _redemptions.DeleteAsync(redemption, ct);
-        RecalculateTotals(bill);
-
-        await _unitOfWork.SaveAsync(ct);
-
-        var updatedAdjustments = await _adjustments.GetByBillIdAsync(billId, ct);
-        bill.BillAdjustments = updatedAdjustments;
-        return BillService.Map(bill);
+        return bill;
     }
 
-    private static void RecalculateTotals(Bill bill)
+    private async Task<BillDTO> ChangeVoucher(Func<Task<Bill>> action, CancellationToken ct)
     {
-        var discountedSubTotal = Math.Max(0, bill.SubTotal - bill.DiscountAmount);
-        bill.ServiceAmount = decimal.Round(discountedSubTotal * bill.ServiceRateSnapshot, 2, MidpointRounding.AwayFromZero);
-        bill.VatAmount = decimal.Round((discountedSubTotal + bill.ServiceAmount) * bill.VatRateSnapshot, 2, MidpointRounding.AwayFromZero);
-        bill.TotalAmount = decimal.Round(discountedSubTotal + bill.ServiceAmount + bill.VatAmount, 0, MidpointRounding.AwayFromZero);
+        try
+        {
+            var bill = await _unitOfWork.ExecuteInTransactionAsync(action, IsolationLevel.Serializable, ct);
+            return BillService.Map(bill);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new BillingException(409, "Hóa đơn đã thay đổi. Vui lòng tải lại và thử lại.");
+        }
+        catch (DbUpdateException error) when (error.InnerException is SqlException { Number: 1205 })
+        {
+            throw new BillingException(409, "Mã giảm giá đang được xử lý. Vui lòng thử lại.");
+        }
+        catch (SqlException error) when (error.Number == 1205)
+        {
+            throw new BillingException(409, "Mã giảm giá đang được xử lý. Vui lòng thử lại.");
+        }
     }
 
     private static void ValidateCreate(CreateVoucherDTO dto)
