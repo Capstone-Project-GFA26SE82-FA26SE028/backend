@@ -14,12 +14,12 @@ public sealed class CartRepository(OrderingDbContext db) : ICartRepository
         return query.Include(cart => cart.CartItems).ThenInclude(item => item.CartItemOptions).AsSplitQuery().SingleOrDefaultAsync(ct);
     }
 
-    public Task<Cart?> GetForSessionAsync(Guid sessionId, CancellationToken ct)
+    public Task<Cart?> GetForGuestAsync(Guid sessionId, Guid guestId, DateTime now, CancellationToken ct)
     {
-        return db.Carts.Where(cart => cart.TableSessionRef == sessionId && cart.GuestAccessRef == null
-                && cart.CustomerUserRef == null)
+        return db.Carts.Where(cart => cart.TableSessionRef == sessionId && cart.GuestAccessRef == guestId
+                && cart.CustomerUserRef == null && cart.ExpiredAt > now)
             .Include(cart => cart.CartItems).ThenInclude(item => item.CartItemOptions)
-            .AsSplitQuery().SingleOrDefaultAsync(ct);
+            .AsSplitQuery().OrderBy(cart => cart.CartId).FirstOrDefaultAsync(ct);
     }
 
     public async Task<Cart?> GetForCustomerAsync(Guid restaurantId, Guid customerId, DateTime now, CancellationToken ct)
