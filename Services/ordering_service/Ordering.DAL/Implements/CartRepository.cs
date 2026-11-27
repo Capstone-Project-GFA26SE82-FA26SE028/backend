@@ -14,13 +14,12 @@ public sealed class CartRepository(OrderingDbContext db) : ICartRepository
         return query.Include(cart => cart.CartItems).ThenInclude(item => item.CartItemOptions).AsSplitQuery().SingleOrDefaultAsync(ct);
     }
 
-    public async Task<Cart?> GetForGuestAsync(Guid sessionId, Guid guestId, DateTime now, CancellationToken ct)
+    public Task<Cart?> GetForSessionAsync(Guid sessionId, CancellationToken ct)
     {
-        var query = db.Database.IsSqlServer()
-            ? db.Carts.FromSqlInterpolated($"SELECT * FROM [Cart] WITH (UPDLOCK, HOLDLOCK) WHERE [TableSessionRef] = {sessionId} AND [GuestAccessRef] = {guestId} AND [ExpiredAt] > {now}")
-            : db.Carts.Where(cart => cart.TableSessionRef == sessionId && cart.GuestAccessRef == guestId && cart.ExpiredAt > now);
-        return await query.Include(cart => cart.CartItems).ThenInclude(item => item.CartItemOptions)
-            .AsSplitQuery().OrderBy(cart => cart.CartId).FirstOrDefaultAsync(ct);
+        return db.Carts.Where(cart => cart.TableSessionRef == sessionId && cart.GuestAccessRef == null
+                && cart.CustomerUserRef == null)
+            .Include(cart => cart.CartItems).ThenInclude(item => item.CartItemOptions)
+            .AsSplitQuery().SingleOrDefaultAsync(ct);
     }
 
     public async Task<Cart?> GetForCustomerAsync(Guid restaurantId, Guid customerId, DateTime now, CancellationToken ct)
@@ -44,9 +43,4 @@ public sealed class CartRepository(OrderingDbContext db) : ICartRepository
         cart.CartItems = items;
     }
 
-    public void Delete(Cart cart)
-    {
-        ReplaceItems(cart, []);
-        db.Carts.Remove(cart);
-    }
 }
