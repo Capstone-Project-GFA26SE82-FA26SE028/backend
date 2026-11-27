@@ -58,5 +58,18 @@ public static class CustomerMapping
 
         return reply;
     }
+
+    public static LoyaltyPolicyInfo Map(LoyaltyPolicyDTO dto)
+    {
+        return new LoyaltyPolicyInfo
+        {
+            PolicyId = dto.PolicyId.ToString(),
+            RestaurantId = dto.RestaurantId?.ToString() ?? string.Empty,
+            Version = dto.Version,
+            SpendPerPoint = dto.SpendPerPoint.ToString("0.##"),
+            MoneyPerRedeemedPoint = dto.MoneyPerRedeemedPoint.ToString("0.##"),
+            EffectiveFrom = dto.EffectiveFrom.ToString("o")
+        };
+    }
 }
 

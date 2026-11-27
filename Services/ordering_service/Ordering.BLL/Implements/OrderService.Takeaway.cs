@@ -83,9 +83,9 @@ public sealed partial class OrderService
                 RequestHash = hash,
                 PickupName = request.PickupName.Trim(),
                 PickupPhone = request.PickupPhone,
-                PickupCode = Convert.ToHexString(RandomNumberGenerator.GetBytes(16))
+                PickupCode = RandomNumberGenerator.GetInt32(1000, 10000).ToString()
             };
-            order.OrderNumber = $"TA-{order.OrderId:N}";
+            order.OrderNumber = $"TA-{order.OrderId.ToString("N")[..6].ToUpperInvariant()}";
             for (var index = 0; index < quote.Items.Count; index++)
             {
                 var snapshot = quote.Items[index];
@@ -167,7 +167,7 @@ public sealed partial class OrderService
     public async Task<OrderDTO> AcceptTakeaway(Guid restaurantId, Guid id, string version, CancellationToken ct)
     {
         var actor = await takeawayAccess.GetActorAsync(restaurantId, ct);
-        RequireWaiter(actor);
+        RequireCashier(actor);
         await SynchronizeTakeaway(restaurantId, id, actor, "Refresh", ct);
         var order = await transaction.ExecuteAsync(async () =>
         {
@@ -222,7 +222,7 @@ public sealed partial class OrderService
         var actor = await takeawayAccess.GetActorAsync(restaurantId, ct);
         if (reject)
         {
-            RequireWaiter(actor);
+            RequireCashier(actor);
         }
         else if (!actor.IsCustomer)
         {
@@ -267,13 +267,13 @@ public sealed partial class OrderService
         string pickupCode, bool handoverConfirmed, CancellationToken ct)
     {
         var actor = await takeawayAccess.GetActorAsync(restaurantId, ct);
-        RequireWaiter(actor);
+        RequireCashier(actor);
         var order = await transaction.ExecuteAsync(async () =>
         {
             var found = await FindTakeaway(restaurantId, id, actor, ct);
-            if (!handoverConfirmed || pickupCode.Length != 32 || found.PickupCode is null
+            if (!handoverConfirmed || string.IsNullOrWhiteSpace(pickupCode) || found.PickupCode is null
                 || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(found.PickupCode),
-                    Encoding.UTF8.GetBytes(pickupCode.ToUpperInvariant())))
+                    Encoding.UTF8.GetBytes(pickupCode.Trim().ToUpperInvariant())))
             {
                 throw new OrderingException(400, "Vui lòng cung cấp mã nhận món hợp lệ và xác nhận đã bàn giao món cho khách.");
             }
@@ -459,11 +459,11 @@ public sealed partial class OrderService
         };
     }
 
-    private static void RequireWaiter(TakeawayActor actor)
+    private static void RequireCashier(TakeawayActor actor)
     {
-        if (actor.IsCustomer || actor.RoleId != "waiter")
+        if (actor.IsCustomer || actor.RoleId != "cashier")
         {
-            throw new OrderingException(403, "Yêu cầu nhân viên phục vụ được phân công tại nhà hàng.");
+            throw new OrderingException(403, "Yêu cầu thu ngân được phân công tại nhà hàng.");
         }
     }
 

@@ -17,5 +17,7 @@ public partial class LoyaltyTier
 
     public decimal DiscountPercent { get; set; }
 
+    public Guid? RestaurantId { get; set; }
+
     public virtual ICollection<Customer> Customers { get; set; } = new List<Customer>();
 }

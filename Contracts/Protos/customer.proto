@@ -70,6 +70,51 @@ message BillIdRequest {
   string bill_id = 1;
 }
 
+message RestaurantTierListRequest {
+  string restaurant_id = 1;
+}
+
+message CreateLoyaltyTierRequest {
+  string restaurant_id = 1;
+  string loyalty_tier_code = 2;
+  string loyalty_tier_name = 3;
+  string required_spend = 4;
+  string discount_percent = 5;
+}
+
+message UpdateLoyaltyTierRequest {
+  string restaurant_id = 1;
+  string loyalty_tier_id = 2;
+  string loyalty_tier_code = 3;
+  string loyalty_tier_name = 4;
+  string required_spend = 5;
+  string discount_percent = 6;
+}
+
+message DeleteLoyaltyTierRequest {
+  string restaurant_id = 1;
+  string loyalty_tier_id = 2;
+}
+
+message LoyaltyPolicyInfo {
+  string policy_id = 1;
+  string restaurant_id = 2;
+  int32 version = 3;
+  string spend_per_point = 4;
+  string money_per_redeemed_point = 5;
+  string effective_from = 6;
+}
+
+message RestaurantPolicyRequest {
+  string restaurant_id = 1;
+}
+
+message SaveLoyaltyPolicyRequest {
+  string restaurant_id = 1;
+  string spend_per_point = 2;
+  string money_per_redeemed_point = 3;
+}
+
 service CustomerGrpc {
   rpc GetOrCreate(CreateCustomerRequest) returns (CustomerInfo);
   rpc GetByPhone(PhoneRequest) returns (CustomerInfo);
@@ -79,6 +124,12 @@ service CustomerGrpc {
   rpc ReservePoints(ReservePointsRequest) returns (ReservePointsReply);
   rpc CommitPoints(BillIdRequest) returns (google.protobuf.Empty);
   rpc CancelPoints(BillIdRequest) returns (google.protobuf.Empty);
+  rpc GetRestaurantTiers(RestaurantTierListRequest) returns (LoyaltyTierListReply);
+  rpc CreateTier(CreateLoyaltyTierRequest) returns (LoyaltyTierInfo);
+  rpc UpdateTier(UpdateLoyaltyTierRequest) returns (LoyaltyTierInfo);
+  rpc DeleteTier(DeleteLoyaltyTierRequest) returns (google.protobuf.Empty);
+  rpc GetRestaurantPolicy(RestaurantPolicyRequest) returns (LoyaltyPolicyInfo);
+  rpc SavePolicy(SaveLoyaltyPolicyRequest) returns (LoyaltyPolicyInfo);
 }
 
 message FeedbackAccessRequest {

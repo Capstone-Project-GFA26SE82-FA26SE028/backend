@@ -19,6 +19,37 @@ public sealed class LoyaltyRepository(CustomerDbContext db) : ILoyaltyRepository
         return db.LoyaltyTiers.FirstOrDefaultAsync(t => t.LoyaltyTierId == tierId, ct);
     }
 
+    public Task<LoyaltyTier?> GetTierByCodeAsync(string code, CancellationToken ct)
+    {
+        var trimmed = code.Trim();
+        return db.LoyaltyTiers.FirstOrDefaultAsync(t => t.LoyaltyTierCode == trimmed, ct);
+    }
+
+    public Task<bool> HasAssignedCustomersAsync(Guid tierId, CancellationToken ct)
+    {
+        return db.Customers.AnyAsync(c => c.LoyaltyTierId == tierId, ct);
+    }
+
+    public Task<int> CountTiersAsync(CancellationToken ct)
+    {
+        return db.LoyaltyTiers.CountAsync(ct);
+    }
+
+    public void CreateTier(LoyaltyTier tier)
+    {
+        db.LoyaltyTiers.Add(tier);
+    }
+
+    public void DeleteTier(LoyaltyTier tier)
+    {
+        db.LoyaltyTiers.Remove(tier);
+    }
+
+    public void CreatePolicy(LoyaltyPolicy policy)
+    {
+        db.LoyaltyPolicies.Add(policy);
+    }
+
     public Task<LoyaltyTier?> GetDefaultTierAsync(CancellationToken ct)
     {
         return db.LoyaltyTiers

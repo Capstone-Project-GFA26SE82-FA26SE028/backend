@@ -23,6 +23,7 @@ if (string.IsNullOrWhiteSpace(connectionString))
 
 builder.Services.AddCustomerPersistence(connectionString);
 builder.Services.AddCustomerBusinessServices();
+builder.Services.AddScoped<Customer.BLL.Interfaces.ILoyaltyManagerAccess, Customer.API.Clients.LoyaltyManagerAccess>();
 
 var app = builder.Build();
 
