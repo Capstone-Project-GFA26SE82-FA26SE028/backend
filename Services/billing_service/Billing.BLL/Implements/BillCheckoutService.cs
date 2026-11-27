@@ -16,7 +16,7 @@ public sealed partial class BillCheckoutService(IBillCheckoutRepository checkout
     IUnitOfWork unitOfWork, ICheckoutSourceClient ordering, IBillSourceClient source,
     IBillService billService, IBillingAccess access, IOptions<CashRegisterAccessSettings> roles,
     TimeProvider clock, ICashRegisterRepository registers, ICashShiftRepository shifts,
-    IPaymentReviewClient reviews) : IBillCheckoutService
+    IPaymentReviewClient reviews, IPaidSessionClosureClient closure) : IBillCheckoutService
 {
     public async Task<BillCheckoutDTO> Request(Guid sessionId, Guid id, string guestToken, CancellationToken ct)
     {

@@ -85,12 +85,12 @@ public sealed partial class PayOsPaymentService(IPaymentRepository payments, IBi
             var unclosed = await shifts.GetUnclosedAsync(register.CashRegisterId, ct);
             var active = await checkouts.GetActiveAsync(sessionId, ct);
             if (shift.Status != CashShiftStatuses.Active || shift.ClosedAt.HasValue || unclosed.Count != 1
-                || unclosed[0].CashShiftId != shift.CashShiftId || checkout?.Status != "Presented"
-                || !PayOsPaymentRules.HasPresentedBill(checkout) || checkout.CashRegisterId != register.CashRegisterId
+                || unclosed[0].CashShiftId != shift.CashShiftId || checkout is null
+                || !PayOsPaymentRules.CanUsePreparedBill(checkout) || checkout.CashRegisterId != register.CashRegisterId
                 || checkout.BillId != billId || checkout.TableSessionRef != sessionId
                 || active?.CheckoutId != checkout.CheckoutId)
             {
-                throw new BillingException(409, "Chỉ tạo QR PayOS sau khi phục vụ đã đưa hóa đơn cho khách, trong ca đang mở của bạn tại quầy nhận.");
+                throw new BillingException(409, "Chỉ tạo QR PayOS cho hóa đơn đã chốt, trong ca đang mở của bạn tại quầy nhận.");
             }
 
             var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");

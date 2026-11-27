@@ -56,6 +56,12 @@ public sealed partial class ReservationSqlServerTests
     }
 
     [SqlServerFact]
+    public Task PaymentSubmissionCreatesPayOsQrBeforePresentationAndRecordsDeliveryAfterEarlyPayment()
+    {
+        return VerifyPaymentSubmission(PayOsScenario.BeforePresentation);
+    }
+
+    [SqlServerFact]
     public Task PaymentSubmissionKeepsPayOsWebhookUnderReviewWithoutRequeryingProvider()
     {
         return VerifyPaymentSubmission(PayOsScenario.Review);
@@ -268,8 +274,14 @@ public sealed partial class ReservationSqlServerTests
             Assert.Equal(HttpStatusCode.Forbidden, (await cashier.GetAsync(
                 $"/api/restaurants/{otherRestaurant.RestaurantId}/payment-requests/incoming")).StatusCode);
 
+            using var earlyWebhookClient = gateway.CreateClient();
             var presented = await VerifyBillPreparation(billing, ordering, location, pendingId, path + $"/{id}",
-                cashier, nextCashier, waiter, otherWaiter, guest, reopened, id, payOs);
+                cashier, nextCashier, waiter, otherWaiter, guest, reopened, id,
+                payOsScenario == PayOsScenario.BeforePresentation ? payOs : null, earlyWebhookClient);
+            if (payOsScenario == PayOsScenario.BeforePresentation)
+            {
+                return;
+            }
 
             using var scope = billing.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<BillingDb>();
@@ -369,7 +381,7 @@ public sealed partial class ReservationSqlServerTests
     private async Task<PreparedResult> VerifyBillPreparation(WebApplicationFactory<BillingGrpc> billing,
         WebApplicationFactory<OrderingGrpc> ordering, LocationIds location, Guid pendingOrderId, string requestPath,
         HttpClient oldCashier, HttpClient cashier, HttpClient waiter, HttpClient otherWaiter, HttpClient guest,
-        CashShiftDTO shift, Guid checkoutId, PayOsHttpFixture? payOs)
+        CashShiftDTO shift, Guid checkoutId, PayOsHttpFixture? payOs, HttpClient webhookClient)
     {
         var prepare = requestPath + "/prepare";
         var billPath = requestPath + "/bill";
@@ -423,9 +435,8 @@ public sealed partial class ReservationSqlServerTests
         Assert.Equal(HttpStatusCode.Conflict, tooEarly.StatusCode);
         if (payOs is not null)
         {
-            using var earlyPayOs = await CreatePayOs(cashier, prepared, shift, Guid.NewGuid());
-            Assert.Equal(HttpStatusCode.Conflict, earlyPayOs.StatusCode);
-            Assert.Empty(payOs.OrderCodes);
+            return await VerifyPayOsBeforePresentation(payOs, prepared, shift, cashier, oldCashier,
+                waiter, otherWaiter, webhookClient, billPath, present);
         }
 
         var presented = await Read<PreparedResult>(await waiter.PostAsync(present, null));
@@ -711,6 +722,7 @@ public sealed partial class ReservationSqlServerTests
     private enum PayOsScenario
     {
         Settlement,
+        BeforePresentation,
         Review,
         ConflictingWebhook,
         TimeoutRecovery

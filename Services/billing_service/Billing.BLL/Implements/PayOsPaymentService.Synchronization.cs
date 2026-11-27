@@ -263,7 +263,7 @@ public sealed partial class PayOsPaymentService
             return !checkout.CashRegisterId.HasValue || checkout.CashRegisterId == payment.CashShift.CashRegisterId;
         }
 
-        return checkout.Status == "Presented" && PayOsPaymentRules.HasPresentedBill(checkout)
+        return PayOsPaymentRules.CanUsePreparedBill(checkout)
             && checkout.CashRegisterId == payment.CashShift.CashRegisterId;
     }
 }

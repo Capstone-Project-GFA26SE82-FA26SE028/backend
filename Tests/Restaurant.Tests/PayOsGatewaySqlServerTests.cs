@@ -22,6 +22,60 @@ namespace Restaurant.Tests;
 
 public sealed partial class ReservationSqlServerTests
 {
+    private async Task<PreparedResult> VerifyPayOsBeforePresentation(PayOsHttpFixture provider, PreparedResult prepared,
+        CashShiftDTO shift, HttpClient cashier, HttpClient oldCashier, HttpClient waiter, HttpClient otherWaiter,
+        HttpClient webhookClient, string billPath, string presentPath)
+    {
+        var key = Guid.NewGuid();
+        using var unauthorized = await CreatePayOs(waiter, prepared, shift, key);
+        Assert.Equal(HttpStatusCode.Forbidden, unauthorized.StatusCode);
+        using var wrongCashier = await CreatePayOs(oldCashier, prepared, shift, key);
+        Assert.Equal(HttpStatusCode.Forbidden, wrongCashier.StatusCode);
+        var payment = await Read<PayOsPaymentDTO>(await CreatePayOs(cashier, prepared, shift, key), HttpStatusCode.Created);
+        Assert.Equal(PayOsHttpFixture.Qr, payment.QrCode);
+        Assert.Equal("Pending", payment.Status);
+        Assert.Equal(prepared.Bill.TotalAmount, payment.Amount);
+        var replay = await Read<PayOsPaymentDTO>(await CreatePayOs(cashier, prepared, shift, key));
+        Assert.Equal(payment.PaymentId, replay.PaymentId);
+        using var duplicate = await CreatePayOs(cashier, prepared, shift, Guid.NewGuid());
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+        var orderCode = Assert.Single(provider.OrderCodes);
+        var beforeDelivery = await Read<PreparedResult>(await waiter.GetAsync(billPath));
+        Assert.Equal("Prepared", beforeDelivery.CheckoutStatus);
+        Assert.Equal("Unpaid", beforeDelivery.Bill.Status);
+        Assert.Null(beforeDelivery.PresentedAt);
+
+        var webhook = $"/api/restaurants/{shift.RestaurantId}/payments/payos/webhook";
+        var payload = provider.Webhook(orderCode);
+        using var unverified = await webhookClient.PostAsJsonAsync(webhook, payload);
+        Assert.Equal(HttpStatusCode.OK, unverified.StatusCode);
+        var paymentPath = $"/api/payments/{payment.PaymentId}/payos";
+        Assert.Equal("Pending", (await Read<PayOsPaymentDTO>(await cashier.GetAsync(paymentPath))).Status);
+
+        var unpaid = await Read<PreparedResult>(await waiter.GetAsync(billPath));
+        Assert.Equal("Unpaid", unpaid.Bill.Status);
+        Assert.Null(unpaid.PresentedAt);
+
+        provider.Settle(orderCode);
+        using var verified = await webhookClient.PostAsJsonAsync(webhook, payload);
+        Assert.Equal(HttpStatusCode.OK, verified.StatusCode);
+        var paid = await Read<PayOsPaymentDTO>(await cashier.GetAsync(paymentPath));
+        Assert.Equal("Paid", paid.Status);
+        Assert.NotNull(paid.PaidAt);
+        Assert.Null(await ReadClosedAt(prepared.TableSessionId));
+
+        using var wrongWaiter = await otherWaiter.PostAsync(presentPath, null);
+        Assert.Equal(HttpStatusCode.Forbidden, wrongWaiter.StatusCode);
+        var delivered = await Read<PreparedResult>(await waiter.PostAsync(presentPath, null));
+        Assert.Equal("Paid", delivered.CheckoutStatus);
+        Assert.Equal("Paid", delivered.Bill.Status);
+        Assert.NotNull(delivered.PresentedAt);
+        Assert.NotNull(await ReadClosedAt(prepared.TableSessionId));
+        Assert.Equivalent(delivered, await Read<PreparedResult>(await waiter.PostAsync(presentPath, null)), strict: true);
+        Assert.Single(provider.OrderCodes);
+        return delivered;
+    }
+
     private async Task VerifyPayOsPayment(BillingDb db, PayOsHttpFixture provider, PreparedResult presented,
         CashShiftDTO shift, HttpClient cashier, HttpClient oldCashier, HttpClient waiter, HttpClient otherWaiter,
         HttpClient crossRestaurantWaiter, HttpClient guest, Guid otherRestaurant)

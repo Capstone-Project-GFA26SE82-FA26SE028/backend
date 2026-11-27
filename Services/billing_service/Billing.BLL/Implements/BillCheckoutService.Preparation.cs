@@ -110,13 +110,24 @@ public sealed partial class BillCheckoutService
     private async Task<PreparedBillDTO> ForResponsibleWaiter(Guid sessionId, Guid id, bool present, CancellationToken ct)
     {
         ValidateIds(sessionId, id);
-        var review = await reviews.GetReviewAsync(sessionId, id, ct);
-        return await InSession(sessionId, async () =>
+        var restaurantId = present
+            ? await reviews.GetResultRestaurantAsync(sessionId, id, ct)
+            : (await reviews.GetReviewAsync(sessionId, id, ct)).RestaurantId;
+        var prepared = await InSession(sessionId, async () =>
         {
             var current = await Find(sessionId, id, ct);
-            RequireRouted(current);
-            var result = await ReadPrepared(current, ct);
-            if (result.Bill.RestaurantId != review.RestaurantId)
+            PreparedBillDTO result;
+            if (current.Status == PaymentStatuses.Paid)
+            {
+                result = await ReadPaidPayOsBill(current, ct);
+            }
+            else
+            {
+                RequireRouted(current);
+                result = await ReadPrepared(current, ct);
+            }
+
+            if (result.Bill.RestaurantId != restaurantId)
             {
                 throw new BillingException(403, "Hóa đơn không thuộc nhà hàng của yêu cầu thanh toán.");
             }
@@ -127,9 +138,43 @@ public sealed partial class BillCheckoutService
             }
 
             current.PresentedAt = clock.GetUtcNow().UtcDateTime;
-            current.Status = "Presented";
+            if (current.Status == "Prepared")
+            {
+                current.Status = "Presented";
+            }
+
             return MapPrepared(current, result.Bill);
         }, ct);
+        if (present && prepared.CheckoutStatus == PaymentStatuses.Paid)
+        {
+            await closure.TryCloseAsync(restaurantId, sessionId, ct);
+        }
+
+        return prepared;
+    }
+
+    private async Task<PreparedBillDTO> ReadPaidPayOsBill(BillCheckout checkout, CancellationToken ct)
+    {
+        if (!PayOsPaymentRules.HasPreparedBill(checkout))
+        {
+            throw new BillingException(409, "Thu ngân chưa chốt hóa đơn cho yêu cầu này.");
+        }
+
+        var bill = await bills.GetForRefreshAsync(checkout.BillId!.Value, ct);
+        if (bill is null || bill.BillLines.Count == 0 || bill.BillLines.Any(line => line.TableSessionRef != checkout.TableSessionRef)
+            || PayOsPaymentService.Hash(bill) != checkout.SourceHash)
+        {
+            throw new BillingException(409, "Hóa đơn đã lưu không khớp với bản chụp món.");
+        }
+
+        var blocking = bill.Payments.Where(PayOsPaymentRules.IsBlocking).ToArray();
+        if (blocking.Length != 1 || !PayOsPaymentRules.BelongsToCheckout(blocking[0], checkout.CheckoutId)
+            || !PayOsPaymentRules.IsVerifiedPaid(blocking[0]))
+        {
+            throw new BillingException(409, "Hóa đơn không còn chưa thanh toán.");
+        }
+
+        return MapPrepared(checkout, BillService.Map(bill));
     }
 
     private async Task<T> AsReceivingCashier<T>(Guid sessionId, Guid id,
