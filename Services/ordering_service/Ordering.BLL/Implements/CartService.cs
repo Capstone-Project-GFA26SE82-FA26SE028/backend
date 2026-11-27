@@ -7,16 +7,24 @@ using Ordering.DAL.Models;
 namespace Ordering.BLL.Implements;
 
 public sealed partial class CartService(ICartRepository carts, IOrderingTransaction transaction,
-    IOrderingAccess access, ICatalogOrderClient catalog, TimeProvider clock, ITakeawayAccess takeawayAccess) : ICartService
+    IOrderingAccess access, ICatalogOrderClient catalog, TimeProvider clock, ITakeawayAccess takeawayAccess,
+    ICheckoutLockRepository checkouts) : ICartService
 {
     public async Task<CartDTO> Create(Guid sessionId, string guestToken, CancellationToken ct)
     {
         var actor = await Guest(sessionId, guestToken, ct);
         var cart = await transaction.ExecuteAsync(async () =>
         {
-            var existing = await carts.GetForGuestAsync(sessionId, actor.GuestId!.Value, clock.GetUtcNow().UtcDateTime, ct);
+            await checkouts.LockSessionAsync(sessionId, ct);
+            var expiresAt = actor.ExpiresAt!.Value.UtcDateTime;
+            var existing = await carts.GetForSessionAsync(sessionId, ct);
             if (existing is not null)
             {
+                if (existing.ExpiredAt < expiresAt)
+                {
+                    existing.ExpiredAt = expiresAt;
+                }
+
                 return existing;
             }
 
@@ -24,8 +32,7 @@ public sealed partial class CartService(ICartRepository carts, IOrderingTransact
             {
                 CartId = Guid.NewGuid(),
                 TableSessionRef = sessionId,
-                GuestAccessRef = actor.GuestId,
-                ExpiredAt = actor.ExpiresAt!.Value.UtcDateTime
+                ExpiredAt = expiresAt
             };
             carts.Create(created);
             return created;
@@ -56,6 +63,7 @@ public sealed partial class CartService(ICartRepository carts, IOrderingTransact
 
         var result = await transaction.ExecuteAsync(async () =>
         {
+            await checkouts.LockSessionAsync(sessionId, ct);
             var found = await carts.GetByIdAsync(id, ct);
             OrderingRules.CheckCart(found, actor, clock.GetUtcNow().UtcDateTime, request.Version);
             var quote = await Quote(actor, guestToken, request.Items, ct);
@@ -83,8 +91,9 @@ public sealed partial class CartService(ICartRepository carts, IOrderingTransact
         return new CartDTO
         {
             CartId = result.Cart.CartId,
+            RestaurantId = result.Cart.RestaurantRef,
             TableSessionId = result.Cart.TableSessionRef,
-            ExpiresAt = OrderingRules.Utc(result.Cart.ExpiredAt),
+            ExpiresAt = actor.ExpiresAt!.Value,
             Version = OrderingRules.CartVersion(result.Cart),
             Items = request.Items,
             Quote = result.Quote
@@ -101,9 +110,10 @@ public sealed partial class CartService(ICartRepository carts, IOrderingTransact
 
         await transaction.ExecuteAsync(async () =>
         {
+            await checkouts.LockSessionAsync(sessionId, ct);
             var cart = await carts.GetByIdAsync(id, ct);
             OrderingRules.CheckCart(cart, actor, clock.GetUtcNow().UtcDateTime, version);
-            carts.Delete(cart!);
+            carts.ReplaceItems(cart!, []);
             return true;
         }, ct);
     }
@@ -127,7 +137,7 @@ public sealed partial class CartService(ICartRepository carts, IOrderingTransact
             CartId = cart.CartId,
             RestaurantId = cart.RestaurantRef,
             TableSessionId = cart.TableSessionRef,
-            ExpiresAt = OrderingRules.Utc(cart.ExpiredAt),
+            ExpiresAt = actor.ExpiresAt ?? OrderingRules.Utc(cart.ExpiredAt),
             Version = OrderingRules.CartVersion(cart),
             Items = lines,
             Quote = await Quote(actor, token, lines, ct)
