@@ -338,6 +338,34 @@ public sealed class OrderValidationFlowTests
         Assert.Empty(menu.GetProperty("items").EnumerateArray());
     }
 
+    [Fact]
+    public async Task CashierCanValidateTakeawayOnlyInVerifiedRestaurant()
+    {
+        var restaurant = Guid.NewGuid();
+        using var app = await ItemTestApplication.Create(verifiedRestaurantId: restaurant);
+        var data = await Seed(app);
+        await using (var db = app.OpenDatabase())
+        {
+            (await db.Items.SingleAsync(item => item.ItemId == data.ItemId)).RestaurantRef = restaurant;
+            await db.SaveChangesAsync();
+        }
+
+        app.Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "cashier");
+        var request = Request(data);
+        request.Channel = "Takeaway";
+        request.RestaurantId = restaurant;
+        var quote = await Result(await app.Client.PostAsJsonAsync(Endpoint, request), HttpStatusCode.OK);
+        Assert.Equal(data.ItemId, quote.GetProperty("items")[0].GetProperty("itemId").GetGuid());
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await app.Client.GetAsync($"/api/menu?restaurantId={restaurant}&channel=Takeaway")).StatusCode);
+
+        request.RestaurantId = Guid.NewGuid();
+        Assert.Equal(HttpStatusCode.Forbidden, (await app.Client.PostAsJsonAsync(Endpoint, request)).StatusCode);
+        request.RestaurantId = restaurant;
+        request.Channel = "DineIn";
+        Assert.Equal(HttpStatusCode.Forbidden, (await app.Client.PostAsJsonAsync(Endpoint, request)).StatusCode);
+    }
+
     private static async Task<JsonElement> Result(HttpResponseMessage response, HttpStatusCode expected)
     {
         Assert.Equal(expected, response.StatusCode);

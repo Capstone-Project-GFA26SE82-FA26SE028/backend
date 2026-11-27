@@ -50,7 +50,7 @@ internal sealed class ItemTestApplication : IDisposable
     public static DateTimeOffset Now { get; } = new(2030, 1, 15, 8, 0, 0, TimeSpan.Zero);
 
     public static async Task<ItemTestApplication> Create(string initialAvailability = "Inactive", IKitchenStationLookup? stationLookup = null, IInventoryRecipeLookup? inventoryLookup = null, TestImageStorage? imageStorage = null,
-        string cloudName = "test", IRecipeMediaStorage? recipeMediaStorage = null, int? maximumVideoBytes = null)
+        string cloudName = "test", IRecipeMediaStorage? recipeMediaStorage = null, int? maximumVideoBytes = null, Guid? verifiedRestaurantId = null)
     {
         var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -77,6 +77,16 @@ internal sealed class ItemTestApplication : IDisposable
                 services.AddRouting();
                 services.AddGrpc();
                 services.AddCatalogManagement(configuration);
+                services.AddScoped(_ =>
+                {
+                    var scope = new Shared.Persistence.RestaurantIsolation.RestaurantDataScope();
+                    if (verifiedRestaurantId.HasValue)
+                    {
+                        scope.Select(verifiedRestaurantId.Value);
+                    }
+
+                    return scope;
+                });
                 services.AddSingleton<Shared.Common.Images.IImageStorage>(imageStorage ?? new TestImageStorage());
                 services.AddSingleton<IRecipeMediaStorage>(recipeMediaStorage ?? new TestRecipeMediaStorage());
                 services.AddSingleton<IInventoryRecipeLookup>(inventoryLookup ?? new TestInventoryLookup());
@@ -287,6 +297,7 @@ internal sealed class ItemTestApplication : IDisposable
                         "Bearer customer" => "customer",
                         "Bearer manager" => "test-menu-manager",
                         "Bearer kitchen" => "test-kitchen",
+                        "Bearer cashier" => "cashier",
                         "Bearer waiter" => "test-waiter",
                         _ => "ordinary-user"
                     },

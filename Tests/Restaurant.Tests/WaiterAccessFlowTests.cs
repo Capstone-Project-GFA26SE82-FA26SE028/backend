@@ -24,12 +24,12 @@ public sealed partial class GatewayFlowTests
     [InlineData("admin", 403)]
     [InlineData("manager", 403)]
     [InlineData("kitchen", 403)]
-    [InlineData("cashier", 403)]
+    [InlineData("cashier", 200)]
     [InlineData("customer", 403)]
     [InlineData("revoked", 401)]
     [InlineData("inactive", 401)]
     [InlineData("", 401)]
-    public async Task ServiceTablesEnforceWaiterRoleThroughGateway(string role, int status)
+    public async Task ServiceTablesAllowWaiterAndCashierThroughGateway(string role, int status)
     {
         _http.DefaultRequestHeaders.Authorization = string.IsNullOrEmpty(role)
             ? null : new AuthenticationHeaderValue("Bearer", role);
@@ -37,8 +37,10 @@ public sealed partial class GatewayFlowTests
         Assert.Equal(status, (int)response.StatusCode);
     }
 
-    [Fact]
-    public async Task WaiterSeesOpenSessionButCannotManageTables()
+    [Theory]
+    [InlineData("waiter")]
+    [InlineData("cashier")]
+    public async Task ServiceTableReaderSeesAssignedOpenSessionButCannotManageTables(string role)
     {
         var restaurant = await CreateRestaurant();
         var area = await CreateArea(restaurant.RestaurantId, "WAITER");
@@ -46,9 +48,11 @@ public sealed partial class GatewayFlowTests
         var table = await CreateTable(area.AreaId);
         var qr = await Read<QrCreatedDto>(await _http.PostAsync($"/api/qr/tables/{table.TableId}", null), HttpStatusCode.Created);
         var session = await Read<TableSessionScanDto>(await Scan(qr.Token));
-        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "waiter");
+        var other = await CreateRestaurant();
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", role);
         var page = await Read<PageResult<ServiceTableDto>>(await _http.GetAsync($"/api/tables/service?areaId={area.AreaId}"));
         Assert.Equal(session.TableSessionId, Assert.Single(Assert.Single(page.Items).OpenSessionIds));
+        Assert.Equal(HttpStatusCode.Forbidden, (await _http.GetAsync($"/api/tables/service?restaurantId={other.RestaurantId}")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await _http.GetAsync("/api/tables")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await _http.DeleteAsync($"/api/tables/{table.TableId}?version={Uri.EscapeDataString(table.Version)}")).StatusCode);
 

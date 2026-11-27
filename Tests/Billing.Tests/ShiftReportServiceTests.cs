@@ -163,9 +163,8 @@ public sealed class ShiftReportServiceTests
     [Fact]
     public async Task PendingCashHandoverExcludesAnIncorrectlyPostedSaleAndBlocksClosing()
     {
-        await using var f = await CashPaymentServiceTests.Fixture.Create();
-        await f.RecordCash(300);
-        var payment = await f.Db.Payments.SingleAsync();
+        await using var f = await CashPaymentServiceTests.Fixture.Create(withHandover: true);
+        var payment = await f.Db.Payments.SingleAsync(value => value.PaymentId == f.PaymentId);
         var movementId = Guid.NewGuid();
         f.Db.CashMovements.Add(new CashMovement
         {

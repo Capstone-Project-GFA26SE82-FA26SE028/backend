@@ -4,6 +4,7 @@ using Catalog.BLL.Interfaces;
 using Catalog.Common.Settings;
 using Grpc.Core;
 using Microsoft.Extensions.Options;
+using Shared.Persistence.RestaurantIsolation;
 
 namespace Catalog.API.Authorization;
 
@@ -11,7 +12,8 @@ public sealed class MenuAccess(
     UserGrpc.UserGrpcClient identity,
     GuestAccessGrpc.GuestAccessGrpcClient guests,
     IHttpContextAccessor httpContextAccessor,
-    IOptions<CatalogManagementSettings> settings) : IMenuAccess
+    IOptions<CatalogManagementSettings> settings,
+    RestaurantDataScope scope) : IMenuAccess
 {
     public Task RequireReadAsync(Guid? tableSessionId, string? guestToken, CancellationToken cancellationToken)
     {
@@ -28,7 +30,13 @@ public sealed class MenuAccess(
         return ReadAsync(null, null, true, cancellationToken);
     }
 
-    private async Task ReadAsync(Guid? tableSessionId, string? guestToken, bool online, CancellationToken cancellationToken)
+    public Task RequireTakeawayValidationAsync(Guid restaurantId, CancellationToken cancellationToken)
+    {
+        return ReadAsync(null, null, true, cancellationToken, restaurantId);
+    }
+
+    private async Task ReadAsync(Guid? tableSessionId, string? guestToken, bool online, CancellationToken cancellationToken,
+        Guid? takeawayValidationRestaurantId = null)
     {
         var deadline = DateTime.UtcNow.AddSeconds(settings.Value.IdentityTimeoutSeconds);
         if (tableSessionId.HasValue)
@@ -80,6 +88,16 @@ public sealed class MenuAccess(
 
         if (online && reply.Result.RoleId == "customer")
         {
+            return;
+        }
+
+        if (takeawayValidationRestaurantId.HasValue && reply.Result.RoleId == "cashier")
+        {
+            if (scope.RestaurantId != takeawayValidationRestaurantId)
+            {
+                throw new RpcException(new Status(StatusCode.PermissionDenied, "Thu ngân chỉ được kiểm tra món của nhà hàng được phân công."));
+            }
+
             return;
         }
 
