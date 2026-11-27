@@ -10,6 +10,7 @@ CREATE TABLE [dbo].[Restaurant](
 	[Hotline] [varchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[LogoUrl] [nvarchar](max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 	[TimeZone] [varchar](100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+	[CreatedAt] [datetime2] NOT NULL CONSTRAINT [DF_Restaurant_CreatedAt] DEFAULT (SYSUTCDATETIME()),
  CONSTRAINT [PK_Restaurant] PRIMARY KEY CLUSTERED 
 (
 	[RestaurantId] ASC
@@ -78,6 +79,7 @@ CREATE TABLE [dbo].[Area](
 	[ServiceType] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[SpaceType] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[IsActive] [bit] NOT NULL,
+	[CreatedAt] [datetime2] NOT NULL CONSTRAINT [DF_Area_CreatedAt] DEFAULT (SYSUTCDATETIME()),
  CONSTRAINT [PK_Area] PRIMARY KEY CLUSTERED 
 (
 	[AreaId] ASC
@@ -134,6 +136,7 @@ CREATE TABLE [dbo].[Table](
 	[IsActive] [bit] NOT NULL,
 	[CleaningStatus] [varchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[Version] [timestamp] NOT NULL,
+	[CreatedAt] [datetime2] NOT NULL CONSTRAINT [DF_Table_CreatedAt] DEFAULT (SYSUTCDATETIME()),
  CONSTRAINT [PK_Table] PRIMARY KEY CLUSTERED 
 (
 	[TableId] ASC

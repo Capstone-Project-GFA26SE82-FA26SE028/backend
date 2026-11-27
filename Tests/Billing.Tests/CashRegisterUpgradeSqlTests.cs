@@ -15,7 +15,7 @@ public sealed class BillingSqlServerFactAttribute : FactAttribute
 
 public sealed class CashRegisterUpgradeSqlTests : IAsyncLifetime
 {
-    private const string DatabasePrefix = "CodexBillingUpgrade_";
+    private const string DatabasePrefix = "TestBillingUpgrade_";
     private readonly string _databaseName = DatabasePrefix + Guid.NewGuid().ToString("N");
     private string _masterConnection = string.Empty;
     private string _testConnection = string.Empty;

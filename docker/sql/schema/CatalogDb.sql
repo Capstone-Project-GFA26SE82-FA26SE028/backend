@@ -8,7 +8,8 @@ CREATE TABLE dbo.[Category]
     [CategoryCode] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [CategoryName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [IsActive] bit NOT NULL,
-    [RestaurantId] uniqueidentifier NULL
+    [RestaurantId] uniqueidentifier NULL,
+    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_Category_CreatedAt] DEFAULT (SYSUTCDATETIME())
 );
 GO
 
@@ -24,7 +25,8 @@ CREATE TABLE dbo.[Item]
     [KitchenStationRef] uniqueidentifier NULL,
     [PreparationTimeMinutes] int NULL,
     [Version] timestamp NOT NULL,
-    [RestaurantRef] uniqueidentifier NULL
+    [RestaurantRef] uniqueidentifier NULL,
+    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_Item_CreatedAt] DEFAULT (SYSUTCDATETIME())
 );
 GO
 
@@ -45,7 +47,8 @@ CREATE TABLE dbo.[Option]
     [OptionName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [ExtraPrice] decimal(18,2) NOT NULL,
     [Availability] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [RestaurantId] uniqueidentifier NULL
+    [RestaurantId] uniqueidentifier NULL,
+    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_Option_CreatedAt] DEFAULT (SYSUTCDATETIME())
 );
 GO
 
@@ -53,7 +56,8 @@ CREATE TABLE dbo.[OptionGroup]
 (
     [OptionGroupId] uniqueidentifier NOT NULL,
     [OptionGroupName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-    [RestaurantId] uniqueidentifier NULL
+    [RestaurantId] uniqueidentifier NULL,
+    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_OptionGroup_CreatedAt] DEFAULT (SYSUTCDATETIME())
 );
 GO
 

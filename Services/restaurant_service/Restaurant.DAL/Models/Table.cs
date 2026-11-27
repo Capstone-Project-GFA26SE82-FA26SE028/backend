@@ -25,6 +25,8 @@ public partial class Table
 
     public byte[] Version { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public virtual Area Area { get; set; }
 
     public virtual ICollection<Qr> Qrs { get; set; } = new List<Qr>();

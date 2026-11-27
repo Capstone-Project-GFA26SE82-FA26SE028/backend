@@ -37,6 +37,8 @@ public partial class Bill
 
     public DateTime? PaidAt { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public byte[] Version { get; set; }
 
     public virtual ICollection<BillCheckout> BillCheckouts { get; set; } = new List<BillCheckout>();

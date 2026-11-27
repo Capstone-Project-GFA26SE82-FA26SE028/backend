@@ -65,7 +65,7 @@ public sealed class ReservationRepository(RestaurantDbContext db) : IReservation
         }
 
         var count = await source.CountAsync(ct);
-        var items = await source.OrderBy(reservation => reservation.StartAt).ThenBy(reservation => reservation.ReservationId)
+        var items = await source.OrderByDescending(reservation => reservation.StartAt).ThenByDescending(reservation => reservation.ReservationId)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync(ct);
         return new PageResult<Reservation>
         {

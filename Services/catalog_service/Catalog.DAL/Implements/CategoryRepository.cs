@@ -33,8 +33,8 @@ public sealed class CategoryRepository(
         var totalCount = await source.CountAsync(cancellationToken);
 
         var items = await source
-            .OrderBy(category => category.CategoryName)
-            .ThenBy(category => category.CategoryId)
+            .OrderByDescending(category => category.CreatedAt)
+            .ThenByDescending(category => category.CategoryId)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .Select(category => new CategoryDTO

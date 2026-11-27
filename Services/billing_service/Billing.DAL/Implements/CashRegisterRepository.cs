@@ -46,7 +46,7 @@ public sealed class CashRegisterRepository(BillingDbContext db)
         }
 
         var totalCount = await source.CountAsync(cancellationToken);
-        var items = await source.OrderBy(register => register.Code).ThenBy(register => register.CashRegisterId)
+        var items = await source.OrderByDescending(register => register.CreatedAt).ThenByDescending(register => register.CashRegisterId)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync(cancellationToken);
         return new PagedResult<CashRegister>(items, totalCount, query.Page, query.PageSize);
     }

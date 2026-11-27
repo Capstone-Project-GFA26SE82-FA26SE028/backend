@@ -21,6 +21,8 @@ public partial class Restaurant
 
     public string TimeZone { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public virtual ICollection<Area> Areas { get; set; } = new List<Area>();
 
     public virtual ICollection<OpeningHour> OpeningHours { get; set; } = new List<OpeningHour>();

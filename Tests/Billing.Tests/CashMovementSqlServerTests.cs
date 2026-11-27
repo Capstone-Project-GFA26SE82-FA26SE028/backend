@@ -14,7 +14,7 @@ namespace Billing.Tests;
 
 public sealed class CashMovementSqlServerTests : IAsyncLifetime
 {
-    private const string Prefix = "CodexBillingLedger_";
+    private const string Prefix = "TestBillingLedger_";
     private readonly string _database = Prefix + Guid.NewGuid().ToString("N");
     private string _master = string.Empty;
     private string _connection = string.Empty;

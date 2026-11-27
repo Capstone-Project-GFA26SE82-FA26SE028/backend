@@ -19,6 +19,8 @@ public partial class Customer
 
     public Guid? RestaurantId { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public virtual ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();
 
     public virtual ICollection<LoyaltyEntry> LoyaltyEntries { get; set; } = new List<LoyaltyEntry>();

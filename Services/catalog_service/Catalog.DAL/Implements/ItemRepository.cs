@@ -51,7 +51,7 @@ public sealed class ItemRepository(
         }
 
         var count = await source.CountAsync(cancellationToken);
-        var items = await source.OrderBy(item => item.ItemName).ThenBy(item => item.ItemId)
+        var items = await source.OrderByDescending(item => item.CreatedAt).ThenByDescending(item => item.ItemId)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .ToListAsync(cancellationToken);
         return new PagedResult<Item>(items, count, query.Page, query.PageSize);
@@ -102,8 +102,8 @@ public sealed class ItemRepository(
         var totalCount = await source.CountAsync(cancellationToken);
         var items = await source
             .Include(item => item.Category)
-            .OrderBy(item => item.ItemName)
-            .ThenBy(item => item.ItemId)
+            .OrderByDescending(item => item.CreatedAt)
+            .ThenByDescending(item => item.ItemId)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .ToListAsync(cancellationToken);

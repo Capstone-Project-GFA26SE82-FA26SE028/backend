@@ -80,7 +80,8 @@ CREATE TABLE dbo.[KitchenAssignment]
 (
     [KitchenStationId] uniqueidentifier NOT NULL,
     [UserRef] uniqueidentifier NOT NULL,
-    [RestaurantId] uniqueidentifier NULL
+    [RestaurantId] uniqueidentifier NULL,
+    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_KitchenAssignment_CreatedAt] DEFAULT (SYSUTCDATETIME())
 );
 GO
 
@@ -90,7 +91,8 @@ CREATE TABLE dbo.[KitchenStation]
     [KitchenStationCode] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [KitchenStationName] nvarchar(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [IsActive] bit NOT NULL,
-    [RestaurantId] uniqueidentifier NULL
+    [RestaurantId] uniqueidentifier NULL,
+    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_KitchenStation_CreatedAt] DEFAULT (SYSUTCDATETIME())
 );
 GO
 

@@ -113,7 +113,7 @@ namespace Identity.DAL.Implements
             }
 
             var total = await query.CountAsync(ct);
-            var items = await query.OrderBy(u => u.CreatedAt).ThenBy(u => u.UserId)
+            var items = await query.OrderByDescending(u => u.CreatedAt).ThenByDescending(u => u.UserId)
                 .Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct);
             return (items, total);
         }

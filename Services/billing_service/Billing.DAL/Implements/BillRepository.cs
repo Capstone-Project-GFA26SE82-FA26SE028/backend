@@ -99,8 +99,9 @@ public sealed class BillRepository(BillingDbContext db) : GenericRepository<Bill
         var items = await source
             .Include(bill => bill.BillLines)
             .Include(bill => bill.BillAdjustments)
-            .OrderBy(bill => bill.BillNumber)
-            .ThenBy(bill => bill.BillId)
+            .OrderByDescending(bill => bill.CreatedAt)
+            .ThenByDescending(bill => bill.BillNumber)
+            .ThenByDescending(bill => bill.BillId)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .ToListAsync(ct);

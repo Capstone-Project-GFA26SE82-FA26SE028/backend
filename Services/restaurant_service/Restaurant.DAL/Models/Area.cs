@@ -21,6 +21,8 @@ public partial class Area
 
     public bool IsActive { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public virtual Restaurant Restaurant { get; set; }
 
     public virtual ICollection<Table> Tables { get; set; } = new List<Table>();

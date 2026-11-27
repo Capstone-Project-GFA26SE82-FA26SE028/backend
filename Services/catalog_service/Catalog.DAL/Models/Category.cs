@@ -15,5 +15,7 @@ public partial class Category
 
     public bool IsActive { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public virtual ICollection<Item> Items { get; set; } = new List<Item>();
 }

@@ -10,8 +10,8 @@ public sealed class ItemOptionGroupRepository(CatalogDbContext context) : IItemO
     {
         return context.ItemOptionGroups.AsNoTracking().Include(entity => entity.OptionGroup)
             .Where(entity => entity.ItemId == itemId)
-            .OrderBy(entity => entity.OptionGroup.OptionGroupName)
-            .ThenBy(entity => entity.OptionGroupId)
+            .OrderByDescending(entity => entity.OptionGroup.CreatedAt)
+            .ThenByDescending(entity => entity.OptionGroupId)
             .ToListAsync(cancellationToken);
     }
 

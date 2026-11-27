@@ -33,7 +33,7 @@ public sealed class IngredientRepository(InventoryDbContext db)
         }
         return new PageDTO<Ingredient>
         {
-            Items = await query.OrderBy(x => x.IngredientCode).ThenBy(x => x.IngredientId).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct),
+            Items = await query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.IngredientId).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(ct),
             TotalCount = await query.CountAsync(ct),
             Page = page,
             PageSize = pageSize

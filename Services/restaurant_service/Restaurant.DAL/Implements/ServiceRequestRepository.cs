@@ -47,7 +47,7 @@ public sealed class ServiceRequestRepository(RestaurantDbContext db)
             && !request.TableSession.SessionTables.Any(link => link.ReleasedAt == null && link.Table.Area.RestaurantId != restaurantId));
 
         var total = await query.CountAsync(ct);
-        var items = await query.OrderBy(request => request.RequestedAt).ThenBy(request => request.ServiceRequestId)
+        var items = await query.OrderByDescending(request => request.RequestedAt).ThenByDescending(request => request.ServiceRequestId)
             .Skip((page - 1) * pageSize).Take(pageSize)
             .Include(request => request.TableSession)
                 .ThenInclude(session => session.SessionTables.Where(link => link.ReleasedAt == null))

@@ -103,8 +103,8 @@ public sealed class MenuService(
     {
         var selected = PriceRules.ResolveForSale(item.Prices, channel, settings.Value, now, timeZone);
         var validPrice = selected is not null;
-        var groups = item.ItemOptionGroups.OrderBy(link => link.OptionGroup.OptionGroupName)
-            .ThenBy(link => link.OptionGroupId).Select(link => new MenuOptionGroupDTO
+        var groups = item.ItemOptionGroups.OrderByDescending(link => link.OptionGroup.CreatedAt)
+            .ThenByDescending(link => link.OptionGroupId).Select(link => new MenuOptionGroupDTO
             {
                 OptionGroupId = link.OptionGroupId,
                 OptionGroupName = link.OptionGroup.OptionGroupName,
@@ -112,7 +112,7 @@ public sealed class MenuService(
                 MaxSelection = link.MaxSelection,
                 Options = link.OptionGroup.Options
                     .Where(option => option.Availability is ItemAvailability.Available or ItemAvailability.OutOfStock)
-                    .OrderBy(option => option.OptionName).ThenBy(option => option.OptionId)
+                    .OrderByDescending(option => option.CreatedAt).ThenByDescending(option => option.OptionId)
                     .Select(option => new MenuOptionDTO
                     {
                         OptionId = option.OptionId,

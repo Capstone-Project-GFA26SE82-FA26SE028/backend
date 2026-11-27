@@ -163,14 +163,18 @@ public sealed class MenuFlowTests
         var id = await SeedItem(app);
         await using (var db = app.OpenDatabase())
         {
+            var firstOption = Option("A", "Available");
+            firstOption.CreatedAt = DateTime.UtcNow.AddMinutes(-2);
+            var secondOption = Option("B", "OutOfStock");
+            secondOption.CreatedAt = DateTime.UtcNow.AddMinutes(-1);
             var group = new OptionGroup
             {
                 OptionGroupId = Guid.NewGuid(),
                 OptionGroupName = "Toppings",
                 Options = new List<Option>
                 {
-                    Option("A", "Available"),
-                    Option("B", "OutOfStock"),
+                    firstOption,
+                    secondOption,
                     Option("C", "Inactive")
                 }
             };
@@ -200,9 +204,11 @@ public sealed class MenuFlowTests
         Assert.Equal(2, groups[0].GetProperty("maxSelection").GetInt32());
         var options = groups[0].GetProperty("options");
         Assert.Equal(2, options.GetArrayLength());
-        Assert.True(options[0].GetProperty("canSelect").GetBoolean());
-        Assert.Equal(5000m, options[0].GetProperty("extraPrice").GetDecimal());
-        Assert.False(options[1].GetProperty("canSelect").GetBoolean());
+        Assert.Equal("B", options[0].GetProperty("optionName").GetString());
+        Assert.False(options[0].GetProperty("canSelect").GetBoolean());
+        Assert.Equal("A", options[1].GetProperty("optionName").GetString());
+        Assert.True(options[1].GetProperty("canSelect").GetBoolean());
+        Assert.Equal(5000m, options[1].GetProperty("extraPrice").GetDecimal());
         Assert.False(result.TryGetProperty("recipeVersionId", out _));
     }
 

@@ -17,6 +17,8 @@ public partial class Option
 
     public string Availability { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public virtual OptionGroup OptionGroup { get; set; }
 
     public virtual ICollection<RecipeVersion> RecipeVersions { get; set; } = new List<RecipeVersion>();

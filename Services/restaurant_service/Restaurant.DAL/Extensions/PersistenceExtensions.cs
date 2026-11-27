@@ -37,6 +37,7 @@ public static class PersistenceExtensions
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.Qr>>(provider => provider.GetRequiredService<Interfaces.IQrRepository>());
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.Reservation>, GenericRepository<global::Restaurant.DAL.Models.Reservation, RestaurantDbContext>>();
         services.AddScoped<IGenericRepository<global::Restaurant.DAL.Models.Restaurant>>(provider => provider.GetRequiredService<Interfaces.IRestaurantRepository>());
+        services.AddScoped<IGenericRepository<RestaurantRegistration>, GenericRepository<RestaurantRegistration, RestaurantDbContext>>();
         services.AddScoped<Interfaces.IServiceRequestRepository, Implements.ServiceRequestRepository>();
         services.AddScoped<IGenericRepository<ServiceRequest>>(provider => provider.GetRequiredService<Interfaces.IServiceRequestRepository>());
         services.AddScoped<IGenericRepository<StaffTransferReceipt>, GenericRepository<StaffTransferReceipt, RestaurantDbContext>>();

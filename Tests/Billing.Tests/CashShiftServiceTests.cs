@@ -306,7 +306,7 @@ internal sealed class ShiftFixture : IAsyncDisposable
         await connection.OpenAsync();
         var fixture = new ShiftFixture(connection);
         await fixture.Db.Database.ExecuteSqlRawAsync(
-            "CREATE TABLE CashRegister (CashRegisterId TEXT NOT NULL PRIMARY KEY, RestaurantId TEXT NOT NULL, Code TEXT NOT NULL);");
+            "CREATE TABLE CashRegister (CashRegisterId TEXT NOT NULL PRIMARY KEY, RestaurantId TEXT NOT NULL, Code TEXT NOT NULL, CreatedAt TEXT NOT NULL);");
         await fixture.Db.Database.ExecuteSqlRawAsync(
             "CREATE TABLE CashShift (RestaurantId TEXT NULL, CashShiftId TEXT NOT NULL PRIMARY KEY, CashRegisterId TEXT NOT NULL REFERENCES CashRegister(CashRegisterId), CashierUserRef TEXT NOT NULL, OpeningCash TEXT NOT NULL, OpenedAt TEXT NOT NULL, ClosedAt TEXT NULL, Status TEXT NOT NULL);");
         fixture.Db.CashRegisters.Add(new CashRegister

@@ -36,15 +36,24 @@ echo "Applying IdentityDb upgrade: IdentityStaffTransfer.sql"
 # Do not infer required restaurant mappings or payment configuration from old rows.
 for upgrade in BillingCashRegisterRestaurant.sql BillingBillRestaurant.sql BillingPayOs.sql \
     BillingCashMethod.sql BillingCheckoutTables.sql BillingCheckoutSubmission.sql BillingCheckoutPreparation.sql \
-    BillingCashHandoverRestaurantIsolation.sql BillingProviderConfiguration.sql NotificationOutbox.sql; do
+    BillingCashHandoverRestaurantIsolation.sql BillingProviderConfiguration.sql BillingCreatedAt.sql NotificationOutbox.sql; do
     echo "Applying BillingDb upgrade: $upgrade"
     "${sqlcmd[@]}" -d BillingDb -i "/init/upgrades/$upgrade"
 done
 for upgrade in OrderingCheckoutLock.sql OrderingRefundAccount.sql OrderingCancellationRequest.sql \
-    OrderingTableTransfer.sql NotificationOutbox.sql; do
+    OrderingTableTransfer.sql OrderingCreatedAt.sql NotificationOutbox.sql; do
     echo "Applying OrderingDb upgrade: $upgrade"
     "${sqlcmd[@]}" -d OrderingDb -i "/init/upgrades/$upgrade"
 done
+
+echo "Applying CatalogDb upgrade: CatalogCreatedAt.sql"
+"${sqlcmd[@]}" -d CatalogDb -i /init/upgrades/CatalogCreatedAt.sql
+
+echo "Applying CustomerDb upgrade: CustomerCreatedAt.sql"
+"${sqlcmd[@]}" -d CustomerDb -i /init/upgrades/CustomerCreatedAt.sql
+
+echo "Applying InventoryDb upgrade: InventoryCreatedAt.sql"
+"${sqlcmd[@]}" -d InventoryDb -i /init/upgrades/InventoryCreatedAt.sql
 
 echo "Applying RestaurantDb upgrade: RestaurantRegistration.sql"
 "${sqlcmd[@]}" -d RestaurantDb -i /init/upgrades/RestaurantRegistration.sql
@@ -55,7 +64,7 @@ echo "Applying RestaurantDb upgrade: RestaurantCloudinary.sql"
 echo "Applying RestaurantDb upgrade: RestaurantReservationOptionalArea.sql"
 "${sqlcmd[@]}" -d RestaurantDb -i /init/upgrades/RestaurantReservationOptionalArea.sql
 
-for upgrade in RestaurantStaffTransferReceipt.sql RestaurantTableTransfer.sql NotificationOutbox.sql; do
+for upgrade in RestaurantStaffTransferReceipt.sql RestaurantTableTransfer.sql RestaurantCreatedAt.sql NotificationOutbox.sql; do
     echo "Applying RestaurantDb upgrade: $upgrade"
     "${sqlcmd[@]}" -d RestaurantDb -i "/init/upgrades/$upgrade"
 done

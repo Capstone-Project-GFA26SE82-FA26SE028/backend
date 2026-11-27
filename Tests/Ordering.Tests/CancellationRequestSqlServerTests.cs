@@ -32,7 +32,7 @@ public sealed partial class CancellationRequestSqlServerTests : IAsyncLifetime
     private readonly Guid guest = Guid.NewGuid();
     private readonly Guid waiter = Guid.NewGuid();
     private string? connectionString;
-    private const string Prefix = "CodexCancellation_";
+    private const string Prefix = "TestCancellation_";
 
     public async Task InitializeAsync()
     {

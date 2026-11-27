@@ -27,7 +27,7 @@ public sealed class AreaRepository(RestaurantDbContext db) : GenericRepository<g
         }
 
         var count = await source.CountAsync(ct);
-        var items = await source.OrderBy(x => x.AreaCode).ThenBy(x => x.AreaId)
+        var items = await source.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.AreaId)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync(ct);
         return new PageResult<global::Restaurant.DAL.Models.Area>
         {

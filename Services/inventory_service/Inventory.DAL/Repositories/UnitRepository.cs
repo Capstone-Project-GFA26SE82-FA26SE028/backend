@@ -17,7 +17,7 @@ public sealed class UnitRepository(InventoryDbContext db)
 
     public Task<List<Unit>> GetAllAsync(CancellationToken ct)
     {
-        return db.Units.AsNoTracking().OrderBy(x => x.Code).ToListAsync(ct);
+        return db.Units.AsNoTracking().OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.UnitId).ToListAsync(ct);
     }
 
     public async Task CreateAsync(Unit unit, CancellationToken ct)

@@ -19,6 +19,7 @@ CREATE TABLE dbo.[Bill]
     [Currency] char(3) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
     [PrebillPrintedAt] datetime NULL,
     [PaidAt] datetime NULL,
+    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_Bill_CreatedAt] DEFAULT (SYSUTCDATETIME()),
     [Version] timestamp NOT NULL
 );
 GO
@@ -106,7 +107,8 @@ CREATE TABLE dbo.[CashRegister]
 (
     [CashRegisterId] uniqueidentifier NOT NULL,
     [RestaurantId] uniqueidentifier NOT NULL,
-    [Code] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+    [Code] varchar(50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [CreatedAt] datetime2 NOT NULL CONSTRAINT [DF_CashRegister_CreatedAt] DEFAULT (SYSUTCDATETIME())
 );
 GO
 

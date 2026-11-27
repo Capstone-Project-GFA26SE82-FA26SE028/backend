@@ -23,6 +23,8 @@ public partial class Ingredient
 
     public bool IsActive { get; set; }
 
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public virtual ICollection<GoodsReceiptItem> GoodsReceiptItems { get; set; } = new List<GoodsReceiptItem>();
 
     public virtual ICollection<StockMovement> StockMovements { get; set; } = new List<StockMovement>();

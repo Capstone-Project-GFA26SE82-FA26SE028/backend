@@ -37,7 +37,8 @@ public sealed class CustomerRepository(CustomerDbContext db) : ICustomerReposito
         var total = await query.CountAsync(ct);
 
         var items = await query
-            .OrderBy(c => c.CustomerName)
+            .OrderByDescending(c => c.CreatedAt)
+            .ThenByDescending(c => c.CustomerId)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
