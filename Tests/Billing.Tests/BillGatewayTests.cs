@@ -68,6 +68,34 @@ public sealed class BillGatewayTests
     }
 
     [Fact]
+    public async Task AssignCustomerForwardsPhoneToBillingWithoutCallingCustomer()
+    {
+        var billId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        await using var app = await Start(new BillingUnaryInvoker((method, request, options) =>
+        {
+            Assert.EndsWith("/AssignCustomer", method);
+            Assert.Equal("Bearer cashier-session", Assert.Single(options.Headers!).Value);
+            var assign = Assert.IsType<Wire.AssignCustomerRequest>(request);
+            Assert.Equal(billId.ToString(), assign.BillId);
+            Assert.Equal("0901234567", assign.PhoneNumber);
+            Assert.Empty(assign.CustomerId);
+            var reply = Reply(billId);
+            reply.CustomerRef = customerId.ToString();
+            return reply;
+        }));
+        using var client = app.GetTestClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "cashier-session");
+        using var response = await client.PostAsJsonAsync($"/api/bills/{billId}/customer", new
+        {
+            PhoneNumber = "0901234567"
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(customerId, json.RootElement.GetProperty("result").GetProperty("customerRef").GetGuid());
+    }
+
+    [Fact]
     public async Task AnonymousRequestsDoNotReachBilling()
     {
         var calls = 0;
@@ -138,7 +166,6 @@ public sealed class BillGatewayTests
             settings.TimeoutSeconds = 15;
         });
         builder.Services.AddSingleton(new Wire.BillGrpc.BillGrpcClient(invoker));
-        builder.Services.AddSingleton(new Gateway::Backend.Contracts.Customer.CustomerGrpc.CustomerGrpcClient(invoker));
         var app = builder.Build();
         app.MapControllers();
         await app.StartAsync();

@@ -53,7 +53,9 @@ public sealed class BillGrpcService(IBillService service, IVoucherService vouche
 
     public override async Task<BillInfo> AssignCustomer(AssignCustomerRequest request, ServerCallContext context)
     {
-        return Map(await service.AssignCustomer(Id(request.BillId), Id(request.CustomerId), context.CancellationToken));
+        return Map(await service.AssignCustomer(Id(request.BillId),
+            request.CustomerId.Length > 0 ? Id(request.CustomerId) : null,
+            request.HasPhoneNumber ? request.PhoneNumber : null, context.CancellationToken));
     }
 
     public override async Task<BillPage> GetAll(BillListRequest request, ServerCallContext context)

@@ -12,5 +12,5 @@ public interface IBillService
     Task<BillDTO> RefreshForCheckout(Guid id, Guid checkoutId, CancellationToken ct);
     Task<PagedResult<BillDTO>> GetAll(BillQueryDTO query, CancellationToken ct);
     Task<BillDTO> GetById(Guid id, CancellationToken ct);
-    Task<BillDTO> AssignCustomer(Guid billId, Guid customerId, CancellationToken ct);
+    Task<BillDTO> AssignCustomer(Guid billId, Guid? customerId, string? phoneNumber, CancellationToken ct);
 }
