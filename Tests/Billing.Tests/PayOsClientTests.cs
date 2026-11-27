@@ -60,6 +60,54 @@ public sealed class PayOsClientTests
         Assert.Null(result.AmountPaid);
     }
 
+    [Fact]
+    public async Task TestQrSignsWithExplicitKeysAndVerifiesResponse()
+    {
+        var signingKey = Key;
+        var provider = Client(async request =>
+        {
+            Assert.Equal("new-client", request.Headers.GetValues("x-client-id").Single());
+            Assert.Equal("new-api", request.Headers.GetValues("x-api-key").Single());
+            using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+            var order = body.RootElement.GetProperty("orderCode").GetInt64();
+            Assert.InRange(order, 100_000_000_000L, 999_999_999_999L);
+            Assert.Equal(PayOsSignature.SignPaymentRequest(order, 2000, "Kiem tra PayOS",
+                "https://merchant.example/cancel", "https://merchant.example/return", Key),
+                body.RootElement.GetProperty("signature").GetString());
+            var data = JsonSerializer.SerializeToElement(new
+            {
+                orderCode = order,
+                amount = 2000,
+                status = "PENDING",
+                paymentLinkId = "test-link",
+                checkoutUrl = "https://pay.example/test-link",
+                qrCode = "000QR",
+                currency = "VND"
+            });
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(new
+                {
+                    code = "00",
+                    data,
+                    signature = PayOsSignature.SignData(data, signingKey)
+                }), Encoding.UTF8, "application/json")
+            };
+        });
+        Task<PayOsProviderResult> Create()
+        {
+            return provider.CreateTestAsync("new-client", new PayOsCredentials
+            {
+                ApiKey = "new-api",
+                ChecksumKey = Key
+            }, "https://merchant.example/return", "https://merchant.example/cancel", default);
+        }
+
+        Assert.Equal("000QR", (await Create()).QrCode);
+        signingKey = "wrong-test-key";
+        Assert.Equal("InvalidResponseSignature", (await Assert.ThrowsAsync<PayOsClientException>(Create)).Failure);
+    }
+
     [Theory]
     [InlineData(400)]
     [InlineData(404)]

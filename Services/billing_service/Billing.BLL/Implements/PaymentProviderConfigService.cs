@@ -13,7 +13,7 @@ namespace Billing.BLL.Implements;
 
 public sealed class PaymentProviderConfigService(IPaymentProviderConfigRepository repository,
     IUnitOfWork work, IBillingAccess access, RestaurantDataScope scope, IPaymentProviderSecrets secrets,
-    IOptions<PaymentProviderConfigurationSettings> settings) : IPaymentProviderConfigService
+    IOptions<PaymentProviderConfigurationSettings> settings, IPayOsTestClient testClient) : IPaymentProviderConfigService
 {
     public async Task<PayOsConfigurationDTO> GetById(Guid restaurantId, CancellationToken ct)
     {
@@ -79,6 +79,39 @@ public sealed class PaymentProviderConfigService(IPaymentProviderConfigRepositor
             configuration.IsVerified = false;
             return Map(restaurantId, configuration);
         }, IsolationLevel.Serializable, ct);
+    }
+
+    public async Task<PayOsProviderResult> TestQr(Guid restaurantId, TestPayOsConfigurationDTO request, CancellationToken ct)
+    {
+        await Authorize(restaurantId, ct);
+
+        var clientId = request.ClientId.Trim();
+        var apiKey = request.ApiKey.Trim();
+        var checksumKey = request.ChecksumKey.Trim();
+        var hasNewCredentials = clientId.Length > 0 || apiKey.Length > 0 || checksumKey.Length > 0;
+        if (request.UseSavedConfiguration && hasNewCredentials)
+        {
+            throw new BillingException(400, "Chọn cấu hình đã lưu hoặc nhập bộ khóa mới để kiểm tra.");
+        }
+
+        if (!hasNewCredentials)
+        {
+            var saved = await repository.GetByRestaurantAsync(restaurantId, ct)
+                ?? throw new BillingException(409, "Nhà hàng chưa cấu hình PayOS. Vui lòng nhập đủ Client ID, API Key và Checksum Key.");
+            var credentials = secrets.Unprotect(restaurantId, saved.SecretReference);
+            return await testClient.CreateTestAsync(saved.ClientId, credentials, saved.ReturnUrl, saved.CancelUrl, ct);
+        }
+
+        if (!Token(clientId, 255) || !Token(apiKey, 512) || !Token(checksumKey, 512))
+        {
+            throw new BillingException(400, "Vui lòng cung cấp đầy đủ Client ID, API Key và Checksum Key hợp lệ.");
+        }
+
+        return await testClient.CreateTestAsync(clientId, new PayOsCredentials
+        {
+            ApiKey = apiKey,
+            ChecksumKey = checksumKey
+        }, "http://localhost:5173/payment/success", "http://localhost:5173/payment/cancel", ct);
     }
 
     private async Task Authorize(Guid restaurantId, CancellationToken ct)

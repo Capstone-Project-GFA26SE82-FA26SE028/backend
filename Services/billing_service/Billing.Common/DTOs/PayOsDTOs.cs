@@ -32,6 +32,11 @@ public sealed record PayOsCreateCommand(long OrderCode, long Amount, string Desc
 public sealed record PayOsTransactionDTO(string Reference, long Amount);
 public sealed record PayOsProviderResult(long OrderCode, long Amount, string Status, string LinkId,
     long? AmountPaid, long? AmountRemaining, IReadOnlyList<PayOsTransactionDTO>? Transactions,
-    string? CheckoutUrl = null, string? QrCode = null);
+    string? CheckoutUrl = null, string? QrCode = null)
+{
+    public string? AccountName { get; init; }
+    public string? AccountNumber { get; init; }
+    public string? Bin { get; init; }
+}
 public sealed record PayOsWebhookDTO(long OrderCode, long Amount, string Reference, string LinkId,
     string Currency, string Code, string PayloadHash, string DedupeKey);

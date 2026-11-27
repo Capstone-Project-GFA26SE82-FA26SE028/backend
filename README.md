@@ -436,6 +436,8 @@ Set the public HTTPS Gateway base URL as `PAYOS_WEBHOOK_BASE_URL` for Compose or
 docker compose up -d --build billing gateway
 ```
 
+To create a test QR, call `POST /api/restaurants/{restaurantId}/payment-settings/payos/test-qr` as the assigned restaurant admin. Omit the body, send `{}`, or send `{"useSavedConfiguration":true}` to use saved credentials. To test new credentials before saving, send all three fields `clientId`, `apiKey`, and `checksumKey`. The response contains QR and transaction details for a 2,000 VND PayOS link valid for 15 minutes. This request does not update the restaurant configuration or create a local bill payment.
+
 Return and cancel URLs are customer-facing HTTPS pages. Register the returned `webhookUrl` in that restaurant's PayOS channel. The URL ends in `/api/restaurants/{restaurantId}/payments/payos/webhook` and routes to Gateway. Redirect visits do **not** settle or cancel a payment.
 
 Public configuration: LinkLifetimeMinutes=15, RequestTimeoutSeconds=10, ReconcileIntervalSeconds=30, ReconcileBatchSize=20. Gateway's separate PayOsGateway:TimeoutSeconds defaults to 45, leaving existing cash/Billing request deadlines unchanged. Worker batches are bounded and rotate through unresolved/zero-terminal attempts. Turning Enabled off prevents new attempts; retained valid credentials still allow recovery of existing attempts. Removing credentials prevents reconciliation and leaves those attempts blocked for safety; do not rotate/remove them before resolving outstanding payments.

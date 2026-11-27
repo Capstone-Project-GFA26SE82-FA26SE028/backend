@@ -11,7 +11,8 @@ using Microsoft.Extensions.Options;
 
 namespace Billing.API.Clients;
 
-public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options, IHostEnvironment environment) : IPayOsClient
+public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options, IHostEnvironment environment,
+    IOptionsMonitor<PayOsSettings>? defaults = null) : IPayOsClient, IPayOsTestClient
 {
     public bool IsConfigured
     {
@@ -62,6 +63,46 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
             expiredAt = request.ExpiresAt.ToUnixTimeSeconds(),
             signature = PayOsSignature.SignPaymentRequest(request.OrderCode, request.Amount, request.Description, s.CancelUrl, s.ReturnUrl, s.ChecksumKey)
         }, request.OrderCode, true, ct);
+    }
+
+    public async Task<PayOsProviderResult> CreateTestAsync(string clientId, PayOsCredentials credentials,
+        string returnUrl, string cancelUrl, CancellationToken ct)
+    {
+        var common = defaults?.CurrentValue ?? new PayOsSettings();
+        if (common.RequestTimeoutSeconds is < 1 or > 120
+            || !ValidUrl(common.BaseUrl, common) || !ValidUrl(returnUrl, common) || !ValidUrl(cancelUrl, common))
+        {
+            throw new BillingException(409, "Cấu hình máy chủ hoặc đường dẫn phản hồi PayOS không hợp lệ.");
+        }
+
+        // Real payments allocate order codes starting at 1,000,000,000,000.
+        var order = Random.Shared.NextInt64(100_000_000_000L, 1_000_000_000_000L);
+        const long amount = 2000;
+        const string description = "Kiem tra PayOS";
+        var result = await Call(HttpMethod.Post, "/v2/payment-requests", new
+        {
+            orderCode = order,
+            amount,
+            description,
+            cancelUrl,
+            returnUrl,
+            expiredAt = DateTimeOffset.UtcNow.AddMinutes(15).ToUnixTimeSeconds(),
+            signature = PayOsSignature.SignPaymentRequest(order, amount, description, cancelUrl, returnUrl, credentials.ChecksumKey)
+        }, order, true, ct, new PayOsSettings
+        {
+            ClientId = clientId,
+            ApiKey = credentials.ApiKey,
+            ChecksumKey = credentials.ChecksumKey,
+            BaseUrl = common.BaseUrl,
+            RequestTimeoutSeconds = common.RequestTimeoutSeconds,
+            AllowInsecureTestTransport = common.AllowInsecureTestTransport
+        });
+        if (result.Amount != amount || result.Status != "PENDING")
+        {
+            throw new PayOsClientException("UnexpectedTestPayment");
+        }
+
+        return result;
     }
 
     public Task<PayOsProviderResult> GetAsync(long orderCode, CancellationToken ct)
@@ -121,14 +162,20 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
         }
     }
 
-    private async Task<PayOsProviderResult> Call(HttpMethod method, string path, object? body, long order, bool creating, CancellationToken ct)
+    private async Task<PayOsProviderResult> Call(HttpMethod method, string path, object? body, long order, bool creating,
+        CancellationToken ct, PayOsSettings? explicitSettings = null)
     {
-        EnsureConfigured();
+        if (explicitSettings is null)
+        {
+            EnsureConfigured();
+        }
+
+        var connection = explicitSettings ?? options.Value;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(options.Value.RequestTimeoutSeconds));
-        using var request = new HttpRequestMessage(method, options.Value.BaseUrl.TrimEnd('/') + path);
-        request.Headers.Add("x-client-id", options.Value.ClientId);
-        request.Headers.Add("x-api-key", options.Value.ApiKey);
+        timeout.CancelAfter(TimeSpan.FromSeconds(connection.RequestTimeoutSeconds));
+        using var request = new HttpRequestMessage(method, connection.BaseUrl.TrimEnd('/') + path);
+        request.Headers.Add("x-client-id", connection.ClientId);
+        request.Headers.Add("x-api-key", connection.ApiKey);
         if (body is not null)
         {
             request.Content = JsonContent.Create(body);
@@ -160,7 +207,7 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
             }
 
             var data = root.GetProperty("data");
-            if (!PayOsSignature.VerifyData(data, Text(root, "signature"), options.Value.ChecksumKey) || Number(data, "orderCode") != order)
+            if (!PayOsSignature.VerifyData(data, Text(root, "signature"), connection.ChecksumKey) || Number(data, "orderCode") != order)
             {
                 throw new PayOsClientException("InvalidResponseSignature");
             }
@@ -178,13 +225,18 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
             {
                 var url = Text(data, "checkoutUrl");
                 var qr = Text(data, "qrCode");
-                if (Text(data, "currency") != "VND" || url.Length > 2048 || !ValidUrl(url)
+                if (Text(data, "currency") != "VND" || url.Length > 2048 || !ValidUrl(url, connection)
                     || qr.Length is 0 or > 65536 || qr.Any(value => value > 127 || char.IsControl(value)))
                 {
                     throw new JsonException();
                 }
 
-                return new PayOsProviderResult(order, amount, status, id, null, null, null, url, qr);
+                return new PayOsProviderResult(order, amount, status, id, null, null, null, url, qr)
+                {
+                    AccountName = OptionalText(data, "accountName"),
+                    AccountNumber = OptionalText(data, "accountNumber"),
+                    Bin = OptionalText(data, "bin")
+                };
             }
 
             if (data.TryGetProperty("currency", out var currency) && currency.GetString() != "VND")
@@ -220,12 +272,19 @@ public sealed class PayOsClient(HttpClient http, IOptions<PayOsSettings> options
         }
     }
 
-    private bool ValidUrl(string value)
+    private bool ValidUrl(string value, PayOsSettings? connection = null)
     {
         return Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.UserInfo.Length == 0
             && (uri.Scheme == Uri.UriSchemeHttps || (uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)
-                || (options.Value.AllowInsecureTestTransport
+                || ((connection ?? options.Value).AllowInsecureTestTransport
                     && environment.IsEnvironment("PayOsTest") && uri.Scheme == Uri.UriSchemeHttp));
+    }
+
+    private static string? OptionalText(JsonElement value, string name)
+    {
+        return value.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
     }
 
     private static long Number(JsonElement value, string name)
