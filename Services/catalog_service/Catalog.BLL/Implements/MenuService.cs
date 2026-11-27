@@ -73,6 +73,17 @@ public sealed class MenuService(
         return new ResponseDTO("Lấy thông tin món trong thực đơn thành công.", 200, true, Map(item, channel, now, timeZone));
     }
 
+    public async Task<Dictionary<Guid, string>> GetItemImages(Guid restaurantId, Guid[] itemIds, CancellationToken cancellationToken)
+    {
+        await access.RequireOnlineReadAsync(restaurantId, cancellationToken);
+        if (itemIds.Length == 0)
+        {
+            return new Dictionary<Guid, string>();
+        }
+
+        return await items.GetImageUrlsAsync(restaurantId, itemIds, cancellationToken);
+    }
+
     private ResponseDTO? ValidateChannel(string channel, out TimeZoneInfo timeZone)
     {
         if (!PriceRules.TryConfiguration(settings.Value, out timeZone))

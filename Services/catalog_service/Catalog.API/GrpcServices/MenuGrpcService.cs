@@ -50,6 +50,24 @@ public sealed class MenuGrpcService(IMenuService service) : MenuGrpc.MenuGrpcBas
         };
     }
 
+    public override async Task<MenuItemImagesReply> GetItemImages(MenuItemImagesRequest request, ServerCallContext context)
+    {
+        if (request.ItemIds.Count > 10_000)
+        {
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "Yêu cầu tối đa 10.000 mã món."));
+        }
+
+        var images = await service.GetItemImages(ParseId(request.RestaurantId),
+            request.ItemIds.Select(ParseId).Distinct().ToArray(), context.CancellationToken);
+        var reply = new MenuItemImagesReply();
+        foreach (var image in images)
+        {
+            reply.ImageUrls.Add(image.Key.ToString(), image.Value);
+        }
+
+        return reply;
+    }
+
     private static Guid? SessionId(MenuAccessRequest? access)
     {
         return access?.HasTableSessionId == true ? ParseId(access.TableSessionId) : null;

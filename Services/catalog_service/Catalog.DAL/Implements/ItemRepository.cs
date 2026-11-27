@@ -9,6 +9,16 @@ namespace Catalog.DAL.Implements;
 public sealed class ItemRepository(
     CatalogDbContext context) : IItemRepository
 {
+    public async Task<Dictionary<Guid, string>> GetImageUrlsAsync(Guid restaurantId, Guid[] itemIds, CancellationToken cancellationToken)
+    {
+        var images = await context.Items.AsNoTracking()
+            .Where(item => item.RestaurantRef == restaurantId && itemIds.Contains(item.ItemId) && item.ImageUrl != null)
+            .Select(item => new { item.ItemId, item.ImageUrl })
+            .ToListAsync(cancellationToken);
+        return images.Where(item => !string.IsNullOrWhiteSpace(item.ImageUrl))
+            .ToDictionary(item => item.ItemId, item => item.ImageUrl);
+    }
+
     public Task<List<Item>> GetForOrderValidationAsync(Guid[] ids, CancellationToken cancellationToken)
     {
         return context.Items.AsNoTracking().Where(item => ids.Contains(item.ItemId))
