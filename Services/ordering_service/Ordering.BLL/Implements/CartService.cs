@@ -7,15 +7,13 @@ using Ordering.DAL.Models;
 namespace Ordering.BLL.Implements;
 
 public sealed partial class CartService(ICartRepository carts, IOrderingTransaction transaction,
-    IOrderingAccess access, ICatalogOrderClient catalog, TimeProvider clock, ITakeawayAccess takeawayAccess,
-    ICheckoutLockRepository checkouts) : ICartService
+    IOrderingAccess access, ICatalogOrderClient catalog, TimeProvider clock, ITakeawayAccess takeawayAccess) : ICartService
 {
     public async Task<CartDTO> Create(Guid sessionId, string guestToken, CancellationToken ct)
     {
         var actor = await Guest(sessionId, guestToken, ct);
         var cart = await transaction.ExecuteAsync(async () =>
         {
-            await checkouts.LockSessionAsync(sessionId, ct);
             var existing = await carts.GetForGuestAsync(sessionId, actor.GuestId!.Value, clock.GetUtcNow().UtcDateTime, ct);
             if (existing is not null)
             {
@@ -58,7 +56,6 @@ public sealed partial class CartService(ICartRepository carts, IOrderingTransact
 
         var result = await transaction.ExecuteAsync(async () =>
         {
-            await checkouts.LockSessionAsync(sessionId, ct);
             var found = await carts.GetByIdAsync(id, ct);
             OrderingRules.CheckCart(found, actor, clock.GetUtcNow().UtcDateTime, request.Version);
             var quote = await Quote(actor, guestToken, request.Items, ct);
@@ -86,7 +83,6 @@ public sealed partial class CartService(ICartRepository carts, IOrderingTransact
         return new CartDTO
         {
             CartId = result.Cart.CartId,
-            RestaurantId = result.Cart.RestaurantRef,
             TableSessionId = result.Cart.TableSessionRef,
             ExpiresAt = OrderingRules.Utc(result.Cart.ExpiredAt),
             Version = OrderingRules.CartVersion(result.Cart),
@@ -105,10 +101,9 @@ public sealed partial class CartService(ICartRepository carts, IOrderingTransact
 
         await transaction.ExecuteAsync(async () =>
         {
-            await checkouts.LockSessionAsync(sessionId, ct);
             var cart = await carts.GetByIdAsync(id, ct);
             OrderingRules.CheckCart(cart, actor, clock.GetUtcNow().UtcDateTime, version);
-            carts.ReplaceItems(cart!, []);
+            carts.Delete(cart!);
             return true;
         }, ct);
     }

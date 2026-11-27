@@ -14,4 +14,5 @@ public interface ICartRepository
 
     void ReplaceItems(Cart cart, ICollection<CartItem> items);
 
+    void Delete(Cart cart);
 }
