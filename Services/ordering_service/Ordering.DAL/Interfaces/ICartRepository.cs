@@ -6,7 +6,7 @@ public interface ICartRepository
 {
     Task<Cart?> GetByIdAsync(Guid id, CancellationToken ct);
 
-    Task<Cart?> GetForSessionAsync(Guid sessionId, CancellationToken ct);
+    Task<Cart?> GetForGuestAsync(Guid sessionId, Guid guestId, DateTime now, CancellationToken ct);
 
     Task<Cart?> GetForCustomerAsync(Guid restaurantId, Guid customerId, DateTime now, CancellationToken ct);
 

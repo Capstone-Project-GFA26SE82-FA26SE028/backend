@@ -16,15 +16,9 @@ public sealed partial class CartService(ICartRepository carts, IOrderingTransact
         var cart = await transaction.ExecuteAsync(async () =>
         {
             await checkouts.LockSessionAsync(sessionId, ct);
-            var expiresAt = actor.ExpiresAt!.Value.UtcDateTime;
-            var existing = await carts.GetForSessionAsync(sessionId, ct);
+            var existing = await carts.GetForGuestAsync(sessionId, actor.GuestId!.Value, clock.GetUtcNow().UtcDateTime, ct);
             if (existing is not null)
             {
-                if (existing.ExpiredAt < expiresAt)
-                {
-                    existing.ExpiredAt = expiresAt;
-                }
-
                 return existing;
             }
 
@@ -32,7 +26,8 @@ public sealed partial class CartService(ICartRepository carts, IOrderingTransact
             {
                 CartId = Guid.NewGuid(),
                 TableSessionRef = sessionId,
-                ExpiredAt = expiresAt
+                GuestAccessRef = actor.GuestId,
+                ExpiredAt = actor.ExpiresAt!.Value.UtcDateTime
             };
             carts.Create(created);
             return created;
@@ -93,7 +88,7 @@ public sealed partial class CartService(ICartRepository carts, IOrderingTransact
             CartId = result.Cart.CartId,
             RestaurantId = result.Cart.RestaurantRef,
             TableSessionId = result.Cart.TableSessionRef,
-            ExpiresAt = actor.ExpiresAt!.Value,
+            ExpiresAt = OrderingRules.Utc(result.Cart.ExpiredAt),
             Version = OrderingRules.CartVersion(result.Cart),
             Items = request.Items,
             Quote = result.Quote
@@ -137,7 +132,7 @@ public sealed partial class CartService(ICartRepository carts, IOrderingTransact
             CartId = cart.CartId,
             RestaurantId = cart.RestaurantRef,
             TableSessionId = cart.TableSessionRef,
-            ExpiresAt = actor.ExpiresAt ?? OrderingRules.Utc(cart.ExpiredAt),
+            ExpiresAt = OrderingRules.Utc(cart.ExpiredAt),
             Version = OrderingRules.CartVersion(cart),
             Items = lines,
             Quote = await Quote(actor, token, lines, ct)

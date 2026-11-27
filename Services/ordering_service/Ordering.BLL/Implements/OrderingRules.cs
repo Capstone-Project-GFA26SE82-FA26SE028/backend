@@ -47,7 +47,7 @@ internal static class OrderingRules
             cart.CartId,
             cart.TableSessionRef,
             cart.GuestAccessRef,
-            ExpiredAtTicks = cart.TableSessionRef.HasValue ? 0L : cart.ExpiredAt.Ticks,
+            ExpiredAtTicks = cart.ExpiredAt.Ticks,
             Items = cart.CartItems.OrderBy(item => item.CartItemId).Select(item => new
             {
                 item.CartItemId,
@@ -70,7 +70,7 @@ internal static class OrderingRules
             throw new OrderingException(403, "Yêu cầu quyền truy cập của khách đối với giỏ hàng. Nhân viên có thể tạo đơn hàng trực tiếp.");
         }
 
-        if (cart is null || cart.GuestAccessRef.HasValue || cart.CustomerUserRef.HasValue
+        if (cart is null || cart.GuestAccessRef != actor.GuestId || cart.CustomerUserRef.HasValue
             || cart.TableSessionRef != actor.SessionId)
         {
             throw new OrderingException(404, "Không tìm thấy giỏ hàng.");
@@ -79,6 +79,11 @@ internal static class OrderingRules
         if (actor.ExpiresAt is null || actor.ExpiresAt <= now)
         {
             throw new OrderingException(401, "Quyền truy cập của khách đã hết hạn.");
+        }
+
+        if (cart.ExpiredAt <= now)
+        {
+            throw new OrderingException(409, "Giỏ hàng đã hết hạn.");
         }
 
         if (expected is not null && !string.Equals(CartVersion(cart), expected, StringComparison.Ordinal))
