@@ -96,6 +96,7 @@ public sealed class CatalogOrderClient(OrderValidationGrpc.OrderValidationGrpcCl
             {
                 ItemId = Guid.Parse(item.ItemId),
                 Name = item.NameSnapshot,
+                ImageUrl = item.HasImageUrl ? item.ImageUrl : null,
                 RecipeVersionId = Guid.Parse(item.RecipeVersionId),
                 KitchenStationId = item.HasKitchenStationId ? Guid.Parse(item.KitchenStationId) : null,
                 PreparationTimeMinutes = item.HasPreparationTimeMinutes ? item.PreparationTimeMinutes : null,

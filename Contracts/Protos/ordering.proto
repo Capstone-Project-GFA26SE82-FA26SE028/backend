@@ -57,7 +57,7 @@ message CartCreateRequest { OrderingAccess access = 1; }
 message CartIdRequest { OrderingAccess access = 1; string cart_id = 2; string version = 3; }
 message CartUpdateRequest { OrderingAccess access = 1; string cart_id = 2; string version = 3; repeated SelectionInfo items = 4; }
 message QuotedOptionInfo { string option_id = 1; string name = 2; int32 quantity = 3; string extra_price = 4; }
-message QuotedItemInfo { string item_id = 1; string name = 2; string recipe_version_id = 3; int32 quantity = 4; string unit_price = 5; repeated QuotedOptionInfo options = 6; optional string kitchen_station_id = 7; optional int32 preparation_time_minutes = 8; }
+message QuotedItemInfo { string item_id = 1; string name = 2; string recipe_version_id = 3; int32 quantity = 4; string unit_price = 5; repeated QuotedOptionInfo options = 6; optional string kitchen_station_id = 7; optional int32 preparation_time_minutes = 8; optional string image_url = 9; }
 message QuoteErrorInfo { int32 line_index = 1; string code = 2; string message = 3; }
 message QuoteInfo { bool is_valid = 1; string message = 2; string evaluated_at = 3; optional string total_amount = 4; repeated QuotedItemInfo items = 5; repeated QuoteErrorInfo errors = 6; }
 message CartInfo { string cart_id = 1; string table_session_id = 2; string expires_at = 3; string version = 4; repeated SelectionInfo items = 5; QuoteInfo quote = 6; string restaurant_id = 7; }

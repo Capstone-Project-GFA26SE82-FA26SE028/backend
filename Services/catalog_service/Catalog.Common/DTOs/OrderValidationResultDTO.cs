@@ -15,6 +15,7 @@ public sealed class ValidatedOrderItemDTO
     public Guid? KitchenStationId { get; set; }
     public Guid ItemId { get; set; }
     public string NameSnapshot { get; set; } = string.Empty;
+    public string? ImageUrl { get; set; }
     public Guid PriceId { get; set; }
     public Guid RecipeVersionId { get; set; }
     public int Quantity { get; set; }

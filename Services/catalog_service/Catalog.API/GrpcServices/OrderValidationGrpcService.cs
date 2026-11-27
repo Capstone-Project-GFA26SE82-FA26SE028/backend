@@ -73,6 +73,11 @@ public sealed class OrderValidationGrpcService(IOrderValidationService service) 
                 UnitTotal = Money(item.UnitTotal),
                 LineTotal = Money(item.LineTotal)
             };
+            if (item.ImageUrl is not null)
+            {
+                mapped.ImageUrl = item.ImageUrl;
+            }
+
             if (item.PreparationTimeMinutes.HasValue)
             {
                 mapped.PreparationTimeMinutes = item.PreparationTimeMinutes.Value;
