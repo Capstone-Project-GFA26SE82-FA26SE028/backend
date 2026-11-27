@@ -188,6 +188,7 @@ public sealed class OrderValidationService(
             LineIndex = index,
             ItemId = item.ItemId,
             NameSnapshot = item.ItemName,
+            ImageUrl = string.IsNullOrWhiteSpace(item.ImageUrl) ? null : item.ImageUrl,
             PriceId = price.PriceId,
             RecipeVersionId = recipeVersions[0].RecipeVersionId,
             KitchenStationId = item.KitchenStationRef,

@@ -43,6 +43,7 @@ internal static class OrderingMapping
         {
             ItemId = Guid.Parse(value.ItemId),
             Name = value.Name,
+            ImageUrl = value.HasImageUrl ? value.ImageUrl : null,
             RecipeVersionId = Guid.Parse(value.RecipeVersionId),
             KitchenStationId = value.HasKitchenStationId ? Guid.Parse(value.KitchenStationId) : null,
             Quantity = value.Quantity,

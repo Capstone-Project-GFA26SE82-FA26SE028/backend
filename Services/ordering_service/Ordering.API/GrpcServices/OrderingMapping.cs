@@ -55,6 +55,11 @@ internal static class OrderingMapping
             UnitPrice = value.UnitPrice.ToString(CultureInfo.InvariantCulture)
         };
         result.Options.AddRange(value.Options.Select(Map));
+        if (value.ImageUrl is not null)
+        {
+            result.ImageUrl = value.ImageUrl;
+        }
+
         if (value.KitchenStationId.HasValue)
         {
             result.KitchenStationId = value.KitchenStationId.Value.ToString();
