@@ -32,6 +32,7 @@ builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<INotificationSettingService, NotificationSettingService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IRestaurantApplicantService, RestaurantApplicantService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRestaurantNames, Identity.API.Clients.RestaurantNamesClient>();
 builder.Services.AddGrpcClient<Backend.Contracts.Restaurant.RestaurantGrpc.RestaurantGrpcClient>(options =>
@@ -84,6 +85,7 @@ app.MapGrpcService<Identity.API.GrpcServices.NotificationSettingGrpcService>();
 app.MapGrpcService<Identity.API.GrpcServices.AccessGrpcService>();
 
 app.MapGrpcService<Identity.API.GrpcServices.IdentityGrpcService>();
+app.MapGrpcService<Identity.API.GrpcServices.RestaurantApplicantGrpcService>();
 app.MapGrpcService<Identity.API.GrpcServices.UserGrpcService>();
 app.MapGrpcService<Identity.API.GrpcServices.RoleGrpcService>();
 app.MapGrpcService<Identity.API.GrpcServices.AuditLogGrpcService>();

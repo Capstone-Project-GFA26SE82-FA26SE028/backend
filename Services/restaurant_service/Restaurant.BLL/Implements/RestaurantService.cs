@@ -67,12 +67,56 @@ public sealed partial class RestaurantService(IRestaurantRepository repository, 
     private async Task<RestaurantDto> Save(Guid? id, RestaurantWriteDto body, CancellationToken ct)
     {
         await access.RequireAdmin(ct);
+        var validated = ValidateWrite(body, id.HasValue);
+        var entity = await transaction.ExecuteAsync(async () =>
+        {
+            var item = id.HasValue
+                ? await repository.GetByIdAsync(id.Value, ct) ?? throw new ManagementException(404, "Không tìm thấy nhà hàng.")
+                : new Entity
+                {
+                    RestaurantId = Guid.NewGuid()
+                };
+            if (id.HasValue && validated.LogoUrl is not null && !string.Equals(validated.LogoUrl, item.LogoUrl, StringComparison.Ordinal))
+            {
+                throw LogoUploadRequired();
+            }
+
+            if (!id.HasValue)
+            {
+                repository.Add(item);
+            }
+
+            Apply(item, validated, !id.HasValue || body.LogoUrl is not null);
+            return item;
+        }, ct);
+        return Map(entity);
+    }
+
+    internal void CreateFromRegistration(Guid id, RestaurantWriteDto body)
+    {
+        var validated = ValidateWrite(body, false);
+        var item = new Entity
+        {
+            RestaurantId = id
+        };
+        repository.Add(item);
+        Apply(item, validated, true);
+    }
+
+    internal static void ValidateRegistration(RestaurantWriteDto body)
+    {
+        ValidateWrite(body, false);
+    }
+
+    private static (string Name, string Address, string Hotline, string? TaxCode, string? LogoUrl,
+        string TimeZone, List<OpeningHour> Hours) ValidateWrite(RestaurantWriteDto body, bool forUpdate)
+    {
         var name = ManagementValidation.Required(body.RestaurantName, 255, "Tên nhà hàng");
         var address = ManagementValidation.Required(body.Address, 500, "Địa chỉ");
         var hotline = ManagementValidation.Required(body.Hotline, 20, "Hotline");
         var taxCode = ManagementValidation.Optional(body.TaxCode, 50, "Mã số thuế");
         var logo = ManagementValidation.Optional(body.LogoUrl, 2048, "Đường dẫn Logo");
-        if (!id.HasValue && logo is not null)
+        if (!forUpdate && logo is not null)
         {
             throw LogoUploadRequired();
         }
@@ -106,42 +150,28 @@ public sealed partial class RestaurantService(IRestaurantRepository repository, 
             throw new ManagementException(400, "Giờ mở cửa phải trước giờ đóng cửa trong cùng một ngày.");
         }
 
-        var entity = await transaction.ExecuteAsync(async () =>
+        return (name, address, hotline, taxCode, logo, zone, hours);
+    }
+
+    private void Apply(Entity item, (string Name, string Address, string Hotline, string? TaxCode, string? LogoUrl,
+        string TimeZone, List<OpeningHour> Hours) fields, bool setLogo)
+    {
+        item.RestaurantName = fields.Name;
+        item.Address = fields.Address;
+        item.Hotline = fields.Hotline;
+        item.TaxCode = fields.TaxCode!;
+        if (setLogo)
         {
-            var item = id.HasValue
-                ? await repository.GetByIdAsync(id.Value, ct) ?? throw new ManagementException(404, "Không tìm thấy nhà hàng.")
-                : new Entity
-                {
-                    RestaurantId = Guid.NewGuid()
-                };
-            if (id.HasValue && logo is not null && !string.Equals(logo, item.LogoUrl, StringComparison.Ordinal))
-            {
-                throw LogoUploadRequired();
-            }
+            item.LogoUrl = fields.LogoUrl!;
+        }
 
-            if (!id.HasValue)
-            {
-                repository.Add(item);
-            }
+        item.TimeZone = fields.TimeZone;
+        foreach (var hour in fields.Hours)
+        {
+            hour.RestaurantId = item.RestaurantId;
+        }
 
-            item.RestaurantName = name;
-            item.Address = address;
-            item.Hotline = hotline;
-            item.TaxCode = taxCode!;
-            if (!id.HasValue || body.LogoUrl is not null)
-            {
-                item.LogoUrl = logo!;
-            }
-            item.TimeZone = zone;
-            foreach (var hour in hours)
-            {
-                hour.RestaurantId = item.RestaurantId;
-            }
-
-            repository.ReplaceOpeningHours(item, hours);
-            return item;
-        }, ct);
-        return Map(entity);
+        repository.ReplaceOpeningHours(item, fields.Hours);
     }
 
     internal static RestaurantDto Map(Entity item)

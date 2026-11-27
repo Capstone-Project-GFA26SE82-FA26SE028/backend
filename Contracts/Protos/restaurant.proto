@@ -502,3 +502,39 @@ message RestaurantReportContextReply {
   string restaurant_id = 1;
   string time_zone = 2;
 }
+
+service RestaurantRegistrationGrpc {
+  rpc Create(RestaurantRegistrationCreateRequest) returns (RestaurantRegistrationReceipt);
+  rpc GetAll(RestaurantRegistrationListRequest) returns (RestaurantRegistrationPage);
+  rpc GetById(IdRequest) returns (RestaurantRegistrationInfo);
+  rpc GetDocument(RestaurantRegistrationDocumentRequest) returns (RestaurantRegistrationDocument);
+  rpc Approve(IdRequest) returns (RestaurantRegistrationReceipt);
+}
+message RestaurantRegistrationCreateRequest {
+  string registration_id = 1;
+  RestaurantInfo restaurant = 2;
+  string email = 3;
+  string password = 4;
+  string full_name = 5;
+  string phone_number = 6;
+  bytes business_certificate_image = 7;
+  bytes food_safety_certificate_image = 8;
+}
+message RestaurantRegistrationReceipt {
+  string registration_id = 1;
+  string status = 2;
+  optional string restaurant_id = 3;
+}
+message RestaurantRegistrationListRequest { int32 page = 1; int32 page_size = 2; optional string status = 3; }
+message RestaurantRegistrationInfo {
+  RestaurantRegistrationReceipt receipt = 1;
+  RestaurantInfo restaurant = 2;
+  string email = 3;
+  string submitted_at = 4;
+  optional string reviewed_at = 5;
+  optional string reviewed_by = 6;
+  string applicant_user_id = 7;
+}
+message RestaurantRegistrationPage { repeated RestaurantRegistrationInfo items = 1; int32 total_count = 2; }
+message RestaurantRegistrationDocumentRequest { string registration_id = 1; string kind = 2; }
+message RestaurantRegistrationDocument { bytes bytes = 1; string content_type = 2; }
