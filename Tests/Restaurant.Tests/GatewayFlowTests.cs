@@ -67,6 +67,8 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
                 services.AddScoped<IStaffIdentity, TestStaffIdentity>();
                 services.RemoveAll<restaurantapi::Backend.Contracts.Identity.UserGrpc.UserGrpcClient>();
                 services.AddSingleton<restaurantapi::Backend.Contracts.Identity.UserGrpc.UserGrpcClient, WaiterIdentityClient>();
+                services.RemoveAll<Restaurant.BLL.Interfaces.IPaymentRequestOrderClient>();
+                services.AddScoped<Restaurant.BLL.Interfaces.IPaymentRequestOrderClient, TestOrderClient>();
             });
         });
         using (var scope = _restaurant.Services.CreateScope())
@@ -416,6 +418,19 @@ public sealed partial class GatewayFlowTests : IAsyncLifetime
             }
 
             return Task.FromResult(Guid.Parse("11111111-1111-1111-1111-111111111111"));
+        }
+    }
+
+    private sealed class TestOrderClient : Restaurant.BLL.Interfaces.IPaymentRequestOrderClient
+    {
+        public static bool HasOrders { get; set; }
+
+        public Task<Restaurant.Common.DTOs.PaymentRequestReviewDto> GetReviewAsync(Guid sessionId, Guid restaurantId, CancellationToken ct)
+        {
+            var items = HasOrders
+                ? [new Restaurant.Common.DTOs.PaymentRequestReviewItemDto(Guid.NewGuid(), Guid.NewGuid(), "Món ăn", 1, "Confirmed")]
+                : new List<Restaurant.Common.DTOs.PaymentRequestReviewItemDto>();
+            return Task.FromResult(new Restaurant.Common.DTOs.PaymentRequestReviewDto(restaurantId, 0, items));
         }
     }
 

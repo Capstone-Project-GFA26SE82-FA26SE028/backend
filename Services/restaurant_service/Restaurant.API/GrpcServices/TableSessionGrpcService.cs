@@ -33,6 +33,12 @@ public sealed class TableSessionGrpcService(ITableSessionService service) : Tabl
         return MapOrderSession(result);
     }
 
+    public override async Task<Google.Protobuf.WellKnownTypes.Empty> CloseEmptySession(IdRequest request, ServerCallContext context)
+    {
+        await service.CloseEmptySession(ManagementMapping.Id(request.Id), context.CancellationToken);
+        return new Google.Protobuf.WellKnownTypes.Empty();
+    }
+
     private static OrderSessionReply MapOrderSession(OrderSessionDto result)
     {
         var reply = new OrderSessionReply
