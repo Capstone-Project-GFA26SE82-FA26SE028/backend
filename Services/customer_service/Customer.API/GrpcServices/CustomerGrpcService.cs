@@ -174,6 +174,155 @@ public sealed class CustomerGrpcService(ICustomerLoyaltyService service) : Backe
         }
     }
 
+    public override async Task<LoyaltyTierListReply> GetRestaurantTiers(RestaurantTierListRequest request, ServerCallContext context)
+    {
+        try
+        {
+            if (!Guid.TryParse(request.RestaurantId, out var restaurantId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã nhà hàng không hợp lệ."));
+            }
+
+            var tiers = await service.GetTiersByRestaurant(restaurantId, context.CancellationToken);
+            var reply = new LoyaltyTierListReply();
+            reply.Items.AddRange(tiers.Select(CustomerMapping.Map));
+            return reply;
+        }
+        catch (CustomerException ex)
+        {
+            throw new RpcException(new Status(MapStatusCode(ex.StatusCode), ex.Message));
+        }
+    }
+
+    public override async Task<LoyaltyTierInfo> CreateTier(CreateLoyaltyTierRequest request, ServerCallContext context)
+    {
+        try
+        {
+            if (!Guid.TryParse(request.RestaurantId, out var restaurantId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã nhà hàng không hợp lệ."));
+            }
+
+            decimal.TryParse(request.RequiredSpend, out var requiredSpend);
+            decimal.TryParse(request.DiscountPercent, out var discountPercent);
+
+            var tier = await service.CreateTier(restaurantId, new SaveLoyaltyTierDTO
+            {
+                LoyaltyTierCode = request.LoyaltyTierCode,
+                LoyaltyTierName = request.LoyaltyTierName,
+                RequiredSpend = requiredSpend,
+                DiscountPercent = discountPercent
+            }, context.CancellationToken);
+
+            return CustomerMapping.Map(tier);
+        }
+        catch (CustomerException ex)
+        {
+            throw new RpcException(new Status(MapStatusCode(ex.StatusCode), ex.Message));
+        }
+    }
+
+    public override async Task<LoyaltyTierInfo> UpdateTier(UpdateLoyaltyTierRequest request, ServerCallContext context)
+    {
+        try
+        {
+            if (!Guid.TryParse(request.RestaurantId, out var restaurantId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã nhà hàng không hợp lệ."));
+            }
+
+            if (!Guid.TryParse(request.LoyaltyTierId, out var tierId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã hạng thành viên không hợp lệ."));
+            }
+
+            decimal.TryParse(request.RequiredSpend, out var requiredSpend);
+            decimal.TryParse(request.DiscountPercent, out var discountPercent);
+
+            var tier = await service.UpdateTier(restaurantId, tierId, new SaveLoyaltyTierDTO
+            {
+                LoyaltyTierId = tierId,
+                LoyaltyTierCode = request.LoyaltyTierCode,
+                LoyaltyTierName = request.LoyaltyTierName,
+                RequiredSpend = requiredSpend,
+                DiscountPercent = discountPercent
+            }, context.CancellationToken);
+
+            return CustomerMapping.Map(tier);
+        }
+        catch (CustomerException ex)
+        {
+            throw new RpcException(new Status(MapStatusCode(ex.StatusCode), ex.Message));
+        }
+    }
+
+    public override async Task<Empty> DeleteTier(DeleteLoyaltyTierRequest request, ServerCallContext context)
+    {
+        try
+        {
+            if (!Guid.TryParse(request.RestaurantId, out var restaurantId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã nhà hàng không hợp lệ."));
+            }
+
+            if (!Guid.TryParse(request.LoyaltyTierId, out var tierId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã hạng thành viên không hợp lệ."));
+            }
+
+            await service.DeleteTier(restaurantId, tierId, context.CancellationToken);
+            return new Empty();
+        }
+        catch (CustomerException ex)
+        {
+            throw new RpcException(new Status(MapStatusCode(ex.StatusCode), ex.Message));
+        }
+    }
+
+    public override async Task<LoyaltyPolicyInfo> GetRestaurantPolicy(RestaurantPolicyRequest request, ServerCallContext context)
+    {
+        try
+        {
+            if (!Guid.TryParse(request.RestaurantId, out var restaurantId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã nhà hàng không hợp lệ."));
+            }
+
+            var policy = await service.GetPolicyByRestaurant(restaurantId, context.CancellationToken);
+            return CustomerMapping.Map(policy);
+        }
+        catch (CustomerException ex)
+        {
+            throw new RpcException(new Status(MapStatusCode(ex.StatusCode), ex.Message));
+        }
+    }
+
+    public override async Task<LoyaltyPolicyInfo> SavePolicy(SaveLoyaltyPolicyRequest request, ServerCallContext context)
+    {
+        try
+        {
+            if (!Guid.TryParse(request.RestaurantId, out var restaurantId))
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Mã nhà hàng không hợp lệ."));
+            }
+
+            decimal.TryParse(request.SpendPerPoint, out var spendPerPoint);
+            decimal.TryParse(request.MoneyPerRedeemedPoint, out var moneyPerPoint);
+
+            var policy = await service.SavePolicy(restaurantId, new SaveLoyaltyPolicyDTO
+            {
+                SpendPerPoint = spendPerPoint,
+                MoneyPerRedeemedPoint = moneyPerPoint
+            }, context.CancellationToken);
+
+            return CustomerMapping.Map(policy);
+        }
+        catch (CustomerException ex)
+        {
+            throw new RpcException(new Status(MapStatusCode(ex.StatusCode), ex.Message));
+        }
+    }
+
     private static StatusCode MapStatusCode(int code)
     {
         return code switch

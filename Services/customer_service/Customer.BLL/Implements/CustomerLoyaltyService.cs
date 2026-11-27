@@ -11,7 +11,8 @@ public sealed class CustomerLoyaltyService(
     ICustomerRepository customers,
     ILoyaltyRepository loyalty,
     ICustomerTransaction transaction,
-    TimeProvider clock) : ICustomerLoyaltyService
+    TimeProvider clock,
+    ILoyaltyManagerAccess managerAccess) : ICustomerLoyaltyService
 {
     public async Task<CustomerDTO?> GetById(Guid id, CancellationToken ct)
     {
@@ -122,15 +123,258 @@ public sealed class CustomerLoyaltyService(
     public async Task<List<LoyaltyTierDTO>> GetTiers(CancellationToken ct)
     {
         var tiers = await loyalty.GetAllTiersAsync(ct);
-        return tiers.Select(t => new LoyaltyTierDTO
-        {
-            LoyaltyTierId = t.LoyaltyTierId,
-            LoyaltyTierCode = t.LoyaltyTierCode,
-            LoyaltyTierName = t.LoyaltyTierName,
-            RequiredSpend = t.RequiredSpend,
-            DiscountPercent = t.DiscountPercent
-        }).ToList();
+        return tiers.Select(MapTierDTO).ToList();
     }
+
+    public async Task<List<LoyaltyTierDTO>> GetTiersByRestaurant(Guid restaurantId, CancellationToken ct)
+    {
+        if (restaurantId == Guid.Empty)
+        {
+            throw new CustomerException(400, "Mã nhà hàng không hợp lệ.");
+        }
+
+        await managerAccess.EnsureManagerAccessAsync(restaurantId, ct);
+        var tiers = await loyalty.GetAllTiersAsync(ct);
+        return tiers.Select(MapTierDTO).ToList();
+    }
+
+    public async Task<LoyaltyTierDTO> CreateTier(Guid restaurantId, SaveLoyaltyTierDTO request, CancellationToken ct)
+    {
+        if (restaurantId == Guid.Empty)
+        {
+            throw new CustomerException(400, "Mã nhà hàng không hợp lệ.");
+        }
+
+        ValidateTierRequest(request);
+        await managerAccess.EnsureManagerAccessAsync(restaurantId, ct);
+
+        var code = request.LoyaltyTierCode.Trim().ToUpperInvariant();
+        var existing = await loyalty.GetTierByCodeAsync(code, ct);
+        if (existing is not null)
+        {
+            throw new CustomerException(409, $"Mã hạng '{code}' đã tồn tại trong nhà hàng.");
+        }
+
+        var tier = new LoyaltyTier
+        {
+            LoyaltyTierId = Guid.NewGuid(),
+            LoyaltyTierCode = code,
+            LoyaltyTierName = request.LoyaltyTierName.Trim(),
+            RequiredSpend = request.RequiredSpend,
+            DiscountPercent = request.DiscountPercent,
+            RestaurantId = restaurantId
+        };
+
+        return await transaction.ExecuteAsync(async () =>
+        {
+            loyalty.CreateTier(tier);
+            return MapTierDTO(tier);
+        }, ct);
+    }
+
+    public async Task<LoyaltyTierDTO> UpdateTier(Guid restaurantId, Guid tierId, SaveLoyaltyTierDTO request, CancellationToken ct)
+    {
+        if (restaurantId == Guid.Empty)
+        {
+            throw new CustomerException(400, "Mã nhà hàng không hợp lệ.");
+        }
+
+        if (tierId == Guid.Empty)
+        {
+            throw new CustomerException(400, "Mã hạng thành viên không hợp lệ.");
+        }
+
+        ValidateTierRequest(request);
+        await managerAccess.EnsureManagerAccessAsync(restaurantId, ct);
+
+        var tier = await loyalty.GetTierByIdAsync(tierId, ct);
+        if (tier is null)
+        {
+            throw new CustomerException(404, "Không tìm thấy hạng thành viên.");
+        }
+
+        var code = request.LoyaltyTierCode.Trim().ToUpperInvariant();
+        var duplicate = await loyalty.GetTierByCodeAsync(code, ct);
+        if (duplicate is not null && duplicate.LoyaltyTierId != tierId)
+        {
+            throw new CustomerException(409, $"Mã hạng '{code}' đã được sử dụng cho hạng khác.");
+        }
+
+        return await transaction.ExecuteAsync(async () =>
+        {
+            tier.LoyaltyTierCode = code;
+            tier.LoyaltyTierName = request.LoyaltyTierName.Trim();
+            tier.RequiredSpend = request.RequiredSpend;
+            tier.DiscountPercent = request.DiscountPercent;
+            return MapTierDTO(tier);
+        }, ct);
+    }
+
+    public async Task DeleteTier(Guid restaurantId, Guid tierId, CancellationToken ct)
+    {
+        if (restaurantId == Guid.Empty)
+        {
+            throw new CustomerException(400, "Mã nhà hàng không hợp lệ.");
+        }
+
+        if (tierId == Guid.Empty)
+        {
+            throw new CustomerException(400, "Mã hạng thành viên không hợp lệ.");
+        }
+
+        await managerAccess.EnsureManagerAccessAsync(restaurantId, ct);
+
+        var tier = await loyalty.GetTierByIdAsync(tierId, ct);
+        if (tier is null)
+        {
+            throw new CustomerException(404, "Không tìm thấy hạng thành viên.");
+        }
+
+        var totalTiers = await loyalty.CountTiersAsync(ct);
+        if (totalTiers <= 1)
+        {
+            throw new CustomerException(400, "Không thể xóa hạng thành viên duy nhất của nhà hàng.");
+        }
+
+        var hasCustomers = await loyalty.HasAssignedCustomersAsync(tierId, ct);
+        if (hasCustomers)
+        {
+            throw new CustomerException(400, "Không thể xóa hạng thành viên đang có khách hàng sử dụng.");
+        }
+
+        await transaction.ExecuteAsync(async () =>
+        {
+            loyalty.DeleteTier(tier);
+            return true;
+        }, ct);
+    }
+
+    public async Task<LoyaltyPolicyDTO> GetPolicyByRestaurant(Guid restaurantId, CancellationToken ct)
+    {
+        if (restaurantId == Guid.Empty)
+        {
+            throw new CustomerException(400, "Mã nhà hàng không hợp lệ.");
+        }
+
+        await managerAccess.EnsureManagerAccessAsync(restaurantId, ct);
+        var policy = await loyalty.GetCurrentPolicyAsync(ct);
+        if (policy is null)
+        {
+            return new LoyaltyPolicyDTO
+            {
+                PolicyId = Guid.Empty,
+                RestaurantId = restaurantId,
+                Version = 1,
+                SpendPerPoint = 1000m,
+                MoneyPerRedeemedPoint = 100m,
+                EffectiveFrom = clock.GetUtcNow().UtcDateTime
+            };
+        }
+
+        return MapPolicyDTO(policy);
+    }
+
+    public async Task<LoyaltyPolicyDTO> SavePolicy(Guid restaurantId, SaveLoyaltyPolicyDTO request, CancellationToken ct)
+    {
+        if (restaurantId == Guid.Empty)
+        {
+            throw new CustomerException(400, "Mã nhà hàng không hợp lệ.");
+        }
+
+        if (request is null)
+        {
+            throw new CustomerException(400, "Dữ liệu chính sách tích điểm không được để trống.");
+        }
+
+        if (request.SpendPerPoint <= 0)
+        {
+            throw new CustomerException(400, "Số tiền để tích 1 điểm phải lớn hơn 0.");
+        }
+
+        if (request.MoneyPerRedeemedPoint <= 0)
+        {
+            throw new CustomerException(400, "Số tiền quy đổi cho 1 điểm tiêu phải lớn hơn 0.");
+        }
+
+        await managerAccess.EnsureManagerAccessAsync(restaurantId, ct);
+
+        var current = await loyalty.GetCurrentPolicyAsync(ct);
+        var nextVersion = (current?.Version ?? 0) + 1;
+        var now = clock.GetUtcNow().UtcDateTime;
+
+        var newPolicy = new LoyaltyPolicy
+        {
+            PolicyId = Guid.NewGuid(),
+            Version = nextVersion,
+            SpendPerPoint = request.SpendPerPoint,
+            MoneyPerRedeemedPoint = request.MoneyPerRedeemedPoint,
+            EffectiveFrom = now,
+            RestaurantId = restaurantId
+        };
+
+        return await transaction.ExecuteAsync(async () =>
+        {
+            loyalty.CreatePolicy(newPolicy);
+            return MapPolicyDTO(newPolicy);
+        }, ct);
+    }
+
+    private static void ValidateTierRequest(SaveLoyaltyTierDTO request)
+    {
+        if (request is null)
+        {
+            throw new CustomerException(400, "Thông tin hạng thành viên không được để trống.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.LoyaltyTierCode))
+        {
+            throw new CustomerException(400, "Mã hạng thành viên là bắt buộc.");
+        }
+
+        if (request.LoyaltyTierCode.Trim().Length > 50)
+        {
+            throw new CustomerException(400, "Mã hạng thành viên tối đa 50 ký tự.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.LoyaltyTierName))
+        {
+            throw new CustomerException(400, "Tên hạng thành viên là bắt buộc.");
+        }
+
+        if (request.LoyaltyTierName.Trim().Length > 100)
+        {
+            throw new CustomerException(400, "Tên hạng thành viên tối đa 100 ký tự.");
+        }
+
+        if (request.RequiredSpend < 0)
+        {
+            throw new CustomerException(400, "Mức chi tiêu yêu cầu không được âm.");
+        }
+
+        if (request.DiscountPercent < 0 || request.DiscountPercent > 100)
+        {
+            throw new CustomerException(400, "Tỷ lệ giảm giá phải từ 0% đến 100%.");
+        }
+    }
+
+    private static LoyaltyTierDTO MapTierDTO(LoyaltyTier t) => new()
+    {
+        LoyaltyTierId = t.LoyaltyTierId,
+        LoyaltyTierCode = t.LoyaltyTierCode,
+        LoyaltyTierName = t.LoyaltyTierName,
+        RequiredSpend = t.RequiredSpend,
+        DiscountPercent = t.DiscountPercent
+    };
+
+    private static LoyaltyPolicyDTO MapPolicyDTO(LoyaltyPolicy p) => new()
+    {
+        PolicyId = p.PolicyId,
+        RestaurantId = p.RestaurantId,
+        Version = p.Version,
+        SpendPerPoint = p.SpendPerPoint,
+        MoneyPerRedeemedPoint = p.MoneyPerRedeemedPoint,
+        EffectiveFrom = p.EffectiveFrom
+    };
 
     public async Task<LoyaltyEarnResultDTO> EarnPoints(LoyaltyEarnRequestDTO request, CancellationToken ct)
     {

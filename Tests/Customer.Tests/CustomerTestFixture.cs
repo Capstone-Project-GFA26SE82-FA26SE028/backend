@@ -14,6 +14,7 @@ public sealed class CustomerTestFixture : IDisposable
     public ICustomerLoyaltyService LoyaltyService { get; }
     public IFeedbackService FeedbackService { get; }
     public TestTimeProvider Clock { get; }
+    public TestLoyaltyManagerAccess ManagerAccess { get; } = new();
     private readonly SqliteConnection _connection;
 
     public CustomerTestFixture()
@@ -38,7 +39,7 @@ public sealed class CustomerTestFixture : IDisposable
         var loyaltyRepo = new LoyaltyRepository(Db);
         var feedbackRepo = new FeedbackRepository(Db);
 
-        LoyaltyService = new CustomerLoyaltyService(customerRepo, loyaltyRepo, transaction, Clock);
+        LoyaltyService = new CustomerLoyaltyService(customerRepo, loyaltyRepo, transaction, Clock, ManagerAccess);
         FeedbackService = new FeedbackService(feedbackRepo, customerRepo, transaction, Clock);
     }
 
@@ -101,6 +102,20 @@ public sealed class CustomerTestFixture : IDisposable
                 .Property(x => x.Version)
                 .IsRowVersion()
                 .HasDefaultValue(new byte[8]);
+        }
+    }
+
+    public sealed class TestLoyaltyManagerAccess : ILoyaltyManagerAccess
+    {
+        public bool DenyAccess { get; set; }
+
+        public Task EnsureManagerAccessAsync(Guid restaurantId, CancellationToken ct)
+        {
+            if (DenyAccess)
+            {
+                throw new Customer.Common.Exceptions.CustomerException(403, "Chỉ quản lý được phân công tại nhà hàng này mới có quyền cấu hình hạng và chính sách tích điểm.");
+            }
+            return Task.CompletedTask;
         }
     }
 }

@@ -17,5 +17,7 @@ public partial class LoyaltyPolicy
 
     public DateTime EffectiveFrom { get; set; }
 
+    public Guid? RestaurantId { get; set; }
+
     public virtual ICollection<LoyaltyEntry> LoyaltyEntries { get; set; } = new List<LoyaltyEntry>();
 }

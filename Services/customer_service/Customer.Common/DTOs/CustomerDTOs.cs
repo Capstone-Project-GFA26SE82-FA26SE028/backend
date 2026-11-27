@@ -98,3 +98,28 @@ public sealed class FeedbackSummaryDTO
     public int Star1Count { get; set; }
 }
 
+public sealed class SaveLoyaltyTierDTO
+{
+    public Guid? LoyaltyTierId { get; set; }
+    public string LoyaltyTierCode { get; set; } = string.Empty;
+    public string LoyaltyTierName { get; set; } = string.Empty;
+    public decimal RequiredSpend { get; set; }
+    public decimal DiscountPercent { get; set; }
+}
+
+public sealed class LoyaltyPolicyDTO
+{
+    public Guid PolicyId { get; set; }
+    public Guid? RestaurantId { get; set; }
+    public int Version { get; set; }
+    public decimal SpendPerPoint { get; set; }
+    public decimal MoneyPerRedeemedPoint { get; set; }
+    public DateTime EffectiveFrom { get; set; }
+}
+
+public sealed class SaveLoyaltyPolicyDTO
+{
+    public decimal SpendPerPoint { get; set; }
+    public decimal MoneyPerRedeemedPoint { get; set; }
+}
+

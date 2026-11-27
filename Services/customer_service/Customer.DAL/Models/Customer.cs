@@ -17,6 +17,8 @@ public partial class Customer
 
     public byte[] Version { get; set; }
 
+    public Guid? RestaurantId { get; set; }
+
     public virtual ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();
 
     public virtual ICollection<LoyaltyEntry> LoyaltyEntries { get; set; } = new List<LoyaltyEntry>();

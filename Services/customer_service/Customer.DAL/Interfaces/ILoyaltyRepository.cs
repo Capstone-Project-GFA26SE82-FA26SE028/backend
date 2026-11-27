@@ -8,11 +8,23 @@ public interface ILoyaltyRepository
 
     Task<LoyaltyTier?> GetTierByIdAsync(Guid tierId, CancellationToken ct);
 
+    Task<LoyaltyTier?> GetTierByCodeAsync(string code, CancellationToken ct);
+
     Task<LoyaltyTier?> GetDefaultTierAsync(CancellationToken ct);
 
     Task<LoyaltyTier?> GetTierForSpendAsync(decimal totalSpend, CancellationToken ct);
 
+    Task<bool> HasAssignedCustomersAsync(Guid tierId, CancellationToken ct);
+
+    Task<int> CountTiersAsync(CancellationToken ct);
+
+    void CreateTier(LoyaltyTier tier);
+
+    void DeleteTier(LoyaltyTier tier);
+
     Task<LoyaltyPolicy?> GetCurrentPolicyAsync(CancellationToken ct);
+
+    void CreatePolicy(LoyaltyPolicy policy);
 
     Task<int> GetAvailablePointsAsync(Guid customerId, CancellationToken ct);
 

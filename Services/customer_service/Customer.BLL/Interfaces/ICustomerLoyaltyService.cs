@@ -14,6 +14,18 @@ public interface ICustomerLoyaltyService
 
     Task<List<LoyaltyTierDTO>> GetTiers(CancellationToken ct);
 
+    Task<List<LoyaltyTierDTO>> GetTiersByRestaurant(Guid restaurantId, CancellationToken ct);
+
+    Task<LoyaltyTierDTO> CreateTier(Guid restaurantId, SaveLoyaltyTierDTO request, CancellationToken ct);
+
+    Task<LoyaltyTierDTO> UpdateTier(Guid restaurantId, Guid tierId, SaveLoyaltyTierDTO request, CancellationToken ct);
+
+    Task DeleteTier(Guid restaurantId, Guid tierId, CancellationToken ct);
+
+    Task<LoyaltyPolicyDTO> GetPolicyByRestaurant(Guid restaurantId, CancellationToken ct);
+
+    Task<LoyaltyPolicyDTO> SavePolicy(Guid restaurantId, SaveLoyaltyPolicyDTO request, CancellationToken ct);
+
     Task<LoyaltyEarnResultDTO> EarnPoints(LoyaltyEarnRequestDTO request, CancellationToken ct);
 
     Task<PointReservationResultDTO> ReservePoints(PointReservationRequestDTO request, CancellationToken ct);
