@@ -23,6 +23,34 @@ public sealed class TableSessionController(TableSessionGrpc.TableSessionGrpcClie
         }, ct);
     }
 
+    [HttpPost("tables/{tableId:guid}/cancel")]
+    [ApiGateway.Swagger.RequireBearerToken]
+    public Task<IActionResult> CancelForTable(Guid tableId, CancellationToken ct)
+    {
+        return Execute(async () =>
+        {
+            await client.CloseEmptySessionAsync(new IdRequest
+            {
+                Id = tableId.ToString()
+            }, Options(ct));
+            return new { success = true, message = "Đã hủy phiên bàn thành công." };
+        }, ct);
+    }
+
+    [HttpPost("{sessionId:guid}/cancel")]
+    [ApiGateway.Swagger.RequireBearerToken]
+    public Task<IActionResult> CancelForSession(Guid sessionId, CancellationToken ct)
+    {
+        return Execute(async () =>
+        {
+            await client.CloseEmptySessionAsync(new IdRequest
+            {
+                Id = sessionId.ToString()
+            }, Options(ct));
+            return new { success = true, message = "Đã hủy phiên bàn thành công." };
+        }, ct);
+    }
+
     [HttpPost("scan")]
     public Task<IActionResult> Scan(ScanTableSessionDto body, CancellationToken ct)
     {

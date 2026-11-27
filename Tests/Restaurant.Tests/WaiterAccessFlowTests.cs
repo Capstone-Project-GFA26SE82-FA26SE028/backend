@@ -115,6 +115,74 @@ public sealed partial class GatewayFlowTests
         Assert.False(scanned.IsNewSession);
     }
 
+    [Fact]
+    public async Task WaiterCanCancelEmptySessionAndNextScanCreatesNewSession()
+    {
+        var restaurant = await CreateRestaurant();
+        await AssignWaiter(restaurant.RestaurantId);
+        var area = await CreateArea(restaurant.RestaurantId, "OPEN");
+        var table = await CreateTable(area.AreaId);
+
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "waiter");
+        var openRoute = $"/api/table-sessions/tables/{table.TableId}/open";
+        var first = await Read<TableSessionScanDto>(await _http.PostAsync(openRoute, null));
+        Assert.True(first.IsNewSession);
+
+        var cancelResponse = await _http.PostAsync($"/api/table-sessions/tables/{table.TableId}/cancel", null);
+        Assert.Equal(HttpStatusCode.OK, cancelResponse.StatusCode);
+
+        using (var scope = _restaurant.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<RestaurantDbContext>();
+            var session = await db.TableSessions.FindAsync(first.TableSessionId);
+            Assert.NotNull(session);
+            Assert.Equal("Closed", session.Status);
+            Assert.NotNull(session.ClosedAt);
+
+            var link = await db.SessionTables.SingleAsync(s => s.TableSessionId == first.TableSessionId);
+            Assert.NotNull(link.ReleasedAt);
+        }
+
+        var second = await Read<TableSessionScanDto>(await _http.PostAsync(openRoute, null));
+        Assert.True(second.IsNewSession);
+        Assert.NotEqual(first.TableSessionId, second.TableSessionId);
+
+        var cancelBySessionResponse = await _http.PostAsync($"/api/table-sessions/{second.TableSessionId}/cancel", null);
+        Assert.Equal(HttpStatusCode.OK, cancelBySessionResponse.StatusCode);
+
+        using (var scope = _restaurant.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<RestaurantDbContext>();
+            var session = await db.TableSessions.FindAsync(second.TableSessionId);
+            Assert.NotNull(session);
+            Assert.Equal("Closed", session.Status);
+        }
+    }
+
+    [Fact]
+    public async Task WaiterCannotCancelSessionWithActiveOrders()
+    {
+        var restaurant = await CreateRestaurant();
+        await AssignWaiter(restaurant.RestaurantId);
+        var area = await CreateArea(restaurant.RestaurantId, "OPEN");
+        var table = await CreateTable(area.AreaId);
+
+        _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", "waiter");
+        var openRoute = $"/api/table-sessions/tables/{table.TableId}/open";
+        var session = await Read<TableSessionScanDto>(await _http.PostAsync(openRoute, null));
+
+        try
+        {
+            TestOrderClient.HasOrders = true;
+            var response = await _http.PostAsync($"/api/table-sessions/tables/{table.TableId}/cancel", null);
+            Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        }
+        finally
+        {
+            TestOrderClient.HasOrders = false;
+        }
+    }
+
     [Theory]
     [InlineData("admin", 403)]
     [InlineData("manager", 403)]
