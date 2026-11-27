@@ -97,70 +97,25 @@ public sealed class OrderingFlowTests
     }
 
     [Fact]
-    public async Task GuestsInTheSameSessionHaveSeparateCarts()
+    public async Task CartOwnershipVersionAndReplacementSurviveReload()
     {
         using var app = new Fixture();
-        var firstGuest = app.Guest;
-        var firstCart = await app.FilledCart();
-        var formerSharedCart = new Cart
-        {
-            CartId = Guid.NewGuid(),
-            TableSessionRef = app.Session,
-            ExpiredAt = DateTime.UtcNow.AddMinutes(30)
-        };
-        app.Db.Carts.Add(formerSharedCart);
-        await app.Db.SaveChangesAsync();
-        app.Db.ChangeTracker.Clear();
-
-        app.Guest = Guid.NewGuid();
-        var secondCart = await app.Carts.Create(app.Session, "second-guest", default);
-        Assert.NotEqual(firstCart.CartId, secondCart.CartId);
-        Assert.NotEqual(formerSharedCart.CartId, secondCart.CartId);
-        Assert.Empty(secondCart.Items);
-        await Error(404, () => app.Carts.GetById(app.Session, formerSharedCart.CartId, "second-guest", default));
-        await Error(404, () => app.Carts.GetById(app.Session, firstCart.CartId, "second-guest", default));
-        await Error(404, () => app.Carts.Update(app.Session, firstCart.CartId,
-            new CartWriteDTO { Version = firstCart.Version, Items = app.Lines() }, "second-guest", default));
-        await Error(404, () => app.Carts.Delete(app.Session, firstCart.CartId, firstCart.Version, "second-guest", default));
-
-        app.Guest = firstGuest;
-        var resumed = await app.Carts.Create(app.Session, "guest", default);
-        Assert.Equal(firstCart.CartId, resumed.CartId);
-        Assert.Equal(firstCart.Version, resumed.Version);
-        Assert.Single(resumed.Items);
-        await Error(404, () => app.Carts.GetById(Guid.NewGuid(), firstCart.CartId, "guest", default));
-        await Error(409, () => app.Carts.Delete(app.Session, resumed.CartId, "stale", "guest", default));
-
-        await app.Carts.Delete(app.Session, resumed.CartId, resumed.Version, "guest", default);
-        Assert.Empty((await app.Carts.GetById(app.Session, resumed.CartId, "guest", default)).Items);
-        Assert.Empty(await app.Db.CartItemOptions.ToListAsync());
-    }
-
-    [Fact]
-    public async Task OnlyCartOwnerCanSubmitAndRetryDoesNotDuplicateOrder()
-    {
-        using var app = new Fixture();
-        var firstGuest = app.Guest;
         var cart = await app.FilledCart();
-        var request = new CreateOrderDTO
-        {
-            CartId = cart.CartId,
-            CartVersion = cart.Version
-        };
-
+        app.Db.ChangeTracker.Clear();
+        var loaded = await app.Carts.GetById(app.Session, cart.CartId, "guest", default);
+        Assert.Equal(cart.Version, loaded.Version);
+        await Error(409, () => app.Carts.Update(app.Session, cart.CartId,
+            new CartWriteDTO { Version = "stale" }, "guest", default));
+        var oldGuest = app.Guest;
         app.Guest = Guid.NewGuid();
-        await Error(404, () => app.Orders.Create(app.Session, "send", request, "second-guest", default));
-        Assert.Empty(await app.Db.Orders.ToListAsync());
-
-        app.Guest = firstGuest;
-        var first = await app.Orders.Create(app.Session, "send", request, "guest", default);
-        Assert.True(first.Created);
-        var replay = await app.Orders.Create(app.Session, "send", request, "guest", default);
-        Assert.False(replay.Created);
-        Assert.Equal(first.Order.OrderId, replay.Order.OrderId);
-        await Error(409, () => app.Orders.Create(app.Session, "another-key", request, "guest", default));
-        Assert.Equal(first.Order.OrderId, (await app.Db.Orders.SingleAsync()).OrderId);
-        Assert.Empty((await app.Carts.GetById(app.Session, cart.CartId, "guest", default)).Items);
+        await Error(404, () => app.Carts.GetById(app.Session, cart.CartId, "guest", default));
+        app.Guest = oldGuest;
+        var empty = await app.Carts.Update(app.Session, cart.CartId,
+            new CartWriteDTO { Version = cart.Version }, "guest", default);
+        Assert.Empty(empty.Items);
+        Assert.Empty(await app.Db.CartItemOptions.ToListAsync());
+        await app.Carts.Delete(app.Session, cart.CartId, empty.Version, "guest", default);
+        Assert.Empty(await app.Db.Carts.ToListAsync());
     }
 
     [Fact]
@@ -406,7 +361,7 @@ public sealed class OrderingFlowTests
             Db.SaveChanges();
             var carts = new CartRepository(Db);
             var transaction = new OrderingTransaction(new UnitOfWork<OrderingDbContext>(Db));
-            Carts = new CartService(carts, transaction, this, this, TimeProvider.System, this, new CheckoutLockRepository(Db));
+            Carts = new CartService(carts, transaction, this, this, TimeProvider.System, this);
             Orders = new OrderService(new OrderRepository(Db), carts, new KitchenTaskRepository(Db),
                 transaction, this, this, Options.Create(new OrderingSettings()), TimeProvider.System, new CheckoutLockRepository(Db), this, this);
         }

@@ -70,15 +70,9 @@ internal static class OrderingRules
             throw new OrderingException(403, "Yêu cầu quyền truy cập của khách đối với giỏ hàng. Nhân viên có thể tạo đơn hàng trực tiếp.");
         }
 
-        if (cart is null || cart.GuestAccessRef != actor.GuestId || cart.CustomerUserRef.HasValue
-            || cart.TableSessionRef != actor.SessionId)
+        if (cart is null || cart.GuestAccessRef != actor.GuestId || cart.TableSessionRef != actor.SessionId)
         {
             throw new OrderingException(404, "Không tìm thấy giỏ hàng.");
-        }
-
-        if (actor.ExpiresAt is null || actor.ExpiresAt <= now)
-        {
-            throw new OrderingException(401, "Quyền truy cập của khách đã hết hạn.");
         }
 
         if (cart.ExpiredAt <= now)
