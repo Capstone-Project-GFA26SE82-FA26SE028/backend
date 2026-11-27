@@ -91,6 +91,7 @@ public sealed class TakeawayOrderTests
         await Error(404, () => app.Orders.GetRefundAccount(app.Restaurant, order.OrderId, default));
         await Error(404, () => app.Orders.SaveRefundAccount(app.Restaurant, order.OrderId, RefundAccount(), default));
         app.Staff = true;
+        app.StaffRole = "waiter";
         await Error(403, () => app.Orders.GetRefundAccount(app.Restaurant, order.OrderId, default));
         app.StaffRole = "cashier";
         Assert.Equal(saved.AccountNumber, (await app.Orders.GetRefundAccount(app.Restaurant, order.OrderId, default)).AccountNumber);
@@ -190,7 +191,9 @@ public sealed class TakeawayOrderTests
         Assert.Null(cancelled.RefundedAt);
         Assert.Empty(await app.Db.KitchenTasks.ToListAsync());
         app.Staff = true;
+        app.StaffRole = "cashier";
         await Error(409, () => app.Orders.AcceptTakeaway(app.Restaurant, order.OrderId, cancelled.Version, default));
+        app.StaffRole = "waiter";
         await Error(403, () => app.Orders.VerifyTakeawayRefund(app.Restaurant, order.OrderId, "bank", "https://evidence.example/1", default));
         app.StaffRole = "cashier";
         await Error(409, () => app.Orders.VerifyTakeawayRefund(app.Restaurant, order.OrderId, "bank", "https://evidence.example/1", default));

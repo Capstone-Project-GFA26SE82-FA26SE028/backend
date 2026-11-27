@@ -367,7 +367,7 @@ public sealed class OrderingFlowTests
         }
 
         public Guid CustomerUser { get; set; } = Guid.NewGuid();
-        public string StaffRole { get; set; } = "waiter";
+        public string StaffRole { get; set; } = "cashier";
         public string PaymentState { get; set; } = "Pending";
         public int PaymentCalls { get; private set; }
         public bool PaymentUnavailable { get; set; }
