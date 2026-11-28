@@ -43,8 +43,8 @@ public sealed class IdentityInventoryAccess(UserGrpc.UserGrpcClient client, IHtt
         var configured = configuration.GetSection($"InventoryAccess:{section}").Get<string[]>();
         var allowed = configured is not null && configured.Length > 0
             ? configured
-            : operation == "Cooking"
-                ? ["kitchen", "manager", "admin"]
+            : operation is "Cooking" or "Read"
+                ? ["kitchen", "manager", "admin", "inventory"]
                 : [];
         if (!allowed.Contains(reply.Result.RoleId, StringComparer.Ordinal))
         {

@@ -13,7 +13,7 @@ public sealed class NotificationService(INotificationRepository repository, INot
     public static void ValidateQuery(NotificationQuery query)
     {
         if (query.Page < 1 || query.Page > 1000000 || query.PageSize is < 1 or > 100
-            || (query.Type is not null && !NotificationCatalog.Types.ContainsKey(query.Type))
+            || (!string.IsNullOrWhiteSpace(query.Type) && !NotificationCatalog.Types.ContainsKey(query.Type))
             || query.From.HasValue && query.To.HasValue && query.From >= query.To)
         {
             throw new NotificationException(400, "Bộ lọc, thời gian hoặc phân trang không hợp lệ.");

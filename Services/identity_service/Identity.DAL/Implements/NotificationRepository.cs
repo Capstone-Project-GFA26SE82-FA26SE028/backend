@@ -22,7 +22,49 @@ public sealed class NotificationRepository(IdentityDbContext db) : INotification
 
     public async Task<(List<Notification> Items, int Total)> GetAllAsync(Guid? restaurantId, Guid? userId, Guid? staffRestaurantId, bool customer, NotificationQuery filter, CancellationToken ct)
     {
-        var query = Query(restaurantId, userId, staffRestaurantId, customer);
+        if (userId.HasValue)
+        {
+            var baseQuery = Visible(userId.Value, staffRestaurantId, customer);
+            if (!string.IsNullOrWhiteSpace(filter.Type))
+            {
+                baseQuery = baseQuery.Where(value => value.Notification.Type == filter.Type);
+            }
+            if (filter.EntityId.HasValue)
+            {
+                baseQuery = baseQuery.Where(value => value.Notification.EntityId == filter.EntityId);
+            }
+            if (filter.From.HasValue)
+            {
+                var from = filter.From.Value.UtcDateTime;
+                baseQuery = baseQuery.Where(value => value.Notification.CreatedAt >= from);
+            }
+            if (filter.To.HasValue)
+            {
+                var to = filter.To.Value.UtcDateTime;
+                baseQuery = baseQuery.Where(value => value.Notification.CreatedAt < to);
+            }
+            if (filter.IsRead.HasValue)
+            {
+                var read = filter.IsRead.Value;
+                baseQuery = baseQuery.Where(value => value.ReadAt.HasValue == read);
+            }
+
+            var total = await baseQuery.CountAsync(ct);
+            var recipients = await baseQuery.AsNoTracking()
+                .Include(value => value.Notification)
+                .OrderByDescending(value => value.Notification.CreatedAt).ThenByDescending(value => value.NotificationId)
+                .Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).ToListAsync(ct);
+
+            var items = recipients.Select(r =>
+            {
+                r.Notification.Recipients = [r];
+                return r.Notification;
+            }).ToList();
+
+            return (items, total);
+        }
+
+        var query = db.Notifications.Where(value => value.RestaurantId == restaurantId && !value.Suppressed);
         if (!string.IsNullOrWhiteSpace(filter.Type))
         {
             query = query.Where(value => value.Type == filter.Type);
@@ -41,16 +83,11 @@ public sealed class NotificationRepository(IdentityDbContext db) : INotification
             var to = filter.To.Value.UtcDateTime;
             query = query.Where(value => value.CreatedAt < to);
         }
-        if (filter.IsRead.HasValue && userId.HasValue)
-        {
-            var read = filter.IsRead.Value;
-            query = query.Where(value => value.Recipients.Any(recipient => recipient.UserId == userId && recipient.ReadAt.HasValue == read));
-        }
-        var total = await query.CountAsync(ct);
-        var items = await query.AsNoTracking().Include(value => value.Recipients)
+        var totalCount = await query.CountAsync(ct);
+        var notifications = await query.AsNoTracking().Include(value => value.Recipients)
             .OrderByDescending(value => value.CreatedAt).ThenByDescending(value => value.NotificationId)
             .Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).ToListAsync(ct);
-        return (items, total);
+        return (notifications, totalCount);
     }
 
     public Task<Notification?> GetByIdAsync(Guid id, Guid? restaurantId, Guid? userId, Guid? staffRestaurantId, bool customer, CancellationToken ct)
