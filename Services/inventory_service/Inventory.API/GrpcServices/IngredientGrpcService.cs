@@ -9,22 +9,30 @@ public sealed class IngredientGrpcService(IngredientService service) : Ingredien
 {
     public override async Task<IngredientInfo> Create(IngredientWriteRequest request, ServerCallContext context)
     {
-        return InventoryMapping.Map(await service.Create(Write(request), context.CancellationToken));
+        var ingredient = await service.Create(Write(request), context.CancellationToken);
+        var isLowStock = await service.IsLowStockAsync(ingredient, context.CancellationToken);
+        return InventoryMapping.Map(ingredient, isLowStock);
     }
 
     public override async Task<IngredientInfo> Update(IngredientWriteRequest request, ServerCallContext context)
     {
-        return InventoryMapping.Map(await service.Update(InventoryMapping.Id(request.Id), Write(request), context.CancellationToken));
+        var ingredient = await service.Update(InventoryMapping.Id(request.Id), Write(request), context.CancellationToken);
+        var isLowStock = await service.IsLowStockAsync(ingredient, context.CancellationToken);
+        return InventoryMapping.Map(ingredient, isLowStock);
     }
 
     public override async Task<IngredientInfo> SetStatus(IngredientStatusRequest request, ServerCallContext context)
     {
-        return InventoryMapping.Map(await service.SetStatus(InventoryMapping.Id(request.Id), request.IsActive, context.CancellationToken));
+        var ingredient = await service.SetStatus(InventoryMapping.Id(request.Id), request.IsActive, context.CancellationToken);
+        var isLowStock = await service.IsLowStockAsync(ingredient, context.CancellationToken);
+        return InventoryMapping.Map(ingredient, isLowStock);
     }
 
     public override async Task<IngredientInfo> GetById(InventoryIdRequest request, ServerCallContext context)
     {
-        return InventoryMapping.Map(await service.GetById(InventoryMapping.Id(request.Id), context.CancellationToken));
+        var ingredient = await service.GetById(InventoryMapping.Id(request.Id), context.CancellationToken);
+        var isLowStock = await service.IsLowStockAsync(ingredient, context.CancellationToken);
+        return InventoryMapping.Map(ingredient, isLowStock);
     }
 
     public override async Task<IngredientPage> GetAll(IngredientListRequest request, ServerCallContext context)

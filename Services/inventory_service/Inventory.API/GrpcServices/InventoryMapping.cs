@@ -36,7 +36,7 @@ internal static class InventoryMapping
         return date;
     }
 
-    public static IngredientInfo Map(Ingredient value)
+    public static IngredientInfo Map(Ingredient value, bool isLowStock)
     {
         return new IngredientInfo
         {
@@ -47,7 +47,23 @@ internal static class InventoryMapping
             StockQuantity = value.StockQuantity.ToString(CultureInfo.InvariantCulture),
             LowStockThreshold = value.LowStockThreshold.ToString(CultureInfo.InvariantCulture),
             IsActive = value.IsActive,
-            IsLowStock = value.StockQuantity <= value.LowStockThreshold,
+            IsLowStock = isLowStock,
+            StockVersion = Convert.ToBase64String(value.StockVersion ?? [])
+        };
+    }
+
+    public static IngredientInfo Map(IngredientSummaryDTO value)
+    {
+        return new IngredientInfo
+        {
+            Id = value.IngredientId.ToString(),
+            Code = value.IngredientCode,
+            Name = value.IngredientName,
+            BaseUnit = value.BaseUnit,
+            StockQuantity = value.StockQuantity.ToString(CultureInfo.InvariantCulture),
+            LowStockThreshold = value.LowStockThreshold.ToString(CultureInfo.InvariantCulture),
+            IsActive = value.IsActive,
+            IsLowStock = value.IsLowStock,
             StockVersion = Convert.ToBase64String(value.StockVersion ?? [])
         };
     }

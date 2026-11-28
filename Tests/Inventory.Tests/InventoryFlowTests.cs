@@ -197,8 +197,213 @@ public sealed class InventoryFlowTests
         }, default);
         await f.Ingredients.SetStatus(ingredient.IngredientId, false, default);
         await Error(409, () => f.Receipts.Create(Receipt(ingredient.IngredientId), default));
-        var page = await f.Ingredients.GetAll(1, 20, "renamed", false, true, default);
-        Assert.Equal("Rice renamed", Assert.Single(page.Items).IngredientName);
+        var inactivePage = await f.Ingredients.GetAll(1, 20, "renamed", false, false, default);
+        var inactiveItem = Assert.Single(inactivePage.Items);
+        Assert.Equal("Rice renamed", inactiveItem.IngredientName);
+        Assert.False(inactiveItem.IsLowStock);
+        var lowStockPage = await f.Ingredients.GetAll(1, 20, "renamed", false, true, default);
+        Assert.Equal(0, lowStockPage.TotalCount);
+        Assert.Empty(lowStockPage.Items);
+    }
+
+    [Fact]
+    public async Task LowStockUsesOnlyIssuableLotsExcludesInactiveAndPaginatesFilteredTotal()
+    {
+        var clock = new FixedClock(new DateTimeOffset(2026, 11, 28, 7, 0, 0, TimeSpan.FromHours(7)));
+        var today = StockLotService.BusinessDate(clock);
+        using var f = new Fixture(clock);
+        var lon = new Unit
+        {
+            UnitId = Guid.NewGuid(),
+            Code = "lon",
+            Name = "Lon"
+        };
+        f.Db.Units.Add(lon);
+        await f.Db.SaveChangesAsync();
+
+        // 1. Pepsi: total stock 30 = 18 expired + 12 issuable, threshold 20 -> low stock, stockQuantity stays 30.
+        var pepsi = await f.Ingredients.Create(new IngredientWriteDTO
+        {
+            IngredientName = "Lon Pepsi",
+            BaseUnit = "lon",
+            LowStockThreshold = 20
+        }, default);
+        var pepsiReceipt = await f.Receipts.Create(new ReceiptWriteDTO
+        {
+            GoodsReceiptId = Guid.NewGuid(),
+            Note = "Pepsi lots",
+            Items =
+            [
+                new ReceiptLineDTO
+                {
+                    IngredientId = pepsi.IngredientId,
+                    ReceivedQuantity = 18,
+                    ExpiryDate = today.AddDays(-1)
+                },
+                new ReceiptLineDTO
+                {
+                    IngredientId = pepsi.IngredientId,
+                    ReceivedQuantity = 12,
+                    ExpiryDate = today.AddDays(5)
+                }
+            ]
+        }, default);
+        await f.Receipts.Confirm(pepsiReceipt.GoodsReceiptId, default);
+
+        // 2. All expired (0 issuable, threshold 0) -> still low stock, stockQuantity stays 10.
+        var allExpired = await f.Ingredients.Create(new IngredientWriteDTO
+        {
+            IngredientName = "All Expired",
+            BaseUnit = "g",
+            LowStockThreshold = 0
+        }, default);
+        var expiredReceipt = await f.Receipts.Create(new ReceiptWriteDTO
+        {
+            GoodsReceiptId = Guid.NewGuid(),
+            Note = "Expired only",
+            Items =
+            [
+                new ReceiptLineDTO
+                {
+                    IngredientId = allExpired.IngredientId,
+                    ReceivedQuantity = 10,
+                    ExpiryDate = today.AddDays(-2)
+                }
+            ]
+        }, default);
+        await f.Receipts.Confirm(expiredReceipt.GoodsReceiptId, default);
+
+        // 3. Partially issued down to exact threshold (25 - 10 = 15 == 15) -> low stock.
+        var equalThreshold = await f.Ingredients.Create(new IngredientWriteDTO
+        {
+            IngredientName = "Equal Threshold",
+            BaseUnit = "g",
+            LowStockThreshold = 15
+        }, default);
+        var equalReceipt = await f.Receipts.Create(new ReceiptWriteDTO
+        {
+            GoodsReceiptId = Guid.NewGuid(),
+            Note = "Valid lot",
+            Items =
+            [
+                new ReceiptLineDTO
+                {
+                    IngredientId = equalThreshold.IngredientId,
+                    ReceivedQuantity = 25,
+                    ExpiryDate = today.AddDays(3)
+                }
+            ]
+        }, default);
+        await f.Receipts.Confirm(equalReceipt.GoodsReceiptId, default);
+        var equalLot = Assert.Single(equalReceipt.GoodsReceiptItems);
+        f.Db.StockMovements.Add(new StockMovement
+        {
+            StockMovementId = Guid.NewGuid(),
+            IngredientId = equalThreshold.IngredientId,
+            GoodsReceiptItemId = equalLot.GoodsReceiptItemId,
+            MovementType = "Issue",
+            QuantityChange = -10,
+            CreatedAt = clock.GetUtcNow().UtcDateTime
+        });
+        equalThreshold.StockQuantity = 15;
+        await f.Db.SaveChangesAsync();
+
+        // 4. Draft receipt only (not confirmed) -> 0 issuable <= 5 -> low stock.
+        var draftOnly = await f.Ingredients.Create(new IngredientWriteDTO
+        {
+            IngredientName = "Draft Only",
+            BaseUnit = "g",
+            LowStockThreshold = 5
+        }, default);
+        await f.Receipts.Create(new ReceiptWriteDTO
+        {
+            GoodsReceiptId = Guid.NewGuid(),
+            Note = "Draft lot",
+            Items =
+            [
+                new ReceiptLineDTO
+                {
+                    IngredientId = draftOnly.IngredientId,
+                    ReceivedQuantity = 50,
+                    ExpiryDate = today.AddDays(10)
+                }
+            ]
+        }, default);
+
+        // 5. Healthy active item expiring today (today >= today is issuable: 15 > 10) -> NOT low stock.
+        var healthyToday = await f.Ingredients.Create(new IngredientWriteDTO
+        {
+            IngredientName = "Healthy Today",
+            BaseUnit = "g",
+            LowStockThreshold = 10
+        }, default);
+        var todayReceipt = await f.Receipts.Create(new ReceiptWriteDTO
+        {
+            GoodsReceiptId = Guid.NewGuid(),
+            Note = "Expires today",
+            Items =
+            [
+                new ReceiptLineDTO
+                {
+                    IngredientId = healthyToday.IngredientId,
+                    ReceivedQuantity = 15,
+                    ExpiryDate = today
+                }
+            ]
+        }, default);
+        await f.Receipts.Confirm(todayReceipt.GoodsReceiptId, default);
+
+        // 6. Inactive item with 0 stock and threshold 20 -> NOT low stock and excluded from lowStockOnly.
+        var inactive = await f.Ingredients.Create(new IngredientWriteDTO
+        {
+            IngredientName = "Inactive Item",
+            BaseUnit = "g",
+            LowStockThreshold = 20
+        }, default);
+        await f.Ingredients.SetStatus(inactive.IngredientId, false, default);
+
+        var allPage = await f.Ingredients.GetAll(1, 20, null, null, false, default);
+        Assert.Equal(6, allPage.TotalCount);
+        var byId = allPage.Items.ToDictionary(x => x.IngredientId);
+
+        Assert.Equal(30m, byId[pepsi.IngredientId].StockQuantity);
+        Assert.True(byId[pepsi.IngredientId].IsLowStock);
+
+        Assert.Equal(10m, byId[allExpired.IngredientId].StockQuantity);
+        Assert.True(byId[allExpired.IngredientId].IsLowStock);
+
+        Assert.Equal(15m, byId[equalThreshold.IngredientId].StockQuantity);
+        Assert.True(byId[equalThreshold.IngredientId].IsLowStock);
+
+        Assert.Equal(0m, byId[draftOnly.IngredientId].StockQuantity);
+        Assert.True(byId[draftOnly.IngredientId].IsLowStock);
+
+        Assert.Equal(15m, byId[healthyToday.IngredientId].StockQuantity);
+        Assert.False(byId[healthyToday.IngredientId].IsLowStock);
+
+        Assert.Equal(0m, byId[inactive.IngredientId].StockQuantity);
+        Assert.False(byId[inactive.IngredientId].IsLowStock);
+
+        // Verify lowStockOnly filtering, totalCount after filter before pagination, and paging.
+        var lowPage1 = await f.Ingredients.GetAll(1, 2, null, null, true, default);
+        var lowPage2 = await f.Ingredients.GetAll(2, 2, null, null, true, default);
+        Assert.Equal(4, lowPage1.TotalCount);
+        Assert.Equal(4, lowPage2.TotalCount);
+        Assert.Equal(2, lowPage1.Items.Count);
+        Assert.Equal(2, lowPage2.Items.Count);
+        Assert.All(lowPage1.Items.Concat(lowPage2.Items), item =>
+        {
+            Assert.True(item.IsActive);
+            Assert.True(item.IsLowStock);
+        });
+        var lowIds = lowPage1.Items.Concat(lowPage2.Items).Select(x => x.IngredientId).ToHashSet();
+        Assert.Equal(
+            [pepsi.IngredientId, allExpired.IngredientId, equalThreshold.IngredientId, draftOnly.IngredientId],
+            lowIds);
+
+        Assert.True(await f.Ingredients.IsLowStockAsync(pepsi, default));
+        Assert.False(await f.Ingredients.IsLowStockAsync(healthyToday, default));
+        Assert.False(await f.Ingredients.IsLowStockAsync(inactive, default));
     }
 
     [Theory]
@@ -320,8 +525,9 @@ public sealed class InventoryFlowTests
         public GoodsReceiptService Receipts { get; }
         public StockMovementService Movements { get; }
 
-        public Fixture()
+        public Fixture(TimeProvider? clock = null)
         {
+            var time = clock ?? TimeProvider.System;
             connection.Open();
             Db = new TestDb(new DbContextOptionsBuilder<InventoryDbContext>().UseSqlite(connection).Options);
             Db.Database.EnsureCreated();
@@ -337,8 +543,8 @@ public sealed class InventoryFlowTests
             var movements = new StockMovementRepository(Db);
             var units = new UnitRepository(Db);
             Conversions = new IngredientUnitService(ingredients, units, new IngredientUnitRepository(Db), transaction, Access);
-            Ingredients = new IngredientService(ingredients, transaction, Access, units);
-            Receipts = new GoodsReceiptService(new GoodsReceiptRepository(Db), ingredients, movements, transaction, Access, TimeProvider.System, Conversions);
+            Ingredients = new IngredientService(ingredients, transaction, Access, units, time);
+            Receipts = new GoodsReceiptService(new GoodsReceiptRepository(Db), ingredients, movements, transaction, Access, time, Conversions);
             Movements = new StockMovementService(movements, ingredients, Access);
         }
 
@@ -356,6 +562,14 @@ public sealed class InventoryFlowTests
         {
             Db.Dispose();
             connection.Dispose();
+        }
+    }
+
+    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow()
+        {
+            return now.ToUniversalTime();
         }
     }
 }
