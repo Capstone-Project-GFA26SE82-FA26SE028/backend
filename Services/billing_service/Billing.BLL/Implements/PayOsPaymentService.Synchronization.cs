@@ -74,7 +74,15 @@ public sealed partial class PayOsPaymentService
                 }
                 catch (PayOsClientException)
                 {
-                    // A timed-out cancel is not confirmation that ordering or another payment may resume.
+                    // Re-query PayOS after an uncertain or rejected cancel (for example, customer paid right before cancel).
+                    try
+                    {
+                        bank = await provider.GetAsync(order, ct);
+                    }
+                    catch (PayOsClientException)
+                    {
+                        bank = null;
+                    }
                 }
             }
 

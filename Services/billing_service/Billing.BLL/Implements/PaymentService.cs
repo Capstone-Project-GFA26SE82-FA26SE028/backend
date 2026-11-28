@@ -63,7 +63,7 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
                 {
                     await payOs.Cancel(open.PaymentId, ct);
                 }
-                catch (BillingException error) when (error.StatusCode is 409 or 503)
+                catch (BillingException error) when (error.StatusCode is 409 or 502 or 503 or 504)
                 {
                     // A concurrent webhook or an uncertain cancel is resolved from the latest persisted state below.
                 }
@@ -183,18 +183,18 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
                     throw new BillingException(403, "Thu ngân chỉ có thể thu tiền trong ca làm việc của chính mình.");
                 }
 
-                if (shift.ClosedAt.HasValue || shift.Status != CashShiftStatuses.Active
-                    || unclosed.Count != 1 || unclosed[0].CashShiftId != shift.CashShiftId)
-                {
-                    throw new BillingException(409, "Ca làm việc đã chọn không phải là ca duy nhất đang hoạt động của máy thu ngân này.");
-                }
-
                 var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
                 var payOsAttempts = bill.Payments.Where(value => PayOsPaymentRules.BelongsToCheckout(value, checkout.CheckoutId)).ToArray();
                 if (bill.RestaurantId == register.RestaurantId && payOsAttempts.Any(PayOsPaymentRules.IsVerifiedPaid))
                 {
                     throw new BillingException(409, "Hóa đơn đã thanh toán qua PayOS. Trả lại toàn bộ tiền mặt đã nhận.",
                         "CashReturnRequired", received);
+                }
+
+                if (shift.ClosedAt.HasValue || shift.Status != CashShiftStatuses.Active
+                    || unclosed.Count != 1 || unclosed[0].CashShiftId != shift.CashShiftId)
+                {
+                    throw new BillingException(409, "Ca làm việc đã chọn không phải là ca duy nhất đang hoạt động của máy thu ngân này.");
                 }
 
                 if (bill.RestaurantId != register.RestaurantId || bill.Status != "Unpaid" || bill.PaidAt.HasValue
@@ -254,6 +254,11 @@ public sealed class PaymentService(IPaymentRepository payments, IBillRepository 
 
                 if (outstanding.Length == 1)
                 {
+                    if (outstanding[0].Status == PayOsStates.ReviewRequired)
+                    {
+                        throw new BillingException(409, "Chờ đối soát PayOS. Chưa ghi nhận tiền mặt.", "PendingReconciliation");
+                    }
+
                     throw new OpenPayOsException(outstanding[0].PaymentId);
                 }
 
