@@ -112,6 +112,8 @@ message MovementInfo {
   optional string stock_issue_id = 9;
   optional string cooking_event_ref = 10;
   optional string order_item_ref = 11;
+  optional string received_at = 12;
+  optional string expiry_date = 13;
 }
 
 service StockLotGrpc {
@@ -155,6 +157,7 @@ message StockIssueInfo {
   string created_at = 3;
   string reason = 4;
   repeated MovementInfo allocations = 5;
+  optional string created_by_name = 6;
 }
 message MovementPage {
   repeated MovementInfo items = 1;

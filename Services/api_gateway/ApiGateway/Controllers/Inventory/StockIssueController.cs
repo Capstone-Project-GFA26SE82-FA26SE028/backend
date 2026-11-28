@@ -59,9 +59,30 @@ public sealed class StockIssueController(StockIssueGrpc.StockIssueGrpcClient cli
         {
             StockIssueId = issue.Id,
             CreatedByRef = issue.CreatedBy,
+            CreatedByName = issue.HasCreatedByName && !string.IsNullOrWhiteSpace(issue.CreatedByName)
+                ? issue.CreatedByName
+                : null,
             issue.CreatedAt,
             issue.Reason,
-            Allocations = issue.Allocations.Select(InventoryMapping.Map).ToList()
+            Allocations = issue.Allocations.Select(MapAllocation).ToList()
+        };
+    }
+
+    private static object MapAllocation(MovementInfo value)
+    {
+        return new
+        {
+            StockMovementId = value.Id,
+            StockIssueId = string.IsNullOrEmpty(value.StockIssueId) ? null : value.StockIssueId,
+            value.IngredientId,
+            GoodsReceiptItemId = string.IsNullOrEmpty(value.ReceiptItemId) ? null : value.ReceiptItemId,
+            ReceivedAt = value.HasReceivedAt && !string.IsNullOrEmpty(value.ReceivedAt) ? value.ReceivedAt : null,
+            ExpiryDate = value.HasExpiryDate && !string.IsNullOrEmpty(value.ExpiryDate) ? value.ExpiryDate : null,
+            value.MovementType,
+            QuantityChange = decimal.Parse(value.QuantityChange, CultureInfo.InvariantCulture),
+            PerformedByRef = value.PerformedBy,
+            value.Reason,
+            value.CreatedAt
         };
     }
 }

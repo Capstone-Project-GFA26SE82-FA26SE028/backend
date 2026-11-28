@@ -1,3 +1,6 @@
+using Backend.Contracts.Inventory;
+using Grpc.Core;
+using Inventory.API.GrpcServices;
 using Inventory.BLL.Interfaces;
 using Inventory.BLL.Services;
 using Inventory.Common;
@@ -7,6 +10,7 @@ using Inventory.DAL.Models;
 using Inventory.DAL.Repositories;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Shared.Persistence.RestaurantIsolation;
 using Shared.Persistence.UnitOfWorks;
 using Xunit;
 
@@ -285,6 +289,110 @@ public sealed class StockIssueTests
         Assert.Equal(0, (await f.Db.Ingredients.FindAsync(ingredient.IngredientId))!.StockQuantity);
     }
 
+    [Fact]
+    public async Task GetByIdIncludesCreatorNameAndLotMetadataAndEnforcesRestaurantScope()
+    {
+        var restaurantId = Guid.NewGuid();
+        var otherRestaurantId = Guid.NewGuid();
+        using var f = new Fixture(restaurantId);
+        f.StaffProfiles.Names[(restaurantId, f.Access.Actor)] = "Nguyễn Văn A";
+
+        var ingredient = await f.Ingredient();
+        var firstLotId = await f.Lot(ingredient, 2, new DateOnly(2026, 12, 1), -3);
+        var secondLotId = await f.Lot(ingredient, 5, new DateOnly(2026, 11, 15), -1);
+        var created = await f.Issues.Create(Request(ingredient, 3), default);
+
+        f.Db.ChangeTracker.Clear();
+        var grpc = new StockIssueGrpcService(f.Issues);
+        var reply = await grpc.GetById(new InventoryIdRequest
+        {
+            Id = created.StockIssueId.ToString()
+        }, new TestCallContext());
+
+        Assert.Equal(created.StockIssueId.ToString(), reply.Id);
+        Assert.Equal(f.Access.Actor.ToString(), reply.CreatedBy);
+        Assert.True(reply.HasCreatedByName);
+        Assert.Equal("Nguyễn Văn A", reply.CreatedByName);
+        Assert.Equal(2, reply.Allocations.Count);
+
+        var firstAllocation = Assert.Single(reply.Allocations, x => x.ReceiptItemId == firstLotId.ToString());
+        Assert.Equal("2026-12-01", firstAllocation.ExpiryDate);
+        Assert.Equal("2026-10-19T08:00:00.0000000Z", firstAllocation.ReceivedAt);
+
+        var secondAllocation = Assert.Single(reply.Allocations, x => x.ReceiptItemId == secondLotId.ToString());
+        Assert.Equal("2026-11-15", secondAllocation.ExpiryDate);
+        Assert.Equal("2026-10-21T08:00:00.0000000Z", secondAllocation.ReceivedAt);
+
+        using var otherDb = f.OpenForRestaurant(otherRestaurantId, out var otherIssues);
+        await Error(404, () => otherIssues.GetById(created.StockIssueId, default));
+    }
+
+    [Fact]
+    public async Task GetByIdReturnsNullMetadataWhenCreatorMissingOrMovementHasNoLot()
+    {
+        var restaurantId = Guid.NewGuid();
+        using var f = new Fixture(restaurantId);
+        var ingredient = await f.Ingredient();
+        var lotWithoutExpiry = await f.Lot(ingredient, 5, null, -2);
+        var issueId = Guid.NewGuid();
+        var issue = new StockIssue
+        {
+            StockIssueId = issueId,
+            CreatedByRef = Guid.NewGuid(),
+            CreatedAt = new DateTime(2026, 10, 22, 8, 0, 0, DateTimeKind.Utc),
+            Reason = "Legacy issue",
+            RequestHash = new string('a', 64),
+            Movements =
+            [
+                new StockMovement
+                {
+                    StockMovementId = Guid.NewGuid(),
+                    StockIssueId = issueId,
+                    IngredientId = ingredient.IngredientId,
+                    GoodsReceiptItemId = null,
+                    MovementType = "Issue",
+                    QuantityChange = -1,
+                    PerformedByRef = f.Access.Actor,
+                    Reason = "Unlinked legacy movement",
+                    CreatedAt = new DateTime(2026, 10, 22, 8, 0, 0, DateTimeKind.Utc)
+                },
+                new StockMovement
+                {
+                    StockMovementId = Guid.NewGuid(),
+                    StockIssueId = issueId,
+                    IngredientId = ingredient.IngredientId,
+                    GoodsReceiptItemId = lotWithoutExpiry,
+                    MovementType = "Issue",
+                    QuantityChange = -2,
+                    PerformedByRef = f.Access.Actor,
+                    Reason = "Lot without expiry",
+                    CreatedAt = new DateTime(2026, 10, 22, 8, 0, 0, DateTimeKind.Utc)
+                }
+            ]
+        };
+        f.Db.Set<StockIssue>().Add(issue);
+        await f.Db.SaveChangesAsync();
+        f.Db.ChangeTracker.Clear();
+
+        var grpc = new StockIssueGrpcService(f.Issues);
+        var reply = await grpc.GetById(new InventoryIdRequest
+        {
+            Id = issueId.ToString()
+        }, new TestCallContext());
+
+        Assert.False(reply.HasCreatedByName);
+        Assert.Equal(2, reply.Allocations.Count);
+
+        var unlinked = Assert.Single(reply.Allocations, x => string.IsNullOrEmpty(x.ReceiptItemId));
+        Assert.False(unlinked.HasReceivedAt);
+        Assert.False(unlinked.HasExpiryDate);
+
+        var linkedNoExpiry = Assert.Single(reply.Allocations, x => x.ReceiptItemId == lotWithoutExpiry.ToString());
+        Assert.True(linkedNoExpiry.HasReceivedAt);
+        Assert.Equal("2026-10-20T08:00:00.0000000Z", linkedNoExpiry.ReceivedAt);
+        Assert.False(linkedNoExpiry.HasExpiryDate);
+    }
+
     private static StockIssueWriteDTO Request(Ingredient ingredient, decimal quantity)
     {
         return new StockIssueWriteDTO
@@ -332,7 +440,8 @@ public sealed class StockIssueTests
         }
     }
 
-    private sealed class TestDb(DbContextOptions<InventoryDbContext> options) : InventoryDbContext(options)
+    private sealed class TestDb(DbContextOptions<InventoryDbContext> options, RestaurantDataScope? scope = null)
+        : InventoryDbContext(options, scope)
     {
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -341,25 +450,79 @@ public sealed class StockIssueTests
         }
     }
 
+    private sealed class FakeStaffProfiles : IInventoryStaffProfileClient
+    {
+        public Dictionary<(Guid RestaurantId, Guid UserId), string?> Names { get; } = new();
+
+        public Task<string?> GetFullNameAsync(Guid restaurantId, Guid userId, CancellationToken ct)
+        {
+            Names.TryGetValue((restaurantId, userId), out var name);
+            return Task.FromResult(name);
+        }
+    }
+
+    private sealed class TestCallContext : ServerCallContext
+    {
+        protected override string MethodCore => "StockIssueGrpc/GetById";
+        protected override string HostCore => "localhost";
+        protected override string PeerCore => "localhost";
+        protected override DateTime DeadlineCore => DateTime.UtcNow.AddMinutes(1);
+        protected override Metadata RequestHeadersCore { get; } = [];
+        protected override CancellationToken CancellationTokenCore => CancellationToken.None;
+        protected override Metadata ResponseTrailersCore { get; } = [];
+        protected override Status StatusCore { get; set; }
+        protected override WriteOptions? WriteOptionsCore { get; set; }
+        protected override AuthContext AuthContextCore => new(string.Empty, new Dictionary<string, List<AuthProperty>>());
+        protected override ContextPropagationToken CreatePropagationTokenCore(ContextPropagationOptions? options) => throw new NotImplementedException();
+        protected override Task WriteResponseHeadersAsyncCore(Metadata responseHeaders) => Task.CompletedTask;
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly SqliteConnection connection = new("Data Source=:memory:");
         private readonly Clock clock = new();
+        public RestaurantDataScope Scope { get; } = new();
+        public FakeStaffProfiles StaffProfiles { get; } = new();
         public InventoryDbContext Db { get; }
         public Access Access { get; } = new();
         public StockIssueService Issues { get; }
         public StockLotService Lots { get; }
 
-        public Fixture()
+        public Fixture(Guid? restaurantId = null)
         {
+            if (restaurantId.HasValue)
+            {
+                Scope.Select(restaurantId.Value);
+            }
+
             connection.Open();
-            Db = new TestDb(new DbContextOptionsBuilder<InventoryDbContext>().UseSqlite(connection).Options);
+            Db = new TestDb(
+                new DbContextOptionsBuilder<InventoryDbContext>().UseSqlite(connection).Options,
+                restaurantId.HasValue ? Scope : null);
             Db.Database.EnsureCreated();
             var transaction = new InventoryTransaction(new UnitOfWork<InventoryDbContext>(Db));
             var ingredients = new IngredientRepository(Db);
             var lots = new StockLotRepository(Db);
-            Issues = new StockIssueService(new StockIssueRepository(Db), lots, ingredients, transaction, Access, clock);
+            Issues = new StockIssueService(new StockIssueRepository(Db), lots, ingredients, transaction, Access, clock, StaffProfiles, Scope);
             Lots = new StockLotService(lots, ingredients, Access, transaction, clock);
+        }
+
+        public InventoryDbContext OpenForRestaurant(Guid otherRestaurantId, out StockIssueService otherIssues)
+        {
+            var otherScope = new RestaurantDataScope();
+            otherScope.Select(otherRestaurantId);
+            var otherDb = new TestDb(new DbContextOptionsBuilder<InventoryDbContext>().UseSqlite(connection).Options, otherScope);
+            var otherTransaction = new InventoryTransaction(new UnitOfWork<InventoryDbContext>(otherDb));
+            otherIssues = new StockIssueService(
+                new StockIssueRepository(otherDb),
+                new StockLotRepository(otherDb),
+                new IngredientRepository(otherDb),
+                otherTransaction,
+                Access,
+                clock,
+                StaffProfiles,
+                otherScope);
+            return otherDb;
         }
 
         public async Task<Ingredient> Ingredient(Guid? id = null)

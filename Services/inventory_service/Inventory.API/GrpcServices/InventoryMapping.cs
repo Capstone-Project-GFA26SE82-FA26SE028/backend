@@ -121,6 +121,21 @@ internal static class InventoryMapping
             info.OrderItemRef = value.OrderItemRef.Value.ToString();
         }
 
+        if (value.GoodsReceiptItem is not null)
+        {
+            if (value.GoodsReceiptItem.GoodsReceipt is not null)
+            {
+                var receivedAt = value.GoodsReceiptItem.GoodsReceipt.ConfirmAt
+                    ?? value.GoodsReceiptItem.GoodsReceipt.CreatedAt;
+                info.ReceivedAt = DateTime.SpecifyKind(receivedAt, DateTimeKind.Utc).ToString("O");
+            }
+
+            if (value.GoodsReceiptItem.ExpiryDate.HasValue)
+            {
+                info.ExpiryDate = value.GoodsReceiptItem.ExpiryDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            }
+        }
+
         return info;
     }
 
