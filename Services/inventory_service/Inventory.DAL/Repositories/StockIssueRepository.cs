@@ -7,7 +7,16 @@ public sealed class StockIssueRepository(InventoryDbContext db)
 {
     public Task<StockIssue?> GetByIdAsync(Guid id, CancellationToken ct)
     {
-        return db.Set<StockIssue>().Include(x => x.Movements).SingleOrDefaultAsync(x => x.StockIssueId == id, ct);
+        return db.Set<StockIssue>()
+            .Include(x => x.Movements)
+                .ThenInclude(m => m.GoodsReceiptItem)
+                    .ThenInclude(item => item.GoodsReceipt)
+            .SingleOrDefaultAsync(x => x.StockIssueId == id, ct);
+    }
+
+    public Guid? GetRestaurantId(StockIssue issue)
+    {
+        return db.Entry(issue).Property<Guid?>("RestaurantId").CurrentValue;
     }
 
     public async Task CreateAsync(StockIssue issue, CancellationToken ct)

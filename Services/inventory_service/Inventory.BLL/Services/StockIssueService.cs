@@ -8,11 +8,19 @@ using Inventory.Common.DTOs;
 using Inventory.DAL;
 using Inventory.DAL.Models;
 using Inventory.DAL.Repositories;
+using Shared.Persistence.RestaurantIsolation;
 
 namespace Inventory.BLL.Services;
 
-public sealed class StockIssueService(StockIssueRepository repository, StockLotRepository lots,
-    IngredientRepository ingredients, InventoryTransaction transaction, IInventoryAccess access, TimeProvider clock)
+public sealed class StockIssueService(
+    StockIssueRepository repository,
+    StockLotRepository lots,
+    IngredientRepository ingredients,
+    InventoryTransaction transaction,
+    IInventoryAccess access,
+    TimeProvider clock,
+    IInventoryStaffProfileClient? staffProfiles = null,
+    RestaurantDataScope? scope = null)
 {
     public async Task<StockIssue> Create(StockIssueWriteDTO request, CancellationToken ct)
     {
@@ -379,5 +387,22 @@ public sealed class StockIssueService(StockIssueRepository repository, StockLotR
         await access.RequireAsync("Read", ct);
         InventoryValidation.Id(id);
         return await repository.GetByIdAsync(id, ct) ?? throw new InventoryException(404, "Không tìm thấy phiếu xuất kho.");
+    }
+
+    public async Task<string?> GetCreatorNameAsync(StockIssue issue, CancellationToken ct)
+    {
+        if (staffProfiles is null || issue.CreatedByRef == Guid.Empty)
+        {
+            return null;
+        }
+
+        var restaurantId = repository.GetRestaurantId(issue) ?? scope?.RestaurantId ?? Guid.Empty;
+        if (restaurantId == Guid.Empty)
+        {
+            return null;
+        }
+
+        var name = await staffProfiles.GetFullNameAsync(restaurantId, issue.CreatedByRef, ct);
+        return string.IsNullOrWhiteSpace(name) ? null : name.Trim();
     }
 }

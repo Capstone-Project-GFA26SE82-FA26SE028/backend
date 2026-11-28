@@ -10,7 +10,7 @@ public sealed class StockIssueGrpcService(StockIssueService service) : StockIssu
 {
     public override async Task<StockIssueInfo> Create(StockIssueWriteRequest request, ServerCallContext context)
     {
-        return Map(await service.Create(new StockIssueWriteDTO
+        var issue = await service.Create(new StockIssueWriteDTO
         {
             StockIssueId = InventoryMapping.Id(request.Id),
             Reason = request.Reason,
@@ -23,12 +23,16 @@ public sealed class StockIssueGrpcService(StockIssueService service) : StockIssu
                     : null,
                 IsDisposal = line.HasIsDisposal && line.IsDisposal
             }).ToList()
-        }, context.CancellationToken));
+        }, context.CancellationToken);
+        var createdByName = await service.GetCreatorNameAsync(issue, context.CancellationToken);
+        return Map(issue, createdByName);
     }
 
     public override async Task<StockIssueInfo> GetById(InventoryIdRequest request, ServerCallContext context)
     {
-        return Map(await service.GetById(InventoryMapping.Id(request.Id), context.CancellationToken));
+        var issue = await service.GetById(InventoryMapping.Id(request.Id), context.CancellationToken);
+        var createdByName = await service.GetCreatorNameAsync(issue, context.CancellationToken);
+        return Map(issue, createdByName);
     }
 
     public override async Task<CookingDeductionReply> DeductForCooking(CookingDeductionRequest request, ServerCallContext context)
@@ -72,7 +76,7 @@ public sealed class StockIssueGrpcService(StockIssueService service) : StockIssu
         return reply;
     }
 
-    private static StockIssueInfo Map(StockIssue issue)
+    private static StockIssueInfo Map(StockIssue issue, string? createdByName)
     {
         var reply = new StockIssueInfo
         {
@@ -81,6 +85,11 @@ public sealed class StockIssueGrpcService(StockIssueService service) : StockIssu
             CreatedAt = DateTime.SpecifyKind(issue.CreatedAt, DateTimeKind.Utc).ToString("O"),
             Reason = issue.Reason
         };
+        if (!string.IsNullOrWhiteSpace(createdByName))
+        {
+            reply.CreatedByName = createdByName;
+        }
+
         reply.Allocations.AddRange(issue.Movements.OrderBy(x => x.IngredientId).ThenBy(x => x.GoodsReceiptItemId).Select(InventoryMapping.Map));
         return reply;
     }

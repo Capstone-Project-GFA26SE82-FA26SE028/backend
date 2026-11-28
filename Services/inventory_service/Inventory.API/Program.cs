@@ -20,6 +20,7 @@ builder.Services.AddGrpcClient<Backend.Contracts.Identity.UserGrpc.UserGrpcClien
         ?? throw new InvalidOperationException("Vui lòng cấu hình GrpcServices:Identity."));
 });
 builder.Services.AddScoped<Inventory.BLL.Interfaces.IInventoryAccess, Inventory.API.Clients.IdentityInventoryAccess>();
+builder.Services.AddScoped<Inventory.BLL.Interfaces.IInventoryStaffProfileClient, Inventory.API.Clients.IdentityStaffProfileClient>();
 builder.Services.AddScoped<Inventory.BLL.Services.IngredientService>();
 builder.Services.AddScoped<Inventory.BLL.Services.StockLotService>();
 builder.Services.AddScoped<Inventory.BLL.Services.StockIssueService>();
