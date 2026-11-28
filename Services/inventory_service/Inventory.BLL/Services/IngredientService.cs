@@ -7,7 +7,12 @@ using Inventory.DAL.Repositories;
 
 namespace Inventory.BLL.Services;
 
-public sealed class IngredientService(IngredientRepository repository, InventoryTransaction transaction, IInventoryAccess access, UnitRepository units)
+public sealed class IngredientService(
+    IngredientRepository repository,
+    InventoryTransaction transaction,
+    IInventoryAccess access,
+    UnitRepository units,
+    TimeProvider clock)
 {
     public async Task<Ingredient> Create(IngredientWriteDTO request, CancellationToken ct)
     {
@@ -69,7 +74,7 @@ public sealed class IngredientService(IngredientRepository repository, Inventory
         return await Find(id, ct);
     }
 
-    public async Task<PageDTO<Ingredient>> GetAll(int page, int pageSize, string? search, bool? active, bool lowStock, CancellationToken ct)
+    public async Task<PageDTO<IngredientSummaryDTO>> GetAll(int page, int pageSize, string? search, bool? active, bool lowStock, CancellationToken ct)
     {
         await access.RequireAsync("Read", ct);
         InventoryValidation.Page(page, pageSize);
@@ -77,7 +82,21 @@ public sealed class IngredientService(IngredientRepository repository, Inventory
         {
             throw new InventoryException(400, "Từ khóa tìm kiếm quá dài.");
         }
-        return await repository.GetAllAsync(page, pageSize, search?.Trim(), active, lowStock, ct);
+
+        var today = StockLotService.BusinessDate(clock);
+        return await repository.GetAllAsync(page, pageSize, search?.Trim(), active, lowStock, today, ct);
+    }
+
+    public async Task<bool> IsLowStockAsync(Ingredient ingredient, CancellationToken ct)
+    {
+        if (!ingredient.IsActive)
+        {
+            return false;
+        }
+
+        var today = StockLotService.BusinessDate(clock);
+        var issuable = await repository.GetIssuableQuantitiesAsync([ingredient.IngredientId], today, ct);
+        return issuable.GetValueOrDefault(ingredient.IngredientId) <= ingredient.LowStockThreshold;
     }
 
     private async Task<Ingredient> Find(Guid id, CancellationToken ct)

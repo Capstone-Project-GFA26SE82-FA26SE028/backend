@@ -7,6 +7,19 @@ public sealed class IngredientWriteDTO
     public decimal LowStockThreshold { get; set; }
 }
 
+public sealed class IngredientSummaryDTO
+{
+    public Guid IngredientId { get; set; }
+    public string IngredientCode { get; set; } = "";
+    public string IngredientName { get; set; } = "";
+    public string BaseUnit { get; set; } = "";
+    public decimal StockQuantity { get; set; }
+    public decimal LowStockThreshold { get; set; }
+    public bool IsActive { get; set; }
+    public bool IsLowStock { get; set; }
+    public byte[]? StockVersion { get; set; }
+}
+
 public sealed class ReceiptLineDTO
 {
     public Guid? UnitId { get; set; }
