@@ -66,7 +66,7 @@ public sealed class CashHandoverService(ICashHandoverRepository handovers, IPaym
                     return (Map(saved, existing), false);
                 }
 
-                if (checkout.Status != "Presented" || !checkout.PresentedAt.HasValue || !checkout.PreparedAt.HasValue
+                if (checkout.Status is not ("Presented" or PaymentStatuses.Paid) || !checkout.PresentedAt.HasValue || !checkout.PreparedAt.HasValue
                     || !checkout.PreparedByRef.HasValue || !checkout.SubmittedAt.HasValue || string.IsNullOrEmpty(checkout.SourceHash))
                 {
                     throw new BillingException(409, "Phục vụ phải xác nhận đã đưa hóa đơn cho khách trước khi ghi nhận thu hộ.");
@@ -90,6 +90,15 @@ public sealed class CashHandoverService(ICashHandoverRepository handovers, IPaym
                     throw new BillingException(403, "Quầy nhận không thuộc nhà hàng của hóa đơn.");
                 }
 
+                var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
+                if (bill.RestaurantId == register.RestaurantId
+                    && bill.Payments.Any(payment => PayOsPaymentRules.BelongsToCheckout(payment, checkout.CheckoutId)
+                        && PayOsPaymentRules.IsVerifiedPaid(payment)))
+                {
+                    throw new BillingException(409, "Hóa đơn đã thanh toán qua PayOS. Trả lại toàn bộ tiền mặt đã nhận.",
+                        "CashReturnRequired", received);
+                }
+
                 var open = await shifts.GetUnclosedAsync(register.CashRegisterId, ct);
                 var shift = open.Count == 1 ? await shifts.LockByIdAsync(open[0].CashShiftId, ct) : null;
                 if (shift is null || shift.Status != CashShiftStatuses.Active
@@ -98,7 +107,6 @@ public sealed class CashHandoverService(ICashHandoverRepository handovers, IPaym
                     throw new BillingException(409, "Quầy phải có đúng một ca thu ngân đang hoạt động để nhận tiền.");
                 }
 
-                var bill = await bills.GetForRefreshAsync(billId, ct) ?? throw new BillingException(404, "Không tìm thấy hóa đơn.");
                 if (bill.RestaurantId != register.RestaurantId || bill.Status != "Unpaid" || bill.PaidAt.HasValue
                     || bill.Currency != "VND" || bill.TotalAmount <= 0 || bill.TotalAmount > PaymentService.MaximumMoney
                     || decimal.Truncate(bill.TotalAmount) != bill.TotalAmount
